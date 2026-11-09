@@ -3,6 +3,22 @@ import XCTest
 @testable import SuperQode
 
 final class LocalHarnessNavigationTests: XCTestCase {
+  @MainActor func testOnlyDocumentedAndWiredHarnessesAreVisible() {
+    XCTAssertEqual(LocalHarnessSupport.documentedIDs, Set(["superqode", "opencode", "goose"]))
+    let documented: [String: Any] = ["local_support": "documented", "source_urls": ["https://example.com/docs"], "status": "Configured"]
+    let rows: [[String: Any]] = [
+      documented.merging(["id": "superqode"]) { _, new in new },
+      documented.merging(["id": "opencode", "status": "Not installed"]) { _, new in new },
+      documented.merging(["id": "goose"]) { _, new in new },
+      documented.merging(["id": "codex"]) { _, new in new },
+      documented.merging(["id": "unreviewed"]) { _, new in new },
+      documented.merging(["id": "opencode", "status": "Unavailable"]) { _, new in new },
+      documented.merging(["id": "goose", "local_support": "unverified"]) { _, new in new },
+      documented.merging(["id": "goose", "source_urls": [] as [String]]) { _, new in new },
+    ]
+    XCTAssertEqual(LocalHarnessSupport.visibleRows(rows).compactMap { $0["id"] as? String }, ["superqode", "opencode", "goose"])
+  }
+
   func testLocalHarnessPageIsAdvancedAndNotTheNewcomerPage() {
     let group = WorkspaceNavigationGroup.containing("Local harnesses")
     XCTAssertEqual(group.id, "advanced")

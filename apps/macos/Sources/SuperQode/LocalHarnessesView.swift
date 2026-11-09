@@ -1,5 +1,20 @@
 import SwiftUI
 
+/// Defense in depth: neither ACP availability nor a saved profile grants local support.
+enum LocalHarnessSupport {
+  static let documentedIDs: Set<String> = ["superqode", "opencode", "goose"]
+
+  static func visibleRows(_ rows: [[String: Any]]) -> [[String: Any]] {
+    rows.filter { row in
+      guard let id = row["id"] as? String, documentedIDs.contains(id),
+        row["local_support"] as? String == "documented",
+        let sources = row["source_urls"] as? [String], !sources.isEmpty,
+        sources.allSatisfy({ URL(string: $0)?.scheme == "https" }) else { return false }
+      return ["Configured", "Not installed"].contains(row["status"] as? String ?? "")
+    }
+  }
+}
+
 /// Advanced only. The newcomer Local AI path has no harness choices.
 struct LocalHarnessesView: View {
   @EnvironmentObject var app: Workspace
@@ -15,7 +30,9 @@ struct LocalHarnessesView: View {
   @State private var commandID = UUID().uuidString
   @State private var generation = 0
 
-  private var harnesses: [[String: Any]] { catalog["harnesses"] as? [[String: Any]] ?? [] }
+  private var harnesses: [[String: Any]] {
+    LocalHarnessSupport.visibleRows(catalog["harnesses"] as? [[String: Any]] ?? [])
+  }
   private var models: [[String: Any]] { catalog["models"] as? [[String: Any]] ?? [] }
   private var selection: [String: Any] { models.first { string($0, "id") == modelID } ?? [:] }
   private var contract: [String: Any] { plan["contract"] as? [String: Any] ?? [:] }
@@ -29,6 +46,10 @@ struct LocalHarnessesView: View {
           subtitle: "Choose how the agent works, then use a model already running on this Mac.")
         Text("Getting started? Local AI is the simpler path for downloading and running a model.")
           .font(.callout).foregroundStyle(.secondary)
+        Text("Only documented local integrations with a wired adapter appear here. Agent tools still need a tool-capable model; model quality is not guaranteed.")
+          .font(.caption).foregroundStyle(.secondary)
+        Text("Reviewed external builds: OpenCode 1.19.5+ and Goose 1.58.0+, both within major version 1. Unverified builds are hidden.")
+          .font(.caption).foregroundStyle(.secondary)
         Button("Open Local AI") { app.section = "Models" }
         if app.projectID.isEmpty { Text("Open a project first.").foregroundStyle(.secondary) }
         HStack {
@@ -110,6 +131,7 @@ struct LocalHarnessesView: View {
       let value = try await app.engine.call("local.harnesses.catalog", ["project": project]) as? [String: Any] ?? [:]
       guard project == app.projectID, token == generation, !Task.isCancelled else { return }
       catalog = value
+      if !harnesses.contains(where: { string($0, "id") == harness }) { harness = "superqode" }
     } catch { if token == generation { failure = error.localizedDescription } }
   }
 

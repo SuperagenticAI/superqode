@@ -9,6 +9,7 @@ import re
 import shlex
 import shutil
 import subprocess
+from types import MappingProxyType
 import urllib.request
 
 from superqode.local.context_contract import choose_contract, memory_fit, requested_context
@@ -22,10 +23,45 @@ ENDPOINTS = {
 }
 HARNESSES = {
     "superqode": ("SuperQode harness", "", ""),
-    "opencode": ("OpenCode (ACP, version 1)", "opencode", "https://opencode.ai/docs/"),
-    "goose": ("Goose (ACP)", "goose", "https://github.com/block/goose"),
-    "codex": ("Codex", "codex", "https://developers.openai.com/codex/cli/"),
+    "opencode": (
+        "OpenCode (ACP, version 1.19.5+)",
+        "opencode",
+        "https://github.com/anomalyco/opencode/releases/tag/v1.19.5",
+    ),
+    "goose": (
+        "Goose (ACP, version 1.58.0+)",
+        "goose",
+        "https://github.com/aaif-goose/goose/releases/tag/v1.58.0",
+    ),
 }
+
+
+# Documented local-model support AND a reviewed launch adapter are both required.
+# A generic ACP descriptor, installed binary or saved profile never grants access.
+# See docs/integrations/local-harness-support.md for the full evidence audit.
+DOCUMENTED_LOCAL_SUPPORT = MappingProxyType(
+    {
+        "superqode": ("https://github.com/SuperagenticAI/superqode/blob/main/README.md",),
+        "opencode": (
+            "https://github.com/anomalyco/opencode/blob/v1.19.5/packages/web/src/content/docs/providers.mdx",
+            "https://github.com/anomalyco/opencode/blob/v1.19.5/packages/opencode/src/cli/cmd/acp.ts",
+            "https://github.com/anomalyco/opencode/blob/v1.19.5/packages/opencode/src/config/config.ts",
+        ),
+        "goose": (
+            "https://github.com/aaif-goose/goose/blob/v1.58.0/documentation/docs/getting-started/providers.md",
+            "https://github.com/aaif-goose/goose/blob/v1.58.0/documentation/docs/guides/environment-variables.md",
+            "https://github.com/aaif-goose/goose/blob/v1.58.0/crates/goose/src/providers/ollama_def.rs",
+            "https://github.com/aaif-goose/goose/blob/v1.58.0/crates/goose-providers/src/declarative/definitions/lmstudio.json",
+        ),
+    }
+)
+VISIBLE_STATUSES = frozenset({"Configured", "Not installed"})
+# Reviewed stable release floors, not claims about the vendors' oldest support.
+ADAPTER_VERSION_FLOORS = MappingProxyType({"opencode": (1, 19, 5), "goose": (1, 58, 0)})
+
+
+def _allowed(identity):
+    return identity in DOCUMENTED_LOCAL_SUPPORT and identity in HARNESSES
 
 
 def _digest(value):
@@ -47,29 +83,28 @@ def _get(url):
 
 
 def installed_harness(identity):
-    if identity not in HARNESSES:
+    if not _allowed(identity):
         raise ValueError("This harness is not supported by the Advanced local launcher")
     name, binary, url = HARNESSES[identity]
     path = shutil.which(binary) if binary else "builtin"
     status = "Configured" if path else "Not installed"
     reason, version = "", ""
-    if identity == "codex" and path:
-        status = "Not supported yet"
-        reason = "Requires a validated Responses API and an enforceable output-token limit adapter."
-    if identity == "opencode" and path:
+    if identity in ADAPTER_VERSION_FLOORS and path:
         try:
             result = subprocess.run(
                 [path, "--version"], capture_output=True, text=True, timeout=3, check=False
             )
             version = result.stdout.strip()[:120]
-            if result.returncode or not re.fullmatch(
-                r"(?:opencode\s+)?1\.\d+\.\d+(?:[-+][\w.-]+)?", version
-            ):
-                status = "Not supported yet"
-                reason = "Only the documented version 1 process-scoped config is wired here."
+            parsed = re.fullmatch(rf"(?:{identity}(?:\s+version)?\s+)?(\d+)\.(\d+)\.(\d+)", version)
+            floor = ADAPTER_VERSION_FLOORS[identity]
+            detected = tuple(map(int, parsed.groups())) if parsed else ()
+            if result.returncode or not detected or detected[0] != floor[0] or detected < floor:
+                status = "Unavailable"
+                minimum = ".".join(map(str, floor))
+                reason = f"This adapter requires a stable {name} build at least {minimum}."
         except (OSError, subprocess.TimeoutExpired):
-            status = "Not supported yet"
-            reason = "Could not verify this OpenCode version."
+            status = "Unavailable"
+            reason = f"Could not verify this {name} version."
     return dict(
         id=identity,
         name=name,
@@ -78,6 +113,8 @@ def installed_harness(identity):
         reason=reason,
         install_url=url,
         version=version,
+        local_support="documented",
+        source_urls=list(DOCUMENTED_LOCAL_SUPPORT[identity]),
     )
 
 
@@ -160,6 +197,8 @@ def model_contract(engine, row):
 
 def generate_config(identity, engine, model, contract):
     """Pure generators, never shell strings or changes to user configuration files."""
+    if not _allowed(identity):
+        raise ValueError("This harness has no documented and wired local adapter")
     endpoint = ENDPOINTS[engine]
     context, output = contract["context"], contract["max_tokens"]
     if identity == "superqode":
@@ -211,16 +250,20 @@ def generate_config(identity, engine, model, contract):
             "argv": ["acp"],
         }
     if identity == "goose":
+        # Use the official local providers, not an OpenAI-model-name heuristic.
+        # Ollama applies num_ctx/num_predict; LM Studio uses its chat endpoint
+        # and its provider-specific max_tokens mapping in upstream Goose.
         return {
             "env": {
-                "GOOSE_PROVIDER": "openai",
+                "GOOSE_PROVIDER": engine,
                 "GOOSE_MODEL": model,
-                "OPENAI_HOST": endpoint.removesuffix("/v1"),
-                "OPENAI_BASE_PATH": "v1/chat/completions",
-                "OPENAI_API_KEY": "local-only",
+                "OLLAMA_HOST" if engine == "ollama" else "LMSTUDIO_HOST": endpoint.removesuffix(
+                    "/v1"
+                ),
+                **({"GOOSE_INPUT_LIMIT": str(context)} if engine == "ollama" else {}),
                 "GOOSE_CONTEXT_LIMIT": str(context),
                 "GOOSE_MAX_TOKENS": str(output),
-                "GOOSE_SUBAGENT_PROVIDER": "openai",
+                "GOOSE_SUBAGENT_PROVIDER": engine,
                 "GOOSE_SUBAGENT_MODEL": model,
                 "GOOSE_MODE": "approve",
                 "GOOSE_TOOLSHIM": "false",
@@ -231,7 +274,7 @@ def generate_config(identity, engine, model, contract):
             "tools": "native; approve mode; no tool shim",
             "argv": ["acp"],
         }
-    raise ValueError("Not supported yet: no validated local configuration for this harness")
+    raise ValueError("This harness has no documented and wired local adapter")
 
 
 def preflight(service, params):
@@ -274,15 +317,24 @@ def preflight(service, params):
         if identity == "goose":
             # Isolate config migrations, extensions, permissions and session data
             # from the user's global Goose directory. JSON is valid YAML.
-            scope = _digest([project, engine, model, contract["context"], contract["max_tokens"]])
+            scope = _digest(
+                [
+                    "native-local-v1",
+                    project,
+                    engine,
+                    model,
+                    contract["context"],
+                    contract["max_tokens"],
+                ]
+            )
             private_root = service.root / "local-harnesses" / scope / "goose"
             config["env"]["GOOSE_PATH_ROOT"] = str(private_root)
             config["files"] = {
                 str(private_root / "config" / "config.yaml"): json.dumps(
                     {
-                        "active_provider": "openai",
+                        "active_provider": engine,
                         "providers": {
-                            "openai": {"enabled": True, "configured": True, "model": model}
+                            engine: {"enabled": True, "configured": True, "model": model}
                         },
                         "GOOSE_MODE": "approve",
                         "GOOSE_TOOLSHIM": False,
@@ -340,7 +392,13 @@ def catalog(service, project):
         except (OSError, ValueError, TypeError) as exc:
             issues.append(engine + ": " + str(exc))
     return {
-        "harnesses": [installed_harness(k) for k in HARNESSES],
+        "harnesses": [
+            row
+            for identity in DOCUMENTED_LOCAL_SUPPORT
+            if _allowed(identity)
+            for row in [installed_harness(identity)]
+            if row["status"] in VISIBLE_STATUSES
+        ],
         "models": rows,
         "issues": issues,
     }
@@ -441,10 +499,14 @@ def selections(service, project):
         profile = json.loads(row["value"])
         if profile.get("project") != project:
             continue
-        identity = profile["harness"]
+        identity = profile.get("harness")
+        if not _allowed(identity):
+            continue
         if identity not in installed:
             installed[identity] = installed_harness(identity)
         harness = installed[identity]
+        if harness["status"] not in VISIBLE_STATUSES:
+            continue
         core = identity == "superqode"
         result.append(
             {

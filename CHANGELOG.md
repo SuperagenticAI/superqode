@@ -9,9 +9,14 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
-- macOS Advanced: Harnesses on local models, separate from newcomer Local AI. Pick an installed SuperQode, OpenCode version 1 ACP or Goose ACP harness and an already loaded Ollama or LM Studio model. Review per-launch settings and send your first message to start a thread.
+- macOS Advanced: Harnesses on local models, separate from newcomer Local AI. Pick SuperQode Core, a reviewed OpenCode version 1 ACP build or a reviewed Goose version 1 ACP build and an already loaded Ollama or LM Studio model. Review per-launch settings and send your first message to start a thread.
 - Local harness catalog, preflight, launch and status RPCs with project-scoped profiles, fixed loopback endpoints, shared context/output budgets, conservative loaded-window fit checks and per-worker credential isolation. Continuations revalidate the same immutable configuration.
-- Missing binaries link to installation documentation. Codex and unverified OpenCode versions are explicitly Not supported yet rather than silently routed elsewhere. No runnable reference-only integrations were added.
+- The Advanced local harness catalog now shows only documented local integrations with a wired adapter: SuperQode Core, stable OpenCode 1.19.5+ within major 1 and stable Goose 1.58.0+ within major 1. Unwired integrations and unverified versions are hidden across the RPC catalog, saved profiles and Swift picker. Missing binaries retain an installation link.
+- An official-source [local harness support audit](docs/integrations/local-harness-support.md), with machine-readable evidence, covers all bundled ACP descriptors, native runtimes and built-in/optional harnesses. Documented support alone does not create a runnable adapter.
+
+### Fixed
+
+- Goose local launches now use its documented native Ollama or LM Studio provider. Ollama receives the contract's input limit as num_ctx; LM Studio uses its own chat-completions provider. Provider selection, token limits and private config agree without generic OpenAI-model-name routing.
 
 ### Notes
 

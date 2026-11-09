@@ -35,7 +35,9 @@ def loaded(monkeypatch, tmp_path):
     monkeypatch.setattr(
         lh.subprocess,
         "run",
-        lambda *args, **kwargs: SimpleNamespace(returncode=0, stdout="1.5.2\n"),
+        lambda argv, **kwargs: SimpleNamespace(
+            returncode=0, stdout="goose 1.58.0\n" if argv[0].endswith("goose") else "1.19.5\n"
+        ),
     )
 
     def get(url):
@@ -87,8 +89,14 @@ def test_generators_use_exact_local_endpoint_and_contract(desktop, loaded, engin
         assert provider["models"][MODEL]["tool_call"] is True
         assert payload["permission"] == "ask"
     elif harness == "goose":
-        assert env["OPENAI_HOST"] + "/v1" == lh.ENDPOINTS[engine]
-        assert env["OPENAI_BASE_PATH"] == "v1/chat/completions"
+        assert env["GOOSE_PROVIDER"] == env["GOOSE_SUBAGENT_PROVIDER"] == engine
+        host_key = "OLLAMA_HOST" if engine == "ollama" else "LMSTUDIO_HOST"
+        assert env[host_key] + "/v1" == lh.ENDPOINTS[engine]
+        assert "OPENAI_HOST" not in env and "OPENAI_API_KEY" not in env
+        if engine == "ollama":
+            assert int(env["GOOSE_INPUT_LIMIT"]) == contract["context"]
+        else:
+            assert "GOOSE_INPUT_LIMIT" not in env
         assert env["GOOSE_MODEL"] == env["GOOSE_SUBAGENT_MODEL"] == MODEL
         assert int(env["GOOSE_CONTEXT_LIMIT"]) == contract["context"]
         assert int(env["GOOSE_MAX_TOKENS"]) == contract["max_tokens"]
@@ -101,29 +109,98 @@ def test_generators_use_exact_local_endpoint_and_contract(desktop, loaded, engin
     assert not service._all("SELECT * FROM jobs")
 
 
-def test_not_installed_and_not_supported_are_honest(desktop, loaded, monkeypatch):
+def test_only_documented_and_wired_harnesses_are_offered(desktop, loaded, monkeypatch):
     service, project, _ = desktop
-    monkeypatch.setattr(lh.shutil, "which", lambda name: None)
-    for harness in ["goose", "opencode", "codex"]:
-        plan = lh.preflight(service, params(project, harness))
-        assert not plan["ready"] and plan["status"] == "Not installed"
-        assert plan["install_url"].startswith("https://")
-    monkeypatch.setattr(lh.shutil, "which", lambda name: "/usr/bin/" + name)
-    plan = lh.preflight(service, params(project, "codex"))
-    assert plan["status"] == "Not supported yet" and not plan["ready"]
-    assert "output-token" in plan["reason"]
-    with pytest.raises(ValueError, match="Not supported yet"):
-        lh.generate_config("codex", "ollama", MODEL, {"context": 8192, "max_tokens": 2048})
+    expected = {"superqode", "opencode", "goose"}
+    assert set(lh.HARNESSES) == set(lh.DOCUMENTED_LOCAL_SUPPORT) == expected
+    for installed in [True, False]:
+        monkeypatch.setattr(
+            lh.shutil, "which", lambda name: "/usr/bin/" + name if installed else None
+        )
+        rows = lh.catalog(service, project["id"])["harnesses"]
+        assert {row["id"] for row in rows} == expected
+        for row in rows:
+            assert row["local_support"] == "documented"
+            assert row["source_urls"] == list(lh.DOCUMENTED_LOCAL_SUPPORT[row["id"]])
+            assert all(url.startswith("https://") for url in row["source_urls"])
+            assert row["status"] in {"Configured", "Not installed"}
+            if row["status"] == "Not installed":
+                assert row["install_url"].startswith("https://")
+                assert not lh.preflight(service, params(project, row["id"]))["ready"]
 
 
-@pytest.mark.parametrize("version", ["2.0.1", "dev", "", "1.2.3\nextra"])
+def test_adding_an_acp_or_catalog_entry_does_not_allow_local_launch(desktop, loaded, monkeypatch):
+    service, project, _ = desktop
+    monkeypatch.setitem(
+        lh.HARNESSES, "unreviewed", ("Unreviewed", "unreviewed", "https://example.com")
+    )
+    assert "unreviewed" not in {r["id"] for r in lh.catalog(service, project["id"])["harnesses"]}
+    with pytest.raises(ValueError, match="not supported"):
+        lh.preflight(service, params(project, "unreviewed"))
+    with pytest.raises(ValueError, match="no documented and wired"):
+        lh.generate_config("unreviewed", "ollama", MODEL, {"context": 8192, "max_tokens": 2048})
+
+
+@pytest.mark.parametrize("identity", ["codex", "claude", "gemini", "aider", "qwen", "crush"])
+def test_unwired_integrations_are_hidden_and_rejected(desktop, loaded, identity):
+    service, project, _ = desktop
+    assert identity not in {r["id"] for r in lh.catalog(service, project["id"])["harnesses"]}
+    with pytest.raises(ValueError, match="not supported"):
+        lh.preflight(service, params(project, identity))
+    with pytest.raises(ValueError, match="no documented and wired"):
+        lh.generate_config(identity, "ollama", MODEL, {"context": 8192, "max_tokens": 2048})
+    reference = lh.PREFIX + identity
+    service._write(
+        "INSERT INTO settings VALUES(?,?)",
+        (
+            reference,
+            json.dumps(
+                {
+                    "project": project["id"],
+                    "harness": identity,
+                    "engine": "ollama",
+                    "model": MODEL,
+                    "digest": "old-profile",
+                }
+            ),
+        ),
+    )
+    assert all(row["id"] != reference for row in lh.selections(service, project["id"]))
+    with pytest.raises(ValueError, match="not supported"):
+        lh.apply_route(service, project["id"], {"harness": reference})
+
+
+@pytest.mark.parametrize("version", ["2.0.1", "dev", "", "1.2.3\nextra", "1.19.4", "1.19.5-dev"])
 def test_unverified_opencode_versions_are_not_launched(desktop, loaded, monkeypatch, version):
     service, project, _ = desktop
     monkeypatch.setattr(
         lh.subprocess, "run", lambda *args, **kwargs: SimpleNamespace(returncode=0, stdout=version)
     )
     plan = lh.preflight(service, params(project, "opencode"))
-    assert plan["status"] == "Not supported yet" and not plan["ready"]
+    assert plan["status"] == "Unavailable" and not plan["ready"]
+    assert "opencode" not in {r["id"] for r in lh.catalog(service, project["id"])["harnesses"]}
+
+
+@pytest.mark.parametrize("version", ["1.57.9", "2.0.0", "1.58.0-dev", "", "unknown"])
+def test_unreviewed_goose_versions_are_hidden(desktop, loaded, monkeypatch, version):
+    service, project, _ = desktop
+    monkeypatch.setattr(
+        lh.subprocess, "run", lambda *args, **kwargs: SimpleNamespace(returncode=0, stdout=version)
+    )
+    assert not lh.preflight(service, params(project, "goose"))["ready"]
+    assert "goose" not in {r["id"] for r in lh.catalog(service, project["id"])["harnesses"]}
+
+
+def test_ui_uses_the_same_documented_allowlist():
+    root = Path(__file__).resolve().parents[1]
+    source = (root / "apps/macos/Sources/SuperQode/LocalHarnessesView.swift").read_text()
+    import re
+
+    identifiers = re.search(r"static let documentedIDs: Set<String> = \[(.*?)\]", source).group(1)
+    assert set(re.findall(r'"([^"]+)"', identifiers)) == set(lh.DOCUMENTED_LOCAL_SUPPORT)
+    assert "LocalHarnessSupport.visibleRows(catalog[" in source
+    assert 'row["local_support"] as? String == "documented"' in source
+    assert 'row["source_urls"] as? [String]' in source
 
 
 def test_version_timeout_is_reported(desktop, loaded, monkeypatch):
@@ -133,7 +210,7 @@ def test_version_timeout_is_reported(desktop, loaded, monkeypatch):
         raise subprocess.TimeoutExpired("opencode --version", 3)
 
     monkeypatch.setattr(lh.subprocess, "run", timeout)
-    assert lh.preflight(service, params(project, "opencode"))["status"] == "Not supported yet"
+    assert lh.preflight(service, params(project, "opencode"))["status"] == "Unavailable"
 
 
 @pytest.mark.parametrize(
@@ -466,9 +543,10 @@ def test_newcomer_files_are_unchanged_from_023c6ecc():
         assert hashlib.sha256((root / name).read_bytes()).hexdigest() == expected, name
 
 
-def test_goose_private_config_only_created_on_explicit_worker_launch(desktop, loaded):
+@pytest.mark.parametrize("engine", ["ollama", "lmstudio"])
+def test_goose_private_config_only_created_on_explicit_worker_launch(desktop, loaded, engine):
     service, project, _ = desktop
-    plan = lh.preflight(service, params(project, "goose"))
+    plan = lh.preflight(service, params(project, "goose", engine))
     base = Path(plan["config"]["env"]["GOOSE_PATH_ROOT"])
     target = base / "config" / "config.yaml"
     assert not target.exists()
@@ -477,7 +555,9 @@ def test_goose_private_config_only_created_on_explicit_worker_launch(desktop, lo
     content = target.read_text()
     parsed = json.loads(content)
     assert set(parsed["extensions"]) == {"developer"}
-    assert parsed["providers"]["openai"]["model"] == MODEL
+    assert parsed["active_provider"] == engine
+    assert set(parsed["providers"]) == {engine}
+    assert parsed["providers"][engine]["model"] == MODEL
     assert target.stat().st_mode & 0o777 == 0o600
     lh.materialize_worker_files(plan, service.root)
     assert target.read_text() == content
@@ -587,3 +667,30 @@ def test_identical_reviewed_pair_reuses_profile_without_changing_other_threads(
     assert first["harness"] == second["harness"]
     assert first["command_id"] != second["command_id"]
     assert len(lh.selections(service, project["id"])) == 1
+
+
+def test_official_audit_covers_the_full_bundled_inventory():
+    import tomllib
+    from superqode.runtime import registry
+    from superqode.harness.catalog import builtin_harnesses
+
+    root = Path(__file__).resolve().parents[1]
+    audit = json.loads((root / "docs/integrations/local-harness-support.json").read_text())
+    entries = {row["id"]: row for row in audit["entries"]}
+    assert set(audit["advanced_allowlist"]) == set(lh.DOCUMENTED_LOCAL_SUPPORT)
+    for path in (root / "src/superqode/agents/data").glob("*.toml"):
+        identity = tomllib.loads(path.read_text())["short_name"]
+        assert "acp:" + identity in entries
+    assert all("runtime:" + key in entries for key in registry._FACTORIES)
+    assert all("harness:" + item.id in entries for item in builtin_harnesses())
+    for row in entries.values():
+        assert row["source_urls"] and row["mechanism"] and row["tool_calling"]
+        assert row["version_requirement"]
+        if row["advanced_adapter"]:
+            assert row["advanced_adapter"] in lh.DOCUMENTED_LOCAL_SUPPORT
+            assert row["verdict"] == "Supported (documented)"
+    # Documented support and a runnable app adapter are independent facts.
+    assert entries["acp:codex"]["verdict"] == "Supported (documented)"
+    assert not entries["acp:codex"]["advanced_adapter"]
+    assert not entries["reference:aider"]["advanced_adapter"]
+    assert not entries["reference:crush"]["advanced_adapter"]

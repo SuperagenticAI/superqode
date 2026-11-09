@@ -1,0 +1,2026 @@
+{
+  "checked_on": "2026-11-09",
+  "timezone": "Europe/London",
+  "basis_commit": "bd569776a615696219835be929fe6b330ea1a8f8",
+  "advanced_allowlist": [
+    "superqode",
+    "opencode",
+    "goose"
+  ],
+  "definitions": {
+    "Supported (documented)": "Positive author documentation or authoritative source confirms a local/compatible model mechanism. This does not certify every model or version.",
+    "Unofficial or workaround only": "A generic override, edition/interface mismatch or bridge exists, but current same-Mac agent support is not established for this exact interface.",
+    "Not supported": "No verified supported same-Mac mechanism for this interface in the checked official sources. Missing evidence is not proof of impossibility."
+  },
+  "entries": [
+    {
+      "id": "acp:minimax",
+      "harness": "MiniMax Code",
+      "group": "ACP registry",
+      "verdict": "Not supported",
+      "mechanism": "No current author-documented same-Mac local model mechanism was verified in the checked official source.",
+      "tool_calling": "Not established for local models in the checked source.",
+      "version_requirement": "Current official source checked on 2026-11-09; no minimum local-capable release verified.",
+      "source_urls": [
+        "https://agent.minimax.io"
+      ],
+      "advanced_adapter": "",
+      "notes": "Excluded for lack of verified positive evidence, not a claim of technical impossibility."
+    },
+    {
+      "id": "acp:agentpool",
+      "harness": "AgentPool",
+      "group": "ACP registry",
+      "verdict": "Supported (documented)",
+      "mechanism": "ACP provider picker includes the ollama provider; exact per-launch isolation is not wired.",
+      "tool_calling": "Documented agent/tool workflow requires a capable model; no live tool-quality test was run.",
+      "version_requirement": "Current official source checked on 2026-11-09; no minimum local-capable release verified.",
+      "source_urls": [
+        "https://phil65.github.io/agentpool/advanced/acp-integration/"
+      ],
+      "advanced_adapter": "",
+      "notes": ""
+    },
+    {
+      "id": "acp:agoragentic",
+      "harness": "Agoragentic",
+      "group": "ACP registry",
+      "verdict": "Not supported",
+      "mechanism": "No current author-documented same-Mac local model mechanism was verified in the checked official source.",
+      "tool_calling": "Not established for local models in the checked source.",
+      "version_requirement": "Current official source checked on 2026-11-09; no minimum local-capable release verified.",
+      "source_urls": [
+        "https://agoragentic.com"
+      ],
+      "advanced_adapter": "",
+      "notes": "Excluded for lack of verified positive evidence, not a claim of technical impossibility."
+    },
+    {
+      "id": "acp:amp",
+      "harness": "Amp",
+      "group": "ACP registry",
+      "verdict": "Unofficial or workaround only",
+      "mechanism": "Custom URL model routing is documented, but inference originates on Amp servers, not this Mac. A public relay would be a different workflow.",
+      "tool_calling": "Not established for local models in the checked source.",
+      "version_requirement": "Current official source checked on 2026-11-09; no minimum local-capable release verified.",
+      "source_urls": [
+        "https://ampcode.com/docs/customize/model-routing"
+      ],
+      "advanced_adapter": "",
+      "notes": ""
+    },
+    {
+      "id": "acp:antigravity",
+      "harness": "Google Antigravity",
+      "group": "ACP registry",
+      "verdict": "Not supported",
+      "mechanism": "No current author-documented same-Mac local model mechanism was verified in the checked official source.",
+      "tool_calling": "Not established for local models in the checked source.",
+      "version_requirement": "Current official source checked on 2026-11-09; no minimum local-capable release verified.",
+      "source_urls": [
+        "https://antigravity.google/docs/ide/extensions"
+      ],
+      "advanced_adapter": "",
+      "notes": "Excluded for lack of verified positive evidence, not a claim of technical impossibility."
+    },
+    {
+      "id": "acp:auggie",
+      "harness": "Auggie (Augment Code)",
+      "group": "ACP registry",
+      "verdict": "Not supported",
+      "mechanism": "No current author-documented same-Mac local model mechanism was verified in the checked official source.",
+      "tool_calling": "Not established for local models in the checked source.",
+      "version_requirement": "Current official source checked on 2026-11-09; no minimum local-capable release verified.",
+      "source_urls": [
+        "https://www.augmentcode.com/product/CLI"
+      ],
+      "advanced_adapter": "",
+      "notes": "Excluded for lack of verified positive evidence, not a claim of technical impossibility."
+    },
+    {
+      "id": "acp:autodev",
+      "harness": "AutoDev Xiuper",
+      "group": "ACP registry",
+      "verdict": "Unofficial or workaround only",
+      "mechanism": "Official repository lists Ollama for its agents, but the exact current ACP interface and local launch configuration were not independently verified.",
+      "tool_calling": "Product-level coding agents and Ollama are documented; current ACP/local tool behavior is not established.",
+      "version_requirement": "Current official source checked on 2026-11-09; no minimum local-capable release verified.",
+      "source_urls": [
+        "https://raw.githubusercontent.com/phodal/auto-dev/main/README.md"
+      ],
+      "advanced_adapter": "",
+      "notes": ""
+    },
+    {
+      "id": "acp:blackbox",
+      "harness": "Blackbox AI",
+      "group": "ACP registry",
+      "verdict": "Not supported",
+      "mechanism": "No current author-documented same-Mac local model mechanism was verified in the checked official source.",
+      "tool_calling": "Not established for local models in the checked source.",
+      "version_requirement": "Current official source checked on 2026-11-09; no minimum local-capable release verified.",
+      "source_urls": [
+        "https://docs.blackbox.ai/features/blackbox-cli/introduction"
+      ],
+      "advanced_adapter": "",
+      "notes": "Excluded for lack of verified positive evidence, not a claim of technical impossibility."
+    },
+    {
+      "id": "acp:bub",
+      "harness": "Bub",
+      "group": "ACP registry",
+      "verdict": "Not supported",
+      "mechanism": "No current author-documented same-Mac local model mechanism was verified in the checked official source.",
+      "tool_calling": "Not established for local models in the checked source.",
+      "version_requirement": "Current official source checked on 2026-11-09; no minimum local-capable release verified.",
+      "source_urls": [
+        "https://github.com/bubbuild/bub"
+      ],
+      "advanced_adapter": "",
+      "notes": "Excluded for lack of verified positive evidence, not a claim of technical impossibility."
+    },
+    {
+      "id": "acp:cagent",
+      "harness": "cagent",
+      "group": "ACP registry",
+      "verdict": "Supported (documented)",
+      "mechanism": "models.<alias>.provider selects Docker Model Runner (dmr); model entries support base_url for custom endpoints.",
+      "tool_calling": "Documented agent/tool workflow requires a capable model; no live tool-quality test was run.",
+      "version_requirement": "Current official source checked on 2026-11-09; no minimum local-capable release verified.",
+      "source_urls": [
+        "https://raw.githubusercontent.com/docker/docker-agent/main/README.md",
+        "https://docker.github.io/docker-agent/concepts/models/"
+      ],
+      "advanced_adapter": "",
+      "notes": ""
+    },
+    {
+      "id": "acp:claude",
+      "harness": "Claude Code",
+      "group": "ACP registry",
+      "verdict": "Unofficial or workaround only",
+      "mechanism": "ANTHROPIC_BASE_URL targets an Anthropic gateway. The author explicitly does not support non-Claude models through gateways.",
+      "tool_calling": "Not established for local models in the checked source.",
+      "version_requirement": "Current official source checked on 2026-11-09; no minimum local-capable release verified.",
+      "source_urls": [
+        "https://code.claude.com/docs/en/llm-gateway"
+      ],
+      "advanced_adapter": "",
+      "notes": ""
+    },
+    {
+      "id": "acp:cline",
+      "harness": "Cline",
+      "group": "ACP registry",
+      "verdict": "Supported (documented)",
+      "mechanism": "cline auth -p ollama|lmstudio -b <server-root> -m <model-id>; --acp is documented separately.",
+      "tool_calling": "Documented agent/tool workflow requires a capable model; no live tool-quality test was run.",
+      "version_requirement": "Current official source checked on 2026-11-09; no minimum local-capable release verified.",
+      "source_urls": [
+        "https://docs.cline.bot/cli/cli-reference",
+        "https://docs.cline.bot/running-models-locally/overview"
+      ],
+      "advanced_adapter": "",
+      "notes": ""
+    },
+    {
+      "id": "acp:codeassistant",
+      "harness": "Code Assistant",
+      "group": "ACP registry",
+      "verdict": "Supported (documented)",
+      "mechanism": "Ollama provider; providers.json supplies endpoints and models.json supplies model IDs and context_token_limit.",
+      "tool_calling": "Documented agent/tool workflow requires a capable model; no live tool-quality test was run.",
+      "version_requirement": "Current official source checked on 2026-11-09; no minimum local-capable release verified.",
+      "source_urls": [
+        "https://raw.githubusercontent.com/stippi/code-assistant/main/README.md",
+        "https://raw.githubusercontent.com/stippi/code-assistant/main/docs/configuration.md"
+      ],
+      "advanced_adapter": "",
+      "notes": ""
+    },
+    {
+      "id": "acp:codebuddy",
+      "harness": "CodeBuddy Code",
+      "group": "ACP registry",
+      "verdict": "Not supported",
+      "mechanism": "No current author-documented same-Mac local model mechanism was verified in the checked official source.",
+      "tool_calling": "Not established for local models in the checked source.",
+      "version_requirement": "Current official source checked on 2026-11-09; no minimum local-capable release verified.",
+      "source_urls": [
+        "https://www.codebuddy.cn/cli/"
+      ],
+      "advanced_adapter": "",
+      "notes": "Excluded for lack of verified positive evidence, not a claim of technical impossibility. Official source was unavailable or unrendered: Empty or unrendered source"
+    },
+    {
+      "id": "acp:codex",
+      "harness": "Codex",
+      "group": "ACP registry",
+      "verdict": "Supported (documented)",
+      "mechanism": "--oss --local-provider ollama|lmstudio -m <id>; oss_provider and model_providers configure the local Responses endpoint.",
+      "tool_calling": "Documented agent/tool workflow requires a capable model; no live tool-quality test was run.",
+      "version_requirement": "Current OSS-mode CLI and local Responses-capable server. Current docs do not state the original minimum version; 0.134+ changes profile-file layout.",
+      "source_urls": [
+        "https://learn.chatgpt.com/docs/config-file/config-advanced"
+      ],
+      "advanced_adapter": "",
+      "notes": "Officially supported locally, but excluded here because no reviewed Responses/output-limit adapter is wired."
+    },
+    {
+      "id": "acp:nova",
+      "harness": "Nova",
+      "group": "ACP registry",
+      "verdict": "Not supported",
+      "mechanism": "No current author-documented same-Mac local model mechanism was verified in the checked official source.",
+      "tool_calling": "Not established for local models in the checked source.",
+      "version_requirement": "Current official source checked on 2026-11-09; no minimum local-capable release verified.",
+      "source_urls": [
+        "https://www.compassap.ai/portfolio/nova.html"
+      ],
+      "advanced_adapter": "",
+      "notes": "Excluded for lack of verified positive evidence, not a claim of technical impossibility."
+    },
+    {
+      "id": "acp:copilot",
+      "harness": "GitHub Copilot",
+      "group": "ACP registry",
+      "verdict": "Supported (documented)",
+      "mechanism": "CLI /model discovers local Ollama; local/self-hosted provider config requires streaming and tool-calling support.",
+      "tool_calling": "Documented agent/tool workflow requires a capable model; no live tool-quality test was run.",
+      "version_requirement": "Current official source checked on 2026-11-09; no minimum local-capable release verified.",
+      "source_urls": [
+        "https://docs.github.com/en/copilot/how-tos/copilot-cli/customize-copilot/add-llm-models"
+      ],
+      "advanced_adapter": "",
+      "notes": ""
+    },
+    {
+      "id": "acp:cortex",
+      "harness": "Cortex Code",
+      "group": "ACP registry",
+      "verdict": "Not supported",
+      "mechanism": "No current author-documented same-Mac local model mechanism was verified in the checked official source.",
+      "tool_calling": "Not established for local models in the checked source.",
+      "version_requirement": "Current official source checked on 2026-11-09; no minimum local-capable release verified.",
+      "source_urls": [
+        "https://docs.snowflake.com/en/user-guide/cortex-code/cortex-code"
+      ],
+      "advanced_adapter": "",
+      "notes": "Excluded for lack of verified positive evidence, not a claim of technical impossibility."
+    },
+    {
+      "id": "acp:corust",
+      "harness": "Corust Agent",
+      "group": "ACP registry",
+      "verdict": "Not supported",
+      "mechanism": "No current author-documented same-Mac local model mechanism was verified in the checked official source.",
+      "tool_calling": "Not established for local models in the checked source.",
+      "version_requirement": "Current official source checked on 2026-11-09; no minimum local-capable release verified.",
+      "source_urls": [
+        "https://corust.ai"
+      ],
+      "advanced_adapter": "",
+      "notes": "Excluded for lack of verified positive evidence, not a claim of technical impossibility. Official source was unavailable or unrendered: <urlopen error [SSL: UNEXPECTED_EOF_WHILE_READING] EOF occurred in violation of protocol (_ssl.c:1029)>"
+    },
+    {
+      "id": "acp:crow",
+      "harness": "crow-cli",
+      "group": "ACP registry",
+      "verdict": "Supported (documented)",
+      "mechanism": "config.yaml providers.<name>.base_url points to a compatible local/LAN server; models map provider and model IDs.",
+      "tool_calling": "Documented agent/tool workflow requires a capable model; no live tool-quality test was run.",
+      "version_requirement": "Current official source checked on 2026-11-09; no minimum local-capable release verified.",
+      "source_urls": [
+        "https://crow-ai.dev/docs/configuration/"
+      ],
+      "advanced_adapter": "",
+      "notes": ""
+    },
+    {
+      "id": "acp:cursor",
+      "harness": "Cursor",
+      "group": "ACP registry",
+      "verdict": "Not supported",
+      "mechanism": "CLI configuration and parameters do not document a loopback model provider. An agent-server URL is not a model endpoint.",
+      "tool_calling": "Not established for local models in the checked source.",
+      "version_requirement": "Current official source checked on 2026-11-09; no minimum local-capable release verified.",
+      "source_urls": [
+        "https://cursor.com/docs/cli/reference/configuration",
+        "https://cursor.com/docs/cli/reference/parameters"
+      ],
+      "advanced_adapter": "",
+      "notes": ""
+    },
+    {
+      "id": "acp:deepagents-code",
+      "harness": "Deep Agents Code",
+      "group": "ACP registry",
+      "verdict": "Supported (documented)",
+      "mechanism": "dcode --install ollama; dcode --model ollama:<id>. Compatible APIs and tool-capable LangChain providers are documented.",
+      "tool_calling": "Documented agent/tool workflow requires a capable model; no live tool-quality test was run.",
+      "version_requirement": "Current official source checked on 2026-11-09; no minimum local-capable release verified.",
+      "source_urls": [
+        "https://docs.langchain.com/oss/deepagents/code/providers"
+      ],
+      "advanced_adapter": "",
+      "notes": ""
+    },
+    {
+      "id": "acp:deepagents",
+      "harness": "DeepAgents",
+      "group": "ACP registry",
+      "verdict": "Supported (documented)",
+      "mechanism": "JavaScript createDeepAgent accepts model: \"ollama:<id>\" through its LangChain provider integration.",
+      "tool_calling": "Documented agent/tool workflow requires a capable model; no live tool-quality test was run.",
+      "version_requirement": "Current official source checked on 2026-11-09; no minimum local-capable release verified.",
+      "source_urls": [
+        "https://docs.langchain.com/oss/javascript/deepagents/overview"
+      ],
+      "advanced_adapter": "",
+      "notes": ""
+    },
+    {
+      "id": "acp:devin",
+      "harness": "Devin",
+      "group": "ACP registry",
+      "verdict": "Not supported",
+      "mechanism": "No current author-documented same-Mac local model mechanism was verified in the checked official source.",
+      "tool_calling": "Not established for local models in the checked source.",
+      "version_requirement": "Current official source checked on 2026-11-09; no minimum local-capable release verified.",
+      "source_urls": [
+        "https://docs.devin.ai/cli"
+      ],
+      "advanced_adapter": "",
+      "notes": "Excluded for lack of verified positive evidence, not a claim of technical impossibility."
+    },
+    {
+      "id": "acp:dimcode",
+      "harness": "DimCode",
+      "group": "ACP registry",
+      "verdict": "Not supported",
+      "mechanism": "No current author-documented same-Mac local model mechanism was verified in the checked official source.",
+      "tool_calling": "Not established for local models in the checked source.",
+      "version_requirement": "Current official source checked on 2026-11-09; no minimum local-capable release verified.",
+      "source_urls": [
+        "https://dimcode.dev/docs/acp.html"
+      ],
+      "advanced_adapter": "",
+      "notes": "Excluded for lack of verified positive evidence, not a claim of technical impossibility."
+    },
+    {
+      "id": "acp:dirac",
+      "harness": "Dirac",
+      "group": "ACP registry",
+      "verdict": "Not supported",
+      "mechanism": "No current author-documented same-Mac local model mechanism was verified in the checked official source.",
+      "tool_calling": "Not established for local models in the checked source.",
+      "version_requirement": "Current official source checked on 2026-11-09; no minimum local-capable release verified.",
+      "source_urls": [
+        "https://dirac.run"
+      ],
+      "advanced_adapter": "",
+      "notes": "Excluded for lack of verified positive evidence, not a claim of technical impossibility."
+    },
+    {
+      "id": "acp:droid",
+      "harness": "Factory Droid",
+      "group": "ACP registry",
+      "verdict": "Supported (documented)",
+      "mechanism": "settings.json customModels[] uses provider=generic-chat-completion-api, baseUrl, model and maxOutputTokens; local keyless endpoints are supported.",
+      "tool_calling": "Documented agent/tool workflow requires a capable model; no live tool-quality test was run.",
+      "version_requirement": "Current official source checked on 2026-11-09; no minimum local-capable release verified.",
+      "source_urls": [
+        "https://docs.factory.com/model-independence/byok"
+      ],
+      "advanced_adapter": "",
+      "notes": ""
+    },
+    {
+      "id": "acp:fast-agent",
+      "harness": "fast-agent",
+      "group": "ACP registry",
+      "verdict": "Supported (documented)",
+      "mechanism": "The generic provider supports local models; the README documents --model=generic.qwen2.5 and an ACP entry point.",
+      "tool_calling": "Documented agent/tool workflow requires a capable model; no live tool-quality test was run.",
+      "version_requirement": "Current official source checked on 2026-11-09; no minimum local-capable release verified.",
+      "source_urls": [
+        "https://raw.githubusercontent.com/evalstate/fast-agent/main/README.md"
+      ],
+      "advanced_adapter": "",
+      "notes": ""
+    },
+    {
+      "id": "acp:fount",
+      "harness": "fount",
+      "group": "ACP registry",
+      "verdict": "Not supported",
+      "mechanism": "No current author-documented same-Mac local model mechanism was verified in the checked official source.",
+      "tool_calling": "Not established for local models in the checked source.",
+      "version_requirement": "Current official source checked on 2026-11-09; no minimum local-capable release verified.",
+      "source_urls": [
+        "https://github.com/steve02081504/fount"
+      ],
+      "advanced_adapter": "",
+      "notes": "Excluded for lack of verified positive evidence, not a claim of technical impossibility."
+    },
+    {
+      "id": "acp:fx",
+      "harness": "fx",
+      "group": "ACP registry",
+      "verdict": "Supported (documented)",
+      "mechanism": "settings.json providers.<name>: protocol=openai-chat-completions, base_url, auth.type=none and model_metadata token/tool limits.",
+      "tool_calling": "Documented agent/tool workflow requires a capable model; no live tool-quality test was run.",
+      "version_requirement": "Current official source checked on 2026-11-09; no minimum local-capable release verified.",
+      "source_urls": [
+        "https://fx.sh/docs/configure-fx/custom-model-connections"
+      ],
+      "advanced_adapter": "",
+      "notes": ""
+    },
+    {
+      "id": "acp:gemini",
+      "harness": "Gemini CLI",
+      "group": "ACP registry",
+      "verdict": "Not supported",
+      "mechanism": "Official CLI authentication documents Google login, Gemini API key and Vertex AI, not Ollama/LM Studio or an OpenAI local provider.",
+      "tool_calling": "Not established for local models in the checked source.",
+      "version_requirement": "Current official source checked on 2026-11-09; no minimum local-capable release verified.",
+      "source_urls": [
+        "https://google-gemini.github.io/gemini-cli/docs/get-started/authentication.html",
+        "https://google-gemini.github.io/gemini-cli/docs/get-started/configuration.html"
+      ],
+      "advanced_adapter": "",
+      "notes": ""
+    },
+    {
+      "id": "acp:glm",
+      "harness": "GLM Agent",
+      "group": "ACP registry",
+      "verdict": "Unofficial or workaround only",
+      "mechanism": "ACP_GLM_BASE_URL overrides the Z.AI-compatible API endpoint. No author-documented local-model setup was verified.",
+      "tool_calling": "Not established for local models in the checked source.",
+      "version_requirement": "Current official source checked on 2026-11-09; no minimum local-capable release verified.",
+      "source_urls": [
+        "https://raw.githubusercontent.com/stefandevo/glm-acp-agent/main/README.md"
+      ],
+      "advanced_adapter": "",
+      "notes": ""
+    },
+    {
+      "id": "acp:goose",
+      "harness": "Goose",
+      "group": "ACP registry",
+      "verdict": "Supported (documented)",
+      "mechanism": "GOOSE_PROVIDER=ollama with OLLAMA_HOST and GOOSE_INPUT_LIMIT; or GOOSE_PROVIDER=lmstudio with LMSTUDIO_HOST. Shared model/context/output environment settings.",
+      "tool_calling": "Documented agent/tool workflow requires a capable model; no live tool-quality test was run.",
+      "version_requirement": "App adapter requires stable 1.58.0 <= version < 2. Reviewed upstream release v1.58.0; older/unparseable builds are excluded.",
+      "source_urls": [
+        "https://github.com/aaif-goose/goose/blob/v1.58.0/documentation/docs/getting-started/providers.md",
+        "https://github.com/aaif-goose/goose/blob/v1.58.0/documentation/docs/guides/environment-variables.md",
+        "https://github.com/aaif-goose/goose/blob/v1.58.0/crates/goose/src/providers/ollama_def.rs",
+        "https://github.com/aaif-goose/goose/blob/v1.58.0/crates/goose-providers/src/declarative/definitions/lmstudio.json"
+      ],
+      "advanced_adapter": "goose",
+      "notes": ""
+    },
+    {
+      "id": "acp:harn",
+      "harness": "Harn",
+      "group": "ACP registry",
+      "verdict": "Supported (documented)",
+      "mechanism": "provider=ollama plus OLLAMA_HOST, or provider=local plus LOCAL_LLM_BASE_URL/LOCAL_LLM_MODEL; native or explicit text-tool fallback.",
+      "tool_calling": "Documented agent/tool workflow requires a capable model; no live tool-quality test was run.",
+      "version_requirement": "Current official source checked on 2026-11-09; no minimum local-capable release verified.",
+      "source_urls": [
+        "https://harnlang.com/llm/providers.html"
+      ],
+      "advanced_adapter": "",
+      "notes": ""
+    },
+    {
+      "id": "acp:hermes",
+      "harness": "Hermes Agent",
+      "group": "ACP registry",
+      "verdict": "Supported (documented)",
+      "mechanism": "Custom OpenAI-compatible main provider/base_url and model; named custom endpoints appear in ACP model selection.",
+      "tool_calling": "Documented agent/tool workflow requires a capable model; no live tool-quality test was run.",
+      "version_requirement": "Current official source checked on 2026-11-09; no minimum local-capable release verified.",
+      "source_urls": [
+        "https://hermes-agent.nousresearch.com/docs/user-guide/features/acp",
+        "https://hermes-agent.nousresearch.com/docs/user-guide/configuration"
+      ],
+      "advanced_adapter": "",
+      "notes": ""
+    },
+    {
+      "id": "acp:junie",
+      "harness": "JetBrains Junie",
+      "group": "ACP registry",
+      "verdict": "Supported (documented)",
+      "mechanism": "CLI /account > Custom models and endpoints > Ollama; host-only URL. Manual profiles use apiType=OpenAICompletion and full chat-completions URL.",
+      "tool_calling": "Documented agent/tool workflow requires a capable model; no live tool-quality test was run.",
+      "version_requirement": "Current official source checked on 2026-11-09; no minimum local-capable release verified.",
+      "source_urls": [
+        "https://junie.jetbrains.com/docs/custom-llm-ollama.html"
+      ],
+      "advanced_adapter": "",
+      "notes": "CLI only. The same official page explicitly excludes the IDE plugin."
+    },
+    {
+      "id": "acp:kilo",
+      "harness": "Kilo",
+      "group": "ACP registry",
+      "verdict": "Supported (documented)",
+      "mechanism": "kilo.jsonc model=ollama/<id> or lmstudio/<id>; provider.<id>.models sets tool_call and limit.context/output; compatible providers use options.baseURL.",
+      "tool_calling": "Documented agent/tool workflow requires a capable model; no live tool-quality test was run.",
+      "version_requirement": "Current official source checked on 2026-11-09; no minimum local-capable release verified.",
+      "source_urls": [
+        "https://kilo.ai/docs/code-with-ai/agents/custom-models",
+        "https://kilo.ai/docs/code-with-ai/platforms/cli"
+      ],
+      "advanced_adapter": "",
+      "notes": ""
+    },
+    {
+      "id": "acp:kimchi",
+      "harness": "Kimchi",
+      "group": "ACP registry",
+      "verdict": "Not supported",
+      "mechanism": "No current author-documented same-Mac local model mechanism was verified in the checked official source.",
+      "tool_calling": "Not established for local models in the checked source.",
+      "version_requirement": "Current official source checked on 2026-11-09; no minimum local-capable release verified.",
+      "source_urls": [
+        "https://kimchi.dev"
+      ],
+      "advanced_adapter": "",
+      "notes": "Excluded for lack of verified positive evidence, not a claim of technical impossibility."
+    },
+    {
+      "id": "acp:kimi",
+      "harness": "Kimi Code",
+      "group": "ACP registry",
+      "verdict": "Supported (documented)",
+      "mechanism": "providers.<id>.type=openai and base_url select an OpenAI Chat Completions-compatible service; models configure provider, model ID, max_context_size and capabilities.",
+      "tool_calling": "Agent model capabilities are configurable in official docs. Specific Ollama/LM Studio model tool behavior was not live-tested.",
+      "version_requirement": "Current official source checked on 2026-11-09; no minimum local-capable release verified.",
+      "source_urls": [
+        "https://moonshotai.github.io/kimi-code/en/configuration/providers.md",
+        "https://moonshotai.github.io/kimi-code/en/configuration/config-files"
+      ],
+      "advanced_adapter": "",
+      "notes": "Support is documented at the compatible-protocol level, not a validated app adapter. It remains hidden."
+    },
+    {
+      "id": "acp:kiro",
+      "harness": "Kiro CLI",
+      "group": "ACP registry",
+      "verdict": "Not supported",
+      "mechanism": "No current author-documented same-Mac local model mechanism was verified in the checked official source.",
+      "tool_calling": "Not established for local models in the checked source.",
+      "version_requirement": "Current official source checked on 2026-11-09; no minimum local-capable release verified.",
+      "source_urls": [
+        "https://kiro.dev/docs/cli/acp/"
+      ],
+      "advanced_adapter": "",
+      "notes": "Excluded for lack of verified positive evidence, not a claim of technical impossibility."
+    },
+    {
+      "id": "acp:llmlingagent",
+      "harness": "LLMling-Agent",
+      "group": "ACP registry",
+      "verdict": "Supported (documented)",
+      "mechanism": "This descriptor points to the same agentpool repository; ACP documents the ollama provider.",
+      "tool_calling": "Documented agent/tool workflow requires a capable model; no live tool-quality test was run.",
+      "version_requirement": "Current official source checked on 2026-11-09; no minimum local-capable release verified.",
+      "source_urls": [
+        "https://raw.githubusercontent.com/phil65/agentpool/main/README.md",
+        "https://phil65.github.io/agentpool/advanced/acp-integration/"
+      ],
+      "advanced_adapter": "",
+      "notes": ""
+    },
+    {
+      "id": "acp:minion",
+      "harness": "Minion Code",
+      "group": "ACP registry",
+      "verdict": "Not supported",
+      "mechanism": "No current author-documented same-Mac local model mechanism was verified in the checked official source.",
+      "tool_calling": "Not established for local models in the checked source.",
+      "version_requirement": "Current official source checked on 2026-11-09; no minimum local-capable release verified.",
+      "source_urls": [
+        "https://github.com/femto/minion-code"
+      ],
+      "advanced_adapter": "",
+      "notes": "Excluded for lack of verified positive evidence, not a claim of technical impossibility."
+    },
+    {
+      "id": "acp:mistral-vibe",
+      "harness": "Mistral Vibe",
+      "group": "ACP registry",
+      "verdict": "Unofficial or workaround only",
+      "mechanism": "Configurable model/provider tables are documented, but exact current local-provider config and local tool behavior were not verified in current author docs.",
+      "tool_calling": "Not established for local models in the checked source.",
+      "version_requirement": "Current official source checked on 2026-11-09; no minimum local-capable release verified.",
+      "source_urls": [
+        "https://raw.githubusercontent.com/mistralai/mistral-vibe/main/README.md"
+      ],
+      "advanced_adapter": "",
+      "notes": ""
+    },
+    {
+      "id": "acp:omp",
+      "harness": "Oh My Pi",
+      "group": "ACP registry",
+      "verdict": "Supported (documented)",
+      "mechanism": "models.yml providers.<name> uses baseUrl, api=openai-completions and model contextWindow/maxTokens; README explicitly lists Ollama and LM Studio.",
+      "tool_calling": "Documented agent/tool workflow requires a capable model; no live tool-quality test was run.",
+      "version_requirement": "Current official source checked on 2026-11-09; no minimum local-capable release verified.",
+      "source_urls": [
+        "https://raw.githubusercontent.com/can1357/oh-my-pi/main/README.md"
+      ],
+      "advanced_adapter": "",
+      "notes": ""
+    },
+    {
+      "id": "acp:openclaw",
+      "harness": "OpenClaw",
+      "group": "ACP registry",
+      "verdict": "Supported (documented)",
+      "mechanism": "Native ollama provider with local host/model discovery; the descriptor has no executable ACP command, so it is not a runnable adapter here.",
+      "tool_calling": "Documented agent/tool workflow requires a capable model; no live tool-quality test was run.",
+      "version_requirement": "Current official source checked on 2026-11-09; no minimum local-capable release verified.",
+      "source_urls": [
+        "https://docs.openclaw.ai/providers/ollama"
+      ],
+      "advanced_adapter": "",
+      "notes": ""
+    },
+    {
+      "id": "acp:opencode",
+      "harness": "OpenCode",
+      "group": "ACP registry",
+      "verdict": "Supported (documented)",
+      "mechanism": "Version 1 provider.<id>.npm=@ai-sdk/openai-compatible, options.baseURL, model limits and enabled_providers, delivered via OPENCODE_CONFIG_CONTENT to opencode acp.",
+      "tool_calling": "Documented agent/tool workflow requires a capable model; no live tool-quality test was run.",
+      "version_requirement": "App adapter requires stable 1.19.5 <= version < 2. Reviewed upstream release v1.19.5; newer schema/ACP architectures are excluded.",
+      "source_urls": [
+        "https://github.com/anomalyco/opencode/blob/v1.19.5/packages/web/src/content/docs/providers.mdx",
+        "https://github.com/anomalyco/opencode/blob/v1.19.5/packages/opencode/src/cli/cmd/acp.ts",
+        "https://github.com/anomalyco/opencode/blob/v1.19.5/packages/opencode/src/config/config.ts"
+      ],
+      "advanced_adapter": "opencode",
+      "notes": ""
+    },
+    {
+      "id": "acp:openhands",
+      "harness": "OpenHands",
+      "group": "ACP registry",
+      "verdict": "Supported (documented)",
+      "mechanism": "Local OpenAI-compatible LLM model and base_url configuration is documented; use a tool-capable model and the local-LLM guide.",
+      "tool_calling": "Documented agent/tool workflow requires a capable model; no live tool-quality test was run.",
+      "version_requirement": "Current official source checked on 2026-11-09; no minimum local-capable release verified.",
+      "source_urls": [
+        "https://docs.openhands.dev/openhands/usage/llms/local-llms"
+      ],
+      "advanced_adapter": "",
+      "notes": ""
+    },
+    {
+      "id": "acp:pi",
+      "harness": "Pi",
+      "group": "ACP registry",
+      "verdict": "Supported (documented)",
+      "mechanism": "models.json providers.<name>: baseUrl, api=openai-completions, apiKey and models. Explicit Ollama/LM Studio examples and model metadata overrides.",
+      "tool_calling": "Documented agent/tool workflow requires a capable model; no live tool-quality test was run.",
+      "version_requirement": "Current official source checked on 2026-11-09; no minimum local-capable release verified.",
+      "source_urls": [
+        "https://raw.githubusercontent.com/earendil-works/pi/main/packages/coding-agent/docs/models.md"
+      ],
+      "advanced_adapter": "",
+      "notes": ""
+    },
+    {
+      "id": "acp:poolside",
+      "harness": "Poolside",
+      "group": "ACP registry",
+      "verdict": "Supported (documented)",
+      "mechanism": "Poolside standalone OpenAI-compatible endpoint uses POOLSIDE_STANDALONE_BASE_URL and POOLSIDE_STANDALONE_MODEL; README also documents Ollama.",
+      "tool_calling": "Documented agent/tool workflow requires a capable model; no live tool-quality test was run.",
+      "version_requirement": "Current official source checked on 2026-11-09; no minimum local-capable release verified.",
+      "source_urls": [
+        "https://raw.githubusercontent.com/poolsideai/pool/main/README.md"
+      ],
+      "advanced_adapter": "",
+      "notes": ""
+    },
+    {
+      "id": "acp:prime-agent",
+      "harness": "Prime Agent",
+      "group": "ACP registry",
+      "verdict": "Unofficial or workaround only",
+      "mechanism": "Current README documents models.json overrides, but earlier custom-endpoint guide paths are absent from the current repository tree. Current local setup not verified.",
+      "tool_calling": "Not established for local models in the checked source.",
+      "version_requirement": "Current official source checked on 2026-11-09; no minimum local-capable release verified.",
+      "source_urls": [
+        "https://raw.githubusercontent.com/PrimeIntellect-ai/prime-agent/main/README.md",
+        "https://github.com/PrimeIntellect-ai/prime-agent/blob/main/crates/pa-models/README.md"
+      ],
+      "advanced_adapter": "",
+      "notes": ""
+    },
+    {
+      "id": "acp:qoder",
+      "harness": "Qoder CLI",
+      "group": "ACP registry",
+      "verdict": "Unofficial or workaround only",
+      "mechanism": "The desktop custom-model page documents OpenAI-compatible Base URL and Chat Completions/Responses, but equivalent CLI/ACP local operation was not verified.",
+      "tool_calling": "Not established for local models in the checked source.",
+      "version_requirement": "Current official source checked on 2026-11-09; no minimum local-capable release verified.",
+      "source_urls": [
+        "https://docs.qoder.com/qoder/custom-models",
+        "https://docs.qoder.com/cli/acp"
+      ],
+      "advanced_adapter": "",
+      "notes": ""
+    },
+    {
+      "id": "acp:qwen",
+      "harness": "Qwen Code",
+      "group": "ACP registry",
+      "verdict": "Supported (documented)",
+      "mechanism": "modelProviders.openai[] uses id, baseUrl, envKey and generationConfig.contextWindowSize/samplingParams.max_tokens; explicit Ollama/LM Studio examples.",
+      "tool_calling": "Documented agent/tool workflow requires a capable model; no live tool-quality test was run.",
+      "version_requirement": "Current official source checked on 2026-11-09; no minimum local-capable release verified.",
+      "source_urls": [
+        "https://qwenlm.github.io/qwen-code-docs/en/users/configuration/model-providers/"
+      ],
+      "advanced_adapter": "",
+      "notes": ""
+    },
+    {
+      "id": "acp:sigit",
+      "harness": "siGit Code",
+      "group": "ACP registry",
+      "verdict": "Supported (documented)",
+      "mechanism": "Official README says the command line runs models on-device. It is not an Ollama/LM Studio endpoint adapter in SuperQode.",
+      "tool_calling": "On-device inference is documented; local tool-calling details were not independently verified.",
+      "version_requirement": "Current official source checked on 2026-11-09; no minimum local-capable release verified.",
+      "source_urls": [
+        "https://raw.githubusercontent.com/getsigit/sigit/main/README.md",
+        "https://github.com/getsigit/sigit/blob/main/docs/terminal.md"
+      ],
+      "advanced_adapter": "",
+      "notes": ""
+    },
+    {
+      "id": "acp:stakpak",
+      "harness": "Stakpak",
+      "group": "ACP registry",
+      "verdict": "Supported (documented)",
+      "mechanism": "profiles.offline provider=local; providers.offline type=custom, base_url and provider-key/model-name selection for Ollama/LM Studio.",
+      "tool_calling": "Documented agent/tool workflow requires a capable model; no live tool-quality test was run.",
+      "version_requirement": "Current official source checked on 2026-11-09; no minimum local-capable release verified.",
+      "source_urls": [
+        "https://raw.githubusercontent.com/stakpak/agent/main/README.md"
+      ],
+      "advanced_adapter": "",
+      "notes": ""
+    },
+    {
+      "id": "acp:stdio-bus",
+      "harness": "stdio Bus",
+      "group": "ACP registry",
+      "verdict": "Unofficial or workaround only",
+      "mechanism": "Official README describes an OpenAI-compatible bridge and custom defineProvider contract, not a verified local coding-model launch configuration.",
+      "tool_calling": "Not established for local models in the checked source.",
+      "version_requirement": "Current official source checked on 2026-11-09; no minimum local-capable release verified.",
+      "source_urls": [
+        "https://raw.githubusercontent.com/stdiobus/stdiobus/main/README.md"
+      ],
+      "advanced_adapter": "",
+      "notes": ""
+    },
+    {
+      "id": "acp:vtcode",
+      "harness": "VT Code",
+      "group": "ACP registry",
+      "verdict": "Supported (documented)",
+      "mechanism": "Ollama local provider with OLLAMA_BASE_URL; local inference guide and custom_providers[].base_url support compatible endpoints.",
+      "tool_calling": "Documented agent/tool workflow requires a capable model; no live tool-quality test was run.",
+      "version_requirement": "Current official source checked on 2026-11-09; no minimum local-capable release verified.",
+      "source_urls": [
+        "https://raw.githubusercontent.com/vinhnx/vtcode/main/docs/providers/PROVIDER_GUIDES.md"
+      ],
+      "advanced_adapter": "",
+      "notes": ""
+    },
+    {
+      "id": "acp:grok",
+      "harness": "Grok Build",
+      "group": "ACP registry",
+      "verdict": "Not supported",
+      "mechanism": "No current author-documented same-Mac local model mechanism was verified in the checked official source.",
+      "tool_calling": "Not established for local models in the checked source.",
+      "version_requirement": "Current official source checked on 2026-11-09; no minimum local-capable release verified.",
+      "source_urls": [
+        "https://x.ai/cli"
+      ],
+      "advanced_adapter": "",
+      "notes": "Excluded for lack of verified positive evidence, not a claim of technical impossibility."
+    },
+    {
+      "id": "runtime:builtin",
+      "harness": "builtin",
+      "group": "Native runtime",
+      "verdict": "Supported (documented)",
+      "mechanism": "SuperQode worker-scoped Ollama/LM Studio gateway with the shared context contract.",
+      "tool_calling": "Documented agent/tool workflow requires a capable model; no live tool-quality test was run.",
+      "version_requirement": "Current official source checked on 2026-11-09; no minimum local-capable release verified.",
+      "source_urls": [
+        "https://github.com/SuperagenticAI/superqode/blob/main/README.md"
+      ],
+      "advanced_adapter": "superqode",
+      "notes": ""
+    },
+    {
+      "id": "runtime:adk",
+      "harness": "adk",
+      "group": "Native runtime",
+      "verdict": "Supported (documented)",
+      "mechanism": "LiteLlm(model=\"ollama_chat/<id>\") connects an ADK agent to Ollama.",
+      "tool_calling": "Documented agent/tool workflow requires a capable model; no live tool-quality test was run.",
+      "version_requirement": "Official Ollama page marks Python ADK v0.1.0 support; LiteLLM integration required.",
+      "source_urls": [
+        "https://adk.dev/agents/models/ollama/"
+      ],
+      "advanced_adapter": "",
+      "notes": ""
+    },
+    {
+      "id": "runtime:openai-agents",
+      "harness": "openai-agents",
+      "group": "Native runtime",
+      "verdict": "Supported (documented)",
+      "mechanism": "OpenAIChatCompletionsModel with AsyncOpenAI(base_url=<local-v1-url>); tool-capable compatible providers.",
+      "tool_calling": "Documented agent/tool workflow requires a capable model; no live tool-quality test was run.",
+      "version_requirement": "Current official source checked on 2026-11-09; no minimum local-capable release verified.",
+      "source_urls": [
+        "https://openai.github.io/openai-agents-python/models/"
+      ],
+      "advanced_adapter": "",
+      "notes": ""
+    },
+    {
+      "id": "runtime:pydanticai",
+      "harness": "pydanticai",
+      "group": "Native runtime",
+      "verdict": "Supported (documented)",
+      "mechanism": "OpenAIChatModel with OpenAIProvider(base_url=<local-v1-url>); Ollama provider is also documented.",
+      "tool_calling": "Documented agent/tool workflow requires a capable model; no live tool-quality test was run.",
+      "version_requirement": "Current official source checked on 2026-11-09; no minimum local-capable release verified.",
+      "source_urls": [
+        "https://pydantic.dev/docs/ai/models/openai/"
+      ],
+      "advanced_adapter": "",
+      "notes": ""
+    },
+    {
+      "id": "runtime:codex-cli",
+      "harness": "codex-cli",
+      "group": "Native runtime",
+      "verdict": "Supported (documented)",
+      "mechanism": "--oss --local-provider ollama|lmstudio -m <id>; oss_provider and model_providers configure the local Responses endpoint.",
+      "tool_calling": "Documented agent/tool workflow requires a capable model; no live tool-quality test was run.",
+      "version_requirement": "Current official source checked on 2026-11-09; no minimum local-capable release verified.",
+      "source_urls": [
+        "https://learn.chatgpt.com/docs/config-file/config-advanced"
+      ],
+      "advanced_adapter": "",
+      "notes": ""
+    },
+    {
+      "id": "runtime:codex-sdk",
+      "harness": "codex-sdk",
+      "group": "Native runtime",
+      "verdict": "Unofficial or workaround only",
+      "mechanism": "The CLI documents OSS providers, but a current Python SDK local-provider configuration was not independently verified. No inference from the CLI is used for app eligibility.",
+      "tool_calling": "Not established for local models in the checked source.",
+      "version_requirement": "Current official source checked on 2026-11-09; no minimum local-capable release verified.",
+      "source_urls": [
+        "https://developers.openai.com/codex/sdk/",
+        "https://learn.chatgpt.com/docs/config-file/config-advanced"
+      ],
+      "advanced_adapter": "",
+      "notes": ""
+    },
+    {
+      "id": "runtime:copilot-sdk",
+      "harness": "copilot-sdk",
+      "group": "Native runtime",
+      "verdict": "Supported (documented)",
+      "mechanism": "Session provider.type=openai, baseUrl/base_url and wireApi=completions for Ollama/local compatible models.",
+      "tool_calling": "Documented agent/tool workflow requires a capable model; no live tool-quality test was run.",
+      "version_requirement": "Current official source checked on 2026-11-09; no minimum local-capable release verified.",
+      "source_urls": [
+        "https://raw.githubusercontent.com/github/copilot-sdk/main/docs/auth/byok.md"
+      ],
+      "advanced_adapter": "",
+      "notes": ""
+    },
+    {
+      "id": "runtime:claude-agent-sdk",
+      "harness": "claude-agent-sdk",
+      "group": "Native runtime",
+      "verdict": "Unofficial or workaround only",
+      "mechanism": "Underlying agent uses the same Anthropic gateway contract; non-Claude local models are not author-supported.",
+      "tool_calling": "Not established for local models in the checked source.",
+      "version_requirement": "Current official source checked on 2026-11-09; no minimum local-capable release verified.",
+      "source_urls": [
+        "https://code.claude.com/docs/en/llm-gateway"
+      ],
+      "advanced_adapter": "",
+      "notes": ""
+    },
+    {
+      "id": "runtime:antigravity-sdk",
+      "harness": "antigravity-sdk",
+      "group": "Native runtime",
+      "verdict": "Supported (documented)",
+      "mechanism": "LocalOpenAIAgentConfig(model=<id>, base_url=<local-v1-url>).lightweight() supports local tools and policies.",
+      "tool_calling": "Documented agent/tool workflow requires a capable model; no live tool-quality test was run.",
+      "version_requirement": "Current official source checked on 2026-11-09; no minimum local-capable release verified.",
+      "source_urls": [
+        "https://antigravity.google/docs/sdk/local-models"
+      ],
+      "advanced_adapter": "",
+      "notes": ""
+    },
+    {
+      "id": "runtime:antigravity-cli",
+      "harness": "antigravity-cli",
+      "group": "Native runtime",
+      "verdict": "Not supported",
+      "mechanism": "LocalOpenAIAgentConfig is documented for the SDK, not independently for this CLI/ACP launch interface.",
+      "tool_calling": "Not established for local models in the checked source.",
+      "version_requirement": "Current official source checked on 2026-11-09; no minimum local-capable release verified.",
+      "source_urls": [
+        "https://antigravity.google/docs/cli-install",
+        "https://antigravity.google/docs/sdk/local-models"
+      ],
+      "advanced_adapter": "",
+      "notes": ""
+    },
+    {
+      "id": "runtime:antigravity-managed",
+      "harness": "antigravity-managed",
+      "group": "Native runtime",
+      "verdict": "Not supported",
+      "mechanism": "Managed hosted agent interface; no documented same-Mac model endpoint in the checked source.",
+      "tool_calling": "Not established for local models in the checked source.",
+      "version_requirement": "Current official source checked on 2026-11-09; no minimum local-capable release verified.",
+      "source_urls": [
+        "https://antigravity.google/docs/cli-install"
+      ],
+      "advanced_adapter": "",
+      "notes": ""
+    },
+    {
+      "id": "runtime:devin-cli",
+      "harness": "devin-cli",
+      "group": "Native runtime",
+      "verdict": "Supported (documented)",
+      "mechanism": "Air-gapped federal edition: DEVIN_MODELS_FILE models.json supports loopback base_url, chat_completions/responses and token limits. Standard public CLI support is not established.",
+      "tool_calling": "Documented agent/tool workflow requires a capable model; no live tool-quality test was run.",
+      "version_requirement": "Current official source checked on 2026-11-09; no minimum local-capable release verified.",
+      "source_urls": [
+        "https://docs.devin.ai/federal/air-gapped/models-file"
+      ],
+      "advanced_adapter": "",
+      "notes": ""
+    },
+    {
+      "id": "runtime:muse",
+      "harness": "muse",
+      "group": "Native runtime",
+      "verdict": "Not supported",
+      "mechanism": "No documented Ollama/LM Studio or local compatible provider in the checked Muse Code page.",
+      "tool_calling": "Not established for local models in the checked source.",
+      "version_requirement": "Current official source checked on 2026-11-09; no minimum local-capable release verified.",
+      "source_urls": [
+        "https://dev.meta.ai/docs/muse-code"
+      ],
+      "advanced_adapter": "",
+      "notes": ""
+    },
+    {
+      "id": "runtime:copilot-cli",
+      "harness": "copilot-cli",
+      "group": "Native runtime",
+      "verdict": "Supported (documented)",
+      "mechanism": "CLI /model discovers local Ollama; local/self-hosted provider config requires streaming and tool-calling support.",
+      "tool_calling": "Documented agent/tool workflow requires a capable model; no live tool-quality test was run.",
+      "version_requirement": "Current official source checked on 2026-11-09; no minimum local-capable release verified.",
+      "source_urls": [
+        "https://docs.github.com/en/copilot/how-tos/copilot-cli/customize-copilot/add-llm-models"
+      ],
+      "advanced_adapter": "",
+      "notes": ""
+    },
+    {
+      "id": "runtime:grok-cli",
+      "harness": "grok-cli",
+      "group": "Native runtime",
+      "verdict": "Not supported",
+      "mechanism": "No documented same-Mac local model provider in the checked official CLI reference.",
+      "tool_calling": "Not established for local models in the checked source.",
+      "version_requirement": "Current official source checked on 2026-11-09; no minimum local-capable release verified.",
+      "source_urls": [
+        "https://x.ai/cli"
+      ],
+      "advanced_adapter": "",
+      "notes": ""
+    },
+    {
+      "id": "harness:core",
+      "harness": "Core",
+      "group": "First-party/optional harness",
+      "verdict": "Supported (documented)",
+      "mechanism": "First-party builtin backend accepts the SuperQode provider/model route; local templates and gateway branches are visible in official repository source.",
+      "tool_calling": "Documented agent/tool workflow requires a capable model; no live tool-quality test was run.",
+      "version_requirement": "Current official source checked on 2026-11-09; no minimum local-capable release verified.",
+      "source_urls": [
+        "https://github.com/SuperagenticAI/superqode/blob/main/src/superqode/harness/templates.py",
+        "https://github.com/SuperagenticAI/superqode/blob/main/src/superqode/providers/litellm_gateway.py"
+      ],
+      "advanced_adapter": "superqode",
+      "notes": "Only Core is mapped to the Advanced SuperQode harness option. Other presets are not added to this page."
+    },
+    {
+      "id": "harness:rlm",
+      "harness": "RLM",
+      "group": "First-party/optional harness",
+      "verdict": "Supported (documented)",
+      "mechanism": "First-party rlm backend accepts the SuperQode provider/model route; local templates and gateway branches are visible in official repository source.",
+      "tool_calling": "Documented agent/tool workflow requires a capable model; no live tool-quality test was run.",
+      "version_requirement": "Current official source checked on 2026-11-09; no minimum local-capable release verified.",
+      "source_urls": [
+        "https://github.com/SuperagenticAI/superqode/blob/main/src/superqode/harness/templates.py",
+        "https://github.com/SuperagenticAI/superqode/blob/main/src/superqode/providers/litellm_gateway.py"
+      ],
+      "advanced_adapter": "",
+      "notes": "Only Core is mapped to the Advanced SuperQode harness option. Other presets are not added to this page."
+    },
+    {
+      "id": "harness:pipy",
+      "harness": "PiPy",
+      "group": "First-party/optional harness",
+      "verdict": "Supported (documented)",
+      "mechanism": "First-party pipy backend accepts the SuperQode provider/model route; local templates and gateway branches are visible in official repository source.",
+      "tool_calling": "Documented agent/tool workflow requires a capable model; no live tool-quality test was run.",
+      "version_requirement": "Current official source checked on 2026-11-09; no minimum local-capable release verified.",
+      "source_urls": [
+        "https://github.com/SuperagenticAI/superqode/blob/main/src/superqode/harness/templates.py",
+        "https://github.com/SuperagenticAI/superqode/blob/main/src/superqode/providers/litellm_gateway.py"
+      ],
+      "advanced_adapter": "",
+      "notes": "Only Core is mapped to the Advanced SuperQode harness option. Other presets are not added to this page."
+    },
+    {
+      "id": "harness:workbench",
+      "harness": "Workbench",
+      "group": "First-party/optional harness",
+      "verdict": "Supported (documented)",
+      "mechanism": "First-party builtin backend accepts the SuperQode provider/model route; local templates and gateway branches are visible in official repository source.",
+      "tool_calling": "Documented agent/tool workflow requires a capable model; no live tool-quality test was run.",
+      "version_requirement": "Current official source checked on 2026-11-09; no minimum local-capable release verified.",
+      "source_urls": [
+        "https://github.com/SuperagenticAI/superqode/blob/main/src/superqode/harness/templates.py",
+        "https://github.com/SuperagenticAI/superqode/blob/main/src/superqode/providers/litellm_gateway.py"
+      ],
+      "advanced_adapter": "",
+      "notes": "Only Core is mapped to the Advanced SuperQode harness option. Other presets are not added to this page."
+    },
+    {
+      "id": "harness:codegem",
+      "harness": "CodeGem",
+      "group": "First-party/optional harness",
+      "verdict": "Supported (documented)",
+      "mechanism": "First-party codegem backend accepts the SuperQode provider/model route; local templates and gateway branches are visible in official repository source.",
+      "tool_calling": "Documented agent/tool workflow requires a capable model; no live tool-quality test was run.",
+      "version_requirement": "Current official source checked on 2026-11-09; no minimum local-capable release verified.",
+      "source_urls": [
+        "https://github.com/SuperagenticAI/superqode/blob/main/src/superqode/harness/templates.py",
+        "https://github.com/SuperagenticAI/superqode/blob/main/src/superqode/providers/litellm_gateway.py"
+      ],
+      "advanced_adapter": "",
+      "notes": "Only Core is mapped to the Advanced SuperQode harness option. Other presets are not added to this page."
+    },
+    {
+      "id": "harness:systemone",
+      "harness": "SystemOne",
+      "group": "First-party/optional harness",
+      "verdict": "Unofficial or workaround only",
+      "mechanism": "Provider-specific or additional decision-service preset; an all-local model/tool workflow was not established for this preset.",
+      "tool_calling": "Not established for local models in the checked source.",
+      "version_requirement": "Current official source checked on 2026-11-09; no minimum local-capable release verified.",
+      "source_urls": [
+        "https://github.com/SuperagenticAI/superqode/blob/main/src/superqode/harness/templates.py"
+      ],
+      "advanced_adapter": "",
+      "notes": "Only Core is mapped to the Advanced SuperQode harness option. Other presets are not added to this page."
+    },
+    {
+      "id": "harness:no-tool",
+      "harness": "No Tool",
+      "group": "First-party/optional harness",
+      "verdict": "Supported (documented)",
+      "mechanism": "First-party builtin backend accepts the SuperQode provider/model route; local templates and gateway branches are visible in official repository source.",
+      "tool_calling": "Model-only reasoning; tools are deliberately disabled by this preset.",
+      "version_requirement": "Current official source checked on 2026-11-09; no minimum local-capable release verified.",
+      "source_urls": [
+        "https://github.com/SuperagenticAI/superqode/blob/main/src/superqode/harness/templates.py",
+        "https://github.com/SuperagenticAI/superqode/blob/main/src/superqode/providers/litellm_gateway.py"
+      ],
+      "advanced_adapter": "",
+      "notes": "Only Core is mapped to the Advanced SuperQode harness option. Other presets are not added to this page."
+    },
+    {
+      "id": "harness:rlm-code",
+      "harness": "RLM Code",
+      "group": "First-party/optional harness",
+      "verdict": "Supported (documented)",
+      "mechanism": "/connect ollama <model> in the official RLM Code CLI; this Advanced adapter does not launch it.",
+      "tool_calling": "Documented agent/tool workflow requires a capable model; no live tool-quality test was run.",
+      "version_requirement": "Current official source checked on 2026-11-09; no minimum local-capable release verified.",
+      "source_urls": [
+        "https://raw.githubusercontent.com/SuperagenticAI/rlm-code/main/README.md"
+      ],
+      "advanced_adapter": "",
+      "notes": "Only Core is mapped to the Advanced SuperQode harness option. Other presets are not added to this page."
+    },
+    {
+      "id": "harness:tau",
+      "harness": "Tau (Hugging Face)",
+      "group": "First-party/optional harness",
+      "verdict": "Supported (documented)",
+      "mechanism": "tau --provider local --base-url <local-v1-url> --model <id> setup; /login custom and catalog.toml are documented.",
+      "tool_calling": "Documented agent/tool workflow requires a capable model; no live tool-quality test was run.",
+      "version_requirement": "Current official source checked on 2026-11-09; no minimum local-capable release verified.",
+      "source_urls": [
+        "https://twotimespi.dev/guides/providers-and-models/"
+      ],
+      "advanced_adapter": "",
+      "notes": "Only Core is mapped to the Advanced SuperQode harness option. Other presets are not added to this page."
+    },
+    {
+      "id": "harness:uhp",
+      "harness": "UHP harness",
+      "group": "First-party/optional harness",
+      "verdict": "Unofficial or workaround only",
+      "mechanism": "UHP is a remote harness routing protocol, not evidence that a target harness accepts same-Mac model endpoints.",
+      "tool_calling": "Not established for local models in the checked source.",
+      "version_requirement": "Current official source checked on 2026-11-09; no minimum local-capable release verified.",
+      "source_urls": [
+        "https://raw.githubusercontent.com/HarnessRouter/harnessrouter/main/README.md"
+      ],
+      "advanced_adapter": "",
+      "notes": "Only Core is mapped to the Advanced SuperQode harness option. Other presets are not added to this page."
+    },
+    {
+      "id": "harness:deepseek-harness",
+      "harness": "DeepSeek Harness",
+      "group": "First-party/optional harness",
+      "verdict": "Supported (documented)",
+      "mechanism": "The official Python SDK guide documents DEEPSEEK_BASE_URL=http://127.0.0.1:8000/v1.",
+      "tool_calling": "Documented agent/tool workflow requires a capable model; no live tool-quality test was run.",
+      "version_requirement": "Current official source checked on 2026-11-09; no minimum local-capable release verified.",
+      "source_urls": [
+        "https://raw.githubusercontent.com/deepseek-ai/deepseek-harness/master/docs/user/guide/python-sdk.md"
+      ],
+      "advanced_adapter": "",
+      "notes": "Only Core is mapped to the Advanced SuperQode harness option. Other presets are not added to this page."
+    },
+    {
+      "id": "harness:deepagents",
+      "harness": "DeepAgents",
+      "group": "First-party/optional harness",
+      "verdict": "Supported (documented)",
+      "mechanism": "create_deep_agent accepts a tool-capable LangChain chat model; Ollama provider routes are documented.",
+      "tool_calling": "Documented agent/tool workflow requires a capable model; no live tool-quality test was run.",
+      "version_requirement": "Current official source checked on 2026-11-09; no minimum local-capable release verified.",
+      "source_urls": [
+        "https://docs.langchain.com/oss/python/deepagents/models"
+      ],
+      "advanced_adapter": "",
+      "notes": "Only Core is mapped to the Advanced SuperQode harness option. Other presets are not added to this page."
+    },
+    {
+      "id": "harness:strands",
+      "harness": "Strands",
+      "group": "First-party/optional harness",
+      "verdict": "Supported (documented)",
+      "mechanism": "Python OllamaModel(host=<local-host>, model_id=<id>) supports local generation and tool calling.",
+      "tool_calling": "Documented agent/tool workflow requires a capable model; no live tool-quality test was run.",
+      "version_requirement": "Current official source checked on 2026-11-09; no minimum local-capable release verified.",
+      "source_urls": [
+        "https://strandsagents.com/latest/documentation/docs/user-guide/concepts/model-providers/ollama/",
+        "https://raw.githubusercontent.com/strands-agents/harness-sdk/main/README.md"
+      ],
+      "advanced_adapter": "",
+      "notes": "Only Core is mapped to the Advanced SuperQode harness option. Other presets are not added to this page."
+    },
+    {
+      "id": "harness:benchmark-coding",
+      "harness": "benchmark-coding",
+      "group": "First-party/optional harness",
+      "verdict": "Supported (documented)",
+      "mechanism": "First-party builtin backend accepts the SuperQode provider/model route; local templates and gateway branches are visible in official repository source.",
+      "tool_calling": "Documented agent/tool workflow requires a capable model; no live tool-quality test was run.",
+      "version_requirement": "Current official source checked on 2026-11-09; no minimum local-capable release verified.",
+      "source_urls": [
+        "https://github.com/SuperagenticAI/superqode/blob/main/src/superqode/harness/templates.py",
+        "https://github.com/SuperagenticAI/superqode/blob/main/src/superqode/providers/litellm_gateway.py"
+      ],
+      "advanced_adapter": "",
+      "notes": "Only Core is mapped to the Advanced SuperQode harness option. Other presets are not added to this page."
+    },
+    {
+      "id": "harness:rlm-docker",
+      "harness": "rlm-docker",
+      "group": "First-party/optional harness",
+      "verdict": "Supported (documented)",
+      "mechanism": "First-party rlm backend accepts the SuperQode provider/model route; local templates and gateway branches are visible in official repository source.",
+      "tool_calling": "Documented agent/tool workflow requires a capable model; no live tool-quality test was run.",
+      "version_requirement": "Current official source checked on 2026-11-09; no minimum local-capable release verified.",
+      "source_urls": [
+        "https://github.com/SuperagenticAI/superqode/blob/main/src/superqode/harness/templates.py",
+        "https://github.com/SuperagenticAI/superqode/blob/main/src/superqode/providers/litellm_gateway.py"
+      ],
+      "advanced_adapter": "",
+      "notes": "Only Core is mapped to the Advanced SuperQode harness option. Other presets are not added to this page."
+    },
+    {
+      "id": "harness:rlm-hybrid",
+      "harness": "rlm-hybrid",
+      "group": "First-party/optional harness",
+      "verdict": "Supported (documented)",
+      "mechanism": "First-party rlm backend accepts the SuperQode provider/model route; local templates and gateway branches are visible in official repository source.",
+      "tool_calling": "Documented agent/tool workflow requires a capable model; no live tool-quality test was run.",
+      "version_requirement": "Current official source checked on 2026-11-09; no minimum local-capable release verified.",
+      "source_urls": [
+        "https://github.com/SuperagenticAI/superqode/blob/main/src/superqode/harness/templates.py",
+        "https://github.com/SuperagenticAI/superqode/blob/main/src/superqode/providers/litellm_gateway.py"
+      ],
+      "advanced_adapter": "",
+      "notes": "Only Core is mapped to the Advanced SuperQode harness option. Other presets are not added to this page."
+    },
+    {
+      "id": "harness:rlm-hybrid-docker",
+      "harness": "rlm-hybrid-docker",
+      "group": "First-party/optional harness",
+      "verdict": "Supported (documented)",
+      "mechanism": "First-party rlm backend accepts the SuperQode provider/model route; local templates and gateway branches are visible in official repository source.",
+      "tool_calling": "Documented agent/tool workflow requires a capable model; no live tool-quality test was run.",
+      "version_requirement": "Current official source checked on 2026-11-09; no minimum local-capable release verified.",
+      "source_urls": [
+        "https://github.com/SuperagenticAI/superqode/blob/main/src/superqode/harness/templates.py",
+        "https://github.com/SuperagenticAI/superqode/blob/main/src/superqode/providers/litellm_gateway.py"
+      ],
+      "advanced_adapter": "",
+      "notes": "Only Core is mapped to the Advanced SuperQode harness option. Other presets are not added to this page."
+    },
+    {
+      "id": "harness:rlm-selective",
+      "harness": "rlm-selective",
+      "group": "First-party/optional harness",
+      "verdict": "Supported (documented)",
+      "mechanism": "First-party rlm backend accepts the SuperQode provider/model route; local templates and gateway branches are visible in official repository source.",
+      "tool_calling": "Documented agent/tool workflow requires a capable model; no live tool-quality test was run.",
+      "version_requirement": "Current official source checked on 2026-11-09; no minimum local-capable release verified.",
+      "source_urls": [
+        "https://github.com/SuperagenticAI/superqode/blob/main/src/superqode/harness/templates.py",
+        "https://github.com/SuperagenticAI/superqode/blob/main/src/superqode/providers/litellm_gateway.py"
+      ],
+      "advanced_adapter": "",
+      "notes": "Only Core is mapped to the Advanced SuperQode harness option. Other presets are not added to this page."
+    },
+    {
+      "id": "harness:rlm-monty",
+      "harness": "rlm-monty",
+      "group": "First-party/optional harness",
+      "verdict": "Supported (documented)",
+      "mechanism": "First-party rlm backend accepts the SuperQode provider/model route; local templates and gateway branches are visible in official repository source.",
+      "tool_calling": "Documented agent/tool workflow requires a capable model; no live tool-quality test was run.",
+      "version_requirement": "Current official source checked on 2026-11-09; no minimum local-capable release verified.",
+      "source_urls": [
+        "https://github.com/SuperagenticAI/superqode/blob/main/src/superqode/harness/templates.py",
+        "https://github.com/SuperagenticAI/superqode/blob/main/src/superqode/providers/litellm_gateway.py"
+      ],
+      "advanced_adapter": "",
+      "notes": "Only Core is mapped to the Advanced SuperQode harness option. Other presets are not added to this page."
+    },
+    {
+      "id": "harness:prime-agent-python",
+      "harness": "prime-agent-python",
+      "group": "First-party/optional harness",
+      "verdict": "Unofficial or workaround only",
+      "mechanism": "Current README documents models.json overrides, but earlier custom-endpoint guide paths are absent from the current repository tree. Current local setup not verified.",
+      "tool_calling": "Not established for local models in the checked source.",
+      "version_requirement": "Current official source checked on 2026-11-09; no minimum local-capable release verified.",
+      "source_urls": [
+        "https://raw.githubusercontent.com/PrimeIntellect-ai/prime-agent/main/README.md",
+        "https://github.com/PrimeIntellect-ai/prime-agent/blob/main/crates/pa-models/README.md"
+      ],
+      "advanced_adapter": "",
+      "notes": "Only Core is mapped to the Advanced SuperQode harness option. Other presets are not added to this page."
+    },
+    {
+      "id": "harness:gemma4-coding",
+      "harness": "gemma4-coding",
+      "group": "First-party/optional harness",
+      "verdict": "Supported (documented)",
+      "mechanism": "First-party builtin backend accepts the SuperQode provider/model route; local templates and gateway branches are visible in official repository source.",
+      "tool_calling": "Documented agent/tool workflow requires a capable model; no live tool-quality test was run.",
+      "version_requirement": "Current official source checked on 2026-11-09; no minimum local-capable release verified.",
+      "source_urls": [
+        "https://github.com/SuperagenticAI/superqode/blob/main/src/superqode/harness/templates.py",
+        "https://github.com/SuperagenticAI/superqode/blob/main/src/superqode/providers/litellm_gateway.py"
+      ],
+      "advanced_adapter": "",
+      "notes": "Only Core is mapped to the Advanced SuperQode harness option. Other presets are not added to this page."
+    },
+    {
+      "id": "harness:gemma4-no-tool",
+      "harness": "gemma4-no-tool",
+      "group": "First-party/optional harness",
+      "verdict": "Supported (documented)",
+      "mechanism": "First-party builtin backend accepts the SuperQode provider/model route; local templates and gateway branches are visible in official repository source.",
+      "tool_calling": "Model-only reasoning; tools are deliberately disabled by this preset.",
+      "version_requirement": "Current official source checked on 2026-11-09; no minimum local-capable release verified.",
+      "source_urls": [
+        "https://github.com/SuperagenticAI/superqode/blob/main/src/superqode/harness/templates.py",
+        "https://github.com/SuperagenticAI/superqode/blob/main/src/superqode/providers/litellm_gateway.py"
+      ],
+      "advanced_adapter": "",
+      "notes": "Only Core is mapped to the Advanced SuperQode harness option. Other presets are not added to this page."
+    },
+    {
+      "id": "harness:ds4-coding",
+      "harness": "ds4-coding",
+      "group": "First-party/optional harness",
+      "verdict": "Supported (documented)",
+      "mechanism": "First-party builtin backend accepts the SuperQode provider/model route; local templates and gateway branches are visible in official repository source.",
+      "tool_calling": "Documented agent/tool workflow requires a capable model; no live tool-quality test was run.",
+      "version_requirement": "Current official source checked on 2026-11-09; no minimum local-capable release verified.",
+      "source_urls": [
+        "https://github.com/SuperagenticAI/superqode/blob/main/src/superqode/harness/templates.py",
+        "https://github.com/SuperagenticAI/superqode/blob/main/src/superqode/providers/litellm_gateway.py"
+      ],
+      "advanced_adapter": "",
+      "notes": "Only Core is mapped to the Advanced SuperQode harness option. Other presets are not added to this page."
+    },
+    {
+      "id": "harness:ds4-fast-local",
+      "harness": "ds4-fast-local",
+      "group": "First-party/optional harness",
+      "verdict": "Supported (documented)",
+      "mechanism": "First-party builtin backend accepts the SuperQode provider/model route; local templates and gateway branches are visible in official repository source.",
+      "tool_calling": "Documented agent/tool workflow requires a capable model; no live tool-quality test was run.",
+      "version_requirement": "Current official source checked on 2026-11-09; no minimum local-capable release verified.",
+      "source_urls": [
+        "https://github.com/SuperagenticAI/superqode/blob/main/src/superqode/harness/templates.py",
+        "https://github.com/SuperagenticAI/superqode/blob/main/src/superqode/providers/litellm_gateway.py"
+      ],
+      "advanced_adapter": "",
+      "notes": "Only Core is mapped to the Advanced SuperQode harness option. Other presets are not added to this page."
+    },
+    {
+      "id": "harness:qwen-coding",
+      "harness": "qwen-coding",
+      "group": "First-party/optional harness",
+      "verdict": "Supported (documented)",
+      "mechanism": "First-party builtin backend accepts the SuperQode provider/model route; local templates and gateway branches are visible in official repository source.",
+      "tool_calling": "Documented agent/tool workflow requires a capable model; no live tool-quality test was run.",
+      "version_requirement": "Current official source checked on 2026-11-09; no minimum local-capable release verified.",
+      "source_urls": [
+        "https://github.com/SuperagenticAI/superqode/blob/main/src/superqode/harness/templates.py",
+        "https://github.com/SuperagenticAI/superqode/blob/main/src/superqode/providers/litellm_gateway.py"
+      ],
+      "advanced_adapter": "",
+      "notes": "Only Core is mapped to the Advanced SuperQode harness option. Other presets are not added to this page."
+    },
+    {
+      "id": "harness:glm-coding",
+      "harness": "glm-coding",
+      "group": "First-party/optional harness",
+      "verdict": "Supported (documented)",
+      "mechanism": "First-party builtin backend accepts the SuperQode provider/model route; local templates and gateway branches are visible in official repository source.",
+      "tool_calling": "Documented agent/tool workflow requires a capable model; no live tool-quality test was run.",
+      "version_requirement": "Current official source checked on 2026-11-09; no minimum local-capable release verified.",
+      "source_urls": [
+        "https://github.com/SuperagenticAI/superqode/blob/main/src/superqode/harness/templates.py",
+        "https://github.com/SuperagenticAI/superqode/blob/main/src/superqode/providers/litellm_gateway.py"
+      ],
+      "advanced_adapter": "",
+      "notes": "Only Core is mapped to the Advanced SuperQode harness option. Other presets are not added to this page."
+    },
+    {
+      "id": "harness:glm52-coding",
+      "harness": "glm52-coding",
+      "group": "First-party/optional harness",
+      "verdict": "Unofficial or workaround only",
+      "mechanism": "Provider-specific or additional decision-service preset; an all-local model/tool workflow was not established for this preset.",
+      "tool_calling": "Not established for local models in the checked source.",
+      "version_requirement": "Current official source checked on 2026-11-09; no minimum local-capable release verified.",
+      "source_urls": [
+        "https://github.com/SuperagenticAI/superqode/blob/main/src/superqode/harness/templates.py"
+      ],
+      "advanced_adapter": "",
+      "notes": "Only Core is mapped to the Advanced SuperQode harness option. Other presets are not added to this page."
+    },
+    {
+      "id": "harness:minimax-coding",
+      "harness": "minimax-coding",
+      "group": "First-party/optional harness",
+      "verdict": "Supported (documented)",
+      "mechanism": "First-party builtin backend accepts the SuperQode provider/model route; local templates and gateway branches are visible in official repository source.",
+      "tool_calling": "Documented agent/tool workflow requires a capable model; no live tool-quality test was run.",
+      "version_requirement": "Current official source checked on 2026-11-09; no minimum local-capable release verified.",
+      "source_urls": [
+        "https://github.com/SuperagenticAI/superqode/blob/main/src/superqode/harness/templates.py",
+        "https://github.com/SuperagenticAI/superqode/blob/main/src/superqode/providers/litellm_gateway.py"
+      ],
+      "advanced_adapter": "",
+      "notes": "Only Core is mapped to the Advanced SuperQode harness option. Other presets are not added to this page."
+    },
+    {
+      "id": "harness:kimi-coding",
+      "harness": "kimi-coding",
+      "group": "First-party/optional harness",
+      "verdict": "Unofficial or workaround only",
+      "mechanism": "Provider-specific or additional decision-service preset; an all-local model/tool workflow was not established for this preset.",
+      "tool_calling": "Not established for local models in the checked source.",
+      "version_requirement": "Current official source checked on 2026-11-09; no minimum local-capable release verified.",
+      "source_urls": [
+        "https://github.com/SuperagenticAI/superqode/blob/main/src/superqode/harness/templates.py"
+      ],
+      "advanced_adapter": "",
+      "notes": "Only Core is mapped to the Advanced SuperQode harness option. Other presets are not added to this page."
+    },
+    {
+      "id": "harness:kimi-k3-coding",
+      "harness": "kimi-k3-coding",
+      "group": "First-party/optional harness",
+      "verdict": "Unofficial or workaround only",
+      "mechanism": "Provider-specific or additional decision-service preset; an all-local model/tool workflow was not established for this preset.",
+      "tool_calling": "Not established for local models in the checked source.",
+      "version_requirement": "Current official source checked on 2026-11-09; no minimum local-capable release verified.",
+      "source_urls": [
+        "https://github.com/SuperagenticAI/superqode/blob/main/src/superqode/harness/templates.py"
+      ],
+      "advanced_adapter": "",
+      "notes": "Only Core is mapped to the Advanced SuperQode harness option. Other presets are not added to this page."
+    },
+    {
+      "id": "reference:aider",
+      "harness": "Aider",
+      "group": "Reference only",
+      "verdict": "Supported (documented)",
+      "mechanism": "OLLAMA_API_BASE and --model ollama_chat/<id>; OpenAI-compatible and LM Studio routes are also documented.",
+      "tool_calling": "Agentic editing is documented; native function calling is not the basis of its edit workflow.",
+      "version_requirement": "Current official source checked on 2026-11-09; no minimum local-capable release verified.",
+      "source_urls": [
+        "https://aider.chat/docs/llms/ollama.html",
+        "https://aider.chat/docs/llms/lm-studio.html"
+      ],
+      "advanced_adapter": "",
+      "notes": "Reference-only in Harness Hub. Not runnable from this launcher."
+    },
+    {
+      "id": "reference:crush",
+      "harness": "Crush",
+      "group": "Reference only",
+      "verdict": "Supported (documented)",
+      "mechanism": "providers.<name>.type=ollama and base_url, or openai-compat; model context/output/tool metadata and local discovery.",
+      "tool_calling": "Documented agent/tool workflow requires a capable model; no live tool-quality test was run.",
+      "version_requirement": "Current official source checked on 2026-11-09; no minimum local-capable release verified.",
+      "source_urls": [
+        "https://raw.githubusercontent.com/charmbracelet/crush/main/README.md"
+      ],
+      "advanced_adapter": "",
+      "notes": "Reference-only in Harness Hub. Not runnable from this launcher. Local discovery was introduced in v0.78.0; older manual compatible providers are documented."
+    },
+    {
+      "id": "reference:roo-code",
+      "harness": "Roo Code",
+      "group": "Historical reference",
+      "verdict": "Not supported",
+      "mechanism": "The checked SuperQode catalog records this as a discontinued historical reference, not a supported connection.",
+      "tool_calling": "Not established for local models in the checked source.",
+      "version_requirement": "Current official source checked on 2026-11-09; no minimum local-capable release verified.",
+      "source_urls": [
+        "https://github.com/RooCodeInc/Roo-Code"
+      ],
+      "advanced_adapter": "",
+      "notes": "No runnable adapter. Historical local-provider capabilities are not current support."
+    }
+  ],
+  "source_snapshots": [
+    {
+      "url": "https://agent.minimax.io",
+      "sha256": "f1e46be691fe19749db246ebfaf4621fc14e56ea4c4487c96f943a31dfb9704e"
+    },
+    {
+      "url": "https://phil65.github.io/agentpool/advanced/acp-integration/",
+      "sha256": "e55db5fb6a17ea9441d3e80698f449c14fecce60091b09a7099f0f8a6d1a19ad"
+    },
+    {
+      "url": "https://agoragentic.com",
+      "sha256": "ad23e1b2ed9b564372e9e6c1481511c0abfd076ef441383fdea21679ebc48dc6"
+    },
+    {
+      "url": "https://ampcode.com",
+      "sha256": "7eb91db78bb8ae670ac9deeade024049107f169b2bca724e98c9d49cab83a96b"
+    },
+    {
+      "url": "https://antigravity.google/docs/ide/extensions",
+      "sha256": "bfeec494f20b29194d270674662dbbec0c3a6abe29a148f326b695e7fec5bd82"
+    },
+    {
+      "url": "https://www.augmentcode.com/product/cli",
+      "sha256": "4ea73959141bbc903951789e9ebf5e4f5f8b7d406c641e321744ac24b7329dea"
+    },
+    {
+      "url": "https://raw.githubusercontent.com/phodal/auto-dev/main/README.md",
+      "sha256": "a5ca79ff8e18a975b7de8ba063f3a1d58c075ac205207f065fc902c4e383c495"
+    },
+    {
+      "url": "https://docs.blackbox.ai/features/blackbox-cli/introduction",
+      "sha256": "a9da484e65223a1914bd9c0a485dee28a07ca0134a4049d3569df3332361150f"
+    },
+    {
+      "url": "https://raw.githubusercontent.com/bubbuild/bub/main/README.md",
+      "sha256": "90c8e19bd4b31e21ecbbdfdc5162db4a65ca2b17d1e274664051cd4126bf0675"
+    },
+    {
+      "url": "https://raw.githubusercontent.com/docker/docker-agent/main/README.md",
+      "sha256": "2ddf816a1cfc5643dc2d04a332415a700d27f682a103cd9bcb3fd76ae76781cd"
+    },
+    {
+      "url": "https://claude.com/product/claude-code",
+      "sha256": "e6142d4d62a18e377f0591b364310d3385044152c0ee894c5aac76f21233188e"
+    },
+    {
+      "url": "https://cline.bot/",
+      "sha256": "2d49c6aa423add7cba6093ef18d7f1fd10ea15d7430e5ec8defc3cda55757fa9"
+    },
+    {
+      "url": "https://raw.githubusercontent.com/stippi/code-assistant/main/README.md",
+      "sha256": "fa43050d2e0d85ef524a4051d6a55d1e9d3188699d66c792e7605c0a54478fe7"
+    },
+    {
+      "url": "https://www.compassap.ai/nova/",
+      "sha256": "15f19b434bd1451c666264578fcae0649f42d43be9f15d6416baf14268d1be34"
+    },
+    {
+      "url": "https://github.com/features/copilot",
+      "sha256": "496b6081c5a78424fc9206de89cf0d60e622e6d5c7b0f4fdef050ceee88f663a"
+    },
+    {
+      "url": "https://docs.snowflake.com/en/user-guide/cortex-code/cortex-code",
+      "sha256": "49f0f053740ddcf170ed4a61361e8f11658d335173c5950975a09be8dcd56c48"
+    },
+    {
+      "url": "https://crow-ai.dev",
+      "sha256": "f85614f02dbbce2f6e019221f924cbbca890c449ba5c9902b0a18fbc42e9d4fa"
+    },
+    {
+      "url": "https://cursor.com/docs/cli/acp",
+      "sha256": "3d8de4626e4a17e1f0fd076c0fa4aee34c748e0748cdd32b0d7b17cf6bdec506"
+    },
+    {
+      "url": "https://docs.langchain.com/oss/deepagents/code/overview",
+      "sha256": "b82b13688456a53b1766c7a5ece07463bef78cf7aeedd64bee76863a124327e9"
+    },
+    {
+      "url": "https://docs.langchain.com/oss/javascript/deepagents/overview",
+      "sha256": "cb36574198cd1385dfa41101e5619162907982e066b04af622d9debc555c571d"
+    },
+    {
+      "url": "https://docs.devin.ai/cli",
+      "sha256": "f35e2694ef36a8b444559e3001d8dc9bff1bbf5466d07312943942602c086f81"
+    },
+    {
+      "url": "https://dimagent.com/docs/acp.html",
+      "sha256": "891492c9d0711d7183bd3d7d5465321ee46cffa55b0da7d8e84f65d56abcfdfa"
+    },
+    {
+      "url": "https://dirac.run",
+      "sha256": "9987ac9ed22119d6ae4d581f9a7b1620b38271db96b367ea1049f92272b31258"
+    },
+    {
+      "url": "https://factory.com/",
+      "sha256": "9e3d12983156a4513ff5288a53acfa3ca6e87736f7893b7a879af822e1bd973e"
+    },
+    {
+      "url": "https://raw.githubusercontent.com/evalstate/fast-agent/main/README.md",
+      "sha256": "6a03b9a97023e86f9b8c3874ce5567ead283ce4a009db3959b96be160595657c"
+    },
+    {
+      "url": "https://raw.githubusercontent.com/steve02081504/fount/master/README.md",
+      "sha256": "dae9c2a9fb2cf74d18a9f6dfc8849e10234e5e39866927f86646741fa922108b"
+    },
+    {
+      "url": "https://fx.sh",
+      "sha256": "139cc928689575a99b7482bf096aed100e3b7676239bd60be8331e615f396c15"
+    },
+    {
+      "url": "https://raw.githubusercontent.com/google-gemini/gemini-cli/main/README.md",
+      "sha256": "1dcb655995df3a664a7052a0c25d73565d698bc95d8d8965ecad95ef7d2a4568"
+    },
+    {
+      "url": "https://raw.githubusercontent.com/stefandevo/glm-acp-agent/main/README.md",
+      "sha256": "986cdf55b43d1e16f392519d4348e646a96197d18ddd80390ab51480e943f322"
+    },
+    {
+      "url": "https://raw.githubusercontent.com/block/goose/main/README.md",
+      "sha256": "0f1df85a0c457caf1f3c4e1c0370f2da3887fffa588d207862cfc298c1d39755"
+    },
+    {
+      "url": "https://harnlang.com",
+      "sha256": "3ac70ee37ba7dc29e7a81ecdbd4b10db5aab87c77886bb7eed6ad93221c2880a"
+    },
+    {
+      "url": "https://hermes-agent.nousresearch.com/docs/user-guide/features/acp",
+      "sha256": "88930a8cf96de99dfc6d976a058862e9dbb1ba8798c863fa3fe55ae38536dee0"
+    },
+    {
+      "url": "https://junie.jetbrains.com/",
+      "sha256": "ca4fd66dad76836032c6d5fea23973c21027110c17b3a8c2cc5ee8a4ef4e3976"
+    },
+    {
+      "url": "https://kilo.ai",
+      "sha256": "be209296d3610d4ac8c603763a712f061d17eeb078f25423e86f0851428dd671"
+    },
+    {
+      "url": "https://kimchi.dev",
+      "sha256": "cce0a5382486c0ed24f0ab630c60e6cd84a3cc28752d2c87b022b769c420de91"
+    },
+    {
+      "url": "https://raw.githubusercontent.com/MoonshotAI/kimi-code/main/README.md",
+      "sha256": "50ea102c7003c746244c69cb78cbd5b1e9158311e5e4e028aee8a2afee698c4c"
+    },
+    {
+      "url": "https://kiro.dev/docs/cli/acp/",
+      "sha256": "fc00fe716050f33d83887eeb315d47f037744927bd18544a22e2bcf89d1ba3e9"
+    },
+    {
+      "url": "https://raw.githubusercontent.com/phil65/agentpool/main/README.md",
+      "sha256": "a0e388ad4b7b22646ea0b565104a48f559caa8f93d3239febea54592f346a864"
+    },
+    {
+      "url": "https://raw.githubusercontent.com/femto/minion-code/main/README.md",
+      "sha256": "e99a8e8c0db13ee7c40784692dda703fc988f26fed906b89c0270aa05be43631"
+    },
+    {
+      "url": "https://raw.githubusercontent.com/mistralai/mistral-vibe/main/README.md",
+      "sha256": "f9c452896f49b1bec4bee29d250b7b4dd271eea2ad9280ef4c27466f118a8aaa"
+    },
+    {
+      "url": "https://raw.githubusercontent.com/can1357/oh-my-pi/main/README.md",
+      "sha256": "28fd17df00c18c89963062a208ec7e4947a9aed2ea67d021b8ece0a71da81eeb"
+    },
+    {
+      "url": "https://docs.openclaw.ai",
+      "sha256": "301d7425dea1bebc12178806ae3ed4062f683585d8abaabeceb20d0cb1f08bb1"
+    },
+    {
+      "url": "https://opencode.ai/",
+      "sha256": "5f7fcc185f02d049e2a9ce08e80303a897b124cfbb5000a8201ab717015c8cdf"
+    },
+    {
+      "url": "https://docs.openhands.dev/openhands/usage/cli/ide/overview",
+      "sha256": "5702803b31e3a805ebcbc34df700e8d8d2cdcc18485a51a7591d4df37d91625d"
+    },
+    {
+      "url": "https://raw.githubusercontent.com/earendil-works/pi/main/README.md",
+      "sha256": "e5a75074d9a53e6d00d616a42fbe138200b46022e8e392ace1c4c08a40af6cd5"
+    },
+    {
+      "url": "https://raw.githubusercontent.com/poolsideai/pool/main/README.md",
+      "sha256": "f175bad0006cbad81cc757e6b6ab4e9cb5d3fcf646f1eb06bd503bfe8161464b"
+    },
+    {
+      "url": "https://raw.githubusercontent.com/PrimeIntellect-ai/prime-agent/main/README.md",
+      "sha256": "fb684a06c239432e6761e4cffd49b2d941b60f10558647658084be609c1bcaea"
+    },
+    {
+      "url": "https://docs.qoder.com/cli/acp",
+      "sha256": "c011905031c30d7670f0b9932693c44fd7d4e02af88d5f947c59892f12f514bf"
+    },
+    {
+      "url": "https://raw.githubusercontent.com/QwenLM/qwen-code/main/README.md",
+      "sha256": "c4ec592956f959934b16e074e4a9687d68f11a9adf4bbfb301f340a8a24338fe"
+    },
+    {
+      "url": "https://raw.githubusercontent.com/getsigit/sigit/main/README.md",
+      "sha256": "ba7f2ddfc255c17d28da77b97064040c6b723f7261dd66285eddc128d3017754"
+    },
+    {
+      "url": "https://raw.githubusercontent.com/stakpak/agent/main/README.md",
+      "sha256": "c10630912fff4800d9ed56d89e9438fc5a9c17db62cca6b712f57043493cac5c"
+    },
+    {
+      "url": "https://raw.githubusercontent.com/stdiobus/stdiobus/main/README.md",
+      "sha256": "e0f7d54cc9e2d723980c62937ac215e112ba5f7e9135e3533914295e53b0db64"
+    },
+    {
+      "url": "https://raw.githubusercontent.com/vinhnx/vtcode/main/README.md",
+      "sha256": "255e65b0e445c73acfcd4a478d901bfe19826d71e85d29da036b2af7cb0a227c"
+    },
+    {
+      "url": "https://x.ai/build",
+      "sha256": "899f6dbb5e1936425f85df6d8586c4b96328c02648855f30fd78a8494fd6262b"
+    },
+    {
+      "url": "https://aider.chat/docs/llms/ollama.html",
+      "sha256": "ff9f37629c2b704bf67945650030cc77bb16b5d074547e58b805f3fdb971ace7"
+    },
+    {
+      "url": "https://raw.githubusercontent.com/charmbracelet/crush/main/README.md",
+      "sha256": "79dd041c3c9c93fc71d8a01449d2512bcb51ca78cb1eba845f33c7172305fd38"
+    },
+    {
+      "url": "https://learn.chatgpt.com/docs/config-file/config-advanced",
+      "sha256": "2b2021136d683e6d68b09e156a8b1c2cd3d2595e163a4dffca8f41aa0c091196"
+    },
+    {
+      "url": "https://code.claude.com/docs/en/llm-gateway",
+      "sha256": "a5fb9f87d7dedf575eef9576db00b3dd5f4452f15ca9452372495e49b4562dd5"
+    },
+    {
+      "url": "https://ampcode.com/docs/customize/model-routing",
+      "sha256": "b60f08669facffd9525882ce949379917ba97f679c67db083793636b6806eb4b"
+    },
+    {
+      "url": "https://raw.githubusercontent.com/block/goose/main/documentation/docs/guides/environment-variables.md",
+      "sha256": "687169b3776657e4ffe649e195911f403a78297191fefd61a7da9fec24bdbe4a"
+    },
+    {
+      "url": "https://raw.githubusercontent.com/block/goose/main/documentation/docs/getting-started/providers.md",
+      "sha256": "794ba732a3c6eace46ed9e3a62387b7b11284c16540a7238511dba9ce2c57939"
+    },
+    {
+      "url": "https://raw.githubusercontent.com/block/goose/main/documentation/docs/guides/config-files.md",
+      "sha256": "2922665a1d3b292336888ef54652c7891a5321c3f9ba85dda2e4e2dd4784a12e"
+    },
+    {
+      "url": "https://opencode.ai/docs/providers/",
+      "sha256": "400036988fa1b6130376e903d7b3b294a8f8ad4b179eafb2d6ae7778510ea36a"
+    },
+    {
+      "url": "https://docs.cline.bot/cli/cli-reference",
+      "sha256": "e9000defabbf6922e2ba73a93b93d0ab4a90412efcc7de32ded8dba506e95ae8"
+    },
+    {
+      "url": "https://kilo.ai/docs/code-with-ai/agents/custom-models",
+      "sha256": "241832282bf9c4e324c803c96617a55552c24df5ff45bf3fff97bed15f98d835"
+    },
+    {
+      "url": "https://qwenlm.github.io/qwen-code-docs/en/users/configuration/model-providers/",
+      "sha256": "e76346cb6120eb9120c7c203d9f941a5c2afcdf0501970610681cd29f5d03d36"
+    },
+    {
+      "url": "https://cursor.com/docs/cli/reference/configuration",
+      "sha256": "15ff65c902dfcbf9e37fa76a998c8274ec389b4a67695e43155874891ce240ef"
+    },
+    {
+      "url": "https://google-gemini.github.io/gemini-cli/docs/get-started/authentication.html",
+      "sha256": "6c25a049d84c196a0ebf54bce6786b183d15e6ccd3a905822b57088665ea9d8f"
+    },
+    {
+      "url": "https://adk.dev/agents/models/ollama/",
+      "sha256": "d6554801167671c3dbdc51a3a29dda9ef24e02142f0c71d3953ea530c06fd7ca"
+    },
+    {
+      "url": "https://openai.github.io/openai-agents-python/models/",
+      "sha256": "11fd618689867eed4372f8a8e67f10c2bf8913e0a9b21f17ed5026e8530f110c"
+    },
+    {
+      "url": "https://pydantic.dev/docs/ai/models/openai/",
+      "sha256": "2c2ba992aa751df69b88c6211a6512b9a9d94b666f1da49fefe2fe7e5d5060b4"
+    },
+    {
+      "url": "https://strandsagents.com/latest/documentation/docs/user-guide/concepts/model-providers/ollama/",
+      "sha256": "4e64900ccc6c3cb0d2aba1589982ab49f51a366054e984a2440c0a7dae20066e"
+    },
+    {
+      "url": "https://raw.githubusercontent.com/huggingface/tau/main/README.md",
+      "sha256": "3760fa93c98b902cc4d19949709066f29fbead63d5c80e73290045d9cc33aa1c"
+    },
+    {
+      "url": "https://raw.githubusercontent.com/HarnessRouter/harnessrouter/main/README.md",
+      "sha256": "e645f8d7840cdc0b0fa1508beea5f8fcaa668f6b73547355e20316971cf3c652"
+    },
+    {
+      "url": "https://raw.githubusercontent.com/SuperagenticAI/rlm-code/main/README.md",
+      "sha256": "f562f0572d1a1c2c7ab67d10ff9ae8d43a2d1ad8efa9a9489f465a80b7965deb"
+    },
+    {
+      "url": "https://raw.githubusercontent.com/github/copilot-sdk/main/docs/auth/byok.md",
+      "sha256": "43fef19dbff3dcd535aded5168100d81dd6be6f4956e92f88bb9c49b3a4c1eb2"
+    },
+    {
+      "url": "https://dev.meta.ai/docs/muse-code",
+      "sha256": "30f1937c524c8a29d13ab6c695556e2dacf8a8fc563a586dc0c00054c2708d3f"
+    },
+    {
+      "url": "https://raw.githubusercontent.com/SuperagenticAI/superqode/main/README.md",
+      "sha256": "6045530ef9f05bb918f0a249455a32ad819fc5605f386383ffc67ec3c9807ac6"
+    },
+    {
+      "url": "https://raw.githubusercontent.com/aaif-goose/goose/main/crates/goose-providers/src/declarative/definitions/lmstudio.json",
+      "sha256": "4a71ebb7d4b67214a4d11ca72e95997db20804c72dd5c2a4cdb62310ecc392cd"
+    },
+    {
+      "url": "https://raw.githubusercontent.com/aaif-goose/goose/main/crates/goose/src/providers/ollama_def.rs",
+      "sha256": "311c2e2b135fa56061ff73143f6a550881fef01dddfba21916a847ef876e3597"
+    },
+    {
+      "url": "https://raw.githubusercontent.com/aaif-goose/goose/main/crates/goose-providers/src/ollama.rs",
+      "sha256": "196d84cce39162a653deca07a634160848aad844bf8e46239c42aa109d478a1c"
+    },
+    {
+      "url": "https://raw.githubusercontent.com/stippi/code-assistant/main/docs/configuration.md",
+      "sha256": "1cfd9f24defc91358aeeb546aaa1aa3c9290a86e0b11901d66e7dd75e7727a20"
+    },
+    {
+      "url": "https://docker.github.io/docker-agent/concepts/models/",
+      "sha256": "3314e85b24e55700e0d55b05ce343a2390e3591dc3f36c1c093af19b9b431663"
+    },
+    {
+      "url": "https://bub.build/docs/getting-started/quickstart/",
+      "sha256": "e4405849b662f50e87af50f9cbcd7c41dec5b54280d1885c564d0c003bc0adbc"
+    },
+    {
+      "url": "https://fx.sh/docs",
+      "sha256": "b47e00958ab57f3c23fa9e925885d42dcff372440fbf60974cdf6b6db2449552"
+    },
+    {
+      "url": "https://moonshotai.github.io/kimi-code/en/configuration/config-files",
+      "sha256": "268bda6b348ff67ddc5521072286565bf2f424e355ceb52a8398a1910cfe0d48"
+    },
+    {
+      "url": "https://raw.githubusercontent.com/earendil-works/pi/main/packages/coding-agent/docs/models.md",
+      "sha256": "a1a373ac64d62afc3a039d7b614caf1216d3ef9c9278179f9d859eee5ca0855d"
+    },
+    {
+      "url": "https://raw.githubusercontent.com/vinhnx/vtcode/main/docs/providers/PROVIDER_GUIDES.md",
+      "sha256": "3e7eb176af1326852f06a9125e02b4f636f088031d599dfe47346990a733451e"
+    },
+    {
+      "url": "https://docs.factory.com/model-independence/byok",
+      "sha256": "dc59977bade9656744978c28190ffe4118850a03f2cd6e61fe8b5ac5e8cd61e2"
+    },
+    {
+      "url": "https://docs.openclaw.ai/providers/ollama",
+      "sha256": "148920fa72e9ee8ffd98b1f64e230aa9538b4ccb85dd11a3714759880ccb7d03"
+    },
+    {
+      "url": "https://docs.openhands.dev/openhands/usage/llms/local-llms",
+      "sha256": "3cb593a0bbf00964af224c856ce516b33e6fbcbbc2ff1d637f95e2c78e7b2b55"
+    },
+    {
+      "url": "https://google-gemini.github.io/gemini-cli/docs/get-started/configuration.html",
+      "sha256": "80e334869d26c8f2e0704b9bb905f3fdd84f67972fba59c814a8a4266f2eafac"
+    },
+    {
+      "url": "https://kilo.ai/docs/code-with-ai/platforms/cli",
+      "sha256": "b87bc3a601df1585c5b05958b24ba6bfb4bbd4b0dbcd393135816ff53ea6d087"
+    },
+    {
+      "url": "https://docs.cline.bot/running-models-locally/overview",
+      "sha256": "170f9977c2c04ec0bba7615176473ac441bf855064174cd8d3251edb96789c6e"
+    },
+    {
+      "url": "https://junie.jetbrains.com/docs/custom-llm-ollama.html",
+      "sha256": "f7f6852b598b5de6c383ce4b1e20fabbb2ad6df1bd4ac21bf0302a78afe99d70"
+    },
+    {
+      "url": "https://docs.qoder.com/qoder/custom-models",
+      "sha256": "83f9f4280cb37ac8d82ff5fe4bdc0bc4499e80808f187dead8c1a629f0e925c9"
+    },
+    {
+      "url": "https://harnlang.com/llm/providers.html",
+      "sha256": "56cf1b5c410a9377db4aa0f540e40d067724726d12827add977ca1533af5e405"
+    },
+    {
+      "url": "https://raw.githubusercontent.com/deepseek-ai/deepseek-harness/master/README.md",
+      "sha256": "0f5516be2acde776f05572cbc8c3093c90549afe04ce118e11157d073d5d15f4"
+    },
+    {
+      "url": "https://raw.githubusercontent.com/deepseek-ai/deepseek-harness/master/docs/user/guide/python-sdk.md",
+      "sha256": "004ebaf4f4f5407a59ebff1b9f5e64588f2e613aa3c7ddfbfa18d4e2f68f0e45"
+    },
+    {
+      "url": "https://raw.githubusercontent.com/strands-agents/harness-sdk/main/README.md",
+      "sha256": "26d6aa71d642c2bd30505007796b1bcbdbf40b4558c7abc3710492a104470bdd"
+    },
+    {
+      "url": "https://docs.langchain.com/oss/python/deepagents/models",
+      "sha256": "abbd42ed699c9fdcb26963f9e6606f99f36b0b9f62772accd2df19b657473b08"
+    },
+    {
+      "url": "https://hermes-agent.nousresearch.com/docs/user-guide/configuration",
+      "sha256": "4bc5d6c937fa067ed5e79d4779c273ad39aee786cc08e0c412b58e7d5a930ebb"
+    },
+    {
+      "url": "https://raw.githubusercontent.com/getsigit/sigit/main/docs/terminal.md",
+      "sha256": "d88b8ef6904e8d7d385fdbb08175a23d1c7ecb17c9ae4f4cd750cdede3747793"
+    },
+    {
+      "url": "https://docs.devin.ai/federal/air-gapped/models-file",
+      "sha256": "6a13e4e7720734e07f61839ed64ed7323bdaaefdc82f6e60b33fe52c7db61fa0"
+    },
+    {
+      "url": "https://crow-ai.dev/docs/configuration/",
+      "sha256": "f6916925fec8d1358cc40cd85357d9a446d5e14b1cf9c3ff4d239104cb4bfe7c"
+    },
+    {
+      "url": "https://twotimespi.dev/guides/providers-and-models/",
+      "sha256": "3676f4c1821987e34d084e14d1b440425b213544aebbd908f431e862a62e83f2"
+    },
+    {
+      "url": "https://raw.githubusercontent.com/vercel-labs/fx/main/README.md",
+      "sha256": "852d05bf30e94b63fc8572476dd014861ed18ef90218e606db3e15c37a7266c3"
+    },
+    {
+      "url": "https://raw.githubusercontent.com/anomalyco/opencode/v1.19.5/packages/web/src/content/docs/providers.mdx",
+      "sha256": "d311c7efcafb23100c993047dc71d3dab90f7f2890c841010323eb95a7ac03c7"
+    },
+    {
+      "url": "https://docs.github.com/en/copilot/how-tos/copilot-cli/customize-copilot/add-llm-models",
+      "sha256": "ebd50966336649892cf70847136fca358d2557576267930e447e6a2f05cbc643"
+    },
+    {
+      "url": "https://moonshotai.github.io/kimi-code/en/configuration/providers.md",
+      "sha256": "bace393d0299c9fc6533ca643784df095f5b1db278281c1b0a05ae111697d22f"
+    },
+    {
+      "url": "https://moonshotai.github.io/kimi-code/zh/configuration/config-files.md",
+      "sha256": "66adbe8dda6b31951b73b2ea682da40167834448bd02bc0c1264c5e0782c7678"
+    },
+    {
+      "url": "https://moonshotai.github.io/kimi-code/en/configuration/overrides.md",
+      "sha256": "ebafbda81fbd9fd421a203e4de057b39891f765f3d197d73287b6463ee094ede"
+    },
+    {
+      "url": "https://raw.githubusercontent.com/PrimeIntellect-ai/prime-agent/main/crates/pa-models/README.md",
+      "sha256": "c7ea393d380d7a438bfc961e857b3fe961ce28c205db2e533ad5bf1892c20559"
+    },
+    {
+      "url": "https://docs.langchain.com/oss/deepagents/code/providers",
+      "sha256": "d024df1e5b1f1a180e1a69b3a15214e9b4ee8b96fee26756d22b744604a95368"
+    },
+    {
+      "url": "https://fx.sh/docs/configure-fx/custom-model-connections",
+      "sha256": "fd63d41ebb3434bd42ba3e274d30f80023f5d950d1625c659ef934ea1de3685c"
+    },
+    {
+      "url": "https://raw.githubusercontent.com/anomalyco/opencode/v1.19.5/packages/opencode/src/cli/cmd/acp.ts",
+      "sha256": "104d1dfe498154fca38c5971deec8330be4793cedf122e36c5a38589089e1b23"
+    },
+    {
+      "url": "https://raw.githubusercontent.com/anomalyco/opencode/v1.19.5/packages/opencode/src/config/config.ts",
+      "sha256": "839c934f014c29a40f06cafd8bf2da1f0b2976ecd9e3e0f71b859792837ab14d"
+    },
+    {
+      "url": "https://raw.githubusercontent.com/aaif-goose/goose/v1.58.0/documentation/docs/getting-started/providers.md",
+      "sha256": "794ba732a3c6eace46ed9e3a62387b7b11284c16540a7238511dba9ce2c57939"
+    },
+    {
+      "url": "https://raw.githubusercontent.com/aaif-goose/goose/v1.58.0/documentation/docs/guides/environment-variables.md",
+      "sha256": "ab488860993b0f32f7a297caa6a281daca59b9d188f99eefeb2603aee1af5110"
+    },
+    {
+      "url": "https://raw.githubusercontent.com/aaif-goose/goose/v1.58.0/documentation/docs/guides/config-files.md",
+      "sha256": "817417d0b82e5b9eba5cc23ad649247beb9e8b7db4c440dff90c1e917efd79c9"
+    },
+    {
+      "url": "https://raw.githubusercontent.com/aaif-goose/goose/v1.58.0/crates/goose/src/providers/ollama_def.rs",
+      "sha256": "311c2e2b135fa56061ff73143f6a550881fef01dddfba21916a847ef876e3597"
+    },
+    {
+      "url": "https://raw.githubusercontent.com/aaif-goose/goose/v1.58.0/crates/goose-providers/src/declarative/definitions/lmstudio.json",
+      "sha256": "4a71ebb7d4b67214a4d11ca72e95997db20804c72dd5c2a4cdb62310ecc392cd"
+    },
+    {
+      "url": "https://raw.githubusercontent.com/aaif-goose/goose/v1.58.0/crates/goose-providers/src/ollama.rs",
+      "sha256": "196d84cce39162a653deca07a634160848aad844bf8e46239c42aa109d478a1c"
+    },
+    {
+      "url": "https://raw.githubusercontent.com/aaif-goose/goose/v1.58.0/crates/goose-providers/src/openai.rs",
+      "sha256": "160881e76471f132bf0810ffc9203cb1cddcc8d4f17dfa3fe06af46e38a4ea8f"
+    }
+  ]
+}
