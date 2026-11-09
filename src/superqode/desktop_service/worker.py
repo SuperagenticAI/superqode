@@ -43,7 +43,10 @@ def snapshot_spec(request: dict, output: Path):
     from superqode.harness.catalog import resolve_harness
     from superqode.harness.loader import harness_spec_to_dict
 
-    definition = resolve_harness(request.get("harness") or "core", root=request["cwd"])
+    definition = resolve_harness(
+        "core" if request.get("_local_harness") else request.get("harness") or "core",
+        root=request["cwd"],
+    )
     data = harness_spec_to_dict(definition.spec)
     raw = yaml.safe_dump(data, sort_keys=False)
     output.write_text(raw)
@@ -89,7 +92,9 @@ async def task(request, directory):
     spec = snapshot_spec(request, directory / "harness.yaml")
     from superqode.harness.catalog import resolve_harness
 
-    digest = resolve_harness(request.get("harness") or "core", root=request["cwd"]).digest
+    digest = (request.get("_local_harness") or {}).get("digest") or resolve_harness(
+        request.get("harness") or "core", root=request["cwd"]
+    ).digest
     if request.get("expected_digest") and request["expected_digest"] != digest:
         raise ValueError(
             "The harness changed since this task. Start a new task to use the new revision."
@@ -140,6 +145,7 @@ async def task(request, directory):
         images=load_snapshots(request),
         metadata={
             "agent_context_window": request.get("context_window") or 0,
+            "agent_max_tokens": request.get("max_tokens"),
             "enable_summarization": request.get("enable_summarization") is True,
         },
     ):

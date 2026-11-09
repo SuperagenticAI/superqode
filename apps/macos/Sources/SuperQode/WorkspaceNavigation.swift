@@ -57,6 +57,8 @@ struct WorkspaceNavigationGroup: Identifiable {
     .init(id: "local", title: "Local AI", symbol: "cpu", sections: ["Models"]),
     .init(id: "threads", title: "Threads", symbol: "bubble.left.and.bubble.right",
       sections: ["Threads", "Agent activity"]),
+    .init(id: "advanced", title: "Advanced", symbol: "slider.horizontal.3",
+      sections: ["Local harnesses"]),
     .init(id: "tools", title: "Tools", symbol: "wrench.and.screwdriver", sections: ["Tools"]),
   ]
 

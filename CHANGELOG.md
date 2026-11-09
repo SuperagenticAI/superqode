@@ -7,6 +7,17 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added
+
+- macOS Advanced: Harnesses on local models, separate from newcomer Local AI. Pick an installed SuperQode, OpenCode version 1 ACP or Goose ACP harness and an already loaded Ollama or LM Studio model. Review per-launch settings and send your first message to start a thread.
+- Local harness catalog, preflight, launch and status RPCs with project-scoped profiles, fixed loopback endpoints, shared context/output budgets, conservative loaded-window fit checks and per-worker credential isolation. Continuations revalidate the same immutable configuration.
+- Missing binaries link to installation documentation. Codex and unverified OpenCode versions are explicitly Not supported yet rather than silently routed elsewhere. No runnable reference-only integrations were added.
+
+### Notes
+
+- Newcomer Local AI, connection-grid Local model and guided setup are unchanged. No global harness config files are edited. Configuration/preflight is not a model quality or tool-calling guarantee; external tools and extensions can still access the network.
+- Unreleased source changes only. App 0.3.8 (24) and engine 2.31.6 are unchanged until the next versioned release; no installer, signing or notarization was produced here.
+
 ## [2.31.6] - 2026-11-09
 
 ### Added

@@ -258,6 +258,8 @@ def prepare_continuation(service, params, project, root):
         digest = "direct-chat-v1"
     elif route:
         digest = route.get("digest")
+    elif params.get("_local_harness"):
+        digest = params["_local_harness"]["digest"]
     else:
         from superqode.harness.catalog import resolve_harness
 

@@ -152,7 +152,28 @@ def save_contract(provider, model, contract):
     os.replace(temporary, path)
 
 
+def _launch_contract_value(provider, model, field, low, high):
+    """A worker-only contract never changes saved defaults for another thread."""
+    try:
+        row = json.loads(os.environ.get("SUPERQODE_LOCAL_CONTEXT_CONTRACT", "{}"))
+        value = row.get(field)
+        if (
+            provider in {"ollama", "lmstudio"}
+            and row.get("provider") == provider
+            and row.get("model") == model
+            and type(value) is int
+            and low <= value <= high
+        ):
+            return value
+    except (ValueError, TypeError, AttributeError):
+        pass
+    return None
+
+
 def requested_context(provider, model):
+    launch = _launch_contract_value(provider, model, "context", 512, 262144)
+    if launch is not None:
+        return launch
     try:
         value = json.loads(_contract_path(provider, model).read_text())["context"]
         if type(value) is int and 512 <= value <= 262144:
@@ -163,6 +184,9 @@ def requested_context(provider, model):
 
 
 def output_limit(provider, model):
+    launch = _launch_contract_value(provider, model, "max_tokens", 128, 65536)
+    if launch is not None:
+        return launch
     try:
         value = json.loads(_contract_path(provider, model).read_text())["max_tokens"]
         if type(value) is int and 128 <= value <= 65536:

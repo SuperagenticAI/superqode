@@ -179,12 +179,12 @@ enum Sections {
   }
   static let names = [
     "Workspace", "Harness Hub", "Models", "Evaluations", "Optimization", "Files", "Tools",
-    "Terminal", "Checkpoints", "Review", "Threads", "Agent activity", "Harness Studio", "Super Agent",
+    "Terminal", "Checkpoints", "Review", "Threads", "Agent activity", "Harness Studio", "Super Agent", "Local harnesses",
   ]
   static let icons = [
     "chevron.left.forwardslash.chevron.right", "square.stack.3d.up", "cpu", "checkmark.seal",
     "slider.horizontal.3", "folder", "wrench.and.screwdriver", "terminal", "clock.arrow.circlepath", "text.magnifyingglass", "bubble.left.and.bubble.right", "square.stack.3d.up", "hammer",
-    "arrow.triangle.2.circlepath",
+    "arrow.triangle.2.circlepath", "cpu.fill",
   ]
 }
 extension Color {
@@ -291,6 +291,7 @@ struct RootView: View {
     case "Threads": ThreadsView(library: app.threadLibrary(for: app.projectID)).id(app.projectID)
     case "Agent activity": AgentFleetView()
     case "Harness Hub": HubView()
+    case "Local harnesses": LocalHarnessesView().id(app.projectID)
     case "Super Agent": CreatorModeView().id(app.projectID)
     case "Evaluations", "Optimization":
       ExperimentView(optimize: app.section == "Optimization").id(app.projectID)

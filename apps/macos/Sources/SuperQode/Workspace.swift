@@ -317,8 +317,16 @@ private func jobStamp(_ row: [String: Any]) -> Double {
       string($0, "type") == "harness_event"
         && string($0["data"] as? [String: Any] ?? [:], "event") == "acp_session"
     }
-    return (event?["data"] as? [String: Any])?["payload"] as? [String: Any]
+    var session = (event?["data"] as? [String: Any])?["payload"] as? [String: Any]
       ?? connectionMetadata[harness]?["session"] as? [String: Any] ?? [:]
+    if harness.hasPrefix("local-harness:") {
+      // This thread's reviewed model/config is fixed. Keep diagnostic capabilities,
+      // but do not offer settings the engine deliberately refuses to override.
+      session["models"] = [:] as [String: Any]
+      session["modes"] = [:] as [String: Any]
+      session["config_options"] = [] as [[String: Any]]
+    }
+    return session
   }
   var acpConnections: [[String: Any]] {
     var seen = Set<String>()
@@ -337,6 +345,7 @@ private func jobStamp(_ row: [String: Any]) -> Double {
       }
   }
   var agentModels: [[String: Any]] {
+    guard !harness.hasPrefix("local-harness:") else { return [] }
     let state = agentSession["models"] as? [String: Any] ?? [:]
     let live = state["availableModels"] as? [[String: Any]] ?? []
     let cached = (connectionMetadata[harness]?["session"] as? [String: Any])?["models"] as? [String: Any] ?? [:]
@@ -953,10 +962,14 @@ private func jobStamp(_ row: [String: Any]) -> Double {
       agentMode = string(choice, "agentMode")
       agentConfig = choice["agentConfig"] as? [String: String] ?? [:]
     }
+    if id.hasPrefix("local-harness:"), let local = harnesses.first(where: { string($0, "id") == id }) {
+      provider = string(local, "local_provider", provider)
+      model = string(local, "local_model", model)
+    }
     savePreferences()
   }
   func chooseModelRoute(_ provider: String, _ model: String) {
-    if isManaged || connectionDisconnected {
+    if isManaged || connectionDisconnected || harness.hasPrefix("local-harness:") {
       chooseHarness(
         harnesses.first(where: { string($0, "id") == "core" })?.projectRowID
           ?? harnesses.first(where: { string($0, "desktop_kind").isEmpty })?.projectRowID ?? "core")
@@ -1468,6 +1481,16 @@ private func jobStamp(_ row: [String: Any]) -> Double {
   }
   func checkRoute() async {
     guard !connectionDisconnected else { routeStatus = [:]; return }
+    if harness.hasPrefix("local-harness:") {
+      let selected = harness
+      do {
+        let result = try await engine.call("local.harnesses.status", ["project": projectID, "harness": selected]) as? [String: Any] ?? [:]
+        if harness == selected { routeStatus = result }
+      } catch {
+        if harness == selected { routeStatus = ["ready": false, "message": error.localizedDescription] }
+      }
+      return
+    }
     if isManaged {
       let selected = harnesses.first(where: { string($0, "id") == harness }) ?? [:]
       routeStatus = [

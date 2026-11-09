@@ -38,6 +38,10 @@ import AppKit
         disabledReason: projectReason ?? idleReason),
       .init(action: .section("Models"), title: "Local AI", detail: "Search, download and serve models on this Mac",
         symbol: "cpu", keywords: "ollama hugging face lm studio mlx gguf kv cache models local inference", disabledReason: engineReason ?? idleReason),
+      .init(action: .section("Local harnesses"), title: "Advanced: Harnesses on local models",
+        detail: "Run a supported harness on a loaded Ollama or LM Studio model",
+        symbol: "cpu.fill", keywords: "advanced local harness opencode goose codex",
+        disabledReason: projectReason ?? idleReason),
       .init(action: .connectionPage("builder"), title: "Build Your Own Harness…",
         detail: "Create or import a project HarnessSpec", symbol: "hammer", keywords: "custom harness yaml preset",
         disabledReason: projectReason ?? idleReason),
@@ -75,7 +79,7 @@ import AppKit
       .init(action: .learning, title: "Getting Started & Learning", detail: "Open the local learning guide",
         symbol: "book", keywords: "help documentation guide", key: "?"),
     ]
-    commands += Sections.names.enumerated().filter { !["Agent activity", "Models"].contains($0.element) }.map { index, name in
+    commands += Sections.names.enumerated().filter { !["Agent activity", "Models", "Local harnesses"].contains($0.element) }.map { index, name in
       WorkspaceCommand(action: .section(name), title: Sections.title(for: name),
         detail: "Navigate to " + Sections.title(for: name), symbol: Sections.icons[index],
         keywords: name == "Workspace" ? "chat conversation coding" : name.lowercased(),

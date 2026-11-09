@@ -556,6 +556,7 @@ class DesktopService:
             params.pop("_remote_previous", None)
             params.pop("_desktop_route", None)
             params.pop("_desktop_connection", None)
+            params.pop("_local_harness", None)
             params.pop("image_snapshots", None)
             params.pop("_chat_history", None)
             params.pop("_handoff_context", None)
@@ -584,7 +585,12 @@ class DesktopService:
                 from superqode.harness.catalog import resolve_harness
 
                 if (
-                    resolve_harness(source["request"]["harness"], root=root).spec.runtime.backend
+                    resolve_harness(
+                        "core"
+                        if source["request"].get("_local_harness")
+                        else source["request"]["harness"],
+                        root=root,
+                    ).spec.runtime.backend
                     != "builtin"
                 ):
                     raise ValueError(
@@ -593,13 +599,21 @@ class DesktopService:
                 params.update(
                     {key: source["request"][key] for key in ("harness", "provider", "model")}
                 )
+                if source["request"].get("_local_harness"):
+                    from .local_harnesses import apply_route
+
+                    apply_route(self, project_id, params)
                 params["session_id"] = source["result"]["session_id"]
                 params["expected_digest"] = source["result"]["harness_digest"]
                 if len(str(params.get("instructions") or "")) > 4000:
                     raise ValueError("Use compaction instructions up to 4,000 characters")
             if kind == "task":
                 reference = str(params.get("harness") or "core")
-                if reference.startswith("connection:"):
+                if reference.startswith("local-harness:"):
+                    from .local_harnesses import apply_route
+
+                    apply_route(self, project_id, params)
+                elif reference.startswith("connection:"):
                     from .connect_workflow import profile_route
 
                     connection = profile_route(root, reference.removeprefix("connection:"))
@@ -718,7 +732,10 @@ class DesktopService:
                         from superqode.harness.catalog import resolve_harness
 
                         backend = resolve_harness(
-                            params.get("harness") or "core", root=root
+                            "core"
+                            if params.get("_local_harness")
+                            else params.get("harness") or "core",
+                            root=root,
                         ).spec.runtime.backend
                         if backend not in {"builtin", "pipy", "codegem"}:
                             raise ValueError(
@@ -831,7 +848,7 @@ class DesktopService:
                     params.get("provider", ""),
                     params.get("model", ""),
                 )
-                if binding:
+                if binding and not params.get("_local_harness"):
                     provider = PROVIDERS.get(params["provider"])
                     if provider and provider.base_url_env:
                         endpoint = binding[0]["endpoint"]
@@ -868,6 +885,11 @@ class DesktopService:
                         os.environ, credential_env, check=kind == "check", allowed=allowed
                     )
                 )
+                if params.get("_local_harness"):
+                    from .local_harnesses import worker_environment
+
+                    credential_env = {}
+                    inherited = worker_environment(os.environ, params["_local_harness"])
                 from superqode.tools.env_policy import is_secret_name
 
                 key_vars = set(credential_env) | {
@@ -1100,7 +1122,7 @@ class DesktopService:
             )
             definition = {}
             if not str(params.get("harness") or "").startswith(
-                ("acp:", "connection:", "remote:", "vendor-key:", "attach:")
+                ("acp:", "connection:", "remote:", "vendor-key:", "attach:", "local-harness:")
             ):
                 from superqode.harness.catalog import resolve_harness
                 from superqode.harness.loader import harness_spec_to_dict
@@ -1120,6 +1142,24 @@ class DesktopService:
             return stage_image(self.root, str(params["path"]))
         if method.startswith("queue."):
             return self.task_queues.dispatch(method, params)
+        if method in {"providers.check", "local.harnesses.status"} and str(
+            params.get("harness") or ""
+        ).startswith("local-harness:"):
+            from .local_harnesses import _profile, preflight
+
+            profile = _profile(self, params["project"], params["harness"])
+            plan = preflight(self, profile)
+            ready = plan["ready"] and plan.get("digest") == profile["digest"]
+            return {
+                "ready": ready,
+                "state": "local",
+                "message": plan.get("reason")
+                or (
+                    "Local harness preflight passed. No model prompt was sent."
+                    if ready
+                    else "Local configuration changed. Return to Advanced."
+                ),
+            }
         if method in {"providers.list", "providers.credentials.set", "providers.check"}:
             from .connections import install, inspect_route, list_connections
 
@@ -1236,6 +1276,16 @@ class DesktopService:
                 "models": [asdict(m) for m in inventory_models()],
                 "hardware": asdict(detect_hardware()),
             }
+        if method.startswith("local.harnesses."):
+            from . import local_harnesses
+
+            if method == "local.harnesses.catalog":
+                return local_harnesses.catalog(self, params["project"])
+            if method == "local.harnesses.preflight":
+                return local_harnesses.preflight(self, params)
+            if method == "local.harnesses.launch":
+                return local_harnesses.launch(self, params)
+            raise ValueError("Unknown Advanced local harness method")
         if method.startswith("local.models."):
             from . import local_models
             from . import hub_access
@@ -1946,27 +1996,42 @@ class DesktopService:
             from superqode.harness.catalog import list_harnesses
             from .session_controls import enforces_session_controls
             from .studio import selection
+            from .local_harnesses import selections as local_selections
 
-            return [
-                {
-                    "id": h.id,
-                    "name": h.display_name,
-                    "description": h.description,
-                    "runtime": h.runtime,
-                    "available": h.available,
-                    "issue": h.issue,
-                    "digest": h.digest,
-                    "path": str(h.path) if h.path else None,
-                    "enforces_session_controls": enforces_session_controls(h.runtime),
-                }
-                for h in list_harnesses(self.project(params["project"]))
-            ] + selection(self, params["project"])
+            return (
+                [
+                    {
+                        "id": h.id,
+                        "name": h.display_name,
+                        "description": h.description,
+                        "runtime": h.runtime,
+                        "available": h.available,
+                        "issue": h.issue,
+                        "digest": h.digest,
+                        "path": str(h.path) if h.path else None,
+                        "enforces_session_controls": enforces_session_controls(h.runtime),
+                    }
+                    for h in list_harnesses(self.project(params["project"]))
+                ]
+                + selection(self, params["project"])
+                + local_selections(self, params["project"])
+            )
         if method == "harnesses.inspect":
             from superqode.harness.catalog import resolve_harness
             from superqode.harness.loader import harness_spec_to_dict
 
             from .connect_workflow import desktop_routes
 
+            if str(params["reference"]).startswith("local-harness:"):
+                from .local_harnesses import _profile, preflight
+
+                profile = _profile(self, params["project"], params["reference"])
+                plan = preflight(self, profile)
+                return {
+                    "name": "Advanced local harness",
+                    "digest": profile["digest"],
+                    "connection": plan,
+                }
             routes = desktop_routes(self.project(params["project"]))
             route = next((route for route in routes if route["id"] == params["reference"]), None)
             if route:

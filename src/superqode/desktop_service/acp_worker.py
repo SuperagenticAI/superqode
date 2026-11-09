@@ -160,6 +160,10 @@ class DesktopTerminals:
 
 async def run_acp(request, directory, emit, secrets):
     route = request["_desktop_route"]
+    if request.get("_local_harness"):
+        from .local_harnesses import materialize_worker_files
+
+        materialize_worker_files(request["_local_harness"], request["state_root"])
     if request.get("expected_digest") and request["expected_digest"] != route["digest"]:
         raise ValueError("The ACP launch route changed. Start a new task.")
 
@@ -225,6 +229,13 @@ async def run_acp(request, directory, emit, secrets):
             raise RuntimeError(
                 client.last_startup_error
                 or "ACP startup or exact session resume failed. Start a new task if the agent cannot resume."
+            )
+        local = request.get("_local_harness") or {}
+        if local.get("harness") == "opencode" and not await select_session_model(
+            client, local["config"]["model"]
+        ):
+            raise ValueError(
+                "The agent rejected the configured local model. No fallback was attempted."
             )
         controls = request.get("acp_options") or {}
         if controls.get("model") and not await select_session_model(client, str(controls["model"])):

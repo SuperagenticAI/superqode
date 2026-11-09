@@ -2,6 +2,29 @@
 
 Native coding workspace for Apple Silicon Macs running macOS 14 or later. Intel Macs are not supported by this build. This is beta software, with manual updates and incomplete terminal feature parity.
 
+## Unreleased: Advanced local harnesses
+
+**Advanced > Local harnesses**, Harness Hub and Command-K **Advanced: Harnesses on local models** open a separate page for experienced users. The Local model connection tile and newcomer Local AI screen have no new choices or harness picker.
+
+Choose a harness and a model that is already loaded in Ollama or LM Studio. Preflight checks the binary, exact loaded identifier, compatible model listing, reported loaded context and approximate fit. A model must be marked Fits. A reachable/configurable pair is labelled Configured only after preflight passes; temporary model/server/fit failures are Preflight blocked. Unknown memory, an unreported context, an unloaded model or an unreachable server blocks launch. Fit accounts for the full loaded context and assumes an unquantized KV cache when the running server's cache format is unknown.
+
+Review the per-launch configuration, write the first message, then choose **Start thread**. This action sends that message and can begin project work. Opening the page and preflight never install a harness, download or load a model, start an agent session or send a generation prompt. Each thread keeps a project-scoped configuration and rechecks it before each turn. A changed model, launch command or context budget requires a new reviewed launch. Identical reviewed pairs reuse the same immutable profile without sharing their thread sessions. No global config files or existing local model bindings are changed.
+
+- **SuperQode harness:** the existing built-in Core runtime, using worker-scoped endpoint, context and output overrides. Other threads and saved model defaults are unaffected.
+- **OpenCode version 1 (ACP):** `opencode acp` with `OPENCODE_CONFIG_CONTENT`. The generated `sq-local` OpenAI-compatible provider is the only enabled provider; main and small-model selections use the same local model, context/output limits are explicit, tool calling is native and permissions ask. ACP must accept the selected local model before a prompt is sent. Other major versions and unparseable version output are Not supported yet.
+- **Goose (ACP):** `goose acp` with process-scoped OpenAI host and chat-completions path, model, context and output settings. Subagent defaults use the same local provider/model, approve mode is requested, tool shim is disabled and automatic session naming is disabled. A private GOOSE_PATH_ROOT under application storage starts with only the documented built-in developer extension. The preview includes its initial config.yaml, created only on launch. Global Goose extensions/config are not imported or rewritten; project instructions, commands and any later recipe-level overrides still need review.
+- **Codex:** shown but Not supported yet when installed. The native integration exists, but this local launcher does not yet have a validated Responses API/output-limit adapter. It does not invent an output-limit config key or fall back to cloud billing. Missing installations are labelled Not installed with a documentation link.
+
+Configured means settings and preflight passed, not that a model has demonstrated reliable tool use. Small models may fail coding tasks. External harness tools, extensions, recipes, plugins and shell commands can access the network or apply their own settings. SuperQode strips inherited provider credentials and common model-routing overrides from the worker, but this is not an OS sandbox or a guarantee that an external harness never accesses its own credential store.
+
+Configuration references checked for this change:
+- OpenCode version 1 process-scoped configuration and provider allowlist: https://opencode.ai/docs/es/config/ and https://opencode.ai/docs/pt-br/config/
+- OpenCode current schema differs from version 1: https://opencode.ai/docs/config/ and https://opencode.ai/docs/providers/
+- Goose environment settings: https://github.com/block/goose/blob/main/documentation/docs/guides/environment-variables.md and provider setup: https://github.com/aaif-goose/goose/blob/main/documentation/docs/getting-started/providers.md
+- Codex per-launch overrides and Responses API requirements: https://developers.openai.com/codex/config-advanced/ and https://learn.chatgpt.com/docs/config-file/config-reference
+
+This is unreleased preparation, with no version bump, new DMG, signing or notarization.
+
 ## Install and start
 
 Download the notarized DMG from the official HTTPS download page, open it and drag SuperQode to Applications. Eject the disk image, then launch SuperQode from Applications. macOS may ask you to confirm opening a downloaded app; it should identify the developer and should not require bypassing security protections. If macOS reports damaged software or cannot verify the developer, stop and report it. Do not disable Gatekeeper or remove quarantine to make a public beta work.
@@ -342,3 +365,15 @@ If a task fails, inspect its recorded status and Git diff before retrying. Inter
 - Send a long tool-heavy thread: old complete turns may be trimmed, tool results must stay paired, output stays within the available window, and an oversized newest prompt gets a visible error. Confirm Ollama num_ctx does not jump to a family default.
 - Unload and verify memory release without deleting weights. Stop app-started Ollama and LM Studio. Adopted Ollama must not be killed. For LM Studio, Stop only appears for an app-started server; unload separately if models remain resident.
 - Open Advanced and verify other runtimes, library, storage and compatibility remain accessible. Run the new LocalModelTests on macOS. Check light/dark mode, keyboard focus, narrow-window scrolling and sheet dismissal.
+
+### Advanced local harness smoke checks (on a Mac)
+
+- Build and run the macOS app in Xcode. Verify Advanced > Local harnesses, Harness Hub and Command-K all reach the same separate page. Confirm the newcomer connection tile, Models and guided Local AI remain unchanged and show no harness options.
+- Open Advanced without loaded models, with either server offline, with missing binaries, and with an installed Codex or unsupported OpenCode version. Confirm honest status, actionable instructions and disabled Start thread. Merely opening or refreshing must not start an agent or send a generation request.
+- Load a small tool-capable model in Ollama and LM Studio separately. Confirm exact loaded model identifiers, requested/loaded/use context, maximum output, Fits and the previewed loopback endpoint. Test a missing compatible model ID and a server that does not report loaded context; both must block.
+- Select an oversized model, an unknown-size model and an excessive loaded context. Confirm launch is blocked rather than silently lowering the displayed memory estimate to a smaller request budget.
+- For SuperQode, OpenCode version 1 and Goose, review configuration and explicitly submit a harmless first message. Confirm a new thread opens using the selected harness/model, replies appear, permission prompts work and a second message resumes the same session. Never use an important repository for the first check.
+- For OpenCode, check that ACP accepts the exact sq-local model and refusal stops before sending. Verify main and small-model settings remain local. For Goose, verify the private configuration enables only the developer extension, global configuration remains unchanged and approval behavior works. Review any later extension or recipe changes.
+- Switch to an unrelated thread and confirm its endpoint, keys, model and context are unchanged. Restart the app and reopen the local thread. Change/unload its model or stop its engine; continuation must block with a visible error, never fall back to a cloud model.
+- Check configuration files before and after launch: global files must remain unchanged. Retry the same accepted launch command after a lost response and confirm no duplicate job. Exercise light/dark mode, narrow layout, keyboard access, project switching during preflight and draft preservation on launch failure.
+- Run LocalHarnessNavigationTests and the existing macOS unit tests in Xcode. Python fixture tests cover configuration and thread routing, not real installed third-party harness versions or macOS compilation.

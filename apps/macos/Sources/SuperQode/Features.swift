@@ -42,6 +42,9 @@ struct HubView: View {
         Button("Agent runtimes…", systemImage: "cpu") { app.openConnections("runtimes") }
         Button("ACP agents…", systemImage: "link") { app.openConnections("acp") }
       }.disabled(app.project.isEmpty || app.busy || app.active)
+      Button("Advanced: Harnesses on local models", systemImage: "cpu.fill") {
+        app.section = "Local harnesses"
+      }.disabled(app.projectID.isEmpty || app.busy || app.active)
       HStack {
         TextField("Search harnesses, runtimes, capabilities", text: $search).textFieldStyle(
           .roundedBorder

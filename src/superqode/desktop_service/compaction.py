@@ -9,8 +9,11 @@ async def compact(request, emit):
     from superqode.harness.backends.base import HarnessBackendRequest
     from superqode.harness.backends.runtime import _create_runtime_for_request
 
-    definition = resolve_harness(request["harness"], root=request["cwd"])
-    if definition.digest != request["expected_digest"]:
+    definition = resolve_harness(
+        "core" if request.get("_local_harness") else request["harness"], root=request["cwd"]
+    )
+    digest = (request.get("_local_harness") or {}).get("digest") or definition.digest
+    if digest != request["expected_digest"]:
         raise ValueError("Harness changed since this conversation; compaction was not started")
     spec = replace(
         definition.spec,
@@ -27,6 +30,10 @@ async def compact(request, emit):
             model=request["model"],
             working_directory=Path(request["cwd"]),
             session_id=request["session_id"],
+            metadata={
+                "agent_context_window": request.get("context_window") or 0,
+                "agent_max_tokens": request.get("max_tokens"),
+            },
         ),
         "builtin",
     )
@@ -38,7 +45,7 @@ async def compact(request, emit):
             **result,
             "status": "completed" if result.get("success") else "failed",
             "session_id": request["session_id"],
-            "harness_digest": definition.digest,
+            "harness_digest": digest,
             "source_job": request["source_job"],
             "native_continuity": bool(result.get("success")),
         },
