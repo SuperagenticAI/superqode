@@ -6,20 +6,37 @@ struct GettingStartedView: View {
   @ObservedObject var draftStore: DraftStore
   @EnvironmentObject var app: Workspace
   @AppStorage("nativeShowStarterGuide") private var showStarterGuide = true
+  /// Global and permanent: the guide appears once, until a first message is
+  /// sent or it is closed. Learning can reopen it.
+  @AppStorage(StarterGuide.completedKey) private var starterGuideCompleted = false
+  /// Anyone with a recorded run in any project already knows the basics.
   private var hasRun: Bool {
-    app.projectJobs.contains { string($0, "kind") == "task" && string($0, "status") == "completed" }
+    app.jobs.contains { string($0, "kind") == "task" }
+  }
+  private var showsGuide: Bool {
+    app.starterTourRequested || (!starterGuideCompleted && showStarterGuide && !hasRun)
   }
   private var hasConnection: Bool {
     app.isManaged || (!app.model.isEmpty && app.routeStatus["ready"] as? Bool == true)
   }
   var body: some View {
     ScrollView {
-      if !app.project.isEmpty && !((showStarterGuide && !hasRun) || app.starterTourRequested) {
+      if !app.project.isEmpty && !showsGuide {
         newThreadStart
       } else {
         guide
       }
     }.defaultScrollAnchor(.top)
+    .onAppear { markCompletedForExistingUser() }
+    .onChange(of: hasRun) { _, _ in markCompletedForExistingUser() }
+  }
+  private func markCompletedForExistingUser() {
+    if hasRun && !starterGuideCompleted { starterGuideCompleted = true }
+  }
+  private func closeGuide() {
+    starterGuideCompleted = true
+    showStarterGuide = false
+    app.starterTourRequested = false
   }
   /// The first screen of a new thread: one question, and the connection front and centre.
   private var newThreadStart: some View {
@@ -98,7 +115,15 @@ struct GettingStartedView: View {
           }
           Text("No SuperQode account required. Requests go to the agent or provider you choose.")
             .font(.caption).foregroundStyle(.secondary)
-        } else if (showStarterGuide && !hasRun) || app.starterTourRequested {
+        } else if showsGuide {
+          HStack {
+            Spacer()
+            Button(action: closeGuide) {
+              Image(systemName: "xmark").font(.system(size: 12, weight: .semibold))
+                .frame(width: 24, height: 24)
+            }.buttonStyle(.borderless).help("Close getting started. Reopen it from Getting started & learning.")
+              .accessibilityLabel("Close getting started")
+          }
           PageTitle(
             eyebrow: "Getting started",
             title: hasConnection ? "Ask for your first change." : "Connect your coding agent.",
@@ -135,10 +160,7 @@ struct GettingStartedView: View {
           HStack {
             Button("How it works") { app.showLearningGuide = true }
             Spacer()
-            Button("Hide getting started") {
-              showStarterGuide = false
-              app.starterTourRequested = false
-            }.font(.caption)
+            Button("Hide getting started", action: closeGuide).font(.caption)
           }
         }
       }.padding(28).frame(maxWidth: 680, alignment: .leading).frame(
@@ -160,6 +182,14 @@ struct GettingStartedView: View {
           horizontal: false, vertical: true)
       }
     }
+  }
+}
+
+enum StarterGuide {
+  static let completedKey = "nativeStarterGuideCompleted"
+  /// Called after the engine accepts a message.
+  static func markCompleted(_ defaults: UserDefaults = .standard) {
+    if !defaults.bool(forKey: completedKey) { defaults.set(true, forKey: completedKey) }
   }
 }
 

@@ -1613,6 +1613,8 @@ private func jobStamp(_ row: [String: Any]) -> Double {
       let id = string(result, "id")
       guard !id.isEmpty else { throw EngineError(message: "The engine did not accept this message.") }
       self.clearAcceptedSubmission(key: submittedKey, submitted: submittedRecord)
+      StarterGuide.markCompleted()
+      self.starterTourRequested = false
       // Acceptance belongs to the submitted conversation even if navigation changed.
       let destination = continueSession ? submittedConversation : id
       if !continueSession {
