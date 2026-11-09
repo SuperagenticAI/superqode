@@ -51,28 +51,71 @@ struct TurnChangeSummary: Equatable {
 }
 
 /// Caches summaries so scrolling a long transcript does not refetch every turn.
+/// The transcript holds this without observing it, so a summary arriving only
+/// re-renders its own chips, not the whole conversation.
 @MainActor final class TurnChangesStore: ObservableObject {
   @Published private(set) var summaries: [String: TurnChangeSummary] = [:]
+  /// One sheet host for every turn in the transcript.
+  @Published var shipRequest: TurnShipRequest?
+  @Published var diffRequest: TurnDiffRequest?
   private var inFlight: Set<String> = []
+  /// What each summary was loaded for (the run status for the live turn).
+  private var stamps: [String: String] = [:]
 
   func summary(_ job: String) -> TurnChangeSummary? { summaries[job] }
 
-  func load(engine: Engine, project: String, job: String, force: Bool = false) async {
+  /// Loads once per job and stamp. `force` refetches regardless, for live turns.
+  func load(engine: Engine, project: String, job: String, stamp: String = "", force: Bool = false) async {
     guard !project.isEmpty, !job.isEmpty, !inFlight.contains(job) else { return }
-    if !force, summaries[job] != nil { return }
+    if !force, summaries[job] != nil, stamps[job] == stamp { return }
     inFlight.insert(job)
     defer { inFlight.remove(job) }
     do {
       let raw = try await engine.call("turns.changes", ["project": project, "job": job]) as? [String: Any] ?? [:]
       let next = TurnChangeSummary(raw)
+      stamps[job] = stamp
       if summaries[job] != next { summaries[job] = next }
     } catch {
       // Older engines do not know this method. Hide the summary quietly.
+      stamps[job] = stamp
       if summaries[job] == nil { summaries[job] = TurnChangeSummary() }
     }
   }
 
-  func invalidate() { summaries.removeAll() }
+  func invalidate() {
+    summaries.removeAll()
+    stamps.removeAll()
+  }
+}
+
+struct TurnShipRequest: Identifiable {
+  let id = UUID()
+  let files: [String]
+  let prompt: String
+}
+
+struct TurnDiffRequest: Identifiable {
+  let job: String
+  let path: String
+  var id: String { job + "\n" + path }
+}
+
+/// Presents the commit and diff sheets for any turn. Attached once to the
+/// transcript instead of two sheet modifiers on every turn.
+struct TurnChangesSheets: View {
+  @ObservedObject var store: TurnChangesStore
+  @EnvironmentObject var app: Workspace
+  var body: some View {
+    Color.clear.frame(width: 0, height: 0)
+      .sheet(item: $store.shipRequest) { request in
+        ShipSheet(turnFiles: request.files, prompt: request.prompt) { store.shipRequest = nil }
+          .environmentObject(app)
+      }
+      .sheet(item: $store.diffRequest) { request in
+        TurnDiffSheet(job: request.job, path: request.path) { store.diffRequest = nil }
+          .environmentObject(app)
+      }
+  }
 }
 
 /// Inline "files changed" chips under a turn, with undo for sealed turns.
@@ -85,13 +128,12 @@ struct TurnChangesView: View {
   @EnvironmentObject var app: Workspace
   @EnvironmentObject var store: TurnChangesStore
   @State private var expanded = false
-  @State private var diffPath: String?
   @State private var undoing = false
-  @State private var showShip = false
   private let collapsedCount = 4
 
   private var summary: TurnChangeSummary? { store.summary(job) }
-  private var refreshKey: String { job + "\n" + (current ? string(app.detail, "status") : "") + "\n" + String(app.connected) }
+  private var stamp: String { current ? string(app.detail, "status") : "" }
+  private var refreshKey: String { job + "\n" + stamp + "\n" + String(app.connected) }
 
   var body: some View {
     Group {
@@ -99,20 +141,19 @@ struct TurnChangesView: View {
     }
     .task(id: refreshKey) {
       guard app.connected, !app.projectID.isEmpty else { return }
-      await store.load(engine: app.engine, project: app.projectID, job: job, force: current)
+      let live = current && app.active
+      if store.summary(job) == nil {
+        // Let the transcript draw first; navigating away cancels the fetch.
+        try? await Task.sleep(for: .milliseconds(120))
+        guard !Task.isCancelled else { return }
+      }
+      await store.load(engine: app.engine, project: app.projectID, job: job, stamp: stamp, force: live)
       // Live turns: refresh at a calm pace while the agent edits files.
       while current, app.active, !Task.isCancelled {
         try? await Task.sleep(for: .seconds(6))
         guard !Task.isCancelled, app.active else { break }
-        await store.load(engine: app.engine, project: app.projectID, job: job, force: true)
+        await store.load(engine: app.engine, project: app.projectID, job: job, stamp: stamp, force: true)
       }
-    }
-    .sheet(isPresented: $showShip) {
-      ShipSheet(turnFiles: summary?.files.map(\.path) ?? [], prompt: prompt) { showShip = false }
-        .environmentObject(app)
-    }
-    .sheet(item: Binding(get: { diffPath.map(TurnDiffTarget.init) }, set: { diffPath = $0?.path })) { target in
-      TurnDiffSheet(job: job, path: target.path) { diffPath = nil }.environmentObject(app)
     }
   }
 
@@ -127,7 +168,7 @@ struct TurnChangesView: View {
         if summary.live { Text("updating").font(.caption2).foregroundStyle(.secondary) }
         Spacer(minLength: 0)
         if !summary.live {
-          Button { showShip = true } label: { Label("Commit…", systemImage: "arrow.up.circle") }
+          Button { store.shipRequest = TurnShipRequest(files: summary.files.map(\.path), prompt: prompt) } label: { Label("Commit…", systemImage: "arrow.up.circle") }
             .buttonStyle(.plain).font(.caption)
             .disabled(!app.connected || app.hasActiveWork(project: app.projectID))
             .help("Commit these changes, push, and open a pull request with your Git setup")
@@ -136,7 +177,7 @@ struct TurnChangesView: View {
       }
       FlowChips(spacing: 6) {
         ForEach(shown) { file in
-          Button { diffPath = file.path } label: {
+          Button { store.diffRequest = TurnDiffRequest(job: job, path: file.path) } label: {
             HStack(spacing: 5) {
               Image(systemName: icon(file.change)).font(.system(size: 9)).foregroundStyle(.secondary)
               Text(file.name).lineLimit(1)
@@ -208,7 +249,7 @@ struct TurnChangesView: View {
       _ = try await app.engine.call("checkpoints.restore", ["project": project, "id": checkpoint])
       store.invalidate()
       await app.refreshGit()
-      await store.load(engine: app.engine, project: project, job: job, force: true)
+      await store.load(engine: app.engine, project: project, job: job, stamp: stamp, force: true)
     }
   }
 
@@ -219,11 +260,6 @@ struct TurnChangesView: View {
     default: return "pencil"
     }
   }
-}
-
-private struct TurnDiffTarget: Identifiable {
-  let path: String
-  var id: String { path }
 }
 
 private struct LineCounts: View {

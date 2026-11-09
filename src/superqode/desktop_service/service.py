@@ -1459,7 +1459,9 @@ class DesktopService:
                 self._status(params["id"], "cancelled")
                 try:
                     os.killpg(process.pid, signal.SIGTERM)
-                except ProcessLookupError:
+                except (ProcessLookupError, PermissionError):
+                    # macOS reports EPERM when the group has already exited
+                    # but is not reaped yet. Either way nothing is left to stop.
                     pass
 
                 def reap():
@@ -1468,7 +1470,7 @@ class DesktopService:
                     except subprocess.TimeoutExpired:
                         try:
                             os.killpg(process.pid, signal.SIGKILL)
-                        except ProcessLookupError:
+                        except (ProcessLookupError, PermissionError):
                             pass
 
                 self._background(reap)

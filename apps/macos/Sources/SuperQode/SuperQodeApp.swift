@@ -260,6 +260,9 @@ struct RootView: View {
     )
     .background { BrandBackdrop() }.tint(.qAccent).frame(minWidth: 1120, minHeight: 740)
     .background { CommandPaletteWindowReader(app: app).frame(width: 0, height: 0) }
+    // Window-level key monitor. Zero-sized so it never takes part in the
+    // workspace layout; its own guards keep it inactive outside the workspace.
+    .background { WorkspaceKeyMonitor(app: app).frame(width: 0, height: 0) }
     .alert(
       "SuperQode",
       isPresented: Binding(get: { app.error != nil }, set: { if !$0 { app.error = nil } })
@@ -409,8 +412,6 @@ struct RootView: View {
         }
       }.frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
     }
-    // Keyboard shortcuts stay active while the threads column is hidden.
-    .background(WorkspaceKeyMonitor(app: app))
     // Section changes replace substantial editors and inspectors. A shell-wide
     // animation retains both pages and animates all their layout work per click.
 
@@ -1201,7 +1202,8 @@ struct EventStream: View {
   @State private var followScrollScheduled = false
   @State private var restorePages = 0
   @State private var positionNotice = ""
-  @StateObject private var turnChanges = TurnChangesStore()
+  // Held, not observed: a turn summary arriving re-renders only its chips.
+  @State private var turnChanges = TurnChangesStore()
   private var availableAnchors: [String] {
     var anchors = ["bottom"] + app.conversationHistory.map { "turn:" + string($0, "id") }
     if !(app.detail["request"] as? [String: Any] ?? [:]).isEmpty { anchors.append("prompt:" + app.selectedJob) }
@@ -1224,8 +1226,9 @@ struct EventStream: View {
   private var transcript: some View {
     let rows = conversationEvents(app.events, includeDetails: false)
     let activity = (rows.last(where: { string($0, "type") == "activity_group" })?["data"] as? [String: Any])?["events"] as? [[String: Any]] ?? []
-    let stats = RunStats(detail: app.detail, events: app.events)
+    let stats = RunStats(detail: app.detail, response: string(app.detail, "status") == "completed" ? app.selectedResponseText : "")
     let isTask = string(app.detail, "kind") == "task"
+    let plan = isTask ? app.selectedPlan : []
     return VStack(spacing: 0) {
       HStack {
         Text("CONVERSATION").font(.system(size: 12, design: .monospaced)).foregroundStyle(
@@ -1302,7 +1305,6 @@ struct EventStream: View {
                 .padding(.bottom, 10)
                 .id("prompt:" + app.selectedJob)
             }
-            let plan = PlanSnapshot.latest(app.events)
             if isTask && !plan.isEmpty { PlanCard(items: plan) }
             let messages = rows.filter { string($0, "type") != "activity_group" }
             if !messages.isEmpty {
@@ -1316,7 +1318,7 @@ struct EventStream: View {
                   EventRow(event: event, embeddedResponse: true)
                 }
               }.padding(20).frame(maxWidth: .infinity, alignment: .leading).modifier(ConversationSurface())
-                .hoverCopy("Copy response as Markdown") { RunStats.responseText(app.events) }
+                .hoverCopy("Copy response as Markdown") { app.selectedResponseText }
                 .id("response:" + app.selectedJob)
             }
             if isTask {
@@ -1382,7 +1384,7 @@ struct EventStream: View {
             AgentWorkingCard(
               status: app.activityStatus, activity: currentAgentActivity(app.events),
               startedAt: RunStats.startDate(app.detail), waitingSince: RunStats.waitingSince(app.detail),
-              planLine: PlanSnapshot.compactLine(PlanSnapshot.latest(app.events)))
+              planLine: PlanSnapshot.compactLine(plan))
           }
           if !activity.isEmpty {
             AgentActivityView(events: activity, active: app.active && app.activityStatus != "needs_approval")
@@ -1390,7 +1392,9 @@ struct EventStream: View {
           }
         }.padding(.horizontal, 24).padding(.vertical, 10)
       }
-    }.onDisappear { savePosition(); app.scheduleRecoverySave() }
+    }
+    .background(TurnChangesSheets(store: turnChanges))
+    .onDisappear { savePosition(); app.scheduleRecoverySave() }
   }
   private func savePosition() {
     guard initialized else { return }

@@ -65,7 +65,7 @@ struct ProviderHealth: Equatable {
 struct ProviderHealthStrip: View {
   @EnvironmentObject var app: Workspace
   var body: some View {
-    let health = ProviderHealth.from(events: app.events, status: string(app.detail, "status"))
+    let health = app.selectedProviderHealth
     Group {
       if !app.connected {
         broken("Local engine offline. Your draft is kept.", action: "Reconnect") {

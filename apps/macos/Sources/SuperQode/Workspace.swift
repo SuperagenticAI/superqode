@@ -473,6 +473,8 @@ private func jobStamp(_ row: [String: Any]) -> Double {
   let reviewCommentStore = ReviewCommentStore()
   /// Review comments waiting to be sent, per thread.
   let pendingComments = PendingCommentStore()
+  /// Plan and provider health derived from `events`, recomputed only when they change.
+  let eventDerivations = EventDerivations()
   var draft: String {
     get { draftStore.text }
     set {

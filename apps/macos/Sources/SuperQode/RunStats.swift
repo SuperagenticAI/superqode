@@ -17,6 +17,11 @@ struct RunStats: Equatable {
 
   /// Stats for the selected run, from `jobs.get` detail and its events.
   init(detail: [String: Any], events: [[String: Any]]) {
+    self.init(detail: detail, response: string(detail, "status") == "completed" ? Self.responseText(events) : "")
+  }
+
+  /// Same, with the response text already joined (see `Workspace.selectedResponseText`).
+  init(detail: [String: Any], response: String) {
     let request = detail["request"] as? [String: Any] ?? [:]
     let result = detail["result"] as? [String: Any] ?? [:]
     let status = string(detail, "status")
@@ -27,7 +32,7 @@ struct RunStats: Equatable {
       model: Self.model(request),
       usage: result["usage_summary"] as? [String: Any],
       status: status,
-      response: status == "completed" ? Self.responseText(events) : "")
+      response: status == "completed" ? response : "")
   }
 
   /// Stats for an earlier turn returned by `conversations.get`.
@@ -242,7 +247,6 @@ struct RunStatsFooter: View {
     } else if !active, !stats.summaryParts.isEmpty {
       Text(stats.summaryParts.joined(separator: " · "))
         .font(.caption).foregroundStyle(.secondary).lineLimit(2)
-        .textSelection(.enabled)
         .help(stats.helpText)
     }
   }
