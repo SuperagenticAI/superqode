@@ -651,7 +651,10 @@ struct CodingComposer: View {
   @State private var showOptions = false
   @State private var isolatePlan: [String: Any]?
   @State private var requestedFiles = false
-  @FocusState private var composerFocused: Bool
+  // Keyboard focus is driven through AppKit so the text view itself, not its
+  // scroll container, becomes first responder.
+  @State private var focusRequest = 0
+  @State private var blurRequest = 0
   private var composerHeight: CGFloat {
     // Height stops growing after eight lines. Avoid allocating every line of
     // a large pasted prompt on each subsequent keystroke.
@@ -685,13 +688,16 @@ struct CodingComposer: View {
     ) {
       isolateConfirmation
     }
-    .onChange(of: draftStore.text) { _, _ in app.scheduleDraftSave() }
+    .onChange(of: draftStore.text) { _, _ in
+      app.composerEditedAt = Date()
+      app.scheduleDraftSave()
+    }
     .onChange(of: app.selectedJob) { _, _ in
-      if WorkspaceNavigationGroup.usesCodingWorkspace(app.section) && !app.drawerExpanded { composerFocused = true }
+      if WorkspaceNavigationGroup.usesCodingWorkspace(app.section) && !app.drawerExpanded { focusRequest += 1 }
     }
     .onChange(of: WorkspaceNavigationGroup.usesCodingWorkspace(app.section)) { _, visible in
       if !visible {
-        if composerFocused { composerFocused = false }
+        blurRequest += 1
         if showQueue { showQueue = false }
         if showContext { showContext = false }
         if showOptions { showOptions = false }
@@ -699,7 +705,7 @@ struct CodingComposer: View {
       }
     }
     .onChange(of: app.drawerExpanded) { _, expanded in
-      if expanded && composerFocused { composerFocused = false }
+      if expanded { blurRequest += 1 }
     }
     .onChange(of: app.projectID) { _, _ in requestedFiles = false }
     .onChange(of: app.mentionPrefix) { _, _ in
@@ -766,9 +772,11 @@ struct CodingComposer: View {
         text: $draftStore.text,
         onCursorPrefix: app.noteComposerCursor,
         onImagePaste: app.pasteImage,
-        onInterceptReturn: app.acceptTopMentionIfNeeded
+        onInterceptReturn: app.acceptTopMentionIfNeeded,
+        onFocusChange: { app.composerHasFocus = $0 },
+        focusRequest: focusRequest,
+        blurRequest: blurRequest
       ) { app.send(continueSession: continuesConversation) }
-        .focused($composerFocused)
         .frame(height: composerHeight).padding(8)
         .outlinedSurface(radius: 8)
         .onDrop(of: [.fileURL], isTargeted: nil) { app.consumeFileDrop($0) }
@@ -1073,6 +1081,7 @@ struct EventStream: View {
   @State private var savedProject = ""
   @State private var initialized = false
   @State private var restoringPosition = false
+  @State private var followScrollScheduled = false
   @State private var restorePages = 0
   @State private var positionNotice = ""
   private var availableAnchors: [String] {
@@ -1217,7 +1226,15 @@ struct EventStream: View {
         .onChange(of: visibleAnchor) { _, _ in
           if initialized && !restoringPosition && pendingAnchor == nil { savePosition() }
         }.onChange(of: app.events.last?["sequence"] as? Int) { _, _ in
-          if follow && initialized { proxy.scrollTo("bottom", anchor: .bottom) }
+          // Coalesce follow scrolling while events stream in so the window is
+          // not relaid out on every token.
+          guard follow && initialized, !followScrollScheduled else { return }
+          followScrollScheduled = true
+          Task { @MainActor in
+            try? await Task.sleep(for: .milliseconds(150))
+            followScrollScheduled = false
+            if follow && initialized { proxy.scrollTo("bottom", anchor: .bottom) }
+          }
         }
       }
       if app.active || !activity.isEmpty {

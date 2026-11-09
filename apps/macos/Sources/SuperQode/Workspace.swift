@@ -163,6 +163,14 @@ private func jobStamp(_ row: [String: Any]) -> Double {
   @Published var restoringNavigation = false
   var restoringComposer = false
   var composerConversationID = ""
+  /// AppKit focus of the prompt editor. Not published: it must not re-render.
+  var composerHasFocus = false
+  var composerEditedAt = Date.distantPast
+  /// True while the user is writing in the composer. Background polling must
+  /// not switch threads under them; it shows a banner or waits instead.
+  var userIsComposing: Bool {
+    composerHasFocus && (!draftStore.text.isEmpty || Date().timeIntervalSince(composerEditedAt) < 3)
+  }
   private var draftSaveTask: Task<Void, Never>?
   var recoverySaveTask: Task<Void, Never>?
   var recoverySaveGeneration = 0
@@ -1115,7 +1123,8 @@ private func jobStamp(_ row: [String: Any]) -> Double {
           string($0, "state") == "running"
         }) {
           let job = string(queued, "job")
-          if !job.isEmpty && job != lastQueueJob {
+          // Wait while the user is typing; the next poll opens the queued run.
+          if !job.isEmpty && job != lastQueueJob && !userIsComposing {
             lastQueueJob = job
             selectJob(job)
           }
@@ -1145,10 +1154,15 @@ private func jobStamp(_ row: [String: Any]) -> Double {
         if !phoneTurn.isEmpty, phoneTurn != selectedJob {
           let row = jobs.first { string($0, "id") == phoneTurn } ?? [:]
           let conversation = string(row, "conversation_id", phoneTurn)
-          switch phoneRunPresentation(
+          var presentation = phoneRunPresentation(
             turn: phoneTurn, conversation: conversation, selectedJob: selectedJob,
             selectedConversation: selectedConversationID, macActive: active
-          ) {
+          )
+          // Never move the user to another thread while they are typing.
+          if presentation == .open, userIsComposing, conversation != selectedConversationID {
+            presentation = .banner
+          }
+          switch presentation {
           case .open:
             phoneRunBanner = [:]
             seenPhoneJobs.insert(phoneTurn)
@@ -1243,8 +1257,13 @@ private func jobStamp(_ row: [String: Any]) -> Double {
     followConversationTip = openedConversationTip(id)
     let summary = projectJobs.first { string($0, "id") == id }
     let identity = conversationID ?? summary.map { string($0, "conversation_id", id) }
+    let wasLoadingDraft = loadingConversationDraft
     loadingConversationDraft = !id.isEmpty && identity == nil
-    restoreComposer(conversationID: identity ?? id)
+    // Following a conversation to its newest turn keeps the same composer. Do
+    // not reload it, so text typed while the agent works stays put.
+    if wasLoadingDraft || loadingConversationDraft || (identity ?? id) != composerConversationID {
+      restoreComposer(conversationID: identity ?? id)
+    }
     if let summary { rememberThreadTab(summary) }
     restoreSessionDestination()
     if let targetSection { section = targetSection }

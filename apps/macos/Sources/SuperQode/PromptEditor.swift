@@ -8,12 +8,29 @@ struct PromptEditor: NSViewRepresentable {
   var onCursorPrefix: (String) -> Void = { _ in }
   var onImagePaste: () -> Void = {}
   var onInterceptReturn: () -> Bool = { false }
+  /// Reports whether the text view itself is the window's first responder.
+  var onFocusChange: (Bool) -> Void = { _ in }
+  /// Increment to move keyboard focus into the editor.
+  var focusRequest = 0
+  /// Increment to release keyboard focus if the editor holds it.
+  var blurRequest = 0
   let submit: () -> Void
 
   final class Editor: NSTextView {
     var submit: () -> Void = {}
     var onImagePaste: () -> Void = {}
     var onInterceptReturn: () -> Bool = { false }
+    var onFocusChange: (Bool) -> Void = { _ in }
+    override func becomeFirstResponder() -> Bool {
+      let accepted = super.becomeFirstResponder()
+      if accepted { onFocusChange(true) }
+      return accepted
+    }
+    override func resignFirstResponder() -> Bool {
+      let resigned = super.resignFirstResponder()
+      if resigned { onFocusChange(false) }
+      return resigned
+    }
     override func keyDown(with event: NSEvent) {
       guard isEditable else { return }
       if (event.keyCode == 36 || event.keyCode == 76), !hasMarkedText(),
@@ -36,7 +53,15 @@ struct PromptEditor: NSViewRepresentable {
   }
   final class Coordinator: NSObject, NSTextViewDelegate {
     var parent: PromptEditor
-    init(_ parent: PromptEditor) { self.parent = parent }
+    var appliedFocusRequest = 0
+    var appliedBlurRequest = 0
+    /// Set when the editor held focus as it became read-only, so focus returns afterwards.
+    var restoreFocusWhenEditable = false
+    init(_ parent: PromptEditor) {
+      self.parent = parent
+      appliedFocusRequest = parent.focusRequest
+      appliedBlurRequest = parent.blurRequest
+    }
     func textDidChange(_ notification: Notification) {
       guard let editor = notification.object as? NSTextView else { return }
       parent.text = editor.string
@@ -76,10 +101,42 @@ struct PromptEditor: NSViewRepresentable {
   func updateNSView(_ scroll: NSScrollView, context: Context) {
     context.coordinator.parent = self
     guard let editor = scroll.documentView as? Editor else { return }
-    if editor.isEditable != enabled { editor.isEditable = enabled }
+    let coordinator = context.coordinator
+    let focused = editor.window?.firstResponder === editor
+    if editor.isEditable != enabled {
+      // Becoming read-only can drop keyboard focus. Remember it and give it back
+      // when the composer is editable again, unless the user moved elsewhere.
+      if !enabled { coordinator.restoreFocusWhenEditable = focused }
+      editor.isEditable = enabled
+      if enabled, coordinator.restoreFocusWhenEditable {
+        coordinator.restoreFocusWhenEditable = false
+        Self.focus(editor)
+      }
+    }
     editor.submit = submit
     editor.onImagePaste = onImagePaste
     editor.onInterceptReturn = onInterceptReturn
-    if editor.string != text { editor.string = text }
+    editor.onFocusChange = onFocusChange
+    // Replacing the string resets the cursor and any IME composition. Only do
+    // it when the bound text really changed outside the editor.
+    if editor.string != text, !editor.hasMarkedText() { editor.string = text }
+    if focusRequest != coordinator.appliedFocusRequest {
+      coordinator.appliedFocusRequest = focusRequest
+      if enabled { Self.focus(editor) }
+    }
+    if blurRequest != coordinator.appliedBlurRequest {
+      coordinator.appliedBlurRequest = blurRequest
+      if editor.window?.firstResponder === editor { editor.window?.makeFirstResponder(nil) }
+    }
+  }
+  /// AppKit focus for the text view itself, deferred until it is in a window.
+  private static func focus(_ editor: Editor) {
+    DispatchQueue.main.async {
+      guard let window = editor.window, window.firstResponder !== editor else { return }
+      // Do not take focus from a sheet or another editable field the user chose.
+      guard window.attachedSheet == nil else { return }
+      if let current = window.firstResponder as? NSTextView, current.isEditable { return }
+      window.makeFirstResponder(editor)
+    }
   }
 }
