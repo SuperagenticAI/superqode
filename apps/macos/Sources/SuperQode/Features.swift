@@ -1032,6 +1032,7 @@ struct FilesView: View {
 struct SettingsView: View {
   @AppStorage("animatedInterface") private var animatedInterface = true
   @AppStorage("colourfulAgentResponses") private var colourfulResponses = true
+  @AppStorage(RunSleepGuard.settingKey) private var keepAwakeDuringRuns = true
   @EnvironmentObject var app: Workspace
   var body: some View {
     ScrollView {
@@ -1056,6 +1057,10 @@ struct SettingsView: View {
         Section("Local engine") {
           LabeledContent("Status", value: app.connected ? (app.backgroundEngineMode ? "Connected to background engine" : "Connected over private pipes") : "Offline")
           BackgroundEngineControls()
+          Toggle("Keep Mac awake during runs", isOn: $keepAwakeDuringRuns)
+            .onChange(of: keepAwakeDuringRuns) { _, _ in app.updateRunSleepGuard() }
+          Text("Stops idle system sleep while an agent is working. The display can still sleep.")
+            .font(.caption).foregroundStyle(.secondary)
           LabeledContent("Execution", value: "This Mac")
           Text(
             "Provider requests go directly from the local engine to your configured provider. The app does not upload project data to a SuperQode service."

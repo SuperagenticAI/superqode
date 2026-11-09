@@ -359,7 +359,7 @@ private func jobStamp(_ row: [String: Any]) -> Double {
   private var connectionTestRoute = ""
   private var credentialGeneration = 0
   private var connectionTestGeneration = 0
-  @Published var connected = false
+  @Published var connected = false { didSet { if connected != oldValue { updateRunSleepGuard() } } }
   @Published var error: String?
   @Published var notice = ""
   var navigationHistory: [WorkspaceDestination] {
@@ -428,7 +428,7 @@ private func jobStamp(_ row: [String: Any]) -> Double {
   @Published var models: [[String: Any]] = []
   @Published var hardware: [String: Any] = [:]
   @Published var packs: [[String: Any]] = []
-  @Published var jobs: [[String: Any]] = []
+  @Published var jobs: [[String: Any]] = [] { didSet { updateRunSleepGuard() } }
   @Published var executionRecovery: [String: Any] = [:]
   private var threadLibraries: [String: ThreadLibrary] = [:]
   func threadLibrary(for project: String) -> ThreadLibrary {
