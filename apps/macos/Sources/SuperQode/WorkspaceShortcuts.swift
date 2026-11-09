@@ -30,7 +30,29 @@ import SwiftUI
   }
 
   func focusThreadSearch() {
-    threadSearchFocusRequest += 1
+    guard threadsSidebarCollapsed else { threadSearchFocusRequest += 1; return }
+    setThreadsSidebar(collapsed: false)
+    // The search field mounts with the column; focus it once it is on screen.
+    Task { @MainActor [weak self] in
+      try? await Task.sleep(for: .milliseconds(250))
+      self?.threadSearchFocusRequest += 1
+    }
+  }
+
+  func setThreadsSidebar(collapsed: Bool) {
+    guard collapsed != threadsSidebarCollapsed else { return }
+    withAnimation(.easeInOut(duration: 0.2)) { threadsSidebarCollapsed = collapsed }
+  }
+
+  func toggleThreadsSidebar() { setThreadsSidebar(collapsed: !threadsSidebarCollapsed) }
+
+  /// Strongest attention state across threads, shown on the toggle when the column is hidden.
+  var threadsAttention: ThreadsAttention {
+    let statuses = jobs.map { string($0, "status") }
+    if statuses.contains("needs_approval") { return .needsApproval }
+    if !unreadThreads.isEmpty { return .unread }
+    if statuses.contains(where: { ["running", "queued", "cancelling"].contains($0) }) { return .running }
+    return .none
   }
 
   /// Up arrow in an empty message box: bring back the last prompt sent in this thread.
@@ -114,4 +136,16 @@ struct WorkspaceKeyMonitor: NSViewRepresentable {
     return view
   }
   func updateNSView(_ view: MonitorView, context: Context) { view.app = app }
+}
+
+enum ThreadsAttention {
+  case none, running, unread, needsApproval
+  var label: String {
+    switch self {
+    case .none: return ""
+    case .running: return "An agent is working"
+    case .unread: return "Unread thread updates"
+    case .needsApproval: return "A thread needs your approval"
+    }
+  }
 }

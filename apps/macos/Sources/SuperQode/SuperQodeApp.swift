@@ -112,6 +112,12 @@ import UserNotifications
         Divider()
         WorkspaceCommandMenuItem(app: workspace, action: .learning)
       }
+      CommandGroup(replacing: .sidebar) {
+        Button(workspace.threadsSidebarCollapsed ? "Show Threads" : "Hide Threads") {
+          workspace.toggleThreadsSidebar()
+        }
+        .keyboardShortcut("s", modifiers: [.command, .control])
+      }
       CommandMenu("Agent Space") {
         Button("Command Palette…", action: workspace.presentCommandPalette)
           .keyboardShortcut("k").disabled(workspace.showCommandPalette)
@@ -240,6 +246,8 @@ struct RootView: View {
   @EnvironmentObject var app: Workspace
   @Environment(\.accessibilityReduceMotion) private var reduceMotion
   @AppStorage("animatedInterface") private var animatedInterface = true
+  @AppStorage("nativeThreadsSidebarWidth") private var sidebarWidth: Double = 260
+  @State private var sidebarDragStart: Double?
   var body: some View {
     GeometryReader { viewport in
       Group {
@@ -288,12 +296,15 @@ struct RootView: View {
     HStack(spacing: 0) {
       WorkspaceNavigationRail()
       Divider()
-      SidebarView().frame(width: 260).background(Color.qPanel)
-        .disabled(app.openingProject || app.restoringNavigation)
-        .background(WorkspaceKeyMonitor(app: app))
-      Divider()
+      if !app.threadsSidebarCollapsed {
+        SidebarView().frame(width: CGFloat(min(max(sidebarWidth, 200), 440))).background(Color.qPanel)
+          .disabled(app.openingProject || app.restoringNavigation)
+          .transition(.move(edge: .leading).combined(with: .opacity))
+        sidebarResizeHandle
+      }
       VStack(spacing: 0) {
         HStack(spacing: 12) {
+          ThreadsSidebarToggle()
           Button {
             app.showWelcome = true
           } label: {
@@ -398,9 +409,32 @@ struct RootView: View {
         }
       }.frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
     }
+    // Keyboard shortcuts stay active while the threads column is hidden.
+    .background(WorkspaceKeyMonitor(app: app))
     // Section changes replace substantial editors and inspectors. A shell-wide
     // animation retains both pages and animates all their layout work per click.
 
+  }
+  /// Divider between the threads column and the content. Drag to resize; double-click resets.
+  private var sidebarResizeHandle: some View {
+    Divider()
+      .overlay(
+        Color.clear.frame(width: 7).contentShape(Rectangle())
+          .onHover { inside in
+            if inside { NSCursor.resizeLeftRight.push() } else { NSCursor.pop() }
+          }
+          .gesture(
+            DragGesture(minimumDistance: 1, coordinateSpace: .global)
+              .onChanged { value in
+                let start = sidebarDragStart ?? min(max(sidebarWidth, 200), 440)
+                if sidebarDragStart == nil { sidebarDragStart = start }
+                sidebarWidth = min(max(start + value.translation.width, 200), 440)
+              }
+              .onEnded { _ in sidebarDragStart = nil }
+          )
+          .onTapGesture(count: 2) { sidebarWidth = 260 }
+          .help("Drag to resize the threads column. Double-click to reset.")
+      )
   }
 }
 extension Dictionary where Key == String, Value == Any {

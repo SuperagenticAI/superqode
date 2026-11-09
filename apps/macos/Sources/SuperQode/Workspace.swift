@@ -186,6 +186,10 @@ private func jobStamp(_ row: [String: Any]) -> Double {
   var composerConversationID = ""
   /// Incremented by Cmd G to move focus to the sidebar thread search.
   @Published var threadSearchFocusRequest = 0
+  /// Threads column visibility and width, kept across launches.
+  @Published var threadsSidebarCollapsed = UserDefaults.standard.bool(forKey: "nativeThreadsSidebarCollapsed") {
+    didSet { UserDefaults.standard.set(threadsSidebarCollapsed, forKey: "nativeThreadsSidebarCollapsed") }
+  }
   /// Threads with a finished run or an approval request the user has not opened yet.
   @Published var unreadThreads: Set<String> =
     Set(UserDefaults.standard.stringArray(forKey: "nativeUnreadThreads") ?? [])

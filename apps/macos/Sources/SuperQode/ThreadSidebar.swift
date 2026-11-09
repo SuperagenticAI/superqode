@@ -251,3 +251,34 @@ struct ThreadSidebarRow: View {
     }.font(.system(size: 10))
   }
 }
+
+/// Header button that shows or hides the threads column. While hidden, a dot
+/// keeps approvals, unread updates and running agents noticeable.
+struct ThreadsSidebarToggle: View {
+  @EnvironmentObject var app: Workspace
+  var body: some View {
+    let attention = app.threadsSidebarCollapsed ? app.threadsAttention : .none
+    Button(action: app.toggleThreadsSidebar) {
+      Image(systemName: "sidebar.left")
+        .overlay(alignment: .topTrailing) {
+          if attention != .none {
+            Circle().fill(color(attention)).frame(width: 7, height: 7)
+              .overlay(Circle().stroke(Color.qPanel, lineWidth: 1))
+              .offset(x: 4, y: -3)
+          }
+        }
+    }
+    .help((app.threadsSidebarCollapsed ? "Show Threads (⌃⌘S)" : "Hide Threads (⌃⌘S)")
+      + (attention == .none ? "" : "\n" + attention.label))
+    .accessibilityLabel(app.threadsSidebarCollapsed ? "Show threads" : "Hide threads")
+    .accessibilityValue(attention.label)
+  }
+  private func color(_ attention: ThreadsAttention) -> Color {
+    switch attention {
+    case .needsApproval: return .orange
+    case .unread: return Color.qAccent
+    case .running: return .green
+    case .none: return .clear
+    }
+  }
+}
