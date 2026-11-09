@@ -504,7 +504,7 @@ struct CodingView: View {
             inspector.frame(width: wide ? 350 : nil).background(Color.qPanel)
           }
         }.frame(maxHeight: .infinity)
-        CodingComposer(draftStore: app.draftStore)
+        CodingComposer(draftStore: app.draftStore, availableHeight: size.height)
       }
       .padding(.bottom, !app.workbenchDrawer.isEmpty && !app.drawerExpanded ? drawerContentHeight(size.height, expanded: false) + 41 : 0)
       .opacity(app.drawerExpanded ? 0 : 1)
@@ -655,11 +655,51 @@ struct CodingComposer: View {
   // scroll container, becomes first responder.
   @State private var focusRequest = 0
   @State private var blurRequest = 0
+  /// Height of the workbench column, used to cap the message box.
+  var availableHeight: CGFloat = 800
+  /// Height chosen with the drag handle. 0 means grow with the text.
+  @AppStorage("nativeComposerEditorHeight") private var savedEditorHeight: Double = 0
+  @State private var dragStartHeight: CGFloat?
+  @State private var resizeCursorPushed = false
+  private static let lineHeight: CGFloat = 20
+  private static let minEditorHeight: CGFloat = 4 * lineHeight + 12
+  /// Grow to min(260pt, 35% of the window) while the conversation keeps at
+  /// least 300pt. About 150pt goes to the composer's own controls.
+  private var maxEditorHeight: CGFloat {
+    max(Self.minEditorHeight, min(260, availableHeight * 0.35, availableHeight - 300 - 150))
+  }
   private var composerHeight: CGFloat {
-    // Height stops growing after eight lines. Avoid allocating every line of
-    // a large pasted prompt on each subsequent keystroke.
-    let lines = 1 + draftStore.text.utf8.lazy.filter { $0 == 10 }.prefix(7).count
-    return min(180, max(54, CGFloat(lines) * 22 + 16))
+    // Count at most a screenful of lines. Avoid allocating every line of a
+    // large pasted prompt on each subsequent keystroke.
+    let lines = 1 + draftStore.text.utf8.lazy.filter { $0 == 10 }.prefix(13).count
+    let grown = CGFloat(lines) * Self.lineHeight + 12
+    return min(maxEditorHeight, max(Self.minEditorHeight, grown, CGFloat(savedEditorHeight)))
+  }
+  private var resizeHandle: some View {
+    Capsule().fill(Color.secondary.opacity(0.35)).frame(width: 36, height: 4)
+      .frame(maxWidth: .infinity).frame(height: 8).contentShape(Rectangle())
+      .onHover { inside in
+        if inside && !resizeCursorPushed {
+          NSCursor.resizeUpDown.push()
+          resizeCursorPushed = true
+        } else if !inside && resizeCursorPushed {
+          NSCursor.pop()
+          resizeCursorPushed = false
+        }
+      }
+      .gesture(
+        DragGesture(minimumDistance: 1, coordinateSpace: .global)
+          .onChanged { value in
+            let start = dragStartHeight ?? composerHeight
+            if dragStartHeight == nil { dragStartHeight = start }
+            let next = min(maxEditorHeight, max(Self.minEditorHeight, start - value.translation.height))
+            savedEditorHeight = Double(next.rounded())
+          }
+          .onEnded { _ in dragStartHeight = nil }
+      )
+      .onTapGesture(count: 2) { savedEditorHeight = 0 }
+      .help("Drag to resize the message box. Double-click to fit the text again.")
+      .accessibilityLabel("Resize message box")
   }
   private var route: [String: Any] {
     app.harnesses.first { string($0, "id") == app.harness } ?? [:]
@@ -711,6 +751,7 @@ struct CodingComposer: View {
   }
   private var composer: some View {
     VStack(alignment: .leading, spacing: 10) {
+      resizeHandle.padding(.top, -8).padding(.bottom, -4)
       HStack(spacing: 8) {
         Menu {
           Button(app.connectionDisconnected ? "Connect an agent…" : "Change agent or model…") { app.openConnections() }
@@ -786,7 +827,7 @@ struct CodingComposer: View {
         .overlay(alignment: .topLeading) {
           if app.draft.isEmpty {
             Text(app.active ? "Draft your next message…" : continuesConversation ? "Ask a follow-up or describe the next change…" : "Describe the change you want to make…")
-              .font(.system(size: 14)).foregroundStyle(.secondary).padding(13).allowsHitTesting(false)
+              .font(.system(size: 15)).foregroundStyle(.secondary).padding(13).allowsHitTesting(false)
           }
         }
         .accessibilityLabel("Message your coding agent")
@@ -870,7 +911,10 @@ struct CodingComposer: View {
     .onChange(of: app.enforcesSessionControls) { _, enforced in
       if !enforced && app.interactionMode == "plan" { app.interactionMode = "code" }
     }
-    .padding(16).brandSurface().padding(.horizontal, 20).padding(.bottom, 16).padding(.top, 8)
+    .padding(16).brandSurface()
+    // Same readable column as the conversation, centred in wide windows.
+    .frame(maxWidth: 840).frame(maxWidth: .infinity)
+    .padding(.horizontal, 20).padding(.bottom, 16).padding(.top, 8)
   }
   private var connectionOptions: some View {
     VStack(alignment: .leading, spacing: 16) {
@@ -1202,7 +1246,9 @@ struct EventStream: View {
               }.padding(16)
             }
             Color.clear.frame(height: 1).id("bottom")
-          }.scrollTargetLayout().padding(24).frame(maxWidth: .infinity, alignment: .leading)
+          }.scrollTargetLayout().padding(24)
+            // Readable line length: about 800pt of text, centred in wide windows.
+            .frame(maxWidth: 848, alignment: .leading).frame(maxWidth: .infinity)
         }.scrollPosition(id: $visibleAnchor, anchor: follow ? .bottom : .top)
         .background(TranscriptScrollObserver { readingEarlier in
           pendingAnchor = nil

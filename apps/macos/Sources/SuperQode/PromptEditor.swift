@@ -14,6 +14,8 @@ struct PromptEditor: NSViewRepresentable {
   var focusRequest = 0
   /// Increment to release keyboard focus if the editor holds it.
   var blurRequest = 0
+  /// Prose is set in the system font for comfortable reading while writing.
+  var fontSize: CGFloat = 15
   let submit: () -> Void
 
   final class Editor: NSTextView {
@@ -85,7 +87,7 @@ struct PromptEditor: NSViewRepresentable {
     let editor = Editor()
     editor.isRichText = false
     editor.drawsBackground = false
-    editor.font = .monospacedSystemFont(ofSize: 14, weight: .regular)
+    editor.font = .systemFont(ofSize: fontSize)
     editor.textColor = .labelColor
     editor.insertionPointColor = .labelColor
     editor.isVerticallyResizable = true
@@ -93,6 +95,8 @@ struct PromptEditor: NSViewRepresentable {
     editor.autoresizingMask = [.width]
     editor.textContainer?.widthTracksTextView = true
     editor.textContainerInset = NSSize(width: 4, height: 4)
+    editor.isAutomaticQuoteSubstitutionEnabled = false
+    editor.isAutomaticDashSubstitutionEnabled = false
     editor.delegate = context.coordinator
     editor.setAccessibilityLabel("Message your coding agent")
     scroll.documentView = editor
@@ -117,6 +121,7 @@ struct PromptEditor: NSViewRepresentable {
     editor.onImagePaste = onImagePaste
     editor.onInterceptReturn = onInterceptReturn
     editor.onFocusChange = onFocusChange
+    if editor.font?.pointSize != fontSize { editor.font = .systemFont(ofSize: fontSize) }
     // Replacing the string resets the cursor and any IME composition. Only do
     // it when the bound text really changed outside the editor.
     if editor.string != text, !editor.hasMarkedText() { editor.string = text }
