@@ -1,4 +1,4 @@
-# SuperQode for macOS public beta 0.3.6
+# SuperQode for macOS public beta 0.3.7
 
 Native coding workspace for Apple Silicon Macs running macOS 14 or later. Intel Macs are not supported by this build. This is beta software, with manual updates and incomplete terminal feature parity.
 
@@ -16,6 +16,49 @@ Open a disposable or backed-up Git project, choose Connect, select the agent or 
 - This app is not an OS sandbox. Agent tools and the terminal can run as your macOS user. Use trusted agents and repositories, review permissions and commands, and keep backups. A UI file boundary is not a security boundary for arbitrary shell commands.
 - Optional app-managed credentials use macOS Keychain. Existing agent credentials are managed by those agents. Local application data is under `~/Library/Application Support/SuperQode`. Removing the app does not remove this data, Keychain entries or credentials stored by external agents.
 - History, terminal output and evidence exports can contain private project content. Inspect and redact anything you choose to share. There is no automatic crash-report upload in this beta.
+
+## Version 0.3.7
+
+Version 0.3.7 (build 23) bundles Python engine 2.31.5. It focuses on the
+coding workspace.
+
+- A new thread opens with a clear choice of agent and model. The getting
+  started guide shows once and stays available from Learning.
+- The message box is larger, grows with your text and can be resized. It
+  keeps keyboard focus while the agent works.
+- Prompts show when they were sent. Finished responses show how long the run
+  took, when it finished, the model, and tokens and cost when the agent
+  reports them. Runs over ACP now keep the usage the agent reports.
+- Running threads show a live working time in the thread list and above the
+  message box, and a waiting time while they need your approval.
+  Notifications include the thread title and duration. Threads with news you
+  have not opened show a dot.
+- Each turn lists the files it changed, with line counts. A file opens its
+  diff for that turn. Undo this turn restores the files from the turn's
+  checkpoint after you confirm, and refuses when newer edits would be
+  overwritten.
+- Commit, push and open a pull request from a turn with your own Git setup:
+  your config, keys, credential helper, signing and hooks. SuperQode never
+  stores tokens and never force pushes. It warns before pushing to the
+  default branch. Pull requests use the GitHub CLI when it is installed and
+  signed in. SuperQode project state is never offered for commit, and Git
+  actions wait while a run is active in the project.
+- Agent plans and todo lists appear as a checklist in the thread. A slim
+  line above the message box shows the connection and, when reported,
+  context and usage limits, with a fix action when something is broken.
+- Comment on diff hunks, collect the comments, and send them to the agent
+  as one follow-up.
+- Keyboard: Esc stops a run, Return and Esc answer a visible approval, Up
+  restores your last prompt, Cmd J toggles the terminal, Cmd Option B review
+  and Cmd G thread search. The threads column can be hidden with Control
+  Cmd S and resized. Messages have copy buttons.
+- The Mac stays awake while a run is active. You can turn this off in
+  Settings. The display may still sleep.
+- Opening a very broad folder, such as your home folder or Documents, asks
+  for confirmation, and agents no longer fall back to your home folder as
+  their working directory. This reduces macOS privacy prompts for Music,
+  Photos and other folders.
+- Moving between workspace sections stays responsive with long threads.
 
 ## Version 0.3.6
 

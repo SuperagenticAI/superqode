@@ -7,6 +7,30 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [2.31.5] - 2026-11-09
+
+### Added
+
+- Desktop engine Git actions for the macOS app: status, drafted commit
+  messages, commit, push, branch creation and pull requests through the
+  user's own Git and GitHub CLI setup, with plain error messages.
+- Per-turn changed files with line counts, run timing (`started_at`,
+  `finished_at`) and reported usage in job details and conversation history.
+
+### Fixed
+
+- Commit paths are validated against the project root (no absolute paths,
+  `..`, `.` or symlinks leading outside), `.superqode/` project state is never
+  listed or staged, and projects below the repository top level use
+  project-relative paths.
+- Git actions hold the project writer lease, so they cannot overlap an agent
+  run in the same project.
+- Token usage reported by ACP agents (usage updates and result stats) is kept
+  with the run without double counting.
+- Agent clients no longer fall back to the home folder as their working
+  directory, which could trigger macOS privacy prompts.
+- Cancelling a run whose process group already exited no longer fails on macOS.
+
 ## [2.31.4] - 2026-11-05
 
 ### Added
