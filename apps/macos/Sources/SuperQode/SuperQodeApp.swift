@@ -1095,11 +1095,13 @@ struct HistoricalConversationTurn: View, Equatable {
   let response: String
   let harness: String
   let status: String
+  var stats = RunStats(sent: nil, finished: nil, model: "", usage: nil, status: "", response: "")
   var body: some View {
     VStack(alignment: .leading, spacing: 12) {
       Text("YOU").font(.system(size: 11, weight: .semibold, design: .monospaced))
         .foregroundStyle(Color.qAccent)
       Text(prompt).font(.system(size: 15)).textSelection(.enabled)
+      SentTimeLabel(date: stats.sent)
       if !response.isEmpty {
         VStack(alignment: .leading, spacing: 10) {
           Text(harness).font(.caption).foregroundStyle(.secondary)
@@ -1107,6 +1109,7 @@ struct HistoricalConversationTurn: View, Equatable {
         }.padding(20).frame(maxWidth: .infinity, alignment: .leading)
           .modifier(ConversationSurface())
       }
+      RunStatsFooter(stats: stats)
       if status != "completed" {
         Text("Previous response: " + status).font(.caption).foregroundStyle(.secondary)
       }
@@ -1153,6 +1156,8 @@ struct EventStream: View {
   private var transcript: some View {
     let rows = conversationEvents(app.events, includeDetails: false)
     let activity = (rows.last(where: { string($0, "type") == "activity_group" })?["data"] as? [String: Any])?["events"] as? [[String: Any]] ?? []
+    let stats = RunStats(detail: app.detail, events: app.events)
+    let isTask = string(app.detail, "kind") == "task"
     return VStack(spacing: 0) {
       HStack {
         Text("CONVERSATION").font(.system(size: 12, design: .monospaced)).foregroundStyle(
@@ -1195,7 +1200,8 @@ struct EventStream: View {
             }
             ForEach(app.conversationHistory, id: \.projectRowID) { turn in
               HistoricalConversationTurn(prompt: string(turn, "prompt"), response: string(turn, "response"),
-                harness: string(turn, "harness"), status: string(turn, "status")).equatable()
+                harness: string(turn, "harness"), status: string(turn, "status"),
+                stats: RunStats(turn: turn)).equatable()
                 .id("turn:" + string(turn, "id"))
             }
             if let request = app.detail["request"] as? [String: Any],
@@ -1209,6 +1215,7 @@ struct EventStream: View {
                 if !route.isEmpty {
                   Text(route).font(.caption).foregroundStyle(.secondary).lineLimit(1)
                 }
+                if isTask { SentTimeLabel(date: stats.sent) }
                 if let continuity = request["_continuity"] as? [String: Any] {
                   Label(string(continuity, "mode") == "handoff" ? "Conversation handed to this agent" : "Agent session resumed",
                     systemImage: "arrow.triangle.branch").font(.caption).foregroundStyle(.secondary)
@@ -1238,6 +1245,9 @@ struct EventStream: View {
                 }
               }.padding(20).frame(maxWidth: .infinity, alignment: .leading).modifier(ConversationSurface())
                 .id("response:" + app.selectedJob)
+            }
+            if isTask {
+              RunStatsFooter(stats: stats, active: app.active).padding(.horizontal, 4)
             }
             if messages.isEmpty && !app.hasMoreRunEvents && !app.eventStreamOpen && !app.active {
               VStack(alignment: .leading, spacing: 8) {
