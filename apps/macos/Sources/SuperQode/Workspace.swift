@@ -70,6 +70,27 @@ func phoneTurnToOpen(
 
 /// Show a phone run in the discussion when the Mac is not already working.
 /// A busy Mac keeps a banner so its open turn stays put.
+/// Folders that are too broad to be a project. Agents working from them walk
+/// into macOS protected locations and cause privacy prompts.
+func broadProjectFolderReason(_ path: String, home: String = NSHomeDirectory()) -> String? {
+  let target = URL(fileURLWithPath: path).standardizedFileURL.resolvingSymlinksInPath().path
+  let homePath = URL(fileURLWithPath: home).standardizedFileURL.resolvingSymlinksInPath().path
+  if target == "/" { return "This is the root of your disk." }
+  if target == homePath { return "This is your home folder." }
+  if target == "/Users" || target == "/Volumes" || target == "/System" || target == "/Library" {
+    return "This is a system folder."
+  }
+  let named: [(String, String)] = [
+    ("Desktop", "Desktop"), ("Documents", "Documents"), ("Downloads", "Downloads"),
+    ("Music", "Music"), ("Pictures", "Pictures"), ("Movies", "Movies"),
+    ("Library/Mobile Documents/com~apple~CloudDocs", "iCloud Drive"), ("Library", "Library"),
+  ]
+  for (relative, name) in named where target == homePath + "/" + relative {
+    return "This is your whole \(name) folder."
+  }
+  return nil
+}
+
 enum PhoneRunPresentation {
   case open, banner, none
 }
@@ -771,7 +792,17 @@ private func jobStamp(_ row: [String: Any]) -> Double {
     panel.canChooseFiles = false
     panel.allowsMultipleSelection = false
     panel.prompt = "Open project"
-    if panel.runModal() == .OK, let url = panel.url { perform { try await self.open(url.path) } }
+    panel.message = "Choose the folder of one project, such as a Git repository. Avoid your home folder or folders like Documents, which can trigger macOS privacy prompts."
+    guard panel.runModal() == .OK, let url = panel.url else { return }
+    if let reason = broadProjectFolderReason(url.path),
+      !confirm(
+        "Open this folder as a project?", reason
+          + " The agent may read files across it, and macOS can ask for access to Music, Photos, Contacts or other apps. Choose a single project folder inside it instead, or open it anyway.",
+        button: "Open anyway")
+    {
+      return
+    }
+    perform { try await self.open(url.path) }
   }
   func open(_ path: String, recordHistory: Bool = true, expectedProjectID: String? = nil) async throws {
     guard !openingProject else { throw EngineError(message: "Wait for the current project to finish opening.") }

@@ -9,16 +9,30 @@ from pathlib import Path
 from typing import Any
 
 # Ensure CWD exists before importing acp (which imports logfire that resolves CWD)
-# This prevents FileNotFoundError when CWD doesn't exist
+# This prevents FileNotFoundError when CWD doesn't exist.
+#
+# Never fall back to the home folder: anything that scans the working directory
+# from there walks into macOS protected folders (Music, Photos, Desktop,
+# Documents, Downloads) and triggers privacy prompts. Use the engine state
+# folder when known, otherwise the system temporary folder.
+
+
+def _safe_working_directory() -> str:
+    import tempfile
+
+    state = os.environ.get("SUPERQODE_STATE_DIR", "")
+    if state and os.path.isdir(state):
+        return state
+    return tempfile.gettempdir()
+
+
 try:
     cwd = os.getcwd()
     if not pathlib.Path(cwd).exists():
-        # Change to home directory if CWD doesn't exist
-        os.chdir(os.path.expanduser("~"))
+        os.chdir(_safe_working_directory())
 except (OSError, FileNotFoundError):
-    # If getcwd() fails, change to home directory
     try:
-        os.chdir(os.path.expanduser("~"))
+        os.chdir(_safe_working_directory())
     except Exception:
         pass  # Last resort - let it fail naturally
 

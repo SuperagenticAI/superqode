@@ -54,6 +54,9 @@ def record_stderr(stream, path, secrets):
 class DesktopService:
     def __init__(self, root: str | Path):
         self.root = private_root(root)
+        # Child processes use the state folder, never the home folder, as their
+        # fallback working directory (see superqode.agents.client).
+        os.environ.setdefault("SUPERQODE_STATE_DIR", str(self.root))
         from .ownership import Lease
 
         self._engine_lease = Lease(self.root / "engine.lock")

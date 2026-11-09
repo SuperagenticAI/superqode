@@ -302,6 +302,8 @@ Projects and history remain on your Mac. Requests and explicitly attached contex
 
 Agents and terminal commands run with your Mac user's access; the app is not an operating-system sandbox. Use trusted agents and a backed-up repository, review commands and inspect changes. History and evidence exports may contain private project content, so review them before sharing.
 
+macOS privacy prompts (for example Music, Photos, Contacts or control of another app) come from macOS, not from SuperQode, when an agent or a command reaches a protected folder or app. Open a single project folder rather than your home folder, Desktop, Documents, Downloads, Music, Pictures, Movies or the iCloud Drive root, and SuperQode asks before opening one of those. If a prompt appears anyway, choose Don't Allow unless you expected the agent to need that access. You can review choices later in System Settings > Privacy & Security.
+
 ## Beta notes and feedback
 
 Some integrations and advanced workflows are experimental, and full terminal feature parity is not included. This build supports Apple Silicon. Intel Macs are not included. Private iPhone access uses your own Tailscale account and stays on this Mac. Updates are manual: quit SuperQode and replace it with a newer download.
