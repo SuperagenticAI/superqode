@@ -1125,6 +1125,8 @@ struct HistoricalConversationTurn: View, Equatable {
       Text("YOU").font(.system(size: 11, weight: .semibold, design: .monospaced))
         .foregroundStyle(Color.qAccent)
       Text(prompt).font(.system(size: 15)).textSelection(.enabled)
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .hoverCopy("Copy prompt") { prompt }
       SentTimeLabel(date: stats.sent)
       if !response.isEmpty {
         VStack(alignment: .leading, spacing: 10) {
@@ -1132,6 +1134,7 @@ struct HistoricalConversationTurn: View, Equatable {
           ResponseDocument(text: response).equatable()
         }.padding(20).frame(maxWidth: .infinity, alignment: .leading)
           .modifier(ConversationSurface())
+          .hoverCopy("Copy response as Markdown") { response }
       }
       RunStatsFooter(stats: stats)
       if status != "completed" {
@@ -1253,7 +1256,9 @@ struct EventStream: View {
                 }
               }.padding(16).frame(maxWidth: .infinity, alignment: .leading).background(
                 Color.qPanel, in: RoundedRectangle(cornerRadius: 10)
-              ).overlay(RoundedRectangle(cornerRadius: 10).stroke(Color.qAccent.opacity(0.35), lineWidth: 1)).padding(.bottom, 10)
+              ).overlay(RoundedRectangle(cornerRadius: 10).stroke(Color.qAccent.opacity(0.35), lineWidth: 1))
+                .hoverCopy("Copy prompt") { string(request, "prompt") }
+                .padding(.bottom, 10)
                 .id("prompt:" + app.selectedJob)
             }
             let messages = rows.filter { string($0, "type") != "activity_group" }
@@ -1268,6 +1273,7 @@ struct EventStream: View {
                   EventRow(event: event, embeddedResponse: true)
                 }
               }.padding(20).frame(maxWidth: .infinity, alignment: .leading).modifier(ConversationSurface())
+                .hoverCopy("Copy response as Markdown") { RunStats.responseText(app.events) }
                 .id("response:" + app.selectedJob)
             }
             // While the agent works, the pinned working card shows the live timer.
