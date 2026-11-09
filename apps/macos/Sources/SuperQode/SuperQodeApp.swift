@@ -124,6 +124,28 @@ import UserNotifications
         Button("Previous Conversation Tab") { workspace.cycleThreadTab(by: -1) }
           .keyboardShortcut(.tab, modifiers: [.control, .shift])
           .disabled(workspace.openThreadTabs.isEmpty || workspace.openingProject || workspace.restoringNavigation)
+        Button("Search Threads") { workspace.focusThreadSearch() }
+          .keyboardShortcut("g")
+          .disabled(workspace.project.isEmpty || workspace.openingProject || workspace.restoringNavigation)
+        Button("Toggle Terminal") { workspace.toggleTerminalDrawer() }
+          .keyboardShortcut("j")
+          .disabled(workspace.project.isEmpty || workspace.openingProject || workspace.restoringNavigation)
+        Button("Toggle Review") { workspace.toggleReviewPanel() }
+          .keyboardShortcut("b", modifiers: [.command, .option])
+          .disabled(workspace.project.isEmpty || workspace.openingProject || workspace.restoringNavigation)
+        Divider()
+        // Esc, Return and Up arrow act in the conversation and message box only,
+        // so they are listed here without menu key equivalents.
+        Button("Stop Agent (Esc)") { workspace.cancel() }
+          .disabled(!workspace.active || workspace.busy)
+        Button("Allow Pending Request (Return)") {
+          if let request = workspace.pendingApprovalRequestID { workspace.approve(request, allow: true) }
+        }.disabled(workspace.pendingApprovalRequestID == nil || workspace.busy)
+        Button("Deny Pending Request (Esc)") {
+          if let request = workspace.pendingApprovalRequestID { workspace.approve(request, allow: false) }
+        }.disabled(workspace.pendingApprovalRequestID == nil || workspace.busy)
+        Button("Restore Last Prompt (Up Arrow in Empty Message Box)") { _ = workspace.recallLastPrompt() }
+          .disabled(!workspace.draft.isEmpty || workspace.selectedJob.isEmpty)
         Divider()
         ForEach(Sections.names, id: \.self) { name in
           WorkspaceCommandMenuItem(app: workspace, action: .section(name))
@@ -268,6 +290,7 @@ struct RootView: View {
       Divider()
       SidebarView().frame(width: 260).background(Color.qPanel)
         .disabled(app.openingProject || app.restoringNavigation)
+        .background(WorkspaceKeyMonitor(app: app))
       Divider()
       VStack(spacing: 0) {
         HStack(spacing: 12) {
@@ -817,6 +840,7 @@ struct CodingComposer: View {
         onCursorPrefix: app.noteComposerCursor,
         onImagePaste: app.pasteImage,
         onInterceptReturn: app.acceptTopMentionIfNeeded,
+        onRecallPrevious: app.recallLastPrompt,
         onFocusChange: { app.composerHasFocus = $0 },
         focusRequest: focusRequest,
         blurRequest: blurRequest

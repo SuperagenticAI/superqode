@@ -80,6 +80,7 @@ struct SidebarView: View {
   @EnvironmentObject var app: Workspace
   @State private var search = ""
   @State private var filter: ThreadListFilter = .all
+  @FocusState private var searchFocused: Bool
   private var rows: [[String: Any]] {
     app.recentConversations.filter { filter.matches($0) && ThreadListFilter.search(search, in: $0) }
   }
@@ -116,6 +117,10 @@ struct SidebarView: View {
         HStack(spacing: 6) {
           Image(systemName: "magnifyingglass").foregroundStyle(.secondary)
           TextField("Search threads or harnesses", text: $search).textFieldStyle(.plain).font(.system(size: 11))
+            .focused($searchFocused)
+            .onChange(of: app.threadSearchFocusRequest) { _, _ in searchFocused = true }
+            .onExitCommand { search = ""; searchFocused = false }
+            .help("Search threads (⌘G)")
             .accessibilityLabel("Search threads or harnesses")
           if !search.isEmpty {
             Button { search = "" } label: { Image(systemName: "xmark.circle.fill") }.buttonStyle(.plain).accessibilityLabel("Clear thread search")

@@ -184,6 +184,8 @@ private func jobStamp(_ row: [String: Any]) -> Double {
   @Published var restoringNavigation = false
   var restoringComposer = false
   var composerConversationID = ""
+  /// Incremented by Cmd G to move focus to the sidebar thread search.
+  @Published var threadSearchFocusRequest = 0
   /// Threads with a finished run or an approval request the user has not opened yet.
   @Published var unreadThreads: Set<String> =
     Set(UserDefaults.standard.stringArray(forKey: "nativeUnreadThreads") ?? [])

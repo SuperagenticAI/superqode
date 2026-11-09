@@ -8,6 +8,8 @@ struct PromptEditor: NSViewRepresentable {
   var onCursorPrefix: (String) -> Void = { _ in }
   var onImagePaste: () -> Void = {}
   var onInterceptReturn: () -> Bool = { false }
+  /// Up arrow in an empty editor. Returns true when it restored a prompt.
+  var onRecallPrevious: () -> Bool = { false }
   /// Reports whether the text view itself is the window's first responder.
   var onFocusChange: (Bool) -> Void = { _ in }
   /// Increment to move keyboard focus into the editor.
@@ -23,6 +25,7 @@ struct PromptEditor: NSViewRepresentable {
     var onImagePaste: () -> Void = {}
     var onInterceptReturn: () -> Bool = { false }
     var onFocusChange: (Bool) -> Void = { _ in }
+    var onRecallPrevious: () -> Bool = { false }
     override func becomeFirstResponder() -> Bool {
       let accepted = super.becomeFirstResponder()
       if accepted { onFocusChange(true) }
@@ -35,6 +38,11 @@ struct PromptEditor: NSViewRepresentable {
     }
     override func keyDown(with event: NSEvent) {
       guard isEditable else { return }
+      if event.keyCode == 126, string.isEmpty, !hasMarkedText(),
+        event.modifierFlags.intersection([.shift, .option, .control, .command]).isEmpty,
+        onRecallPrevious() {
+        return
+      }
       if (event.keyCode == 36 || event.keyCode == 76), !hasMarkedText(),
         event.modifierFlags.intersection([.shift, .option, .control]).isEmpty {
         if !onInterceptReturn() { submit() }
@@ -121,6 +129,7 @@ struct PromptEditor: NSViewRepresentable {
     editor.onImagePaste = onImagePaste
     editor.onInterceptReturn = onInterceptReturn
     editor.onFocusChange = onFocusChange
+    editor.onRecallPrevious = onRecallPrevious
     if editor.font?.pointSize != fontSize { editor.font = .systemFont(ofSize: fontSize) }
     // Replacing the string resets the cursor and any IME composition. Only do
     // it when the bound text really changed outside the editor.
