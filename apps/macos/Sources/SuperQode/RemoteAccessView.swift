@@ -78,7 +78,8 @@ struct RemoteAccessSettingsView: View {
         do { status = try await call("remote.status"); network = try await call("remote.network.check") }
         catch { self.error = error.localizedDescription }
         while !Task.isCancelled {
-          do { try await Task.sleep(for: .seconds(3)); status = try await call("remote.status") }
+          // Poll only while remote access is on; the initial read above covers the off state.
+          do { try await Task.sleep(for: .seconds(3)); if running { status = try await call("remote.status") } }
           catch is CancellationError { break }
           catch { self.error = error.localizedDescription; break }
         }
