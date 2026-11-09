@@ -1171,7 +1171,7 @@ struct HistoricalConversationTurn: View, Equatable {
           .modifier(ConversationSurface())
           .hoverCopy("Copy response as Markdown") { response }
       }
-      if !turnID.isEmpty { TurnChangesView(job: turnID) }
+      if !turnID.isEmpty { TurnChangesView(job: turnID, prompt: prompt) }
       RunStatsFooter(stats: stats)
       if status != "completed" {
         Text("Previous response: " + status).font(.caption).foregroundStyle(.secondary)
@@ -1313,7 +1313,10 @@ struct EventStream: View {
                 .hoverCopy("Copy response as Markdown") { RunStats.responseText(app.events) }
                 .id("response:" + app.selectedJob)
             }
-            if isTask { TurnChangesView(job: app.selectedJob, current: true) }
+            if isTask {
+              TurnChangesView(job: app.selectedJob, current: true,
+                prompt: string(app.detail["request"] as? [String: Any] ?? [:], "prompt"))
+            }
             // While the agent works, the pinned working card shows the live timer.
             if isTask && !app.active {
               RunStatsFooter(stats: stats).padding(.horizontal, 4)

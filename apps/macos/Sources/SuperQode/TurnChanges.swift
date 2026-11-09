@@ -80,11 +80,14 @@ struct TurnChangesView: View {
   let job: String
   /// The visible, currently selected turn. Live turns refresh while running.
   var current = false
+  /// The turn's prompt, used to draft a commit message.
+  var prompt = ""
   @EnvironmentObject var app: Workspace
   @EnvironmentObject var store: TurnChangesStore
   @State private var expanded = false
   @State private var diffPath: String?
   @State private var undoing = false
+  @State private var showShip = false
   private let collapsedCount = 4
 
   private var summary: TurnChangeSummary? { store.summary(job) }
@@ -104,6 +107,10 @@ struct TurnChangesView: View {
         await store.load(engine: app.engine, project: app.projectID, job: job, force: true)
       }
     }
+    .sheet(isPresented: $showShip) {
+      ShipSheet(turnFiles: summary?.files.map(\.path) ?? [], prompt: prompt) { showShip = false }
+        .environmentObject(app)
+    }
     .sheet(item: Binding(get: { diffPath.map(TurnDiffTarget.init) }, set: { diffPath = $0?.path })) { target in
       TurnDiffSheet(job: job, path: target.path) { diffPath = nil }.environmentObject(app)
     }
@@ -119,7 +126,13 @@ struct TurnChangesView: View {
         LineCounts(added: summary.added, removed: summary.removed)
         if summary.live { Text("updating").font(.caption2).foregroundStyle(.secondary) }
         Spacer(minLength: 0)
-        if !summary.live { undoButton(summary) }
+        if !summary.live {
+          Button { showShip = true } label: { Label("Commit…", systemImage: "arrow.up.circle") }
+            .buttonStyle(.plain).font(.caption)
+            .disabled(!app.connected || app.hasActiveWork(project: app.projectID))
+            .help("Commit these changes, push, and open a pull request with your Git setup")
+          undoButton(summary)
+        }
       }
       FlowChips(spacing: 6) {
         ForEach(shown) { file in

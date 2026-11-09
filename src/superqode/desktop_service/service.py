@@ -968,6 +968,10 @@ class DesktopService:
         return self._dispatch(method, params)
 
     def _dispatch(self, method: str, params: dict):
+        if method.startswith("ship."):
+            from .ship import action as ship_action
+
+            return ship_action(self, self.project(params["project"]), method, params)
         if method == "turns.changes":
             from .turn_changes import summary
 
