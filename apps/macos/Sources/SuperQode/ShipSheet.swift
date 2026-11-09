@@ -1,6 +1,21 @@
 import AppKit
 import SwiftUI
 
+/// Rules for the commit sheet, kept free of view state so they can be tested.
+enum ShipRules {
+  /// SuperQode project state (checkpoints, work orders, drafts) is never offered
+  /// for commit, even if an older engine lists it.
+  static func isPrivate(_ path: String) -> Bool {
+    path.split(separator: "/").contains { $0 == ".superqode" || $0.hasPrefix(".superqode-") }
+  }
+
+  /// A drafted message may replace the text only when the box is empty or still
+  /// holds the previous draft unchanged. Typed text is never overwritten.
+  static func mayApplyDraft(current: String, lastDraft: String) -> Bool {
+    current.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty || (!lastDraft.isEmpty && current == lastDraft)
+  }
+}
+
 /// Commit, push and open a pull request with the user's own Git setup.
 struct ShipSheet: View {
   /// Files the turn changed; preselected when they still have changes.
@@ -12,6 +27,10 @@ struct ShipSheet: View {
   @State private var files: [[String: Any]] = []
   @State private var selected: Set<String> = []
   @State private var message = ""
+  /// The last message drafted automatically, to tell it apart from typed text.
+  @State private var lastDraft = ""
+  /// The project when the sheet opened. Git actions never follow navigation.
+  @State private var project = ""
   @State private var newBranch = ""
   @State private var working = false
   @State private var failure = ""
@@ -32,7 +51,8 @@ struct ShipSheet: View {
   private var onDefault: Bool { status["on_default_branch"] as? Bool ?? false }
   private var ghInstalled: Bool { status["gh_installed"] as? Bool ?? false }
   private var ghReady: Bool { status["gh_ready"] as? Bool ?? false }
-  private var busy: Bool { working || app.hasActiveWork(project: app.projectID) }
+  private var projectID: String { project.isEmpty ? app.projectID : project }
+  private var busy: Bool { working || app.hasActiveWork(project: projectID) }
 
   var body: some View {
     VStack(alignment: .leading, spacing: 12) {
@@ -52,7 +72,7 @@ struct ShipSheet: View {
           .overlay(RoundedRectangle(cornerRadius: 6).stroke(Color.primary.opacity(0.12)))
         HStack {
           Button("Draft message") { draft() }.disabled(selected.isEmpty || working)
-            .help("Writes a summary from this turn's prompt and the selected files")
+            .help("Writes a summary from this turn's prompt and the selected files. Text you typed is kept.")
           Spacer()
           if ahead > 0 || (upstream.isEmpty && !committedSha.isEmpty && !remotes.isEmpty) {
             Button("Push") { push() }.disabled(busy || branch.isEmpty)
@@ -61,7 +81,7 @@ struct ShipSheet: View {
           Button("Commit and Push") { commit(andPush: true) }.disabled(!canCommit || remotes.isEmpty)
             .keyboardShortcut(.defaultAction)
         }
-        if app.hasActiveWork(project: app.projectID) {
+        if app.hasActiveWork(project: projectID) {
           Text("Finish or stop the active run before committing.").font(.caption).foregroundStyle(.orange)
         }
         if !committedSha.isEmpty || ahead > 0 { prSection }
@@ -74,7 +94,10 @@ struct ShipSheet: View {
       if working { ProgressView().controlSize(.small) }
     }
     .padding(18).frame(width: 640).frame(minHeight: 420)
-    .task { await load(draftMessage: true) }
+    .task {
+      if project.isEmpty { project = app.projectID }
+      await load(draftMessage: true)
+    }
   }
 
   private var canCommit: Bool {
@@ -181,9 +204,9 @@ struct ShipSheet: View {
 
   private func load(draftMessage: Bool) async {
     do {
-      let result = try await app.engine.call("ship.status", ["project": app.projectID]) as? [String: Any] ?? [:]
+      let result = try await app.engine.call("ship.status", ["project": projectID]) as? [String: Any] ?? [:]
       status = result
-      files = result["files"] as? [[String: Any]] ?? []
+      files = (result["files"] as? [[String: Any]] ?? []).filter { !ShipRules.isPrivate(string($0, "path")) }
       if !loaded {
         selectTurn()
         if selected.isEmpty && turnFiles.isEmpty { selected = Set(files.map { string($0, "path") }) }
@@ -199,10 +222,18 @@ struct ShipSheet: View {
 
   private func draft() {
     let paths = Array(selected).sorted()
+    let project = projectID
     Task {
       do {
-        let result = try await app.engine.call("ship.draft_message", ["project": app.projectID, "paths": paths, "prompt": prompt]) as? [String: Any] ?? [:]
-        message = string(result, "message")
+        let result = try await app.engine.call("ship.draft_message", ["project": project, "paths": paths, "prompt": prompt]) as? [String: Any] ?? [:]
+        let drafted = string(result, "message")
+        // Checked when the draft arrives, so typing while it loads wins.
+        if ShipRules.mayApplyDraft(current: message, lastDraft: lastDraft) {
+          message = drafted
+          lastDraft = drafted
+        } else {
+          notice = "Your message was kept. Clear it to use a drafted one."
+        }
       } catch { failure = error.localizedDescription }
     }
   }
@@ -228,14 +259,15 @@ struct ShipSheet: View {
     if andPush && !confirmPushIfNeeded() { return }
     let paths = Array(selected).sorted()
     let text = message
+    let project = projectID
     run {
-      let result = try await app.engine.call("ship.commit", ["project": app.projectID, "paths": paths, "message": text]) as? [String: Any] ?? [:]
+      let result = try await app.engine.call("ship.commit", ["project": project, "paths": paths, "message": text]) as? [String: Any] ?? [:]
       committedSha = string(result, "sha")
       notice = "Committed " + committedSha + "."
       let subject = text.split(separator: "\n", maxSplits: 1).first.map(String.init) ?? text
       if prTitle.isEmpty { prTitle = subject }
       if prBody.isEmpty { prBody = text.split(separator: "\n", maxSplits: 1).dropFirst().joined().trimmingCharacters(in: .whitespacesAndNewlines) }
-      message = ""
+      if message == text { message = ""; lastDraft = "" }
       if andPush { try await pushNow() }
     }
   }
@@ -246,21 +278,21 @@ struct ShipSheet: View {
   }
 
   private func pushNow() async throws {
-    _ = try await app.engine.call("ship.push", ["project": app.projectID, "set_upstream": upstream.isEmpty])
+    _ = try await app.engine.call("ship.push", ["project": projectID, "set_upstream": upstream.isEmpty])
     notice += (notice.isEmpty ? "" : " ") + (upstream.isEmpty ? "Pushed and set upstream." : "Pushed.")
   }
 
   private func createBranch() {
     let name = newBranch
     run {
-      _ = try await app.engine.call("ship.create_branch", ["project": app.projectID, "name": name])
+      _ = try await app.engine.call("ship.create_branch", ["project": projectID, "name": name])
       notice = "Switched to new branch " + name + "."
       newBranch = ""
     }
   }
 
   private func createPR() {
-    let params: [String: Any] = ["project": app.projectID, "title": prTitle, "body": prBody, "base": prBase, "draft": prDraft]
+    let params: [String: Any] = ["project": projectID, "title": prTitle, "body": prBody, "base": prBase, "draft": prDraft]
     run {
       let result = try await app.engine.call("ship.create_pr", params) as? [String: Any] ?? [:]
       prURL = string(result, "url")

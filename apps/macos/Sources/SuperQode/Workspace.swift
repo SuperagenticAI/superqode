@@ -472,7 +472,7 @@ private func jobStamp(_ row: [String: Any]) -> Double {
   let draftStore = DraftStore()
   let reviewCommentStore = ReviewCommentStore()
   /// Review comments waiting to be sent, per thread.
-  let pendingComments = PendingCommentStore()
+  lazy var pendingComments = PendingCommentStore(defaults: preferences)
   /// Plan and provider health derived from `events`, recomputed only when they change.
   let eventDerivations = EventDerivations()
   var draft: String {
@@ -1603,7 +1603,9 @@ private func jobStamp(_ row: [String: Any]) -> Double {
       && detail["archived"] as? Bool != true
       && !draft.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
   }
-  func send(continueSession: Bool) {
+  /// `onSettled` reports whether the engine accepted the message. It is not
+  /// called when send declines before starting (check `busy` afterwards).
+  func send(continueSession: Bool, onSettled: (@MainActor (Bool) -> Void)? = nil) {
     guard connected else { notice = "The local engine is offline. Your draft is kept; reconnect before sending."; return }
 
     guard detail["archived"] as? Bool != true else { notice = "Restore this archived thread before continuing."; return }
@@ -1645,10 +1647,15 @@ private func jobStamp(_ row: [String: Any]) -> Double {
     params.merge(extra) { _, value in value }
     busy = true
     perform {
-      defer { self.busy = false }
+      var accepted = false
+      defer {
+        self.busy = false
+        onSettled?(accepted)
+      }
       let result = try await self.engine.call("tasks.start", params) as? [String: Any] ?? [:]
       let id = string(result, "id")
       guard !id.isEmpty else { throw EngineError(message: "The engine did not accept this message.") }
+      accepted = true
       self.clearAcceptedSubmission(key: submittedKey, submitted: submittedRecord)
       StarterGuide.markCompleted()
       self.starterTourRequested = false

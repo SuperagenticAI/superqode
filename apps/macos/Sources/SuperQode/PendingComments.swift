@@ -23,9 +23,11 @@ struct PendingComment: Codable, Identifiable, Equatable {
 @MainActor final class PendingCommentStore: ObservableObject {
   private static let key = "nativePendingReviewComments"
   @Published private(set) var byThread: [String: [PendingComment]] = [:]
+  private let defaults: UserDefaults
 
-  init() {
-    if let data = UserDefaults.standard.data(forKey: Self.key),
+  init(defaults: UserDefaults = .standard) {
+    self.defaults = defaults
+    if let data = defaults.data(forKey: Self.key),
       let saved = try? JSONDecoder().decode([String: [PendingComment]].self, from: data) {
       byThread = saved
     }
@@ -45,6 +47,13 @@ struct PendingComment: Codable, Identifiable, Equatable {
     save()
   }
 
+  /// Removes the sent comments only, keeping any added while sending.
+  func remove(ids: Set<String>, thread: String) {
+    byThread[thread]?.removeAll { ids.contains($0.id) }
+    if byThread[thread]?.isEmpty == true { byThread.removeValue(forKey: thread) }
+    save()
+  }
+
   func clear(_ thread: String) {
     byThread.removeValue(forKey: thread)
     save()
@@ -56,23 +65,43 @@ struct PendingComment: Codable, Identifiable, Equatable {
   }
 
   private func save() {
-    if let data = try? JSONEncoder().encode(byThread) { UserDefaults.standard.set(data, forKey: Self.key) }
+    if let data = try? JSONEncoder().encode(byThread) { defaults.set(data, forKey: Self.key) }
   }
 }
 
 extension Workspace {
-  /// Moves the thread's pending comments into a follow-up. Sends right away when the
-  /// agent is idle and the message box is empty; otherwise adds them to the message
-  /// box so they go with the next message once the current run finishes.
-  func sendPendingComments() {
-    let thread = composerKey
+  /// Moves a thread's pending comments into a follow-up. Sends right away when
+  /// the agent is idle and the message box is empty; otherwise adds them to the
+  /// message box so they go with the next message once the current run finishes.
+  /// `thread` is the thread the comments were written for, captured when the
+  /// diff or tray opened; nothing is sent if another thread is now in view.
+  func sendPendingComments(thread requested: String? = nil) {
+    let thread = requested ?? composerKey
     let comments = pendingComments.comments(thread)
     guard !comments.isEmpty else { return }
+    guard thread == composerKey else {
+      notice = "These comments belong to another thread. Open that thread to send them."
+      return
+    }
     let text = PendingCommentStore.prompt(comments)
     if !active && !busy && connected && draft.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
       draft = text
-      pendingComments.clear(thread)
-      send(continueSession: !selectedJob.isEmpty)
+      // Clear only once the engine accepted the follow-up. On failure the
+      // comments stay pending and the message box is emptied again.
+      send(continueSession: !selectedJob.isEmpty) { [weak self] accepted in
+        guard let self else { return }
+        if accepted {
+          self.pendingComments.remove(ids: Set(comments.map(\.id)), thread: thread)
+        } else if self.draft == text {
+          self.draft = ""
+          self.saveDraft(flush: false)
+        }
+      }
+      if !busy {
+        // send() declined before starting (for example no connected agent).
+        if draft == text { draft = "" }
+        notice = "Review comments were not sent. They are still pending."
+      }
     } else {
       draft += (draft.isEmpty ? "" : "\n\n") + text
       saveDraft(flush: false)
@@ -88,9 +117,11 @@ extension Workspace {
 struct PendingCommentsTray: View {
   @EnvironmentObject var app: Workspace
   @ObservedObject var store: PendingCommentStore
+  /// The thread captured when a diff sheet opened. Nil follows the composer.
+  var thread: String? = nil
   @State private var expanded = false
   var body: some View {
-    let thread = app.composerKey
+    let thread = self.thread ?? app.composerKey
     let comments = store.comments(thread)
     if !comments.isEmpty {
       VStack(alignment: .leading, spacing: 6) {
@@ -108,8 +139,8 @@ struct PendingCommentsTray: View {
               store.clear(thread)
             }
           }.font(.caption)
-          Button(app.active ? "Add to message" : "Send comments to agent") { app.sendPendingComments() }
-            .font(.caption).disabled(!app.connected)
+          Button(app.active ? "Add to message" : "Send comments to agent") { app.sendPendingComments(thread: thread) }
+            .font(.caption).disabled(!app.connected || thread != app.composerKey)
             .help(app.active ? "The agent is working. Comments go into your message box to send next." : "Send all pending comments as one follow-up")
         }
         if expanded {
@@ -135,6 +166,9 @@ struct PendingCommentsTray: View {
 /// Hunk-by-hunk diff with a comment affordance on each hunk.
 struct CommentableDiff: View {
   let document: ReviewDocument
+  /// The thread the diff was opened for. Comments always attach to it, even if
+  /// background updates change the visible thread while the sheet is open.
+  let thread: String
   @EnvironmentObject var app: Workspace
   @State private var commenting: Int?
   @State private var text = ""
@@ -193,7 +227,7 @@ struct CommentableDiff: View {
     app.pendingComments.add(
       PendingComment(path: document.path, lines: lineRange(hunk), excerpt: excerpt,
         text: text.trimmingCharacters(in: .whitespacesAndNewlines)),
-      thread: app.composerKey)
+      thread: thread)
     commenting = nil
     text = ""
   }

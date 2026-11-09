@@ -66,19 +66,30 @@ struct TurnChangeSummary: Equatable {
 
   /// Loads once per job and stamp. `force` refetches regardless, for live turns.
   func load(engine: Engine, project: String, job: String, stamp: String = "", force: Bool = false) async {
-    guard !project.isEmpty, !job.isEmpty, !inFlight.contains(job) else { return }
+    guard !project.isEmpty else { return }
+    await load(job: job, stamp: stamp, force: force) {
+      try await engine.call("turns.changes", ["project": project, "job": job]) as? [String: Any] ?? [:]
+    }
+  }
+
+  /// Only a completed answer is cached. A cancelled or failed request leaves
+  /// the turn unloaded, so the next appearance or status change asks again
+  /// instead of showing "no changes" forever.
+  func load(job: String, stamp: String = "", force: Bool = false,
+    fetch: () async throws -> [String: Any]) async {
+    guard !job.isEmpty, !inFlight.contains(job) else { return }
     if !force, summaries[job] != nil, stamps[job] == stamp { return }
     inFlight.insert(job)
     defer { inFlight.remove(job) }
     do {
-      let raw = try await engine.call("turns.changes", ["project": project, "job": job]) as? [String: Any] ?? [:]
+      let raw = try await fetch()
+      // Navigating away cancels the view's task; do not record a partial answer.
+      guard !Task.isCancelled else { return }
       let next = TurnChangeSummary(raw)
       stamps[job] = stamp
       if summaries[job] != next { summaries[job] = next }
     } catch {
-      // Older engines do not know this method. Hide the summary quietly.
-      stamps[job] = stamp
-      if summaries[job] == nil { summaries[job] = TurnChangeSummary() }
+      // Keep any earlier summary on screen; never cache a failure as empty.
     }
   }
 
@@ -97,6 +108,8 @@ struct TurnShipRequest: Identifiable {
 struct TurnDiffRequest: Identifiable {
   let job: String
   let path: String
+  /// Thread in view when the diff was opened; its review comments go there.
+  var thread = ""
   var id: String { job + "\n" + path }
 }
 
@@ -112,7 +125,7 @@ struct TurnChangesSheets: View {
           .environmentObject(app)
       }
       .sheet(item: $store.diffRequest) { request in
-        TurnDiffSheet(job: request.job, path: request.path) { store.diffRequest = nil }
+        TurnDiffSheet(job: request.job, path: request.path, thread: request.thread) { store.diffRequest = nil }
           .environmentObject(app)
       }
   }
@@ -205,7 +218,7 @@ struct TurnChangesView: View {
       }
       FlowChips(spacing: 6) {
         ForEach(shown) { file in
-          Button { store.diffRequest = TurnDiffRequest(job: job, path: file.path) } label: {
+          Button { store.diffRequest = TurnDiffRequest(job: job, path: file.path, thread: workspace?.composerKey ?? "") } label: {
             HStack(spacing: 5) {
               Image(systemName: icon(file.change)).font(.system(size: 9)).foregroundStyle(.secondary)
               Text(file.name).lineLimit(1)
@@ -333,6 +346,8 @@ private struct FlowChips: Layout {
 struct TurnDiffSheet: View {
   let job: String
   let path: String
+  /// Captured when the sheet opened, so comments cannot move to another thread.
+  var thread = ""
   var close: () -> Void
   @EnvironmentObject var app: Workspace
   @StateObject private var review = WorkbenchReview()
@@ -364,8 +379,9 @@ struct TurnDiffSheet: View {
       } else if let document = review.document {
         if !document.issue.isEmpty { Text(document.issue).font(.caption).foregroundStyle(.orange) }
         if document.truncated { Text("Incomplete diff preview.").font(.caption).foregroundStyle(.orange) }
-        CommentableDiff(document: document).frame(maxWidth: .infinity, maxHeight: .infinity)
-        PendingCommentsTray(store: app.pendingComments)
+        CommentableDiff(document: document, thread: thread.isEmpty ? app.composerKey : thread)
+          .frame(maxWidth: .infinity, maxHeight: .infinity)
+        PendingCommentsTray(store: app.pendingComments, thread: thread.isEmpty ? nil : thread)
       }
       Spacer(minLength: 0)
     }
