@@ -7,7 +7,6 @@ agent conversations within model context limits.
 
 from __future__ import annotations
 
-import json
 from typing import Any, Dict, List, Optional
 
 
@@ -25,24 +24,11 @@ class ContextManager:
         self.model_name = model_name
         self._last_summary: Optional[str] = None
 
-    def count_tokens(self, messages: List[Dict[str, Any]]) -> int:
-        """Estimate token count for a list of messages.
+    def count_tokens(self, messages: List[Dict[str, Any]], tools=None) -> int:
+        """Count structured messages and optional tool schemas conservatively."""
+        from superqode.local.context_contract import estimate_tokens
 
-        A rough heuristic: 4 characters per token.
-        """
-        total_chars = 0
-        for msg in messages:
-            content = msg.get("content", "")
-            if content:
-                total_chars += len(content)
-
-            # Count tool calls and results
-            if msg.get("tool_calls"):
-                total_chars += len(json.dumps(msg["tool_calls"]))
-            if msg.get("tool_result"):
-                total_chars += len(str(msg["tool_result"]))
-
-        return total_chars // 4
+        return estimate_tokens(messages, tools)
 
     def prune_history(
         self, messages: List[Dict[str, Any]], reserve_tokens: int = 1000

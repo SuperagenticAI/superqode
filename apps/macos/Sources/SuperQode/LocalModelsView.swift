@@ -42,6 +42,7 @@ import UniformTypeIdentifiers
 }
 
 struct ModelsView: View {
+  @EnvironmentObject var app: Workspace
   var active = true
   @State private var tab = "local"
   var body: some View {
@@ -50,7 +51,9 @@ struct ModelsView: View {
         Text("Local AI · discover and run").tag("local")
         Text("Existing models and provider routes").tag("routes")
       }.pickerStyle(.segmented).padding(.horizontal, 28).padding(.top, 20)
-      if tab == "local" { LocalModelWorkbenchView(active: active) } else { ModelRoutesView() }
+      if tab == "local" {
+        if active { LocalQuickStartView(project: app.projectID, embedded: true).id(app.projectID) }
+      } else { ModelRoutesView() }
     }
   }
 }
@@ -87,7 +90,7 @@ struct LocalModelWorkbenchView: View {
       HStack {
         let hardware = library.overview["hardware"] as? [String: Any] ?? [:]
         Label(string(hardware, "chip", "Detecting device…"), systemImage: "desktopcomputer")
-        Text("\(hardware["unified_memory_gb"] ?? "—") GB memory").foregroundStyle(.secondary)
+        Text("\(hardware["unified_memory_gb"] ?? "Unknown") GB memory").foregroundStyle(.secondary)
         Spacer()
         Button("Storage & Hub access…") { setup = true }
         Button("Harness compatibility…") { compatibility = true }
@@ -153,7 +156,7 @@ struct LocalModelWorkbenchView: View {
             }
           }
           if rows.isEmpty && !library.searching { Text("No matches. Search Hugging Face or review an exact local Ollama tag.").foregroundStyle(.secondary) }
-          Text("Fit estimates cover weights only. Context/KV cache, runtime support and coding/tool quality still need verification. LM Studio-compatible search uses Hugging Face artifacts.")
+          Text("Fit estimates include context/KV cache, buffers and headroom. Runtime support and coding/tool quality still need verification. LM Studio-compatible search uses Hugging Face artifacts.")
             .font(.caption).foregroundStyle(.secondary)
           if !library.jobs.isEmpty { operations }
         }.padding(.bottom, 16)

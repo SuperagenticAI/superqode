@@ -20,7 +20,7 @@ import time
 
 from .hardware import detect_hardware
 from .install import install_plan, runtime_executable
-from .matrix import estimate_model_memory_gb, memory_fit_phrase, search_models
+from .matrix import search_models
 from .servers import ServerManager, SPECS
 from .options import cache_options
 
@@ -73,16 +73,15 @@ def download_disk_free(source, *, cache_dir=None):
 
 
 def fit(label, *, size_bytes=None):
+    from .context_contract import memory_fit
+
     hardware = detect_hardware()
-    memory = hardware.available_memory_gb
-    estimate = size_bytes / 1024**3 if size_bytes else estimate_model_memory_gb(label)
-    return {
-        "estimate_gb": estimate,
-        "memory_gb": memory,
-        "verdict": memory_fit_phrase(estimate, memory),
-        "likely_fits": bool(estimate and memory and estimate <= memory * 0.6),
-        "note": "Weight estimate only; runtime buffers, KV cache, other apps and context need additional memory. This is not a measured compatibility test.",
-    }
+    return memory_fit(
+        label,
+        hardware.available_memory_gb,
+        weights_gb=size_bytes / 1024**3 if size_bytes else None,
+        apple=hardware.is_apple_silicon,
+    )
 
 
 def search(query, source="recommended", kind="gguf", *, token=None):
@@ -258,7 +257,15 @@ def gguf_group(files, selected):
 def prepare(params, registry_dir, *, token=None):
     action = params.get("action")
     engine = params.get("engine", "ollama")
-    if engine not in ENGINES or action not in {"download", "serve", "stop", "install", "verify"}:
+    if engine not in ENGINES or action not in {
+        "download",
+        "serve",
+        "stop",
+        "unload",
+        "load",
+        "install",
+        "verify",
+    }:
         raise ValueError("Choose a supported local runtime and action")
     if engine == "ds4" and action in {"download", "install"}:
         raise ValueError(
@@ -266,6 +273,16 @@ def prepare(params, registry_dir, *, token=None):
         )
     plan = {"action": action, "engine": engine, "provider": PROVIDERS[engine]}
     manager = ServerManager(registry_dir=Path(registry_dir))
+    metadata = {}
+    if (
+        engine in {"ollama", "lmstudio"}
+        and action in {"serve", "load", "verify"}
+        and params.get("model")
+    ):
+        from .model_metadata import read_metadata
+
+        metadata = read_metadata(engine, params["model"])
+    weights_gb = metadata.get("size_bytes", 0) / 1024**3 or None
     if action == "verify":
         model = params.get("model")
         if (
@@ -310,9 +327,60 @@ def prepare(params, registry_dir, *, token=None):
             docs_url=recipe.docs_url,
             command=recipe.command,
         )
+    elif action in {"unload", "load"}:
+        model = params.get("model", "")
+        if (
+            engine not in {"ollama", "lmstudio"}
+            or not isinstance(model, str)
+            or not 0 < len(model) <= 4096
+            or model.startswith("-")
+            or any(ord(c) < 32 for c in model)
+        ):
+            raise ValueError("Choose a valid model on Ollama or LM Studio")
+        if action == "load" and engine != "lmstudio":
+            raise ValueError("Ollama loads its model on the first request")
+        from .context_contract import choose_contract
+
+        contract = choose_contract(
+            model,
+            provider=engine,
+            context=params.get("context"),
+            metadata=metadata,
+            weights_gb=weights_gb,
+        )
+        plan.update(
+            model=model,
+            context=contract.context,
+            contract=asdict(contract),
+            title=f"{action.title()} {model}",
+            command=f"{action.title()} model on {engine}",
+            note="Unloading frees model memory, not downloaded files. Other sessions using this model may be interrupted.",
+        )
     elif action == "download":
         model = params.get("model", "")
-        if params.get("source") == "ollama":
+        if params.get("source") == "lmstudio":
+            if (
+                engine != "lmstudio"
+                or not isinstance(model, str)
+                or not 0 < len(model) <= 4096
+                or any(ord(c) < 32 for c in model)
+                or model.startswith("-")
+            ):
+                raise ValueError("Choose an exact LM Studio catalog ID or Hugging Face HTTPS link")
+            if "://" in model and not model.startswith("https://huggingface.co/"):
+                raise ValueError("Use an official catalog ID or a Hugging Face HTTPS link")
+            plan.update(
+                source="lmstudio",
+                model=model,
+                files=[],
+                total_bytes=None,
+                download_bytes=None,
+                fit=fit(model),
+                title=f"Download {model}",
+                command="POST /api/v1/models/download",
+                note="LM Studio chooses the artifact and reports transfer size. Cancelling this observer does not cancel the server-owned download; manage it in LM Studio.",
+            )
+        elif params.get("source") == "ollama":
             if engine != "ollama" or not _ollama_id(model):
                 raise ValueError("Choose a valid Ollama model tag")
             # Remote/cloud tags cannot satisfy an offline/local coding promise.
@@ -398,6 +466,21 @@ def prepare(params, registry_dir, *, token=None):
             raise ValueError("Choose an existing GGUF file")
         if engine == "mlx" and not Path(model).is_dir():
             raise ValueError("Download the MLX snapshot first and choose its local directory")
+        if engine in {"ollama", "lmstudio"} and model:
+            from .context_contract import choose_contract
+
+            contract = choose_contract(
+                model,
+                provider=engine,
+                context=context,
+                metadata=metadata,
+                weights_gb=weights_gb,
+                kv_cache=cache,
+            )
+            context = contract.context
+            if cache == "auto":
+                cache = contract.kv_cache
+            plan["contract"] = asdict(contract)
         extra, env = cache_options(engine, cache)
         if engine == "ds4":
             from .servers import DS4_DEFAULT_KV_DIR, DS4_DEFAULT_KV_DISK_MB
@@ -449,7 +532,7 @@ def prepare(params, registry_dir, *, token=None):
             environment={**environment, **env},
             command=shlex.join(argv),
             title=f"Start {engine}",
-            fit=fit(model),
+            fit=plan.get("contract", {}).get("fit") or fit(model),
             note="Already-running servers are adopted without changing their settings. MLX ignores requested context; LM Studio applies it at load. No weights are downloaded by server start.",
         )
         if engine == "ds4":
@@ -459,7 +542,11 @@ def prepare(params, registry_dir, *, token=None):
             )
     else:
         handle = manager._load(engine)
-        if not handle or handle.adopted or handle.pid is None or not handle.process_start:
+        if (
+            not handle
+            or handle.adopted
+            or (engine != "lmstudio" and (handle.pid is None or not handle.process_start))
+        ):
             raise ValueError(
                 "This app does not own a stoppable process for this server. Manage it in its owning app or terminal."
             )
@@ -468,6 +555,8 @@ def prepare(params, registry_dir, *, token=None):
             pid=handle.pid,
             started_at=handle.started_at,
             process_start=handle.process_start,
+            command="lms server stop" if engine == "lmstudio" else "Stop the owned server process",
+            note="Stops inference for other sessions using this server too. LM Studio may keep models in its daemon; use Unload separately to release model memory.",
         )
     disk = (
         download_disk_free(
@@ -548,6 +637,9 @@ def run(plan, registry_dir, emit, *, owner_job=None):
                             "detail": f"{context[0]} tokens from {context[1]}",
                         }
                     )
+                from .context_contract import requested_context
+
+                readiness["requested_context"] = requested_context(engine, plan["model"])
                 report["readiness"] = readiness
                 if readiness["status"] == "failed":
                     report["status"] = "failed"
@@ -582,6 +674,28 @@ def run(plan, registry_dir, emit, *, owner_job=None):
             raise ValueError(
                 "Installer exited but the runtime is not available. Refresh setup diagnostics."
             )
+    elif action == "unload":
+        if engine == "ollama":
+            import urllib.request
+
+            payload = json.dumps({"model": plan["model"], "keep_alive": 0}).encode()
+            req = urllib.request.Request(
+                "http://127.0.0.1:11434/api/generate",
+                data=payload,
+                headers={"Content-Type": "application/json"},
+            )
+            with urllib.request.urlopen(req, timeout=60) as response:
+                response.read(65536)
+        else:
+            _command([runtime_executable("lms"), "unload", plan["model"]], emit)
+        result = {"unloaded": True}
+    elif action == "load":
+        from .lmstudio_api import load
+        from .context_contract import ContextContract, save_contract
+
+        contract = ContextContract(**plan["contract"])
+        result = load(plan["model"], contract.context)
+        save_contract(engine, plan["model"], contract)
     elif action == "stop":
         handle = manager._load(engine)
         if (
@@ -598,6 +712,10 @@ def run(plan, registry_dir, emit, *, owner_job=None):
             )
         result = {"stopped": True}
     elif action == "serve":
+        from .context_contract import ContextContract, save_contract
+
+        if plan.get("contract"):
+            save_contract(engine, plan["model"], ContextContract(**plan["contract"]))
         # Avoid changing process-wide environment in the shared engine: this runs
         # in the isolated, cancellable local-operation worker.
         os.environ.update(plan["environment"])
@@ -608,6 +726,7 @@ def run(plan, registry_dir, emit, *, owner_job=None):
                 model=None if engine == "lmstudio" else plan["model"] or None,
                 ctx=plan["context"],
                 extra_args=plan["extra_args"],
+                kv_cache=plan["kv_cache"] if engine == "ollama" else "auto",
                 wait=True,
                 timeout=180,
                 allow_download=False,
@@ -619,17 +738,9 @@ def run(plan, registry_dir, emit, *, owner_job=None):
                 manager.stop(engine)
             raise
         if engine == "lmstudio" and plan["model"]:
-            _command(
-                [
-                    runtime_executable("lms"),
-                    "load",
-                    plan["model"],
-                    "--context-length",
-                    str(plan["context"]),
-                    "-y",
-                ],
-                emit,
-            )
+            from .lmstudio_api import load
+
+            load(plan["model"], plan["context"])
         result = {
             "server": handle.to_dict(),
             "serve_model": plan["model"],
@@ -637,6 +748,15 @@ def run(plan, registry_dir, emit, *, owner_job=None):
             "ready": manager.is_running(engine),
             "notes": handle.notes
             + (["Existing server settings were kept, including KV cache."] if was_running else []),
+        }
+    elif plan["source"] == "lmstudio":
+        from .lmstudio_api import download
+
+        result = {
+            "downloaded": True,
+            "download": download(plan["model"], emit),
+            "serve_model": plan["model"],
+            "provider": "lmstudio",
         }
     elif plan["source"] == "ollama":
         if not manager.is_running("ollama"):

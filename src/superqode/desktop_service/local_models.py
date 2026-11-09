@@ -87,7 +87,10 @@ def servers(service):
                 **ready,
                 "id": engine,
                 "name": "DS4 · DeepSeek V4" if engine == "ds4" else NAMES[engine],
-                "can_stop": owned,
+                "can_stop": owned
+                or bool(
+                    engine == "lmstudio" and ready["running"] and handle and not handle.adopted
+                ),
                 "install": {
                     "automatic": False,
                     "docs_url": "https://github.com/antirez/ds4",
@@ -130,7 +133,7 @@ def start(service, params):
     with service.lock:
         # Model operations have a separate writer scope. A download need not
         # block editing/coding in unrelated projects.
-        if plan["action"] in {"serve", "stop", "install"} and service._all(
+        if plan["action"] in {"serve", "stop", "unload", "load", "install"} and service._all(
             "SELECT id FROM jobs WHERE kind!='local' AND status IN ('running','queued','needs_approval','cancelling')"
         ):
             raise ValueError("Finish or stop agent work before changing inference servers")
@@ -195,6 +198,17 @@ def available(engine):
     if engine not in workbench.ENGINES:
         raise ValueError("Choose a supported local runtime")
     endpoint = f"http://127.0.0.1:{SPECS[engine].default_port}/v1"
+    if engine == "lmstudio":
+        from superqode.local.lmstudio_api import models as lm_models
+
+        rows = lm_models()
+        return {
+            "endpoint": endpoint,
+            "models": [r["key"] for r in rows if r.get("key")],
+            "loaded_models": [r["key"] for r in rows if r.get("key") and r.get("loaded_instances")],
+            "metadata": rows,
+            "provider": "lmstudio",
+        }
     # Fixed loopback endpoints; never inherit a remote host from shell settings.
     with urllib.request.urlopen(endpoint + "/models", timeout=3) as response:
         payload = json.loads(response.read(2_000_000))

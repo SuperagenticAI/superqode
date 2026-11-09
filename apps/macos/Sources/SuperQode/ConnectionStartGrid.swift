@@ -15,7 +15,7 @@ struct ConnectionStartGrid: View {
   private static let tiles: [Tile] = [
     Tile(id: "agent", title: "Your agent", detail: "An existing harness with its own tools, model and sign-in.", symbol: "person.crop.circle", page: "menu:agents"),
     Tile(id: "harness", title: "SuperQode harness", detail: "Core, RLM, PiPy, CodeGem or Workbench with your model.", symbol: "sparkles", page: "menu:harness", recommended: true),
-    Tile(id: "local", title: "Local model", detail: "Ollama, LM Studio, MLX, vLLM and other local servers.", symbol: "desktopcomputer", page: "source:local"),
+    Tile(id: "local", title: "Local model", detail: "Run on your Mac with Ollama or LM Studio.", symbol: "desktopcomputer", page: "source:local"),
     Tile(id: "key", title: "API key", detail: "Your provider key with API billing.", symbol: "key", page: "source:key"),
     Tile(id: "acp", title: "ACP agent", detail: "A coding agent you run as a local process.", symbol: "link", page: "acp"),
     Tile(id: "protocols", title: "Protocols", detail: "Reach an agent over ACP, A2A or UHP.", symbol: "network", page: "menu:protocols"),

@@ -66,6 +66,8 @@ class HardwareProfile:
                 return "apple_128"
             if mem >= 56:
                 return "apple_64"
+            if mem >= 48:
+                return "apple_48"
             if mem >= 30:
                 return "apple_32"
             return "apple_16"

@@ -39,6 +39,9 @@ def runtime_executable(name: str) -> str:
         return name
     for directory in (
         Path.home() / ".lmstudio/bin",
+        Path("/Applications/Ollama.app/Contents/Resources"),
+        Path("/Applications/LM Studio.app/Contents/Resources/app/.webpack/lms"),
+        Path("/Applications/LM Studio.app/Contents/Resources/app/bin"),
         Path("/opt/homebrew/bin"),
         Path("/usr/local/bin"),
     ):
@@ -87,7 +90,9 @@ def runtime_installed(engine: str) -> bool:
     binary = {"ollama": "ollama", "lmstudio": "lms", "llama.cpp": "llama-server"}.get(engine)
     if binary:
         resolved = runtime_executable(binary)
-        return bool(shutil.which(resolved))
+        return bool(shutil.which(resolved)) or (
+            engine == "lmstudio" and Path("/Applications/LM Studio.app").is_dir()
+        )
     if engine == "mlx" and managed_mlx_installed(refresh=True):
         return True
     if engine in ("sglang", "vllm"):

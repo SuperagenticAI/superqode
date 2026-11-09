@@ -83,10 +83,13 @@ def test_local_providers_detected():
 
 def test_local_unprobed_window_is_conservative_not_catalog():
     # An unprobed local model must NOT inherit a huge catalog/model-card window.
-    assert _loop("ollama")._effective_context_window() == 8192
+    from superqode.local.context_contract import requested_context
+
+    assert _loop("ollama")._effective_context_window() == requested_context("ollama", "m")
 
 
-def test_explicit_window_wins_for_local():
+def test_explicit_smaller_window_is_respected_for_local(monkeypatch):
+    monkeypatch.setattr("superqode.local.context_contract.requested_context", lambda *a: 32768)
     loop = _loop("ollama", window=16384)
     assert loop._effective_context_window() == 16384
     threshold, keep_recent, window = loop._compaction_budgets()
@@ -101,7 +104,25 @@ def test_reserve_floor_protects_tiny_windows():
 
 
 @pytest.mark.asyncio
-async def test_ensure_context_window_caches_explicit():
+async def test_ensure_context_window_caches_smaller_explicit(monkeypatch):
+    monkeypatch.setattr("superqode.local.context_contract.requested_context", lambda *a: 32768)
+
+    async def no_probe(*args):
+        return None
+
+    monkeypatch.setattr(cp, "resolve_local_context_window", no_probe)
     loop = _loop("ollama", window=12000)
     assert await loop._ensure_context_window() == 12000
-    assert loop._context_window_source == "configured"
+    assert loop._context_window_source == "local-contract"
+
+
+@pytest.mark.asyncio
+async def test_explicit_context_cannot_exceed_actual_local_window(monkeypatch):
+    async def loaded(*args):
+        return 4096, "/api/ps"
+
+    monkeypatch.setattr(cp, "resolve_local_context_window", loaded)
+    monkeypatch.setattr("superqode.local.context_contract.requested_context", lambda *a: 8192)
+    loop = _loop("ollama", window=131072)
+    assert await loop._ensure_context_window() == 4096
+    assert loop._effective_context_window() == 4096

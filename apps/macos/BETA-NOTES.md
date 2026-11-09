@@ -1,4 +1,4 @@
-# SuperQode for macOS public beta 0.3.7
+# SuperQode for macOS public beta 0.3.8
 
 Native coding workspace for Apple Silicon Macs running macOS 14 or later. Intel Macs are not supported by this build. This is beta software, with manual updates and incomplete terminal feature parity.
 
@@ -17,7 +17,20 @@ Open a disposable or backed-up Git project, choose Connect, select the agent or 
 - Optional app-managed credentials use macOS Keychain. Existing agent credentials are managed by those agents. Local application data is under `~/Library/Application Support/SuperQode`. Removing the app does not remove this data, Keychain entries or credentials stored by external agents.
 - History, terminal output and evidence exports can contain private project content. Inspect and redact anything you choose to share. There is no automatic crash-report upload in this beta.
 
-## Next release
+## Version 0.3.8
+
+Version 0.3.8 (build 24) bundles Python engine 2.31.6. Signing, notarization and device verification happen separately from code preparation.
+
+- Local model opens one guided Local AI screen for Ollama and LM Studio. It detects installations and offers the official LM Studio headless installer only after a reviewed, explicit action. Ollama links to its official download, with Homebrew offered when available.
+- Review Start, Stop, model download, load and Unload operations in the app. Progress comes from the server. Stopping the LM Studio server does not unload its daemon's models; use Unload to release them. Cancelling the download observer does not cancel an LM Studio-owned transfer.
+- Your Mac shows chip, unified memory and macOS. Starter suggestions use approximate weights, context/KV cache, buffers and headroom against an estimated Metal working-set budget. Ratings are not a guarantee. Qwen3-Coder-Next is only suggested at 96 GB and up.
+- Context, output budget and KV cache share one contract. Loaded context is probed and reported separately from requested context. Unknown architecture metadata uses conservative estimates. Older history may be trimmed before a request; an oversized latest prompt fails clearly before sending.
+- The amber notice explains local memory, heat, battery, downloads and responsibility. Models run on the Mac; tools and other configured services can still use the network.
+- Guided LM Studio downloads and loads require its native REST v1 API (LM Studio 0.4 or newer). API access restrictions are reported; this flow does not collect a server authentication token.
+- Advanced retains the existing workbench, storage, compatibility and other runtime controls.
+- Bundling regenerates engine metadata to match packaged source, including older base payloads.
+
+### Connection updates
 
 - New-thread connection tiles make the supported setup paths visible at a glance. Choose an existing agent, a SuperQode harness, a local model, an API key, ACP, protocols, a custom harness or SystemOne, or browse All connections.
 - Send to Thread (Command-Shift-T) adds an editable context draft to another thread or a new thread. Preview the whole conversation or start at a recorded turn, optionally include changed-file names, then review before sending. Existing drafts and the destination agent session stay intact. Long histories show an omission warning; attachments and permissions are not transferred.
@@ -315,3 +328,17 @@ Updates are manual. Quit SuperQode, download the newer notarized beta and replac
 Report issues at https://github.com/SuperagenticAI/superqode/issues with the app version, macOS version, agent version and reproduction steps. Do not post API keys, transcripts or private code without reviewing them first. For sensitive security reports, use the repository's security reporting policy rather than posting exploit details publicly.
 
 If a task fails, inspect its recorded status and Git diff before retrying. Interrupted runs are not automatically replayed. Stop using the beta on important repositories if you encounter data loss, unintended execution or an authentication/credential exposure issue, and report it.
+
+
+## 0.3.8 release smoke checklist (on a Mac)
+
+- Build in Xcode or with the normal Mac build script. Confirm About and Info.plist show 0.3.8 (24). Inspect the staged runtime: one superqode dist-info, version 2.31.6, matching manifest and imported source. Rebuild using an older base payload and confirm no 2.31.4 metadata remains.
+- New thread: exercise every connection grid tile, Back and All connections. Local model opens the newcomer screen. API-key setup and existing agent routes still work.
+- Send to thread: Command-Shift-T, whole history and starting turn, existing and new destination, existing draft preservation, omission warning and cancel. Confirm no prompt is sent until explicitly submitted.
+- Local AI before opening a project: inspect device and engine detection, notice and Learn more. Ensure merely opening it never installs, downloads or sends a model request.
+- With neither engine installed: review the LM Studio official installer command and consent, observe output and re-detect. Test failure/cancel/retry. Check Get Ollama and optional Homebrew. Test Ollama.app installed but never opened and lms outside PATH.
+- For each engine: start on loopback, download a small suggested model and watch byte progress, close/reopen setup, cancel/retry, load and check requested versus actual context, finish the bounded check, then Start coding. No prompt should be sent by Start coding.
+- Check fit guidance on 16, 24, 32, 48, 64 and 96 GB profiles. The 80B Q4 artifact must not show Fits on 64 GB. Check long context increases the estimate and unknown size is labelled unknown.
+- Send a long tool-heavy thread: old complete turns may be trimmed, tool results must stay paired, output stays within the available window, and an oversized newest prompt gets a visible error. Confirm Ollama num_ctx does not jump to a family default.
+- Unload and verify memory release without deleting weights. Stop app-started Ollama and LM Studio. Adopted Ollama must not be killed. For LM Studio, Stop only appears for an app-started server; unload separately if models remain resident.
+- Open Advanced and verify other runtimes, library, storage and compatibility remain accessible. Run the new LocalModelTests on macOS. Check light/dark mode, keyboard focus, narrow-window scrolling and sheet dismissal.

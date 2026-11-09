@@ -485,7 +485,7 @@ class LiteLLMGateway(GatewayInterface):
 
         # Dynamic (models.dev-synthesized) providers route as OpenAI-compatible
         # with api_base/api_key passed explicitly per-request (see
-        # chat_completion). Don't mutate global OPENAI_* env here — that would
+        # chat_completion). Don't mutate global OPENAI_* env here  -  that would
         # clobber a user's real OpenAI credentials.
         if provider_def.dynamic:
             return
@@ -706,7 +706,7 @@ class LiteLLMGateway(GatewayInterface):
 
         Converts string content to a one-block list so providers that
         require structured content (Anthropic, Bedrock) parse it correctly.
-        Returns a new message — callers must not mutate the original.
+        Returns a new message  -  callers must not mutate the original.
         """
         content = msg.get("content")
         if isinstance(content, str):
@@ -718,7 +718,7 @@ class LiteLLMGateway(GatewayInterface):
             last = blocks[-1]
             if isinstance(last, dict) and last.get("type") == "text":
                 if field in last and last[field] == value:
-                    return msg  # already marked — idempotent
+                    return msg  # already marked  -  idempotent
                 blocks[-1] = {**last, field: value}
             else:
                 return msg
@@ -759,21 +759,21 @@ class LiteLLMGateway(GatewayInterface):
 
         Strategy per provider:
 
-        - **Anthropic** (Claude extended thinking) — emits a top-level
+        - **Anthropic** (Claude extended thinking)  -  emits a top-level
           ``thinking={"type": "enabled", "budget_tokens": N}``. Caller
           must also send ``max_tokens > budget_tokens``.
-        - **DS4** — same Anthropic-compatible shape; the gateway's DS4
+        - **DS4**  -  same Anthropic-compatible shape; the gateway's DS4
           path already reads the thinking config inline via
           ``_ds4_thinking_config()`` so we mirror the budgets here for
           parity. The dedicated DS4 path keeps its own env override so
           ``SUPERQODE_DS4_THINKING`` continues to work session-wide.
-        - **OpenAI** (o1, o3, GPT-5 family) — emits ``reasoning_effort``
+        - **OpenAI** (o1, o3, GPT-5 family)  -  emits ``reasoning_effort``
           as a top-level kwarg with values ``low|medium|high`` (no
           ``max``). We collapse ``max`` to ``high`` since OpenAI doesn't
           expose a deeper tier through this field.
-        - **OpenRouter** — passes the same field through to whichever
+        - **OpenRouter**  -  passes the same field through to whichever
           backend it's routing to; OpenRouter normalizes it.
-        - **Others** — no native concept; silently dropped. Better than
+        - **Others**  -  no native concept; silently dropped. Better than
           erroring, since users may share one ``reasoning_effort=high``
           across a multi-provider workflow.
         """
@@ -885,11 +885,11 @@ class LiteLLMGateway(GatewayInterface):
         return {}
 
     # Structured-output mode. Two values are supported:
-    # - ``json``    — request a JSON object back (response_format=json_object
+    # - ``json``     -  request a JSON object back (response_format=json_object
     #                 for OpenAI, equivalent on others where available).
-    # - ``tool_use`` — force a single tool call whose arguments are the
+    # - ``tool_use``  -  force a single tool call whose arguments are the
     #                  structured output. Works everywhere with tool calling.
-    # ``auto`` (the default) means "let the gateway decide" — currently
+    # ``auto`` (the default) means "let the gateway decide"  -  currently
     # behaves as if unset, leaving the request shape untouched.
     _STRUCTURED_OUTPUT_MODES = ("json", "tool_use", "auto")
 
@@ -901,7 +901,7 @@ class LiteLLMGateway(GatewayInterface):
     ) -> Dict[str, Any]:
         """Translate a neutral structured-output mode to provider kwargs.
 
-        ``has_response_schema`` is informational — when ``True`` we know
+        ``has_response_schema`` is informational  -  when ``True`` we know
         the caller has a JSON Schema to constrain output, so on providers
         that support strict schema mode (OpenAI) we can opt in.
         """
@@ -914,7 +914,7 @@ class LiteLLMGateway(GatewayInterface):
         if mode == "json":
             if provider in {"openai", "openrouter", "azure", "groq"}:
                 return {"response_format": {"type": "json_object"}}
-            # Anthropic/Bedrock/Vertex don't expose a json mode flag —
+            # Anthropic/Bedrock/Vertex don't expose a json mode flag  -
             # the agent loop is responsible for the prompt-level "respond
             # with JSON" instruction in that case.
             return {}
@@ -931,60 +931,50 @@ class LiteLLMGateway(GatewayInterface):
     _LOCAL_SHAPED_PROVIDERS = {"ollama", "mlx", "lmstudio", "vllm", "sglang", "tgi", "llamacpp"}
 
     # Models whose default Ollama context window is too small (4096) for a
-    # coding agent's system + tools prefix. The override is conservative —
+    # coding agent's system + tools prefix. The override is conservative  -
     # we cap at what the underlying model actually supports so we don't
     # silently exceed limits and force Ollama into truncation.
-    _OLLAMA_CONTEXT_HINTS = {
-        "qwen2.5-coder": 32768,
-        "qwen2.5": 32768,
-        "qwen3": 32768,
-        "qwen": 32768,
-        "llama3.3": 32768,
-        "llama3.2": 32768,
-        "llama3.1": 32768,
-        "llama3": 8192,
-        "deepseek-coder-v2": 32768,
-        "deepseek-coder": 16384,
-        "mistral": 32768,
-        "mixtral": 32768,
-        "gpt-oss": 32768,
-        "phi": 16384,
-        # Gemma 3 / Gemma 4 train at 128K; cap at a practical 32K like the
-        # Llama/Qwen peers above. Gemma 1/2 are genuinely 8K.
-        "gemma4": 32768,
-        "gemma-4": 32768,
-        "gemma3": 32768,
-        "gemma-3": 32768,
-        "gemma2": 8192,
-        "gemma": 8192,
-    }
-
     def _ollama_num_ctx_for(self, model: str) -> int:
-        """Pick an Ollama num_ctx for ``model``.
+        """Use the chosen per-model contract, never a model-family maximum."""
+        from superqode.local.context_contract import requested_context
 
-        Why this exists: Ollama defaults to num_ctx=4096 regardless of what
-        the model's training context allows. With a coding harness whose
-        system prompt + tool schemas alone run 2–3k tokens, that leaves
-        almost no room for the conversation — Ollama silently truncates
-        from the *front*, dropping the system prompt, and the model then
-        emits "rubbish" because it no longer knows what tools exist.
+        return requested_context("ollama", model)
 
-        Env override: ``SUPERQODE_OLLAMA_NUM_CTX`` (int) wins if set.
-        Otherwise pick the highest hint matching the model name's family.
-        Falls back to 8192 (safe-ish for most modern locals).
-        """
-        env = os.environ.get("SUPERQODE_OLLAMA_NUM_CTX", "").strip()
-        if env.isdigit():
-            return int(env)
-        m = model.lower()
-        # Longest-prefix match so "qwen2.5-coder" beats "qwen".
-        best = 0
-        best_ctx = 8192
-        for key, ctx in self._OLLAMA_CONTEXT_HINTS.items():
-            if key in m and len(key) > best:
-                best = len(key)
-                best_ctx = ctx
-        return best_ctx
+    async def _guard_local_request(self, messages, model, provider, max_tokens, tools, kwargs):
+        if provider not in {"ollama", "lmstudio"}:
+            return messages, max_tokens
+        from superqode.local.context_contract import effective_context, guard_request, output_limit
+        from superqode.providers.local.context_probe import (
+            probe_base_url,
+            resolve_local_context_window,
+        )
+
+        base = kwargs.get("api_base") or kwargs.get("base_url")
+        if base:
+            loaded = await probe_base_url(base.rstrip("/").removesuffix("/v1"), model)
+        else:
+            loaded = await resolve_local_context_window(provider, model)
+        window = effective_context(provider, model, loaded[0] if loaded else None)
+        explicit = kwargs.get("num_ctx") or (kwargs.get("options") or {}).get("num_ctx")
+        if type(explicit) is int and explicit >= 512:
+            window = min(window, explicit)
+        kept, output = guard_request(
+            self._convert_messages(messages),
+            self._convert_tools(tools) if tools else None,
+            window,
+            min(max_tokens or output_limit(provider, model), output_limit(provider, model)),
+        )
+        if len(kept) < len(messages):
+            import logging
+
+            logging.getLogger(__name__).warning(
+                "Trimmed %d older messages to fit local context %d",
+                len(messages) - len(kept),
+                window,
+            )
+        if provider == "ollama":
+            kwargs["num_ctx"] = window
+        return [messages[i] for i in kept], output
 
     def _apply_local_request_shaping(
         self,
@@ -996,8 +986,8 @@ class LiteLLMGateway(GatewayInterface):
         """Tune request params for local-model backends in place.
 
         Ollama-specific:
-        - ``num_ctx`` — see ``_ollama_num_ctx_for``.
-        - ``keep_alive`` — use an explicit caller/environment value when
+        - ``num_ctx``  -  see ``_ollama_num_ctx_for``.
+        - ``keep_alive``  -  use an explicit caller/environment value when
           supplied; otherwise retain the server's memory residency policy.
         - Clamp temperature to ≤0.2 when tools are in play; small local
           models lose tool-call discipline at higher temperatures.
@@ -1058,14 +1048,14 @@ class LiteLLMGateway(GatewayInterface):
 
         Many open-weight models (Qwen 2.5, Llama 3.x, Hermes) emit tool
         calls inline as text instead of through the OpenAI-style
-        ``tool_calls`` channel — either as ``<tool_call>{...}</tool_call>``
+        ``tool_calls`` channel  -  either as ``<tool_call>{...}</tool_call>``
         or inside a fenced code block. LiteLLM passes those through as
         normal content; the agent loop then sees zero tool calls and the
         model appears to "narrate without acting".
 
         This shim recognizes those patterns, lifts them into proper
         ``tool_calls`` dicts, and returns the stripped content. Returns
-        ``(content, None)`` if no patterns match — safe to call on any
+        ``(content, None)`` if no patterns match  -  safe to call on any
         response.
         """
         import re
@@ -1092,7 +1082,7 @@ class LiteLLMGateway(GatewayInterface):
                 if args is None:
                     args = parsed.get("parameters") or {}
                 # Normalize arguments to a JSON string (OpenAI's tool_calls
-                # contract — agent loop json.loads it back).
+                # contract  -  agent loop json.loads it back).
                 if isinstance(args, (dict, list)):
                     args_str = json.dumps(args)
                 else:
@@ -1108,7 +1098,7 @@ class LiteLLMGateway(GatewayInterface):
                 # Strip the matched substrings so the content shown to the
                 # user doesn't double up with the tool-call invocation.
                 stripped = re.sub(pattern, "", stripped, flags=flags).strip()
-                break  # one pattern is enough — don't re-scan the residue
+                break  # one pattern is enough  -  don't re-scan the residue
 
         return stripped, (extracted or None)
 
@@ -1297,7 +1287,7 @@ class LiteLLMGateway(GatewayInterface):
         """MLX chat completion.
 
         Primary path is the in-process engine (``mlx_lm`` via a worker), where
-        SuperQode owns tool-call parsing — no ``mlx_lm.server`` and no reliance
+        SuperQode owns tool-call parsing  -  no ``mlx_lm.server`` and no reliance
         on its tool parser. Falls back to the HTTP server path when the engine
         is unavailable (mlx_lm not installed, worker error) or explicitly
         disabled via ``SUPERQODE_MLX_INPROCESS=0``.
@@ -2136,7 +2126,7 @@ class LiteLLMGateway(GatewayInterface):
                     # Parse the Anthropic SSE event stream. Per the spec, tool
                     # argument fragments arrive as ``input_json_delta`` events
                     # whose ``partial_json`` field is a raw substring of the
-                    # final JSON — not a parseable object. We must concatenate
+                    # final JSON  -  not a parseable object. We must concatenate
                     # the fragments and parse once at ``content_block_stop``.
                     # ``stop_reason`` and ``usage`` arrive on ``message_delta``,
                     # not on ``message_stop``.
@@ -2428,6 +2418,10 @@ class LiteLLMGateway(GatewayInterface):
             provider = parsed.provider or "unknown"
             model = parsed.model
 
+        messages, max_tokens = await self._guard_local_request(
+            messages, model, provider, max_tokens, tools, kwargs
+        )
+
         # Per-task budget pre-check. Done before any provider dispatch so
         # DS4 / MLX / LMStudio all share the fail-fast behavior; the
         # specialized methods credit usage themselves on the way out.
@@ -2509,10 +2503,10 @@ class LiteLLMGateway(GatewayInterface):
                     provider, structured_output_mode, response_schema is not None
                 )
             )
-            # Internal-only marker — strip before sending to LiteLLM.
+            # Internal-only marker  -  strip before sending to LiteLLM.
             request_kwargs.pop("_structured_output_mode", None)
 
-        # Strip the budget marker — it's our concern, not LiteLLM's.
+        # Strip the budget marker  -  it's our concern, not LiteLLM's.
         # (Pre-check already happened at the dispatcher's entry point.)
         budget_for_credit: Optional[TaskTokenBudget] = kwargs.pop("task_budget", None)
 
@@ -2711,6 +2705,10 @@ class LiteLLMGateway(GatewayInterface):
             parsed = split_provider_model_ref(model)
             provider = parsed.provider or "unknown"
             model = parsed.model
+
+        messages, max_tokens = await self._guard_local_request(
+            messages, model, provider, max_tokens, tools, kwargs
+        )
 
         # Per-task budget pre-check (mirrors chat_completion).
         task_budget: Optional[TaskTokenBudget] = kwargs.get("task_budget")
@@ -2966,8 +2964,8 @@ class LiteLLMGateway(GatewayInterface):
                     _, extracted = self._extract_inline_tool_calls(full)
                     if extracted:
                         # Hand the tool calls to the loop. We do not echo the
-                        # raw content again — earlier chunks already carried
-                        # it — so the user sees the model's text once and the
+                        # raw content again  -  earlier chunks already carried
+                        # it  -  so the user sees the model's text once and the
                         # tool calls fire from the trailing chunk.
                         stream_chunk.tool_calls = extracted
                         stream_chunk.finish_reason = "tool_calls"

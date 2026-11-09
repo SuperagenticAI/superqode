@@ -112,15 +112,12 @@ def test_openai_gpt54_fallback_candidates():
     ]
 
 
-def test_gemma_num_ctx_modern_vs_legacy():
-    """Gemma 3/4 get a real context window; Gemma 1/2 stay at 8K."""
+def test_model_family_never_overrides_chosen_context(monkeypatch):
+    """Every family uses the saved or hardware-selected contract."""
+    monkeypatch.setattr("superqode.local.context_contract.requested_context", lambda *args: 6144)
     gateway = LiteLLMGateway()
-
-    # Modern Gemma must not be capped at the legacy 8K (cripples agentic loops).
-    assert gateway._ollama_num_ctx_for("gemma4:31b-mlx-bf16") == 32768
-    assert gateway._ollama_num_ctx_for("gemma3:27b-it") == 32768
-    # Gemma 2 is genuinely an 8K model.
-    assert gateway._ollama_num_ctx_for("gemma2:9b-it") == 8192
+    for model in ("gemma4:31b-mlx-bf16", "gemma3:27b-it", "gemma2:9b-it", "qwen3.5:9b"):
+        assert gateway._ollama_num_ctx_for(model) == 6144
 
 
 def test_openai_gpt54_pro_fallback_candidates():
@@ -424,7 +421,7 @@ def test_caching_is_idempotent():
 
 def test_caching_preserves_existing_content_blocks():
     """If content is already a list of blocks (e.g. multi-part user msg with
-    an image), tag only the last text block — don't clobber the structure."""
+    an image), tag only the last text block  -  don't clobber the structure."""
     gateway = LiteLLMGateway()
     msgs = [
         {
@@ -441,7 +438,7 @@ def test_caching_preserves_existing_content_blocks():
 
 
 def test_caching_skips_empty_string_content():
-    """Don't promote an empty string to a content block — would be a wire-
+    """Don't promote an empty string to a content block  -  would be a wire-
     format error on some providers."""
     gateway = LiteLLMGateway()
     msgs = [{"role": "user", "content": ""}]
@@ -456,7 +453,7 @@ def test_caching_handles_empty_message_list():
 
 @pytest.mark.parametrize("provider", ["bedrock", "amazon-bedrock", "vertex", "openrouter"])
 def test_caching_supported_provider_aliases_get_marked(provider):
-    """Bedrock/Vertex host Anthropic models — same cache_control field.
+    """Bedrock/Vertex host Anthropic models  -  same cache_control field.
     OpenRouter routes Anthropic models too."""
     gateway = LiteLLMGateway()
     msgs = _msgs(("system", "S"), ("user", "U"))

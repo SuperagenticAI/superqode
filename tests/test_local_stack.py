@@ -195,7 +195,9 @@ def test_matrix_recommendations_have_trusted_sources():
     for tier in matrix["tiers"]:
         for model in tier.get("models", []):
             source = model.get("source", "")
-            assert source in trusted, f"{tier['id']}::{model.get('name')} has untrusted source"
+            assert source in trusted or source.startswith(
+                ("https://ollama.com/library/", "https://lmstudio.ai/models/")
+            ), f"{tier['id']}::{model.get('name')} has untrusted source"
 
 
 def test_recommend_prefers_installed_engine_and_downloaded_model():
@@ -205,18 +207,18 @@ def test_recommend_prefers_installed_engine_and_downloaded_model():
         "ds4": EngineStatus(engine="ds4", installed=False),
         "lmstudio": EngineStatus(engine="lmstudio", installed=False),
     }
-    inventory = [LocalModel(model_id="hf:org/gemma-4-31b-it-4bit-mlx", source="hf")]
+    inventory = [LocalModel(model_id="ollama:qwen3.6:35b", source="ollama")]
     rec = recommend(_apple(128), engines, inventory)
     assert rec.tier_id == "apple_128"
     assert rec.engine == "ollama"
-    assert "mlx-lm" in rec.engines_missing
+    assert "lmstudio" in rec.engines_missing
     best = rec.best_model
     assert best is not None and best.downloaded is not None
-    assert best.downloaded.model_id == "hf:org/gemma-4-31b-it-4bit-mlx"
+    assert best.downloaded.model_id == "ollama:qwen3.6:35b"
 
 
 def test_recommend_neural_accelerator_note():
-    rec = recommend(_apple(128, gen=5, macos="26.2"), {}, [])
+    rec = recommend(replace(_apple(128, gen=5, macos="26.2"), neural_accelerators=True), {}, [])
     assert any("Neural Accelerators" in n for n in rec.notes)
 
 
@@ -240,6 +242,35 @@ def test_user_matrix_override(monkeypatch, tmp_path):
 def _fake_report(monkeypatch, inventory=None):
     from superqode.local import doctor as doctor_mod
 
+    # Routing tests use an explicit Advanced fixture rather than pinning the
+    # monthly newcomer starter catalog to an old set of downloaded models.
+    monkeypatch.setattr(
+        "superqode.local.doctor.load_matrix",
+        lambda: {
+            "version": "fixture",
+            "tiers": [
+                {
+                    "id": "apple_128",
+                    "description": "Advanced fixture",
+                    "engines": ["mlx-lm", "ollama"],
+                    "models": [
+                        {
+                            "name": "GLM-4.5-Air",
+                            "match": ["glm-4.5-air"],
+                            "pull": "hf download THUDM/GLM-4.5-Air",
+                            "pack": "glm",
+                        },
+                        {
+                            "name": "Gemma 4 31B",
+                            "match": ["gemma-4-31b"],
+                            "pull": "hf download org/gemma-4-31b-it-4bit-mlx",
+                            "pack": "gemma4",
+                        },
+                    ],
+                }
+            ],
+        },
+    )
     monkeypatch.setattr(doctor_mod, "detect_hardware", lambda: _apple(128))
     monkeypatch.setattr(
         doctor_mod,

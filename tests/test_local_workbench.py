@@ -233,7 +233,8 @@ def test_q8_weights_are_not_recommended_as_q4_on_a_32gb_mac(monkeypatch):
         lambda: HardwareProfile(platform="darwin", is_apple_silicon=True, unified_memory_gb=32),
     )
     report = workbench.fit("Qwen-30B-Q8_0")
-    assert report["estimate_gb"] == 31.5
+    assert report["weights_gb"] == 31.5
+    assert report["estimate_gb"] > 31.5
     assert not report["likely_fits"]
 
 

@@ -18,6 +18,7 @@ def setup(desktop, monkeypatch):
         running=False,
         install={"automatic": True, "docs_url": "https://ollama.com/download"},
     )
+    monkeypatch.setattr("superqode.local.context_contract.save_contract", lambda *args: None)
     models = []
     monkeypatch.setattr(
         "superqode.local.hardware.detect_hardware",
@@ -196,3 +197,50 @@ def test_running_server_needs_no_cli_installation(setup):
     status.update(installed=False, running=True)
     models.append(choices[0]["model"])
     assert service.dispatch("local.models.quickstart.prepare", params)["step"] == "verify"
+
+
+def test_lmstudio_guided_install_download_load_verify_chain(setup, monkeypatch):
+    service, params, status, models, _ = setup
+    status.update(id="lmstudio", name="LM Studio", cli_available=False)
+    loaded = []
+    monkeypatch.setattr(
+        local_models,
+        "available",
+        lambda engine: {"models": list(models), "loaded_models": list(loaded)},
+    )
+    monkeypatch.setattr("shutil.which", lambda name: "/fixture/lms")
+    choices = local_quickstart.catalog(service, params["project"])["choices"]
+    row = next(r for r in choices if r["model"] == "qwen/qwen3.5-4b")
+    params = {**params, "choice": row["id"]}
+    advance(service, params, "install")
+    status.update(installed=True, cli_available=True)
+    review = local_quickstart.prepare(service, params)
+    assert review["plan"]["model"] == ""  # Start before downloading, no accidental load.
+    advance(service, params, "serve")
+    status["running"] = True
+    advance(service, params, "download")
+    models.append(row["model"])
+    advance(service, params, "load")
+    loaded.append(row["model"])
+    advance(
+        service,
+        params,
+        "verify",
+        {"verification": {"status": "passed", "readiness": {"status": "ready"}}},
+    )
+    assert local_quickstart.prepare(service, params)["step"] == "ready"
+
+
+def test_lmstudio_catalog_alias_resolves_exact_downloaded_artifact(setup, monkeypatch):
+    service, params, status, models, _ = setup
+    status.update(id="lmstudio", name="LM Studio", installed=True, running=True)
+    key = "lmstudio-community/Qwen3.5-4B-GGUF/Qwen3.5-4B-Q4_K_M.gguf"
+    models.append(key)
+    monkeypatch.setattr(
+        local_models, "available", lambda engine: {"models": list(models), "loaded_models": []}
+    )
+    rows = local_quickstart.catalog(service, params["project"])["choices"]
+    row = next(r for r in rows if r["model"] == "qwen/qwen3.5-4b")
+    review = local_quickstart.prepare(service, {**params, "choice": row["id"]})
+    assert review["step"] == "load"
+    assert review["plan"]["model"] == key

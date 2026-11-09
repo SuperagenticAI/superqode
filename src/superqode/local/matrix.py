@@ -105,6 +105,7 @@ _TIER_RANK = {
     "nvidia_16": 1,
     "apple_32": 2,
     "nvidia_24": 2,
+    "apple_48": 3,
     "apple_64": 3,
     "nvidia_48": 3,
     "apple_128": 4,
@@ -153,19 +154,10 @@ def estimate_model_memory_gb(label: str, *, quantized_default: bool = True) -> O
 
 
 def memory_fit_phrase(est_gb: Optional[float], ram_gb: Optional[float]) -> str:
-    """A short, honest fit verdict comparing an estimate to available RAM."""
-    if est_gb is None:
-        return "size unknown"
-    size = f"~{est_gb:g} GB"
-    if not ram_gb:
-        return size
-    if est_gb <= 0.6 * ram_gb:
-        return f"{size} · likely fits"
-    if est_gb <= 0.85 * ram_gb:
-        return f"{size} · should fit"
-    if est_gb <= ram_gb:
-        return f"{size} · tight, may not fit with context"
-    return f"{size} · likely too large for {ram_gb:g} GB"
+    """Include a default context, buffers and headroom in the fit verdict."""
+    from .context_contract import memory_fit
+
+    return memory_fit("", ram_gb, weights_gb=est_gb)["verdict"]
 
 
 def _engine_from_pull(pull: str) -> str:
@@ -354,6 +346,18 @@ def search_models(
             if pull:
                 g["commands"].setdefault(_engine_from_pull(pull), pull)
 
+    from .context_contract import memory_fit
+
+    tier_memory = {
+        "apple_16": 16,
+        "apple_32": 32,
+        "apple_48": 48,
+        "apple_64": 64,
+        "apple_128": 96,
+        "nvidia_16": 16,
+        "nvidia_24": 24,
+        "nvidia_48": 48,
+    }
     results: List[ModelSearchHit] = []
     for name, g in grouped.items():
         downloaded = _find_downloaded(list(g["match"]), inventory)
@@ -366,7 +370,11 @@ def search_models(
                 tiers=sorted(g["tiers"], key=lambda t: _TIER_RANK.get(t, 99)),
                 commands=sorted(g["commands"].items()),
                 downloaded_as=(downloaded.bare_id if downloaded else None),
-                fits=(g["min_rank"] <= user_rank) if tier else True,
+                fits=memory_fit(name, tier_memory.get(tier), apple=str(tier).startswith("apple"))[
+                    "likely_fits"
+                ]
+                if tier in tier_memory
+                else ((g["min_rank"] <= user_rank) if tier else False),
                 est_memory_gb=estimate_model_memory_gb(name, quantized_default=True),
             )
         )
@@ -418,7 +426,7 @@ def recommend(
     if profile.neural_accelerators:
         notes.insert(
             0,
-            "M5 Neural Accelerators active (macOS 26.2+): the MLX path gets ~4x faster prompt processing.",
+            "M5 Neural Accelerators are available to compatible Advanced runtimes on macOS 26.2+. Performance depends on the model and runtime.",
         )
 
     return StackRecommendation(

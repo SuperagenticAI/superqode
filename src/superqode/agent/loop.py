@@ -69,7 +69,7 @@ def _cached_system_prompt(
     """Cached system prompt builder.
 
     At MINIMAL (the default) we substitute a provider/model-tuned prompt
-    when one exists — e.g. DeepSeek V4 Flash gets a terse DS4-specific
+    when one exists  -  e.g. DeepSeek V4 Flash gets a terse DS4-specific
     prompt instead of the generic one-liner. Higher levels keep the user's
     explicit choice intact.
     """
@@ -342,7 +342,7 @@ def _is_simple_conversational_query(message: str) -> bool:
         return True
 
     # Short social openers: "Hello!", "Hi there", "Hey, how are you?"
-    # Keep this tight — "hello please refactor the auth module" is a task.
+    # Keep this tight  -  "hello please refactor the auth module" is a task.
     words = message_lower.split()
     if words:
         opener = words[0].rstrip(",!;:")
@@ -361,7 +361,7 @@ def _is_simple_conversational_query(message: str) -> bool:
                 if all(w.rstrip(",!;:") in ("hi", "hello", "hey", "there") for w in words):
                     return True
 
-    # Session/model identity — answer from system context, never need tools.
+    # Session/model identity  -  answer from system context, never need tools.
     # (Substring "code" must not match "coding model".)
     identity_patterns = [
         r"^(what|which) (coding |ai |llm )?(model|version)\b.*$",
@@ -507,7 +507,7 @@ def _should_send_tools(provider: str, model: str, user_message: str, tool_defs: 
         return False
 
     # For DS4, the decision is session-level (see _ds4_should_send_tools).
-    # Do not inspect the user message — flipping tools mid-session
+    # Do not inspect the user message  -  flipping tools mid-session
     # invalidates DS4's rendered-prefix KV cache.
     if provider == "ds4":
         return _ds4_should_send_tools()
@@ -686,7 +686,7 @@ def repair_dangling_tool_calls(messages: List["AgentMessage"]) -> List["AgentMes
     """Ensure every assistant tool_call is followed by a tool result.
 
     A *dangling* tool_call is one an assistant requested that never got a result
-    — caused by an interrupted/cancelled run, an approval pause, a malformed or
+     -  caused by an interrupted/cancelled run, an approval pause, a malformed or
     truncated tool call (common with small local models), or a resumed session
     that ended mid-call. Providers reject such a history ("tool_calls must be
     followed by tool results"), so we synthesize a short result for each
@@ -695,7 +695,7 @@ def repair_dangling_tool_calls(messages: List["AgentMessage"]) -> List["AgentMes
 
     Matching prefers ``tool_call_id`` but falls back to positional order, since
     resumed tool messages may not carry ids. Returns a new list; the input is
-    not mutated. Idempotent — re-running it adds nothing new.
+    not mutated. Idempotent  -  re-running it adds nothing new.
     """
     if not messages:
         return messages
@@ -1211,7 +1211,7 @@ class AgentLoop:
         Runs ``pre_init`` once per spec, then returns the profile's
         ``init_kwargs`` merged with ``init_kwargs_factory()`` output.
         Caller-supplied kwargs at the gateway call site still override
-        these — caller wins by passing them as explicit arguments.
+        these  -  caller wins by passing them as explicit arguments.
         """
         run_pre_init_once(self.config.provider, self.config.model)
         profile = resolve_model_profile(self.config.provider, self.config.model)
@@ -1778,7 +1778,7 @@ class AgentLoop:
         ``tool_call_id`` is threaded through so any tool calls nested
         inside this one (e.g. tools invoked by a sub-agent spawned via
         SubAgentTool) inherit it as ``parentToolCallId`` in their ACP
-        ``_meta`` payload. Optional for backwards compatibility — if a
+        ``_meta`` payload. Optional for backwards compatibility  -  if a
         caller doesn't supply it, no parent linkage is recorded.
 
         Hook coverage: ``before_tool_call`` fires once before any work
@@ -2048,11 +2048,15 @@ class AgentLoop:
 
         For local providers this probes the live server for the *loaded* window
         (Ollama num_ctx, llama.cpp n_ctx, vLLM max_model_len, etc.). An explicit
-        ``config.context_window`` always wins. Safe + best-effort.
+        ``config.context_window`` may lower the local contract, not enlarge it. Safe + best-effort.
         """
         if getattr(self, "_cached_context_window", 0):
             return self._cached_context_window
-        if self.config.context_window and self.config.context_window > 0:
+        if (
+            self.config.context_window
+            and self.config.context_window > 0
+            and not self._provider_is_local()
+        ):
             self._cached_context_window = int(self.config.context_window)
             self._context_window_source = "configured"
             return self._cached_context_window
@@ -2065,14 +2069,25 @@ class AgentLoop:
                 probed = await resolve_local_context_window(self.config.provider, self.config.model)
                 if probed:
                     window, endpoint = probed
+                    from superqode.local.context_contract import effective_context
+
+                    window = effective_context(self.config.provider, self.config.model, window)
+                    if self.config.context_window and self.config.context_window > 0:
+                        window = min(window, int(self.config.context_window))
                     self._cached_context_window = window
                     self._context_window_source = f"loaded ({endpoint})"
                     return window
             except Exception:
                 pass
             # Unknown local window: stay conservative rather than risk overflow.
-            self._cached_context_window = max(self.config.max_context_tokens, 8192)
-            self._context_window_source = "local-fallback"
+            from superqode.local.context_contract import requested_context
+
+            self._cached_context_window = requested_context(self.config.provider, self.config.model)
+            if self.config.context_window and self.config.context_window > 0:
+                self._cached_context_window = min(
+                    self._cached_context_window, int(self.config.context_window)
+                )
+            self._context_window_source = "local-contract"
             return self._cached_context_window
         # Cloud/BYOK: the static catalog window is reliable.
         self._cached_context_window = self._effective_context_window()
@@ -2084,12 +2099,18 @@ class AgentLoop:
         cached = getattr(self, "_cached_context_window", 0)
         if cached:
             return cached
+        # Local configuration may lower, but never enlarge, the contract.
+        if self._provider_is_local():
+            from superqode.local.context_contract import requested_context
+
+            window = requested_context(self.config.provider, self.config.model)
+            return (
+                min(window, int(self.config.context_window))
+                if self.config.context_window and self.config.context_window > 0
+                else window
+            )
         if self.config.context_window and self.config.context_window > 0:
             return int(self.config.context_window)
-        # Local windows can't be trusted from the static catalog (model-card max);
-        # stay conservative until the async probe fills the cache.
-        if self._provider_is_local():
-            return max(self.config.max_context_tokens, 8192)
         try:
             from superqode.providers.models import get_model_info
 
@@ -3058,7 +3079,7 @@ class AgentLoop:
                 response_content, response.tool_calls
             )
 
-            # Fast-chat turns must never run tools — even if the model invents
+            # Fast-chat turns must never run tools  -  even if the model invents
             # tool calls (common with strong coding models + explore-the-repo
             # system prompts). "Hello" on Grok subscription used to scan the
             # tree for minutes this way. Only gate on fast_chat: plan mode has
@@ -3694,7 +3715,7 @@ class AgentLoop:
             tool_calls = extracted_calls or []
 
             # Never execute tools on fast-chat turns (subscription "Hello" must
-            # not kick off a multi-minute repo scan). fast_chat only — plan and
+            # not kick off a multi-minute repo scan). fast_chat only  -  plan and
             # prompt-tool modes handle their own tool-call flow.
             if tool_calls and fast_chat:
                 if self.on_thinking:

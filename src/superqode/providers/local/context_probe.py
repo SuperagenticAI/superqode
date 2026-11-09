@@ -10,8 +10,8 @@ into adaptive compaction.
 Each backend reports the loaded window on a different endpoint:
   - Ollama      GET /api/ps             -> models[].context_length
   - llama.cpp   GET /props              -> default_generation_settings.n_ctx
-  - LM Studio   GET /api/v1/models      -> data[].loaded_context_length
-  - vLLM/DS4/…  GET /v1/models          -> data[].max_model_len | context_length
+  - LM Studio   GET /api/v1/models      -> models[].loaded_instances[].config.context_length
+  - vLLM/DS4  GET /v1/models          -> data[].max_model_len | context_length
 
 This module is dependency-light (urllib in a thread) and best-effort: any
 failure returns None so the caller can fall back conservatively.
@@ -93,7 +93,7 @@ def _model_matches(entry_id: str, model_id: Optional[str]) -> bool:
     if not model_id:
         return True
     a, b = str(entry_id or "").lower(), str(model_id).lower()
-    return a == b or a in b or b in a
+    return bool(a and b) and (a == b or a in b or b in a)
 
 
 def _parse_ollama_ps(data: dict, model_id: Optional[str]) -> Optional[int]:
@@ -112,26 +112,35 @@ def _parse_llamacpp_props(data: dict, _model_id: Optional[str]) -> Optional[int]
 
 def _parse_models_list(data: dict, model_id: Optional[str]) -> Optional[int]:
     """OpenAI-style /v1/models or LM Studio /api/v1/models entries."""
-    entries = data.get("data", data if isinstance(data, list) else [])
-    if isinstance(entries, dict):
-        entries = entries.get("data", [])
-    best = None
-    for entry in entries or []:
+    if not isinstance(data, dict):
+        return None
+    native = "models" in data
+    entries = data.get("models", data.get("data", []))
+    windows = []
+    for entry in entries if isinstance(entries, list) else []:
         if not isinstance(entry, dict):
             continue
-        win = _sane(
-            entry.get("loaded_context_length")
-            or entry.get("max_context_length")
-            or entry.get("max_model_len")
-            or entry.get("context_length")
-            or entry.get("context_window")
-            or ((entry.get("top_provider") or {}).get("context_length"))
-        )
-        if win and _model_matches(entry.get("id", ""), model_id):
-            return win
-        if win and best is None:
-            best = win
-    return best
+        instances = entry.get("loaded_instances") or []
+        matches = _model_matches(entry.get("key") or entry.get("id", ""), model_id)
+        for instance in instances:
+            if not isinstance(instance, dict):
+                continue
+            if matches or _model_matches(instance.get("id", ""), model_id):
+                win = _sane((instance.get("config") or {}).get("context_length"))
+                if win:
+                    windows.append(win)
+        # Native model-card maxima are not loaded windows. Never borrow an
+        # unrelated model's context, including on older OpenAI-style servers.
+        if not native and matches:
+            win = _sane(
+                entry.get("loaded_context_length")
+                or entry.get("max_model_len")
+                or entry.get("context_length")
+                or entry.get("context_window")
+            )
+            if win:
+                windows.append(win)
+    return min(windows) if windows else None
 
 
 # Endpoint -> parser, ordered so loaded-window sources win over model maxima.

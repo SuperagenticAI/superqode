@@ -682,9 +682,11 @@ class ServerManager:
 
         if engine == "ollama":
             env = {"OLLAMA_HOST": f"{host}:{port}"}
-            # Ollama's current guidance recommends at least 64K for coding,
-            # web-search, and agent tool workloads.
-            env["OLLAMA_CONTEXT_LENGTH"] = str(ctx or 64000)
+            # Conservative bootstrap. Each model request supplies its chosen
+            # hardware-aware context instead of a model-family maximum.
+            env["OLLAMA_CONTEXT_LENGTH"] = str(ctx or 8192)
+            env["OLLAMA_KV_CACHE_TYPE"] = "q8_0"
+            env["OLLAMA_FLASH_ATTENTION"] = "1"
             return (
                 [runtime_executable("ollama"), "serve", *extra_args],
                 {**env, **cache_env},
@@ -830,6 +832,15 @@ class ServerManager:
                     "(stop it first to relaunch with a new context window)"
                 )
             if (
+                engine == "lmstudio"
+                and existing
+                and not existing.adopted
+                and existing.host == host
+                and existing.port == port
+            ):
+                existing.notes = [*existing.notes, *adopt_notes]
+                return existing
+            if (
                 existing
                 and existing.pid
                 and not existing.adopted
@@ -888,6 +899,7 @@ class ServerManager:
                 wait=wait,
                 timeout=timeout,
             )
+            handle.owner_job = owner_job
             self._save(handle)
             return handle
 
@@ -1093,16 +1105,20 @@ class ServerManager:
     def stop(self, engine: str) -> bool:
         """Stop a managed server. Returns True if anything was stopped."""
         if engine == "lmstudio":
-            if shutil.which(runtime_executable("lms")):
-                try:
-                    subprocess.run(  # noqa: S603
-                        [runtime_executable("lms"), "server", "stop"],
-                        capture_output=True,
-                        timeout=15,
-                        check=False,
-                    )
-                except (OSError, subprocess.SubprocessError):
-                    pass
+            handle = self._load(engine)
+            if not handle or handle.adopted or not shutil.which(runtime_executable("lms")):
+                return False
+            try:
+                result = subprocess.run(
+                    [runtime_executable("lms"), "server", "stop"],
+                    capture_output=True,
+                    timeout=30,
+                    check=False,
+                )
+            except (OSError, subprocess.SubprocessError):
+                return False
+            if result.returncode:
+                return False
             self._forget(engine)
             return True
 

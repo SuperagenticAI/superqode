@@ -37,7 +37,7 @@ def test_search_fit_depends_on_tier():
     big_hits = {
         h.name: h.fits for h in search_models("qwen3-coder", tier="apple_128", inventory=[])
     }
-    big_model = "Qwen3-Coder 30B-A3B"
+    big_model = "Qwen3-Coder-Next 80B Q4_K_M"
     assert cpu_hits.get(big_model) is False
     assert big_hits.get(big_model) is True
 
@@ -113,10 +113,10 @@ def test_gguf_separators_preserve_weight_precision(label, expected):
 def test_memory_fit_phrase_verdicts():
     from superqode.local.matrix import memory_fit_phrase as fit
 
-    assert "likely fits" in fit(5.0, 16)
-    assert "too large" in fit(30.0, 16)
-    assert fit(None, 16) == "size unknown"
-    assert fit(5.0, None) == "~5 GB"  # no RAM known -> size only
+    assert "Fits" in fit(5.0, 16)
+    assert "Too large" in fit(30.0, 16)
+    assert fit(None, 16) == "Unknown size or memory budget"
+    assert fit(5.0, None) == "Unknown size or memory budget"
 
 
 def test_search_hit_carries_estimate_in_json():
@@ -145,9 +145,9 @@ def test_augment_adds_mlx_and_gguf_commands_per_model():
         _FakeHubModel("unsloth/Qwen3-Coder-30B-A3B-Instruct-GGUF", 90, gguf=True),
     ]
     augment_commands_with_hub(hits, hub)
-    hit = next(h for h in hits if h.name == "Qwen3-Coder 30B-A3B")
+    hit = next(h for h in hits if h.name == "Qwen3-Coder 30B-A3B (FP8)")
     engines = {e for e, _ in hit.commands}
-    assert "ollama" in engines  # native, from the catalog
+    assert "mlx / hf" in engines  # Native command from this Advanced catalog entry.
     assert "MLX" in engines  # hf download ...
     assert "llama.cpp" in engines  # llama-server -hf ...
     assert "LM Studio" in engines  # lms get ...

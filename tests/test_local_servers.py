@@ -49,7 +49,9 @@ def test_build_command_ollama_sets_host_and_ctx_env(manager: ServerManager):
 
 def test_build_command_ollama_defaults_to_vendor_coding_context(manager: ServerManager):
     _cmd, env, _cwd = manager.build_command("ollama", host="127.0.0.1", port=11434)
-    assert env["OLLAMA_CONTEXT_LENGTH"] == "64000"
+    assert env["OLLAMA_CONTEXT_LENGTH"] == "8192"
+    assert env["OLLAMA_KV_CACHE_TYPE"] == "q8_0"
+    assert env["OLLAMA_FLASH_ATTENTION"] == "1"
 
 
 def test_build_command_lmstudio_uses_lms_server_start(manager: ServerManager):
@@ -432,9 +434,16 @@ def test_stop_adopted_does_not_kill(manager, monkeypatch):
 
 
 def test_stop_lmstudio_calls_lms_stop(manager, monkeypatch):
+    from types import SimpleNamespace
+
+    manager._save(ServerHandle(engine="lmstudio", host="127.0.0.1", port=1234, base_url="x"))
     monkeypatch.setattr(servers.shutil, "which", lambda name: "/usr/bin/lms")
     calls = []
-    monkeypatch.setattr(servers.subprocess, "run", lambda *a, **k: calls.append(a[0]))
+    monkeypatch.setattr(
+        servers.subprocess,
+        "run",
+        lambda *a, **k: calls.append(a[0]) or SimpleNamespace(returncode=0),
+    )
     assert manager.stop("lmstudio") is True
     assert calls and calls[0] == ["lms", "server", "stop"]
 

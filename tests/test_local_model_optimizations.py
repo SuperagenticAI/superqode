@@ -7,8 +7,8 @@ model behavior and our cloud-provider experience:
 2. Request shaping (num_ctx, keep_alive, tool-temp clamp).
 3. In-band tool-call extraction for models that emit tool calls as text.
 
-The tests exercise the gateway helpers directly — no live local server
-needed — so they run portably in CI.
+The tests exercise the gateway helpers directly  -  no live local server
+needed  -  so they run portably in CI.
 """
 
 from __future__ import annotations
@@ -37,7 +37,7 @@ def test_local_prompt_used_for_ollama_generic():
 
 
 def test_qwen_prompt_used_for_ollama_qwen():
-    """Qwen on Ollama should get the tag-aware variant — the model is
+    """Qwen on Ollama should get the tag-aware variant  -  the model is
     sensitive to the explicit <tool_call> wording in its instruct tuning."""
     assert get_provider_prompt("ollama", "qwen2.5-coder:7b") == QWEN_PROMPT
 
@@ -73,7 +73,7 @@ def test_laguna_prompt_follows_model_across_local_engines(provider):
     ],
 )
 def test_all_local_providers_get_a_local_prompt(provider):
-    """Every local provider routes through the local-prompt path —
+    """Every local provider routes through the local-prompt path  -
     regressions where a provider falls through to "" silently make the
     model lose its tool-use instructions."""
     out = get_provider_prompt(provider, "any-model")
@@ -81,42 +81,37 @@ def test_all_local_providers_get_a_local_prompt(provider):
 
 
 def test_cloud_provider_still_returns_empty():
-    """Cloud providers must not get the local prompt — they rely on
+    """Cloud providers must not get the local prompt  -  they rely on
     their own provider-tuned prompt or the user's chosen SystemPromptLevel."""
     assert get_provider_prompt("anthropic", "claude-sonnet-4") == ""
     assert get_provider_prompt("openai", "gpt-5") == ""
 
 
 # ---------------------------------------------------------------------------
-# Request shaping — num_ctx, keep_alive, temperature clamp
+# Request shaping  -  num_ctx, keep_alive, temperature clamp
 # ---------------------------------------------------------------------------
 
 
-def test_ollama_num_ctx_picks_family_hint():
-    """Family-matched models should get their tuned context, not the 8192 floor."""
+def test_ollama_num_ctx_uses_chosen_contract_for_every_family(monkeypatch):
+    monkeypatch.setattr("superqode.local.context_contract.requested_context", lambda *args: 6144)
     gw = LiteLLMGateway()
-    assert gw._ollama_num_ctx_for("qwen2.5-coder:7b") == 32768
-    assert gw._ollama_num_ctx_for("llama3.2:3b") == 32768
-    assert gw._ollama_num_ctx_for("gemma:7b") == 8192
+    for model in ("qwen2.5-coder:7b", "llama3.2:3b", "gemma:7b"):
+        assert gw._ollama_num_ctx_for(model) == 6144
 
 
-def test_ollama_num_ctx_longest_prefix_wins():
-    """``qwen2.5-coder`` must beat the shorter ``qwen`` key — otherwise
-    coder-tuned models inherit the wrong context window."""
-    gw = LiteLLMGateway()
-    # Both keys would match this name; only the longest-key value is correct.
-    assert gw._ollama_num_ctx_for("qwen2.5-coder-instruct") == 32768
-
-
-def test_ollama_num_ctx_env_override_wins(monkeypatch):
+def test_ollama_family_and_legacy_env_cannot_raise_contract(monkeypatch):
     monkeypatch.setenv("SUPERQODE_OLLAMA_NUM_CTX", "65536")
+    monkeypatch.setattr("superqode.local.context_contract.requested_context", lambda *args: 4096)
     gw = LiteLLMGateway()
-    assert gw._ollama_num_ctx_for("qwen2.5") == 65536
+    assert gw._ollama_num_ctx_for("qwen2.5-coder-instruct") == 4096
 
 
-def test_ollama_num_ctx_unknown_model_falls_back_to_safe_default():
+def test_ollama_unknown_model_uses_hardware_contract():
+    from superqode.local.context_contract import requested_context
+
     gw = LiteLLMGateway()
-    assert gw._ollama_num_ctx_for("some-exotic-model:latest") == 8192
+    model = "some-exotic-model:latest"
+    assert gw._ollama_num_ctx_for(model) == requested_context("ollama", model)
 
 
 def test_shaping_keeps_server_residency_policy_and_sets_num_ctx(monkeypatch):
@@ -125,7 +120,7 @@ def test_shaping_keeps_server_residency_policy_and_sets_num_ctx(monkeypatch):
     kwargs: dict = {}
     gw._apply_local_request_shaping("ollama", "qwen2.5-coder:7b", kwargs, has_tools=True)
     assert "keep_alive" not in kwargs
-    assert kwargs["num_ctx"] == 32768
+    assert kwargs["num_ctx"] == gw._ollama_num_ctx_for("qwen2.5-coder:7b")
 
 
 def test_shaping_clamps_temperature_when_tools_present():
@@ -161,7 +156,7 @@ def test_shaping_respects_disable_env(monkeypatch):
 
 
 def test_shaping_preserves_existing_options():
-    """Caller-supplied Ollama options must not be obliterated — we only
+    """Caller-supplied Ollama options must not be obliterated  -  we only
     fill in defaults, never overwrite."""
     gw = LiteLLMGateway()
     kwargs: dict = {"options": {"num_ctx": 65536, "num_gpu": 1}}
@@ -293,7 +288,7 @@ def test_extract_returns_none_on_plain_text():
 
 def test_extract_returns_none_on_malformed_json():
     """A <tool_call> tag with non-JSON body should not crash and must
-    not produce a tool call — better to skip than to fabricate args."""
+    not produce a tool call  -  better to skip than to fabricate args."""
     gw = LiteLLMGateway()
     content = "<tool_call>not valid json</tool_call>"
     _, calls = gw._extract_inline_tool_calls(content)
@@ -301,7 +296,7 @@ def test_extract_returns_none_on_malformed_json():
 
 
 def test_extract_skips_objects_without_name():
-    """A JSON blob missing the ``name`` field isn't a tool call —
+    """A JSON blob missing the ``name`` field isn't a tool call  -
     ignore it instead of emitting a call with empty name."""
     gw = LiteLLMGateway()
     content = '<tool_call>{"arguments": {"x": 1}}</tool_call>'
@@ -318,7 +313,7 @@ def test_extract_handles_empty_content():
 
 def test_extract_function_name_field_variant():
     """Real-world: qwen3:8b emits ``function_name`` instead of ``name``.
-    Caught by the live smoke probe — keep the regression here."""
+    Caught by the live smoke probe  -  keep the regression here."""
     gw = LiteLLMGateway()
     content = '{"function_name": "read_file", "arguments": {"path": "pyproject.toml"}}'
     _, calls = gw._extract_inline_tool_calls(content)
@@ -327,7 +322,7 @@ def test_extract_function_name_field_variant():
 
 
 # ---------------------------------------------------------------------------
-# LiteLLM model routing — Ollama tool support requires ollama_chat/
+# LiteLLM model routing  -  Ollama tool support requires ollama_chat/
 # ---------------------------------------------------------------------------
 
 
@@ -355,7 +350,7 @@ def test_ollama_chat_prefix_passes_through():
 
 
 # ---------------------------------------------------------------------------
-# MLX path — mocked, no live server required
+# MLX path  -  mocked, no live server required
 # ---------------------------------------------------------------------------
 
 
@@ -366,7 +361,7 @@ async def test_mlx_chat_clamps_temperature_and_extracts_inline_tool_calls(monkey
     content is rescued into proper ``tool_calls`` so the agent loop
     can act on it.
 
-    Mocked at the MLXClient boundary so this is fast and portable —
+    Mocked at the MLXClient boundary so this is fast and portable  -
     we don't need a live 8081 server to verify the gateway behavior."""
     import superqode.providers.local.mlx as mlx_mod
     from superqode.providers.gateway.base import Message, ToolDefinition
@@ -523,7 +518,7 @@ async def test_mlx_stream_extracts_inline_tool_calls(monkeypatch):
 
 def test_extract_arguments_string_form_preserved():
     """If a model emits ``arguments`` as a JSON string (not an object),
-    we should still surface it through — agent loops json.loads() it
+    we should still surface it through  -  agent loops json.loads() it
     back so a string is fine."""
     gw = LiteLLMGateway()
     content = '<tool_call>{"name": "read_file", "arguments": "{\\"path\\": \\"x\\"}"}</tool_call>'

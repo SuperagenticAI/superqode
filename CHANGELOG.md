@@ -7,12 +7,22 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [2.31.6] - 2026-11-09
+
 ### Added
+
+- macOS 0.3.8 (build 24): a newcomer Local AI screen from Local model and Models, with Ollama and LM Studio detection, reviewed runtime installation, server controls and model downloads with progress. Other runtimes remain under Advanced.
+- Your Mac panel, approximate Fits/Tight/Too large working-set guidance, refreshed starter suggestions and an amber responsible-use notice with a Learn more sheet.
+- A shared local context, output and KV cache contract with conservative hardware limits, LM Studio v1 loaded-context parsing, tool-schema-aware request estimates and complete-old-turn trimming before send. Oversized current prompts get actionable errors.
 
 - macOS: new threads offer connection tiles for an existing agent, a SuperQode harness, a local model, an API key, ACP, protocols, a custom harness and SystemOne. All connections remains one click away.
 - macOS: Send to Thread previews editable, bounded conversation context for another thread or a new thread. Choose the whole conversation or a starting turn and optionally include safe changed-file names. Existing draft text and the destination agent session are preserved. Nothing is sent automatically. Open it from thread actions or with Command-Shift-T.
 
 ### Fixed
+
+- Model-family defaults no longer silently raise the selected Ollama context. App-started Ollama uses quantized KV cache and Flash Attention; adopted servers keep their settings.
+- Reviewed LM Studio Stop uses its CLI instead of requiring an owned PID. Unload frees model memory without deleting downloaded files.
+- macOS bundling refreshes engine distribution metadata from the packaged source version so an older base runtime cannot advertise a stale engine version.
 
 - macOS: getting-started and connection-health links open All connections instead of jumping straight to subscriptions.
 
@@ -1947,7 +1957,7 @@ local Gemma improvements.
 
 ## [2.4.10] - 2026-09-21
 
-### Jev Tool Routing — Developer Preview
+### Jev Tool Routing  -  Developer Preview
 
 - Route tool catalogues once per turn through Jev in the native SuperQode loop
   or a local OpenAI, Anthropic, or native Gemini gateway, with shadow mode, a

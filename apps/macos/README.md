@@ -55,27 +55,34 @@ not launch agents or install a plugin. Monty is not bundled in this macOS releas
 
 ## Start with a local model
 
-Open a project, choose **Local AI**, then **Local Quick Start**. The guide puts
-models already available on all five supported local servers first and offers
-Fast, Balanced and Capable Qwen starting presets plus a Gemma alternative when
-the detected memory permits. These are starting presets, not measured rankings.
-Review each step
-to install a missing runtime, start the server, download weights and run a
-tool-call/context probes and a bounded Core read-tool check on generated data.
-The result shows the reported loaded context and warnings, including unknown
-context. Existing server settings are preserved. **Start coding** selects Core and
-the checked local model without sending a prompt.
+Choose **Local model** from the connection grid, or open **Local AI**. The
+newcomer screen focuses on Ollama and LM Studio. It shows your Mac's chip,
+memory and macOS, detects installed engines and presents model suggestions
+with approximate working-set ratings. Fits includes weights, context/KV cache,
+buffers and headroom against an estimated Metal budget, not just file size.
 
-Progress is saved per project. Reopen the guide to observe an existing operation;
-failed or interrupted work requires an explicit retry, which reuses cached
-downloads. Closing the guide does not cancel its job. Engine shutdown can
-interrupt it. A runtime without an automatic install recipe links to its official
-installer; return and choose **Check again** afterward.
+If neither engine is installed, review and explicitly approve LM Studio's
+official headless installer, or use **Get Ollama** and re-detect after installing.
+Homebrew remains an option when present. Nothing installs or downloads just
+because you open the screen. Review each start, download and load step. Model
+download progress is shown in-app. LM Studio owns its transfers, so cancelling
+the observer does not cancel its download manager.
 
-These are starting choices, not measured quality guarantees. Download size can
-be unknown until transfer begins. The primary endpoint stays local; other tools
-and project configuration may use the network. The existing model library,
-storage controls and runtime configuration remain available for advanced setup.
+Open a project to finish the context/tool readiness check on generated data.
+Requested context and reported loaded context are distinct. One contract limits
+context, output and KV cache; long requests include tool schemas in estimates,
+trim complete older turns when possible and otherwise ask you to shorten the
+prompt or start a new thread. These are conservative estimates, not exact
+model tokenization. **Start coding** chooses Core and the checked model without
+sending a coding prompt.
+
+**Unload** frees model memory without deleting downloaded weights. **Stop**
+stops an app-started server; LM Studio may retain loaded models in its daemon,
+so unload them too. Existing servers are adopted without changing their settings.
+The amber notice and **Learn more** cover memory, heat, battery and responsible
+use. Models run on this Mac, but tools and configured services may use the network.
+Other runtimes, the library, storage and compatibility controls stay under
+**Advanced**. See the 0.3.8 release smoke checklist in [BETA-NOTES.md](BETA-NOTES.md).
 
 Recommended search includes Hugging Face families. Select an exact GGUF or MLX
 conversion to review its immutable revision, files and download size. Original

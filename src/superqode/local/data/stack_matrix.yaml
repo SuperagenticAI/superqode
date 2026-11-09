@@ -13,141 +13,146 @@
 #   pack:          model policy pack the generated harness should reference
 #   notes:         shown verbatim by the doctor
 
-version: 2026-07-23
+version: 2026-11-09
 
 tiers:
   - id: apple_16
-    description: "Apple Silicon, up to ~24GB unified memory"
-    engines: [mlx-lm, ollama, lmstudio, llama.cpp]
+    description: "Apple Silicon, 16 to 24 GB unified memory"
+    engines: [lmstudio, ollama]
     models:
-      - name: "Gemma 4 E4B"
-        match: ["gemma-4-e4b", "gemma4:e4b"]
-        pull: "ollama pull gemma4:e4b"
+      - name: "Qwen3.5 4B"
+        match: ["qwen3.5:4b"]
+        pull: "ollama pull qwen3.5:4b"
         role: main
-        pack: gemma4
-        source: models.dev/labs/google
-      - name: "Qwen3.5 9B (4bit)"
-        match: ["qwen3.5-9b", "qwen3.5:9b"]
+        pack: qwen3
+        engines: [ollama]
+        source: "https://ollama.com/library/qwen3.5"
+      - name: "Qwen3.5 4B"
+        match: ["qwen/qwen3.5-4b"]
+        pull: "lms get qwen/qwen3.5-4b"
+        role: main
+        pack: qwen3
+        engines: [lmstudio]
+        source: "https://lmstudio.ai/models/qwen/qwen3.5-4b"
+      - name: "Qwen3.5 9B"
+        match: ["qwen3.5:9b"]
         pull: "ollama pull qwen3.5:9b"
         role: main
         pack: qwen3
-        source: models.dev/labs/alibaba
-      - name: "Qwen2.5-Coder 7B (FIM/utility)"
-        match: ["qwen2.5-coder-7b"]
-        pull: "ollama pull qwen2.5-coder:7b"
-        role: utility
-        pack: qwen-coder
-        source: models.dev/labs/alibaba
-    notes:
-      - "Ollama's MLX runtime needs more than 32GB; use mlx_lm.server or the standard Ollama runtime here."
-      - "Prefer 4bit quantizations and the prompt tool-calling mode for the smallest models."
-
-  - id: apple_32
-    description: "Apple Silicon, ~32-48GB unified memory"
-    engines: [ollama, mlx-lm, lmstudio, llama.cpp]
-    models:
-      - name: "GLM-4.5-Air (4bit)"
-        match: ["glm-4.5-air", "glm4.5-air", "glm-4-5-air"]
-        pull: "hf download THUDM/GLM-4.5-Air"
-        role: main
-        pack: glm
-        source: models.dev/labs/zhipuai
-      - name: "Qwen3.6 35B-A3B (4bit MoE)"
-        match: ["qwen3.6-35b", "qwen3.6:35b"]
-        pull: "ollama pull qwen3.6:35b-a3b"
+        engines: [ollama]
+        source: "https://ollama.com/library/qwen3.5"
+      - name: "Qwen3.5 9B"
+        match: ["qwen/qwen3.5-9b"]
+        pull: "lms get qwen/qwen3.5-9b"
         role: main
         pack: qwen3
-        source: models.dev/labs/alibaba
-      - name: "Gemma 4 12B (multimodal)"
-        match: ["gemma-4-12b", "gemma4:12b"]
-        pull: "ollama pull gemma4:12b"
-        role: main
-        pack: gemma4
-        source: models.dev/labs/google
-      - name: "Devstral 2 Small"
-        match: ["devstral-2", "devstral2"]
-        pull: "ollama pull devstral2:small"
+        engines: [lmstudio]
+        source: "https://lmstudio.ai/models/qwen/qwen3.5-9b"
+    notes:
+      - "Suggestions only. Fit includes context, buffers and headroom against an approximate Metal budget."
+      - "LM Studio uses its own official catalog IDs, not Ollama tags. Other runtimes remain in Advanced."
+
+  - id: apple_32
+    description: "Apple Silicon, 32 GB unified memory"
+    engines: [lmstudio, ollama]
+    models:
+      - name: "Devstral Small 2 24B"
+        match: ["devstral-small-2:24b"]
+        pull: "ollama pull devstral-small-2:24b"
         role: main
         pack: devstral
-        source: models.dev/labs/mistral
-    notes:
-      - "MoE A3B models are the unified-memory sweet spot: large-model quality at ~3B active decode cost."
-
-  - id: apple_64
-    description: "Apple Silicon, ~64GB unified memory"
-    engines: [ollama, mlx-lm, lmstudio]
-    models:
-      - name: "GLM-4.5-Air (8bit or MLX)"
-        match: ["glm-4.5-air", "glm4.5-air", "glm-4-5-air"]
-        pull: "hf download THUDM/GLM-4.5-Air"
-        role: main
-        pack: glm
-        source: models.dev/labs/zhipuai
-      - name: "Gemma 4 26B MoE"
-        match: ["gemma-4-26b", "gemma4:26b"]
-        pull: "ollama pull gemma4:26b"
-        role: main
-        pack: gemma4
-        source: models.dev/labs/google
-      - name: "Qwen3.6 27B dense"
-        match: ["qwen3.6-27b", "qwen3.6:27b"]
+        engines: [ollama]
+        source: "https://ollama.com/library/devstral-small-2"
+      - name: "Qwen3.6 27B"
+        match: ["qwen3.6:27b"]
         pull: "ollama pull qwen3.6:27b"
         role: main
         pack: qwen3
-        source: models.dev/labs/alibaba
-      - name: "Qwen3.6 35B-A3B (8bit)"
-        match: ["qwen3.6-35b"]
-        pull: "ollama pull qwen3.6:35b-a3b-q8"
+        engines: [ollama]
+        source: "https://ollama.com/library/qwen3.6"
+      - name: "Qwen3.6 27B"
+        match: ["qwen/qwen3.6-27b"]
+        pull: "lms get qwen/qwen3.6-27b"
         role: main
         pack: qwen3
-        source: models.dev/labs/alibaba
+        engines: [lmstudio]
+        source: "https://lmstudio.ai/models/qwen/qwen3.6-27b"
     notes:
-      - "DeepSeek V4 Flash heavily quantized (~33GB) becomes possible via the DS4 engine."
+      - "Suggestions only. Fit includes context, buffers and headroom against an approximate Metal budget."
+      - "LM Studio uses its own official catalog IDs, not Ollama tags. Other runtimes remain in Advanced."
+
+  - id: apple_48
+    description: "Apple Silicon, 48 GB unified memory"
+    engines: [lmstudio, ollama]
+    models:
+      - name: "Qwen3.6 35B-A3B"
+        match: ["qwen3.6:35b"]
+        pull: "ollama pull qwen3.6:35b"
+        role: main
+        pack: qwen3
+        engines: [ollama]
+        source: "https://ollama.com/library/qwen3.6"
+      - name: "Qwen3.6 35B-A3B"
+        match: ["qwen/qwen3.6-35b-a3b"]
+        pull: "lms get qwen/qwen3.6-35b-a3b"
+        role: main
+        pack: qwen3
+        engines: [lmstudio]
+        source: "https://lmstudio.ai/models/qwen/qwen3.6-35b-a3b"
+    notes:
+      - "Suggestions only. Fit includes context, buffers and headroom against an approximate Metal budget."
+      - "LM Studio uses its own official catalog IDs, not Ollama tags. Other runtimes remain in Advanced."
+
+  - id: apple_64
+    description: "Apple Silicon, 64 GB unified memory"
+    engines: [lmstudio, ollama]
+    models:
+      - name: "Qwen3.6 35B-A3B"
+        match: ["qwen3.6:35b"]
+        pull: "ollama pull qwen3.6:35b"
+        role: main
+        pack: qwen3
+        engines: [ollama]
+        source: "https://ollama.com/library/qwen3.6"
+      - name: "Qwen3.6 35B-A3B"
+        match: ["qwen/qwen3.6-35b-a3b"]
+        pull: "lms get qwen/qwen3.6-35b-a3b"
+        role: main
+        pack: qwen3
+        engines: [lmstudio]
+        source: "https://lmstudio.ai/models/qwen/qwen3.6-35b-a3b"
+    notes:
+      - "Suggestions only. Fit includes context, buffers and headroom against an approximate Metal budget."
+      - "LM Studio uses its own official catalog IDs, not Ollama tags. Other runtimes remain in Advanced."
 
   - id: apple_128
-    description: "Apple Silicon, 96GB+ unified memory"
-    engines: [ds4, llama.cpp, mlx-lm, ollama, lmstudio]
+    description: "Apple Silicon, 96 GB and up unified memory"
+    engines: [lmstudio, ollama]
     models:
-      - name: "Poolside Laguna S 2.1 118B-A8B (Q4_K_M)"
-        match: ["laguna-s-2.1", "laguna-s2.1"]
-        pull: "hf download poolside/Laguna-S-2.1-GGUF laguna-s-2.1-Q4_K_M.gguf"
-        role: main
-        pack: laguna
-        source: huggingface.co/poolside
-        engines: [ds4, llama.cpp]
-      - name: "GLM-4.5-Air (bf16 or 8bit)"
-        match: ["glm-4.5-air", "glm4.5-air", "glm-4-5-air"]
-        pull: "hf download THUDM/GLM-4.5-Air"
-        role: main
-        pack: glm
-        source: models.dev/labs/zhipuai
-      - name: "Gemma 4 31B (bf16 or 8bit)"
-        match: ["gemma-4-31b", "gemma4-31b", "gemma4:31b"]
-        pull: "ollama pull gemma4:31b"
-        role: main
-        pack: gemma4
-        source: models.dev/labs/google
-      - name: "Qwen3-Coder 30B-A3B"
-        match: ["qwen3-coder-30b", "qwen3-coder:30b"]
-        pull: "ollama pull qwen3-coder:30b-a3b"
+      - name: "Qwen3-Coder-Next 80B Q4_K_M"
+        match: ["qwen3-coder-next:q4_K_M"]
+        pull: "ollama pull qwen3-coder-next:q4_K_M"
         role: main
         pack: qwen-coder
-        source: models.dev/labs/alibaba
-      - name: "DeepSeek V4 Flash (quantized, via DS4)"
-        match: ["deepseek-v4-flash"]
-        pull: "superqode providers ds4 server"
+        engines: [ollama]
+        source: "https://ollama.com/library/qwen3-coder-next"
+      - name: "Qwen3.6 35B-A3B"
+        match: ["qwen3.6:35b"]
+        pull: "ollama pull qwen3.6:35b"
         role: main
-        pack: ds4
-        source: models.dev/labs/deepseek
-      - name: "Gemma 4 12B (vision/utility companion)"
-        match: ["gemma-4-12b", "gemma4:12b"]
-        pull: "ollama pull gemma4:12b"
-        role: utility
-        pack: gemma4
-        source: models.dev/labs/google
+        pack: qwen3
+        engines: [ollama]
+        source: "https://ollama.com/library/qwen3.6"
+      - name: "Qwen3.6 35B-A3B"
+        match: ["qwen/qwen3.6-35b-a3b"]
+        pull: "lms get qwen/qwen3.6-35b-a3b"
+        role: main
+        pack: qwen3
+        engines: [lmstudio]
+        source: "https://lmstudio.ai/models/qwen/qwen3.6-35b-a3b"
     notes:
-      - "Laguna's shared GGUF works with DwarfStar and llama.cpp; run only one of those servers at a time on 128GB."
-      - "For model families with a supported MLX conversion, M5 Neural Accelerators can materially improve prefill; Laguna currently uses its GGUF paths."
+      - "Suggestions only. Fit includes context, buffers and headroom against an approximate Metal budget."
+      - "LM Studio uses its own official catalog IDs, not Ollama tags. Other runtimes remain in Advanced."
 
   - id: nvidia_16
     description: "NVIDIA GPU, up to ~16GB VRAM"

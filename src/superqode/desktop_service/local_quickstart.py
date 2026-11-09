@@ -24,15 +24,34 @@ def _save(service, project, state):
 def catalog(service, project):
     from superqode.local.hardware import detect_hardware
 
-    service.project(project)
+    if project:
+        service.project(project)
     hardware = detect_hardware()
     engines = local_models.servers(service)
     choices = {}
+    from dataclasses import asdict
+    from superqode.local.context_contract import choose_contract, LM_STARTERS
+    from superqode.local.guardrails import build_guardrails
 
-    def add(engine, model, name, detail, installed, *, preset="running", context=None):
+    def add(
+        engine, model, name, detail, installed, *, preset="running", context=None, metadata=None
+    ):
+        if engine not in {e["id"] for e in engines} or engine not in {"ollama", "lmstudio"}:
+            return
         if any(word in model.lower() for word in ("embed", "rerank", "cloud")):
             return
         identity = hashlib.sha256((engine + "\n" + model).encode()).hexdigest()[:24]
+        if identity in choices and not installed:
+            return
+        weights = (metadata or {}).get("size_bytes")
+        contract = choose_contract(
+            model,
+            hardware,
+            provider=engine,
+            context=context,
+            weights_gb=weights / 1024**3 if weights else None,
+            metadata=metadata,
+        )
         choices[identity] = dict(
             id=identity,
             engine=engine,
@@ -41,69 +60,69 @@ def catalog(service, project):
             detail=detail,
             installed=installed,
             preset=preset,
-            suggested_context=context,
+            suggested_context=contract.context,
+            max_tokens=contract.max_tokens,
+            kv_cache=contract.kv_cache,
+            fit=contract.fit,
+            metadata=metadata,
         )
 
     for engine in engines:
         if engine["running"]:
             try:
-                for model in local_models.available(engine["id"])["models"]:
-                    add(engine["id"], model, model, "Already available · " + engine["name"], True)
+                available = local_models.available(engine["id"])
+                for model in available["models"]:
+                    metadata = next(
+                        (m for m in available.get("metadata", []) if m.get("key") == model), None
+                    )
+                    add(
+                        engine["id"],
+                        model,
+                        model,
+                        "Already available · " + engine["name"],
+                        True,
+                        metadata=metadata,
+                    )
             except (OSError, ValueError):
                 pass
-    # Keep the first setup small. These are starting choices, not quality claims.
     memory = hardware.available_memory_gb
     if memory and memory >= 8:
-        suggestions = [
-            (
-                "qwen3.5:2b",
-                "Fast · Qwen 2B",
-                "A small starting model for limited memory.",
-                "fast",
-                8192,
-            )
-        ]
-        if memory >= 16:
-            suggestions += [
-                (
-                    "qwen3.5:9b",
-                    "Balanced · Qwen 9B",
-                    "More memory and latency than Fast.",
-                    "balanced",
-                    16384,
-                ),
-                (
-                    "gemma4:e4b",
-                    "Gemma · alternative",
-                    "Google's open model family.",
-                    "alternative",
-                    16384,
-                ),
-            ]
+        suggestions = ["qwen3.5:4b", "qwen3.5:9b"]
+        if memory >= 24:
+            suggestions += ["devstral-small-2:24b"]
+        if memory >= 32:
+            suggestions += ["qwen3.6:27b"]
         if memory >= 48:
-            suggestions.append(
-                (
-                    "qwen3.5:27b",
-                    "Capable · Qwen 27B",
-                    "A larger starting model for high-memory machines.",
-                    "capable",
-                    32768,
-                )
+            suggestions += ["qwen3.6:35b"]
+        if memory >= 96:
+            suggestions += ["qwen3-coder-next:q4_K_M"]
+        for model in reversed(suggestions):
+            contract = choose_contract(model, hardware)
+            # Keep safe fallback choices. Do not call a tight 24B artifact a
+            # starter for a 24 GB machine merely because it is in that tier.
+            if contract.fit["rating"] != "Fits":
+                continue
+            add(
+                "ollama",
+                model,
+                "Ollama · " + model,
+                "Suggested starting model, not a measured quality guarantee.",
+                False,
+                preset="suggested",
+                context=contract.context,
             )
-        for model, name, detail, preset, context in suggestions:
-            identity = hashlib.sha256(("ollama\n" + model).encode()).hexdigest()[:24]
-            if identity not in choices:
-                add(
-                    "ollama",
-                    model,
-                    name,
-                    detail
-                    + " Exact artifact size is reported during transfer; these are not measured speed or quality rankings.",
-                    False,
-                    preset=preset,
-                    context=context,
-                )
-    saved = _read(service, project)
+            for lm_model, ollama_model in LM_STARTERS.items():
+                if model == ollama_model:
+                    add(
+                        "lmstudio",
+                        lm_model,
+                        "LM Studio · " + lm_model,
+                        "Official catalog suggestion. LM Studio selects the artifact; check its reported size.",
+                        False,
+                        preset="suggested",
+                        context=contract.context,
+                    )
+    saved = _read(service, project) if project else {}
     previous = saved.get("selection")
     if previous and previous["id"] not in choices:
         choices[previous["id"]] = {
@@ -115,6 +134,9 @@ def catalog(service, project):
         "choices": sorted(choices.values(), key=lambda row: not row["installed"]),
         "selected": saved.get("choice", ""),
         "memory_gb": memory,
+        "hardware": asdict(hardware),
+        "engines": [e for e in engines if e["id"] in {"ollama", "lmstudio"}],
+        "guardrails": build_guardrails(hardware).to_dict(),
         "note": "Starting suggestions, not measured coding-quality guarantees. Context and other apps also need memory.",
     }
 
@@ -172,6 +194,14 @@ def prepare(service, params):
     engine, model = choice["engine"], choice["model"]
     status = next(row for row in local_models.servers(service) if row["id"] == engine)
     options = {"engine": engine, "model": model}
+    # LM Studio's installed desktop app does not necessarily bootstrap lms.
+    # Offer the consented official headless installer when the CLI is missing.
+    if engine == "lmstudio" and not status["running"]:
+        from superqode.local.install import runtime_executable
+        import shutil
+
+        if not shutil.which(runtime_executable("lms")):
+            status = {**status, "installed": False}
     if not status["installed"] and not status["running"]:
         if not status["install"]["automatic"]:
             return finish(
@@ -186,27 +216,45 @@ def prepare(service, params):
         step = "install"
     elif not status["running"]:
         # Reuse existing model-specific configuration for single-model engines.
-        if engine != "ollama":
+        if engine not in {"ollama", "lmstudio"}:
             raise ValueError("Start this model from Advanced setup, then check again")
         step = "serve"
         options["context"] = choice.get("suggested_context") or 8192
-    elif model not in local_models.available(engine)["models"]:
-        if engine != "ollama":
-            raise ValueError("Load the selected model in its server, then check again")
-        step = "download"
-        options["source"] = "ollama"
-    elif state.get("verified"):
-        return finish(
-            {
-                "step": "ready",
-                "engine": engine,
-                "model": model,
-                "verification": state.get("verification", {}),
-            }
-        )
+        if engine == "lmstudio":
+            options["model"] = ""
     else:
-        step = "verify"
-        options["check"] = "quickstart"
+        available = local_models.available(engine)
+        runtime_model = model
+        if engine == "lmstudio" and model not in available["models"]:
+            # Catalog aliases resolve to the exact downloaded artifact key.
+            needle = model.split("/")[-1].lower()
+            matches = [m for m in available["models"] if needle in m.lower()]
+            if len(matches) == 1:
+                runtime_model = matches[0]
+            elif len(matches) > 1:
+                raise ValueError(
+                    "Multiple artifacts match. Choose the downloaded model explicitly."
+                )
+        model = runtime_model
+        options["model"] = model
+        if model not in available["models"]:
+            step = "download"
+            options["source"] = engine
+        elif engine == "lmstudio" and model not in available.get("loaded_models", []):
+            step = "load"
+            options["context"] = choice.get("suggested_context") or 8192
+        elif state.get("verified"):
+            return finish(
+                {
+                    "step": "ready",
+                    "engine": engine,
+                    "model": model,
+                    "verification": state.get("verification", {}),
+                }
+            )
+        else:
+            step = "verify"
+            options["check"] = "quickstart"
     plan = local_models.prepare(service, {**options, "action": step})
     return finish({"step": step, "plan": plan, "engine": engine, "model": model})
 
@@ -229,7 +277,22 @@ def start(service, params):
         if state.get("plan") != params["plan"]:
             raise ValueError("Review the current setup step again")
         choice_id = params["choice"]
+        from superqode.local.context_contract import ContextContract, choose_contract, save_contract
+
+        selection = state["selection"]
         result = local_models.start(service, params)
+        contract = (
+            ContextContract(**plan["contract"])
+            if plan.get("contract")
+            else choose_contract(
+                selection["model"],
+                provider=selection["engine"],
+                context=selection.get("suggested_context"),
+                metadata=selection.get("metadata"),
+                weights_gb=(selection.get("fit") or {}).get("weights_gb"),
+            )
+        )
+        save_contract(selection["engine"], plan.get("model") or selection["model"], contract)
         _save(
             service,
             project,

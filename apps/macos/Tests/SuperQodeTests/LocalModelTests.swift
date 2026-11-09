@@ -2,6 +2,13 @@ import XCTest
 @testable import SuperQode
 
 final class LocalModelTests: XCTestCase {
+  @MainActor func testLocalAINoticeAndResponsibilityGuidance() {
+    XCTAssertEqual(LocalAINotice.copy, "Local AI runs on your Mac. No subscription needed. Pick a model that fits your Mac and use it responsibly.")
+    XCTAssertTrue(LocalAILearnMoreView.points.contains { $0.0 == "Your responsibility" })
+    XCTAssertTrue(LocalAILearnMoreView.points.contains { $0.0 == "Privacy" && $0.1.contains("network") })
+    XCTAssertTrue(LocalAILearnMoreView.points.contains { $0.0 == "When you are done" && $0.1.contains("Unload") })
+  }
+
   @MainActor func testHubCredentialDoesNotChangeTheCodingRoute() async throws {
     let pipe = Pipe()
     let engine = Engine(input: pipe.fileHandleForWriting)

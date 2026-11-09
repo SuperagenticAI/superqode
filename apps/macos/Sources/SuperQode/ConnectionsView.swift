@@ -28,20 +28,6 @@ struct ConnectionSourcesView: View {
   private var cloud: [String: Any] {
     cloudProviders.first { string($0, "id") == selectedProvider } ?? [:]
   }
-  private var supportsOllama: Bool {
-    let selected = app.harnesses.first { string($0, "id") == app.harness } ?? [:]
-    return (selected["local_providers"] as? [String])?.contains("ollama") ?? true
-  }
-  private var localModels: [[String: Any]] {
-    let selected = app.harnesses.first { string($0, "id") == app.harness } ?? [:]
-    if let allowed = selected["local_providers"] as? [String], !allowed.contains("ollama") {
-      return []
-    }
-    return app.models.filter {
-      string($0, "source") == "ollama" && codingModel(string($0, "model_id"))
-    }
-  }
-
   var body: some View {
     ScrollView {
       VStack(alignment: .leading, spacing: 20) {
@@ -95,52 +81,7 @@ struct ConnectionSourcesView: View {
   }
 
   private var localContent: some View {
-    VStack(alignment: .leading, spacing: 16) {
-      HStack {
-        Label("Ollama", systemImage: "desktopcomputer").font(.headline)
-        Spacer()
-        Button("Refresh") { app.perform { await app.refreshModels() } }
-        Button("Open Ollama") { openOllama() }.disabled(!supportsOllama)
-      }
-      Text(
-        "Choose a chat or coding model already installed on your Ollama server. Cached weights from other engines remain visible in Models."
-      ).font(.callout).foregroundStyle(.secondary)
-      if localModels.isEmpty {
-        EmptyState(
-          icon: "cpu",
-          title: supportsOllama
-            ? "No coding models available yet" : "This harness does not support Ollama",
-          detail: supportsOllama
-            ? "Open Ollama and install a chat or coding model, then refresh this list. No weights are downloaded automatically."
-            : "Go Back to choose a model source declared by this harness. Installing more models will not change its supported providers."
-        ).frame(height: 190)
-      } else {
-        ScrollView {
-          LazyVStack(spacing: 8) {
-            ForEach(localModels, id: \.projectRowID) { row in
-              HStack {
-                VStack(alignment: .leading, spacing: 5) {
-                  Text(modelName(string(row, "model_id"))).font(.headline)
-                  Text(String(format: "%.1f GB", row["size_gb"] as? Double ?? 0)).font(
-                    .caption.monospaced()
-                  ).foregroundStyle(.secondary)
-                }
-                Spacer()
-                if row["loaded"] as? Bool == true { Pill(title: "LOADED", color: .green) }
-                Button("Use model") {
-                  app.chooseModelRoute("ollama", modelName(string(row, "model_id")))
-                  app.section = "Workspace"
-                  app.perform { await app.checkRoute() }
-                  app.notice =
-                    "Local model selected. Run a task or test the connection from Models."
-                  dismiss()
-                }.buttonStyle(BrandButtonStyle())
-              }.padding(14).outlinedSurface(radius: 9)
-            }
-          }
-        }.frame(height: 280).defaultScrollAnchor(.top)
-      }
-    }
+    LocalQuickStartView(project: app.projectID).id(app.projectID).environmentObject(app)
   }
 
   private var cloudContent: some View {
@@ -239,18 +180,6 @@ struct ConnectionSourcesView: View {
           "Provider selected. Credentials are configured; use Test model to verify execution."
         dismiss()
       } catch { message = error.localizedDescription }
-    }
-  }
-
-  private func openOllama() {
-    let candidates = ["/Applications/Ollama.app", NSHomeDirectory() + "/Applications/Ollama.app"]
-    if let path = candidates.first(where: { FileManager.default.fileExists(atPath: $0) }) {
-      NSWorkspace.shared.openApplication(
-        at: URL(fileURLWithPath: path), configuration: NSWorkspace.OpenConfiguration()
-      ) { _, _ in }
-    } else {
-      message = "Ollama is not installed in Applications. Install and open it, then return here."
-      if let url = URL(string: "https://ollama.com/download/mac") { NSWorkspace.shared.open(url) }
     }
   }
 }
