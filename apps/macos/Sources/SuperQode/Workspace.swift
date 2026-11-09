@@ -184,6 +184,12 @@ private func jobStamp(_ row: [String: Any]) -> Double {
   @Published var restoringNavigation = false
   var restoringComposer = false
   var composerConversationID = ""
+  /// Threads with a finished run or an approval request the user has not opened yet.
+  @Published var unreadThreads: Set<String> =
+    Set(UserDefaults.standard.stringArray(forKey: "nativeUnreadThreads") ?? [])
+  {
+    didSet { UserDefaults.standard.set(Array(unreadThreads).sorted(), forKey: "nativeUnreadThreads") }
+  }
   /// AppKit focus of the prompt editor. Not published: it must not re-render.
   var composerHasFocus = false
   var composerEditedAt = Date.distantPast
@@ -1138,7 +1144,8 @@ private func jobStamp(_ row: [String: Any]) -> Double {
       let nextJobs = try await engine.call("jobs.list") as? [[String: Any]] ?? []
       if !NSArray(array: jobs).isEqual(to: nextJobs) { jobs = nextJobs }
       let alerts = try await engine.call("notifications.poll", ["after": threadNotifications.cursor]) as? [String: Any] ?? [:]
-      threadNotifications.consume(alerts, selected: selectedJob)
+      noteUnreadThreads(alerts)
+      threadNotifications.consume(alerts, selected: selectedJob, jobs: jobs)
       if !projectID.isEmpty {
         let queuedProject = projectID
         let nextQueue = try await engine.call("queue.list", ["project": queuedProject]) as? [String: Any] ?? [:]
@@ -1230,6 +1237,25 @@ private func jobStamp(_ row: [String: Any]) -> Double {
       self.error = error.localizedDescription
     }
   }
+  /// Mark threads unread when a run finishes or needs approval out of view.
+  func noteUnreadThreads(_ alerts: [String: Any]) {
+    let viewing = NSApp.isActive && !showWelcome && WorkspaceNavigationGroup.usesCodingWorkspace(section)
+    var next = unreadThreads
+    if viewing { next.remove(selectedConversationID) }
+    for item in alerts["items"] as? [[String: Any]] ?? [] {
+      guard ["completed", "needs_approval", "failed", "interrupted"].contains(string(item, "status"))
+      else { continue }
+      let job = string(item, "job")
+      let row = jobs.first { string($0, "id") == job } ?? [:]
+      let thread = string(row, "conversation_id", job)
+      if viewing && thread == selectedConversationID { continue }
+      next.insert(thread)
+    }
+    if next != unreadThreads { unreadThreads = next }
+  }
+  func markThreadRead(_ thread: String) {
+    if unreadThreads.contains(thread) { unreadThreads.remove(thread) }
+  }
   /// Reset composer routing only; running jobs retain their own connections.
   func resetThreadConnection() {
     connectionGeneration += 1
@@ -1288,6 +1314,7 @@ private func jobStamp(_ row: [String: Any]) -> Double {
     followConversationTip = openedConversationTip(id)
     let summary = projectJobs.first { string($0, "id") == id }
     let identity = conversationID ?? summary.map { string($0, "conversation_id", id) }
+    markThreadRead(identity ?? id)
     let wasLoadingDraft = loadingConversationDraft
     loadingConversationDraft = !id.isEmpty && identity == nil
     // Following a conversation to its newest turn keeps the same composer. Do

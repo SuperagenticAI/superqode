@@ -201,7 +201,10 @@ struct ThreadSidebarRow: View {
       .accessibilityLabel(Text(verbatim: rowDescription))
       .accessibilityAddTraits(selected ? .isSelected : [])
   }
-  private var rowDescription: String { "\(title), \(harnessLabel), \(statusTitle)" }
+  private var unread: Bool { !selected && app.unreadThreads.contains(identity) }
+  private var rowDescription: String {
+    "\(title), \(harnessLabel), \(statusTitle)" + (unread ? ", unread" : "")
+  }
   private func openThread() {
     app.selectJob(string(row, "id"), targetSection: destination)
   }
@@ -218,7 +221,10 @@ struct ThreadSidebarRow: View {
   }
   private var titleLine: some View {
     HStack(spacing: 5) {
-      Text(title).font(.system(size: 12, weight: selected ? .semibold : .regular)).lineLimit(1)
+      if unread {
+        Circle().fill(Color.qAccent).frame(width: 7, height: 7).help("New activity since you last opened this thread")
+      }
+      Text(title).font(.system(size: 12, weight: selected || unread ? .semibold : .regular)).lineLimit(1)
       Spacer(minLength: 0)
       if pinned { Image(systemName: "pin.fill").font(.system(size: 8)).foregroundStyle(.secondary) }
     }

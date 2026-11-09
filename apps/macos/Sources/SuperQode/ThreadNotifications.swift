@@ -2,11 +2,25 @@ import AppKit
 import UserNotifications
 import SwiftUI
 
-func threadNotificationText(_ status: String) -> (title: String, body: String)? {
+/// Alert text for a thread status change. The thread title and run duration
+/// are included when known.
+func threadNotificationText(_ status: String, thread: String = "", duration: TimeInterval? = nil)
+  -> (title: String, body: String)?
+{
+  let name = thread.trimmingCharacters(in: .whitespacesAndNewlines)
+  let subject = name.isEmpty ? "A coding thread" : "\u{201C}" + name + "\u{201D}"
   switch status {
-  case "needs_approval": return ("Approval needed", "A coding thread is waiting for your review.")
-  case "completed": return ("Task completed", "A coding thread finished. Open it to review the result.")
-  case "failed", "interrupted": return ("Task needs attention", "A coding thread stopped without completing. Its recorded history is available.")
+  case "needs_approval":
+    return ("Needs your approval", subject + " is waiting for you to allow or deny a request.")
+  case "completed":
+    let title = duration.map { "Finished in " + RunStatsFormat.duration($0) } ?? "Task completed"
+    return (title, subject + " finished. Open it to review the result.")
+  case "failed", "interrupted":
+    // An interrupted run is recorded when the engine restarts, so its duration is not meaningful.
+    let title = status == "failed"
+      ? duration.map { "Stopped after " + RunStatsFormat.duration($0) } ?? "Task needs attention"
+      : "Task needs attention"
+    return (title, subject + " stopped without completing. Its recorded history is available.")
   default: return nil
   }
 }
@@ -42,7 +56,7 @@ func threadNotificationText(_ status: String) -> (title: String, body: String)? 
       } catch { issue = error.localizedDescription }
     }
   }
-  func consume(_ result: [String: Any], selected: String) {
+  func consume(_ result: [String: Any], selected: String, jobs: [[String: Any]] = []) {
     let next = result["cursor"] as? Int ?? cursor
     if next != cursor { cursor = next; preferences.set(cursor, forKey: "threadAlertCursor") }
     guard enabled, Bundle.main.bundleIdentifier != nil, !ProcessInfo.processInfo.arguments.contains("--smoke-test") else { return }
@@ -52,7 +66,14 @@ func threadNotificationText(_ status: String) -> (title: String, body: String)? 
     center.delegate = self
     for row in result["items"] as? [[String: Any]] ?? [] {
       if NSApp.isActive && string(row, "job") == selected { continue }
-      guard let text = threadNotificationText(string(row, "status")) else { continue }
+      let job = jobs.first { string($0, "id") == string(row, "job") } ?? [:]
+      let thread = string(job, "conversation_title", string(job, "title"))
+      var duration: TimeInterval?
+      if let start = RunStats.startDate(job), let at = RunStats.date(row["created"]), at >= start {
+        duration = at.timeIntervalSince(start)
+      }
+      guard let text = threadNotificationText(string(row, "status"), thread: thread, duration: duration)
+      else { continue }
       let content = UNMutableNotificationContent()
       content.title = "SuperQode · " + text.title
       content.body = text.body
