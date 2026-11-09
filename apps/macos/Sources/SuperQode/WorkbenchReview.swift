@@ -20,7 +20,7 @@ import Combine
     listing = nil; document = nil; failure = ""; loading = false; loadingFile = false; requestedFile = ""
   }
 
-  func load(engine: Engine, project: String, job: String, scope: ReviewScope) async {
+  func load(engine: Engine, project: String, job: String, scope: ReviewScope, preferredPath: String = "") async {
     generation += 1; fileGeneration += 1
     let ticket = generation
     self.project = project; self.job = job; self.scope = scope
@@ -35,7 +35,9 @@ import Combine
       guard ticket == generation, !Task.isCancelled else { return }
       guard next.scope == scope else { throw EngineError(message: "The review scope changed. Refresh to continue.") }
       listing = next
-      if let file = next.files.first { await select(file.id, engine: engine) }
+      if let file = next.files.first(where: { !preferredPath.isEmpty && $0.path == preferredPath }) ?? next.files.first {
+        await select(file.id, engine: engine)
+      }
     } catch { if ticket == generation, !Task.isCancelled { failure = error.localizedDescription } }
   }
 
