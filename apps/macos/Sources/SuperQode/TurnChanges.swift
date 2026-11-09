@@ -75,7 +75,7 @@ struct TurnChangeSummary: Equatable {
   func invalidate() { summaries.removeAll() }
 }
 
-/// Inline "files changed" chips under a turn.
+/// Inline "files changed" chips under a turn, with undo for sealed turns.
 struct TurnChangesView: View {
   let job: String
   /// The visible, currently selected turn. Live turns refresh while running.
@@ -84,6 +84,7 @@ struct TurnChangesView: View {
   @EnvironmentObject var store: TurnChangesStore
   @State private var expanded = false
   @State private var diffPath: String?
+  @State private var undoing = false
   private let collapsedCount = 4
 
   private var summary: TurnChangeSummary? { store.summary(job) }
@@ -118,6 +119,7 @@ struct TurnChangesView: View {
         LineCounts(added: summary.added, removed: summary.removed)
         if summary.live { Text("updating").font(.caption2).foregroundStyle(.secondary) }
         Spacer(minLength: 0)
+        if !summary.live { undoButton(summary) }
       }
       FlowChips(spacing: 6) {
         ForEach(shown) { file in
@@ -150,6 +152,51 @@ struct TurnChangesView: View {
     .frame(maxWidth: .infinity, alignment: .leading)
     .background(Color.qPanel.opacity(0.6), in: RoundedRectangle(cornerRadius: 8))
     .overlay(RoundedRectangle(cornerRadius: 8).stroke(Color.primary.opacity(0.08), lineWidth: 1))
+  }
+
+  @ViewBuilder private func undoButton(_ summary: TurnChangeSummary) -> some View {
+    let blockedByRun = app.hasActiveWork(project: app.projectID)
+    let enabled = summary.canRestore && !blockedByRun && !undoing && app.connected
+    Button {
+      undo(summary)
+    } label: {
+      Label(undoing ? "Undoing…" : "Undo this turn", systemImage: "arrow.uturn.backward")
+    }
+    .buttonStyle(.plain).font(.caption)
+    .foregroundStyle(enabled ? Color.primary : Color.secondary)
+    .disabled(!enabled)
+    .help(enabled ? "Restore the files this turn changed to their state before it ran"
+      : blockedByRun ? "Finish or stop project work before undoing a turn"
+      : summary.restoreReason.isEmpty ? "Undo is not available for this turn" : summary.restoreReason)
+  }
+
+  private func undo(_ summary: TurnChangeSummary) {
+    let project = app.projectID
+    let checkpoint = summary.checkpoint
+    guard !checkpoint.isEmpty else { return }
+    let listed = summary.files.prefix(12).map { file -> String in
+      switch file.change {
+      case "added": return "• " + file.path + " (will be removed)"
+      case "deleted": return "• " + file.path + " (will be restored)"
+      default: return "• " + file.path
+      }
+    }
+    var message = "These files return to how they were before this turn:\n" + listed.joined(separator: "\n")
+    if summary.fileCount > listed.count { message += "\n…and \(summary.fileCount - listed.count) more" }
+    message += "\n\nOther files are not touched. Git staging is preserved."
+    if summary.laterTurns > 0 {
+      message += "\n\n\(summary.laterTurns) later turn\(summary.laterTurns == 1 ? " was" : "s were") recorded after this one. Their files stay as they are, but their undo checkpoints are replaced when the next run starts."
+    }
+    message += "\n\nIf any of these files changed after the turn (later turns or your own unsaved or uncommitted edits), undo is refused so nothing newer is overwritten. Save editor drafts first."
+    guard app.confirm("Undo this turn?", message, button: "Undo turn") else { return }
+    undoing = true
+    app.perform {
+      defer { undoing = false }
+      _ = try await app.engine.call("checkpoints.restore", ["project": project, "id": checkpoint])
+      store.invalidate()
+      await app.refreshGit()
+      await store.load(engine: app.engine, project: project, job: job, force: true)
+    }
   }
 
   private func icon(_ change: String) -> String {
