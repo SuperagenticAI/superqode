@@ -1160,6 +1160,8 @@ struct HistoricalConversationTurn: View, Equatable {
   let status: String
   var stats = RunStats(sent: nil, finished: nil, model: "", usage: nil, status: "", response: "")
   var turnID = ""
+  /// Chips state from the transcript, compared with the rest of the turn.
+  var changes = TurnChangesContext()
   var body: some View {
     VStack(alignment: .leading, spacing: 12) {
       Text("YOU").font(.system(size: 11, weight: .semibold, design: .monospaced))
@@ -1176,7 +1178,7 @@ struct HistoricalConversationTurn: View, Equatable {
           .modifier(ConversationSurface())
           .hoverCopy("Copy response as Markdown") { response }
       }
-      if !turnID.isEmpty { TurnChangesView(job: turnID, prompt: prompt) }
+      if !turnID.isEmpty { TurnChangesView(job: turnID, prompt: prompt, context: changes) }
       RunStatsFooter(stats: stats)
       if status != "completed" {
         Text("Previous response: " + status).font(.caption).foregroundStyle(.secondary)
@@ -1229,6 +1231,10 @@ struct EventStream: View {
     let stats = RunStats(detail: app.detail, response: string(app.detail, "status") == "completed" ? app.selectedResponseText : "")
     let isTask = string(app.detail, "kind") == "task"
     let plan = isTask ? app.selectedPlan : []
+    let projectBusy = app.hasActiveWork(project: app.projectID)
+    let historyChanges = TurnChangesContext(connected: app.connected, project: app.projectID, projectBusy: projectBusy)
+    let liveChanges = TurnChangesContext(connected: app.connected, project: app.projectID, projectBusy: projectBusy,
+      runActive: app.active, status: string(app.detail, "status"))
     return VStack(spacing: 0) {
       HStack {
         Text("CONVERSATION").font(.system(size: 12, design: .monospaced)).foregroundStyle(
@@ -1272,7 +1278,8 @@ struct EventStream: View {
             ForEach(app.conversationHistory, id: \.projectRowID) { turn in
               HistoricalConversationTurn(prompt: string(turn, "prompt"), response: string(turn, "response"),
                 harness: string(turn, "harness"), status: string(turn, "status"),
-                stats: RunStats(turn: turn), turnID: string(turn, "id")).equatable()
+                stats: RunStats(turn: turn), turnID: string(turn, "id"),
+                changes: historyChanges).equatable()
                 .id("turn:" + string(turn, "id"))
             }
             if let request = app.detail["request"] as? [String: Any],
@@ -1323,7 +1330,8 @@ struct EventStream: View {
             }
             if isTask {
               TurnChangesView(job: app.selectedJob, current: true,
-                prompt: string(app.detail["request"] as? [String: Any] ?? [:], "prompt"))
+                prompt: string(app.detail["request"] as? [String: Any] ?? [:], "prompt"),
+                context: liveChanges)
             }
             // While the agent works, the pinned working card shows the live timer.
             if isTask && !app.active {
@@ -1341,6 +1349,7 @@ struct EventStream: View {
             .frame(maxWidth: 848, alignment: .leading).frame(maxWidth: .infinity)
         }.scrollPosition(id: $visibleAnchor, anchor: follow ? .bottom : .top)
         .environmentObject(turnChanges)
+        .environment(\.turnChangesWorkspace, app)
         .background(TranscriptScrollObserver { readingEarlier in
           pendingAnchor = nil
           positionNotice = ""

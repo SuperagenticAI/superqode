@@ -118,6 +118,32 @@ struct TurnChangesSheets: View {
   }
 }
 
+/// What a turn's chips need from the workspace. Passed in rather than observed,
+/// so unrelated workspace updates (navigation, polling) do not re-render the
+/// chips of every turn in the transcript.
+struct TurnChangesContext: Equatable {
+  var connected = false
+  var project = ""
+  /// Any run or task is active in this project; commit and undo wait for it.
+  var projectBusy = false
+  /// The selected run is active; its live summary keeps refreshing.
+  var runActive = false
+  /// The selected run's status, so a finished turn reloads once.
+  var status = ""
+}
+
+private struct TurnChangesWorkspaceKey: EnvironmentKey {
+  static let defaultValue: Workspace? = nil
+}
+
+extension EnvironmentValues {
+  /// The workspace, for actions only. Reading it does not subscribe to changes.
+  var turnChangesWorkspace: Workspace? {
+    get { self[TurnChangesWorkspaceKey.self] }
+    set { self[TurnChangesWorkspaceKey.self] = newValue }
+  }
+}
+
 /// Inline "files changed" chips under a turn, with undo for sealed turns.
 struct TurnChangesView: View {
   let job: String
@@ -125,34 +151,36 @@ struct TurnChangesView: View {
   var current = false
   /// The turn's prompt, used to draft a commit message.
   var prompt = ""
-  @EnvironmentObject var app: Workspace
+  var context = TurnChangesContext()
+  @Environment(\.turnChangesWorkspace) private var workspace
   @EnvironmentObject var store: TurnChangesStore
   @State private var expanded = false
   @State private var undoing = false
   private let collapsedCount = 4
 
   private var summary: TurnChangeSummary? { store.summary(job) }
-  private var stamp: String { current ? string(app.detail, "status") : "" }
-  private var refreshKey: String { job + "\n" + stamp + "\n" + String(app.connected) }
+  private var stamp: String { current ? context.status : "" }
+  private var refreshKey: String { job + "\n" + stamp + "\n" + String(context.connected) + "\n" + context.project }
 
   var body: some View {
     Group {
       if let summary, summary.available, summary.fileCount > 0 { chips(summary) }
     }
     .task(id: refreshKey) {
-      guard app.connected, !app.projectID.isEmpty else { return }
-      let live = current && app.active
+      guard context.connected, !context.project.isEmpty, let app = workspace else { return }
+      let project = context.project
+      let live = current && context.runActive
       if store.summary(job) == nil {
         // Let the transcript draw first; navigating away cancels the fetch.
         try? await Task.sleep(for: .milliseconds(120))
         guard !Task.isCancelled else { return }
       }
-      await store.load(engine: app.engine, project: app.projectID, job: job, stamp: stamp, force: live)
+      await store.load(engine: app.engine, project: project, job: job, stamp: stamp, force: live)
       // Live turns: refresh at a calm pace while the agent edits files.
       while current, app.active, !Task.isCancelled {
         try? await Task.sleep(for: .seconds(6))
-        guard !Task.isCancelled, app.active else { break }
-        await store.load(engine: app.engine, project: app.projectID, job: job, stamp: stamp, force: true)
+        guard !Task.isCancelled, app.active, app.projectID == project else { break }
+        await store.load(engine: app.engine, project: project, job: job, stamp: stamp, force: true)
       }
     }
   }
@@ -170,7 +198,7 @@ struct TurnChangesView: View {
         if !summary.live {
           Button { store.shipRequest = TurnShipRequest(files: summary.files.map(\.path), prompt: prompt) } label: { Label("Commit…", systemImage: "arrow.up.circle") }
             .buttonStyle(.plain).font(.caption)
-            .disabled(!app.connected || app.hasActiveWork(project: app.projectID))
+            .disabled(!context.connected || context.projectBusy)
             .help("Commit these changes, push, and open a pull request with your Git setup")
           undoButton(summary)
         }
@@ -209,8 +237,8 @@ struct TurnChangesView: View {
   }
 
   @ViewBuilder private func undoButton(_ summary: TurnChangeSummary) -> some View {
-    let blockedByRun = app.hasActiveWork(project: app.projectID)
-    let enabled = summary.canRestore && !blockedByRun && !undoing && app.connected
+    let blockedByRun = context.projectBusy
+    let enabled = summary.canRestore && !blockedByRun && !undoing && context.connected
     Button {
       undo(summary)
     } label: {
@@ -225,7 +253,8 @@ struct TurnChangesView: View {
   }
 
   private func undo(_ summary: TurnChangeSummary) {
-    let project = app.projectID
+    guard let app = workspace else { return }
+    let project = context.project
     let checkpoint = summary.checkpoint
     guard !checkpoint.isEmpty else { return }
     let listed = summary.files.prefix(12).map { file -> String in
