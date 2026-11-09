@@ -842,7 +842,6 @@ struct CodingComposer: View {
           .help(app.connectionDisconnected ? "No agent connected. Choose a connection for this new thread." : "Connection for your next message. Compatible sessions resume; other routes receive bounded thread context.")
           .popover(isPresented: $showOptions, arrowEdge: .top) { connectionOptions }
         Spacer(minLength: 0)
-        if !app.connected { Label("Engine offline · draft kept", systemImage: "exclamationmark.circle").font(.caption).foregroundStyle(.secondary) }
       }
       if app.isManaged || app.routeStatus["ready"] as? Bool == false {
         HStack {
@@ -852,6 +851,9 @@ struct CodingComposer: View {
             .lineLimit(2).textSelection(.enabled)
           if string(app.routeStatus, "state") == "connection-failed" {
             Button("Retry") { app.perform { await app.checkManagedConnection() } }.font(.caption)
+          }
+          if app.routeStatus["ready"] as? Bool == false {
+            Button("Fix…") { app.openConnections("menu:root") }.font(.caption)
           }
         }
       }
@@ -868,6 +870,7 @@ struct CodingComposer: View {
           Button("Load agent models") { app.perform { await app.checkManagedConnection() } }
         }
       }
+      ProviderHealthStrip()
       attachments
       PromptEditor(
         text: $draftStore.text,
