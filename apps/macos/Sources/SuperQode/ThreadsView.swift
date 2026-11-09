@@ -171,6 +171,8 @@ struct ThreadsView: View {
       Menu {
         Button(row["pinned"] as? Bool == true ? "Unpin" : "Pin") { update(row, changes: ["pinned": row["pinned"] as? Bool != true]) }
         Button("Rename…") { newTitle = string(row, "conversation_title"); renaming = row }
+        Button("Send to thread…") { app.openSendToThread(source: string(row, "id")) }
+          .disabled(!["completed", "failed", "cancelled", "interrupted"].contains(string(row, "status")) || app.busy)
         Button("Fork into worktree…") { forkSource = row }
           .disabled(!["completed", "failed", "cancelled", "interrupted"].contains(string(row, "status")))
         Button(row["archived"] as? Bool == true ? "Restore thread" : "Archive thread") {

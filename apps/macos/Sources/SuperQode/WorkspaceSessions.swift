@@ -13,7 +13,7 @@ import Foundation
       identity = string(row, "conversation_id", target)
     }
     selectJob(target, conversationID: identity, targetSection: "Workspace")
-    draft += (draft.isEmpty ? "" : "\n\n") + text
+    draft = ThreadDraftText.appending(text, to: draft)
     saveDraft(flush: false)
     showWelcome = false
     notice = "Thread context added to the destination draft. Review it before sending."

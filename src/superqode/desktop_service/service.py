@@ -1389,6 +1389,10 @@ class DesktopService:
             from .conversations import history
 
             return history(self, params["id"], params.get("before"))
+        if method == "threads.send.preview":
+            from .conversations import send_preview
+
+            return send_preview(self, params, self.project(params["project"]))
         if method == "conversations.share":
             from .conversations import share_context
 

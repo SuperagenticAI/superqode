@@ -10,7 +10,8 @@ import AppKit
     // unrelated navigation, transcript or draft changes publish the workspace.
     let state = [connected, project.isEmpty, openingProject, restoringNavigation,
       switchingBackgroundEngine, busy, isManaged, navigationHistory.isEmpty,
-      forwardHistory.isEmpty, showWelcome, selectedJob.isEmpty]
+      forwardHistory.isEmpty, showWelcome, selectedJob.isEmpty, active, loadingConversationDraft,
+      string(detail, "kind") == "task"]
     if let cache = baseCommandCache, cache.state == state { return cache.commands }
     let commands = makeWorkspaceBaseCommands()
     baseCommandCache = (state, commands)
@@ -65,6 +66,10 @@ import AppKit
       .init(action: .exportEvidence, title: "Export Run Evidence…", detail: "Save recorded run activity locally",
         symbol: "square.and.arrow.up", keywords: "history transcript json",
         disabledReason: selectedJob.isEmpty ? "Select a run first." : engineReason ?? idleReason),
+      .init(action: .sendToThread, title: "Send to Thread…", detail: "Add editable conversation context to another thread's draft",
+        symbol: "arrowshape.turn.up.right", keywords: "transfer handoff conversation draft", key: "t", shiftKey: true,
+        disabledReason: projectReason ?? idleReason ?? (selectedJob.isEmpty || string(detail, "kind") != "task"
+          ? "Select a coding thread first." : active || loadingConversationDraft ? "Wait for this thread to finish loading or running." : nil)),
       .init(action: .welcome, title: "Welcome to SuperQode", detail: "Return to Welcome",
         symbol: "house", keywords: "home start", disabledReason: openingProject ? idleReason : nil),
       .init(action: .learning, title: "Getting Started & Learning", detail: "Open the local learning guide",
@@ -120,6 +125,7 @@ import AppKit
     case .newTask:
       selectJob("", targetSection: "Workspace")
       showWelcome = false
+    case .sendToThread: openSendToThread(source: selectedJob)
     case .connect: openConnections()
     case .connectionPage(let page): openConnections(page)
     case .connectionDiagnostics: showConnectionInspector = true

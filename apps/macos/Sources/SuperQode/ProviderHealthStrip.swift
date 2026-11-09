@@ -72,7 +72,7 @@ struct ProviderHealthStrip: View {
           app.perform { try await app.engine.stopAndWait(); await app.boot() }
         }
       } else if app.connectionDisconnected {
-        broken("No agent or model connected for this thread.", action: "Connect…") { app.openConnections("menu:vendors") }
+        broken("No agent or model connected for this thread.", action: "Connect…") { app.openConnections("menu:root") }
       } else if !health.authFailure.isEmpty && !app.active {
         broken("The last run could not sign in to " + app.connectionDisplayName + ".", action: "Fix connection…") {
           app.openConnections("menu:root")

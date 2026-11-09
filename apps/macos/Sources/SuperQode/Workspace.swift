@@ -295,6 +295,7 @@ private func jobStamp(_ row: [String: Any]) -> Double {
   private weak var commandPaletteResponder: NSResponder?
   private var pendingPaletteAction: WorkspaceCommandAction?
   @Published var learningTopic = "Start coding"
+  @Published var sendToThreadRequest: SendToThreadRequest?
   @Published var showConnection = false
   @Published var showConnectionInspector = false
   @Published var connectionStartPage = "menu:root"

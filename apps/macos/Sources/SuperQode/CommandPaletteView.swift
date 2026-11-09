@@ -50,7 +50,7 @@ struct CommandPaletteView: View {
                     .foregroundStyle(.secondary).lineLimit(1)
                 }
                 Spacer()
-                if let key = command.key { Text("⌘" + key.uppercased()).font(.caption.monospaced()) }
+                if let key = command.key { Text((command.shiftKey ? "⇧⌘" : "⌘") + key.uppercased()).font(.caption.monospaced()) }
               }.padding(.vertical, 5).frame(maxWidth: .infinity, alignment: .leading)
             }.buttonStyle(.plain).disabled(!command.isEnabled)
               .help(command.disabledReason ?? command.detail)
@@ -92,7 +92,7 @@ struct WorkspaceCommandMenuItem: View {
   var body: some View {
     if let command = app.workspaceCommand(action) {
       if let key = command.key, key.count == 1, let character = key.first {
-        button(command).keyboardShortcut(KeyEquivalent(character))
+        button(command).keyboardShortcut(KeyEquivalent(character), modifiers: command.shiftKey ? [.command, .shift] : [.command])
       } else { button(command) }
     }
   }

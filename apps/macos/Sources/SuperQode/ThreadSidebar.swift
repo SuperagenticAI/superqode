@@ -205,6 +205,10 @@ struct ThreadSidebarRow: View {
       .help(Text(verbatim: rowDescription))
       .accessibilityLabel(Text(verbatim: rowDescription))
       .accessibilityAddTraits(selected ? .isSelected : [])
+      .contextMenu {
+        Button("Send to thread…") { app.openSendToThread(source: string(row, "id")) }
+          .disabled(string(row, "kind") != "task" || !["completed", "failed", "cancelled", "interrupted"].contains(status) || app.busy)
+      }
   }
   private var unread: Bool { !selected && app.unreadThreads.contains(identity) }
   private var rowDescription: String {

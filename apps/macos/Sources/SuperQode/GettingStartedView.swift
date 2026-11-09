@@ -51,23 +51,12 @@ struct GettingStartedView: View {
           Text("Use a coding agent you already have, or your own model through a local runtime or API key.")
             .font(.callout).foregroundStyle(.secondary).multilineTextAlignment(.center)
             .fixedSize(horizontal: false, vertical: true)
-          HStack(spacing: 12) {
-            Button { app.openConnections("menu:vendors") } label: {
-              Label("Agent", systemImage: "person.crop.circle.badge.checkmark")
-                .font(.system(size: 14, weight: .semibold)).frame(minWidth: 130, minHeight: 30)
-            }.buttonStyle(BrandButtonStyle())
-              .help("Connect a coding agent with its existing subscription or sign-in.")
-            Button { app.openConnections("menu:harness") } label: {
-              Label("Model", systemImage: "cpu")
-                .font(.system(size: 14, weight: .semibold)).frame(minWidth: 130, minHeight: 30)
-            }.controlSize(.large)
-              .help("Use a local model or your API key with a SuperQode harness.")
-          }.disabled(app.connectionPickerDisabled)
+          ConnectionStartGrid()
           if !app.connected {
             Text("Waiting for the local engine…").font(.caption).foregroundStyle(.secondary)
           }
         }
-        .padding(24).frame(maxWidth: 520)
+        .padding(24).frame(maxWidth: 800)
         .background(Color.qPanel.opacity(0.6), in: RoundedRectangle(cornerRadius: 14))
         .overlay(RoundedRectangle(cornerRadius: 14).stroke(Color.orange.opacity(0.45), lineWidth: 1))
       } else {
@@ -143,7 +132,7 @@ struct GettingStartedView: View {
           }.font(.caption)
           if !hasConnection {
             HStack(spacing: 12) {
-              Button("Connect an agent…") { app.openConnections("menu:vendors") }
+              Button("Connect an agent…") { app.openConnections("menu:root") }
                 .buttonStyle(BrandButtonStyle())
               Button("Use a model…") { app.openConnections("menu:harness") }
             }.disabled(app.connectionPickerDisabled)

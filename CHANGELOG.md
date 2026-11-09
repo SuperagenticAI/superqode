@@ -7,6 +7,15 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added
+
+- macOS: new threads offer connection tiles for an existing agent, a SuperQode harness, a local model, an API key, ACP, protocols, a custom harness and SystemOne. All connections remains one click away.
+- macOS: Send to Thread previews editable, bounded conversation context for another thread or a new thread. Choose the whole conversation or a starting turn and optionally include safe changed-file names. Existing draft text and the destination agent session are preserved. Nothing is sent automatically. Open it from thread actions or with Command-Shift-T.
+
+### Fixed
+
+- macOS: getting-started and connection-health links open All connections instead of jumping straight to subscriptions.
+
 ## [2.31.5] - 2026-11-09
 
 ### Added

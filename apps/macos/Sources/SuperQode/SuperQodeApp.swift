@@ -161,6 +161,7 @@ import UserNotifications
         WorkspaceCommandMenuItem(app: workspace, action: .forward)
         WorkspaceCommandMenuItem(app: workspace, action: .refreshChanges)
         WorkspaceCommandMenuItem(app: workspace, action: .exportEvidence)
+        WorkspaceCommandMenuItem(app: workspace, action: .sendToThread)
       }
     }
     Settings { SettingsView().environmentObject(workspace).frame(width: 560, height: 460) }
@@ -263,6 +264,7 @@ struct RootView: View {
     // Window-level key monitor. Zero-sized so it never takes part in the
     // workspace layout; its own guards keep it inactive outside the workspace.
     .background { WorkspaceKeyMonitor(app: app).frame(width: 0, height: 0) }
+    .background { SendToThreadSheetHost() }
     .alert(
       "SuperQode",
       isPresented: Binding(get: { app.error != nil }, set: { if !$0 { app.error = nil } })
@@ -483,9 +485,6 @@ struct RouteControls: View {
 }
 struct CodingView: View {
   @EnvironmentObject var app: Workspace
-  @State private var shareSource = ""
-  @State private var shareProject = ""
-  @State private var showShare = false
   @State private var forkSource: [String: Any]?
   @StateObject private var review = WorkbenchReview()
   @State private var scope: ReviewScope = .turn
@@ -511,9 +510,6 @@ struct CodingView: View {
         guard WorkspaceNavigationGroup.usesCodingWorkspace(app.section), app.inspectorVisible, inspectorTab == "Changes" else { return }
         await review.load(engine: app.engine, project: app.projectID, job: app.selectedJob, scope: scope)
       }
-    .centeredDialog(isPresented: $showShare, title: "Share thread context") {
-      ThreadShareView(project: shareProject, source: shareSource).environmentObject(app)
-    }
     .centeredDialog(isPresented: Binding(get: { forkSource != nil }, set: { if !$0 { forkSource = nil } }), title: "Fork thread") {
       if let source = forkSource { ThreadForkView(project: string(source, "project"), source: string(source, "id")) }
     }
@@ -527,7 +523,6 @@ struct CodingView: View {
     .onChange(of: WorkspaceNavigationGroup.usesCodingWorkspace(app.section)) { _, visible in
       if !visible {
         if showFullReview { showFullReview = false }
-        if showShare { showShare = false }
         if forkSource != nil { forkSource = nil }
       }
     }
@@ -639,7 +634,7 @@ struct CodingView: View {
         }
         Button("Fork thread…") { forkSource = ["project": app.projectID, "id": app.selectedJob] }
           .disabled(app.active || app.busy || string(app.detail, "kind") != "task")
-        Button("Share to thread…") { shareSource = app.selectedJob; shareProject = app.projectID; showShare = true }
+        Button("Send to thread…") { app.openSendToThread(source: app.selectedJob) }
           .disabled(app.selectedJob.isEmpty || app.active || app.busy || app.loadingConversationDraft)
         Button("Export evidence…", action: app.exportEvidence).disabled(app.selectedJob.isEmpty)
         Button("Full review…", action: openFullReview)
@@ -1164,8 +1159,12 @@ struct HistoricalConversationTurn: View, Equatable {
   var changes = TurnChangesContext()
   var body: some View {
     VStack(alignment: .leading, spacing: 12) {
-      Text("YOU").font(.system(size: 11, weight: .semibold, design: .monospaced))
-        .foregroundStyle(Color.qAccent)
+      HStack {
+        Text("YOU").font(.system(size: 11, weight: .semibold, design: .monospaced))
+          .foregroundStyle(Color.qAccent)
+        Spacer()
+        SendTurnMenu(turn: turnID, context: changes)
+      }
       Text(prompt).font(.system(size: 15)).textSelection(.enabled)
         .frame(maxWidth: .infinity, alignment: .leading)
         .hoverCopy("Copy prompt") { prompt }
@@ -1286,8 +1285,12 @@ struct EventStream: View {
               !string(request, "prompt").isEmpty
             {
               VStack(alignment: .leading, spacing: 8) {
-                Text("YOU").font(.system(size: 11, weight: .semibold, design: .monospaced))
-                  .foregroundStyle(Color.qAccent)
+                HStack {
+                  Text("YOU").font(.system(size: 11, weight: .semibold, design: .monospaced))
+                    .foregroundStyle(Color.qAccent)
+                  Spacer()
+                  if isTask { SendTurnMenu(turn: app.selectedJob, context: liveChanges) }
+                }
                 Text(string(request, "prompt")).font(.system(size: 15)).textSelection(.enabled)
                 let route = recordedConnectionLabel(request: request, harnesses: app.harnesses)
                 if !route.isEmpty {

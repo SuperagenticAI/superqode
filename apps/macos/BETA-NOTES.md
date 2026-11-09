@@ -17,6 +17,12 @@ Open a disposable or backed-up Git project, choose Connect, select the agent or 
 - Optional app-managed credentials use macOS Keychain. Existing agent credentials are managed by those agents. Local application data is under `~/Library/Application Support/SuperQode`. Removing the app does not remove this data, Keychain entries or credentials stored by external agents.
 - History, terminal output and evidence exports can contain private project content. Inspect and redact anything you choose to share. There is no automatic crash-report upload in this beta.
 
+## Next release
+
+- New-thread connection tiles make the supported setup paths visible at a glance. Choose an existing agent, a SuperQode harness, a local model, an API key, ACP, protocols, a custom harness or SystemOne, or browse All connections.
+- Send to Thread (Command-Shift-T) adds an editable context draft to another thread or a new thread. Preview the whole conversation or start at a recorded turn, optionally include changed-file names, then review before sending. Existing drafts and the destination agent session stay intact. Long histories show an omission warning; attachments and permissions are not transferred.
+- The getting-started and connection-health Connect links now open All connections, not only subscriptions.
+
 ## Version 0.3.7
 
 Version 0.3.7 (build 23) bundles Python engine 2.31.5. It focuses on the

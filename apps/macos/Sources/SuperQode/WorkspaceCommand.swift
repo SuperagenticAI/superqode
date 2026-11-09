@@ -4,7 +4,7 @@ enum WorkspaceCommandAction: Equatable {
   case openProject, newTask, connect, back, forward, refreshChanges, exportEvidence, welcome, learning
   case section(String), run(String), project(String)
   case connectionPage(String)
-  case connectionDiagnostics
+  case connectionDiagnostics, sendToThread
 
   var id: String {
     switch self {
@@ -22,6 +22,7 @@ enum WorkspaceCommandAction: Equatable {
     case .project(let path): return "project:" + path
     case .connectionPage(let page): return "connection-page:" + page
     case .connectionDiagnostics: return "connection-diagnostics"
+    case .sendToThread: return "send-to-thread"
     }
   }
 }
@@ -33,6 +34,7 @@ struct WorkspaceCommand: Identifiable {
   let symbol: String
   var keywords: String = ""
   var key: String? = nil
+  var shiftKey = false
   var disabledReason: String? = nil
   var id: String { action.id }
   var isEnabled: Bool { disabledReason == nil }
