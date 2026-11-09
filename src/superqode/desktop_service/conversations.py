@@ -94,6 +94,8 @@ def answer(service, identity):
 
 
 def history(service, identity, before=None):
+    from .run_stats import normalize_usage, timing
+
     nodes = lineage(service, identity)
     previous = nodes[:-1]
     if before:
@@ -112,6 +114,11 @@ def history(service, identity, before=None):
                 "response": answer(service, node["id"]),
                 "harness": node["request"].get("harness", ""),
                 "status": node["status"],
+                "model": node["request"].get("model", ""),
+                "created": node.get("created"),
+                **timing(service, node),
+                "usage": (node["result"] or {}).get("usage_summary")
+                or normalize_usage((node["result"] or {}).get("usage")),
             }
             for node in page
         ],

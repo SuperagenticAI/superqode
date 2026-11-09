@@ -104,6 +104,9 @@ class DesktopService:
             CREATE TABLE IF NOT EXISTS local_model_bindings(project TEXT,harness TEXT,provider TEXT,model TEXT,endpoint TEXT,PRIMARY KEY(project,harness,provider,model));
             """
         )
+        from .run_stats import ensure_timing_table
+
+        ensure_timing_table(self.db)
         self.db.execute(
             "UPDATE jobs SET status='interrupted' WHERE status IN ('running','needs_approval','queued','cancelling')"
         )
@@ -301,6 +304,10 @@ class DesktopService:
         }
 
     def append(self, job_id: str, event: dict):
+        # Wall-clock time the engine recorded the event, for timestamps in the app.
+        at = time.time()
+        if isinstance(event, dict) and "at" not in event:
+            event = {**event, "at": at}
         raw = json.dumps(event, default=str, ensure_ascii=False)
         if len(raw) > 64_000:
             if event.get("type") == "approval":
@@ -323,12 +330,31 @@ class DesktopService:
                 }
             else:
                 event = {"type": "output", "data": {"text": raw[:63_000], "truncated": True}}
+            event["at"] = at
             raw = json.dumps(event, ensure_ascii=False)
         self._write("INSERT INTO events(job,payload) VALUES(?,?)", (job_id, raw))
 
     def _status(self, job_id, status):
         self._write("UPDATE jobs SET status=?,updated=? WHERE id=?", (status, time.time(), job_id))
+        self._mark_finished(job_id, status)
         self._notify(job_id, status)
+
+    def _mark_started(self, job_id, at):
+        self._write(
+            "INSERT OR IGNORE INTO job_timing(job,started,finished) VALUES(?,?,NULL)",
+            (job_id, at),
+        )
+
+    def _mark_finished(self, job_id, status):
+        from .run_stats import TERMINAL_STATUSES
+
+        if status not in TERMINAL_STATUSES:
+            return
+        self._write(
+            "INSERT INTO job_timing(job,started,finished) VALUES(?,NULL,?) "
+            "ON CONFLICT(job) DO UPDATE SET finished=COALESCE(job_timing.finished,excluded.finished)",
+            (job_id, time.time()),
+        )
 
     def _notify(self, job_id, status):
         if status not in {"needs_approval", "completed", "failed", "interrupted"}:
@@ -366,8 +392,11 @@ class DesktopService:
             pass
 
     def _watch(self, job_id, process, secrets=(), logger=None):
+        from .run_stats import UsageCollector
+
         result = None
         error = None
+        usage = UsageCollector()
         try:
             for line in process.stdout:
                 try:
@@ -378,6 +407,7 @@ class DesktopService:
                     )
                     continue
                 self.append(job_id, event)
+                usage.observe(event)
                 if event.get("type") == "approval":
                     with self.lock:
                         self.pending[job_id] = event["data"]["request_id"]
@@ -410,6 +440,10 @@ class DesktopService:
                 status = "regressed"
             if isinstance(result, dict) and result.get("status") in {"failed", "error"}:
                 status = "failed"
+            # Keep the reported usage with the run so history can show it later.
+            summary = usage.result(result)
+            if isinstance(result, dict) and summary:
+                result = {**result, "usage_summary": summary}
             with self.lock:
                 self.processes.pop(job_id, None)
                 self._write(
@@ -428,6 +462,7 @@ class DesktopService:
                 lease = self._project_leases.pop(job_id, None)
                 if lease:
                     lease.close()
+                self._mark_finished(job_id, status)
                 self._notify(job_id, status)
         except Exception as exc:
             self.append(job_id, {"type": "error", "data": {"message": redact(str(exc), secrets)}})
@@ -723,6 +758,7 @@ class DesktopService:
                         now,
                     ),
                 )
+                self._mark_started(job_id, now)
             except Exception:
                 self._project_leases.pop(job_id, None)
                 lease.close()
@@ -1334,6 +1370,9 @@ class DesktopService:
             row["fork_origin"] = summary.get("fork_origin")
             row["request"] = json.loads(row["request"])
             row["result"] = json.loads(row["result"]) if row["result"] else None
+            from .run_stats import timing
+
+            row.update(timing(self, row))
             if row["kind"] in {"evaluation", "optimization"} and row["result"] is not None:
                 from .evaluation_review import with_evaluation_comparison
 
