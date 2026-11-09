@@ -289,6 +289,14 @@ struct ReviewWorkspaceView: View {
         Text("Feedback is added to your draft for review before sending.")
           .font(.caption).foregroundStyle(.secondary)
         Spacer()
+        Button("Add to pending comments") {
+          addFeedback(document, pending: true)
+        }
+        .help("Collect comments for this thread, then send them together from the message box")
+        .disabled(
+          !document.complete || (selectedRange.map { $0.count > 80 } ?? true)
+            || comment.wrappedValue.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
+            || comment.wrappedValue.count > 4000 || applying)
         Button(app.selectedJob.isEmpty ? "Add to draft" : "Add to follow-up") {
           addFeedback(document)
         }
@@ -415,7 +423,7 @@ struct ReviewWorkspaceView: View {
     }
   }
 
-  private func addFeedback(_ document: ReviewDocument) {
+  private func addFeedback(_ document: ReviewDocument, pending: Bool = false) {
     guard !applying, document.complete, app.section == "Review",
       let hunk = selectedHunk, let range = selection.range(in: hunk),
       let snapshot = document.snapshotID
@@ -438,7 +446,19 @@ struct ReviewWorkspaceView: View {
         guard !text.isEmpty else {
           throw EngineError(message: "The engine returned no review feedback.")
         }
-        if app.appendReviewFeedback(text, project: project, conversation: conversation) {
+        if pending {
+          guard project == app.projectID, conversation == app.composerKey else {
+            throw EngineError(message: "The selected thread changed. Add the comment again.")
+          }
+          let lines = range.lowerBound == range.upperBound
+            ? hunk.header : hunk.header + " lines \(range.lowerBound + 1)-\(range.upperBound + 1)"
+          app.pendingComments.add(
+            PendingComment(path: document.path, lines: lines, excerpt: "",
+              text: comment.wrappedValue.trimmingCharacters(in: .whitespacesAndNewlines), formatted: text),
+            thread: conversation)
+          commentStore.drafts.removeValue(forKey: snapshot)
+          app.saveDraft(flush: false)
+        } else if app.appendReviewFeedback(text, project: project, conversation: conversation) {
           commentStore.drafts.removeValue(forKey: snapshot)
           app.saveDraft(flush: false)
         }

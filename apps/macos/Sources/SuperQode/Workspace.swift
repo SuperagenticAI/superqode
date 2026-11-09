@@ -471,6 +471,8 @@ private func jobStamp(_ row: [String: Any]) -> Double {
   @Published var harness = "superqode"
   let draftStore = DraftStore()
   let reviewCommentStore = ReviewCommentStore()
+  /// Review comments waiting to be sent, per thread.
+  let pendingComments = PendingCommentStore()
   var draft: String {
     get { draftStore.text }
     set {

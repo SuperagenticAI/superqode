@@ -870,6 +870,7 @@ struct CodingComposer: View {
           Button("Load agent models") { app.perform { await app.checkManagedConnection() } }
         }
       }
+      PendingCommentsTray(store: app.pendingComments)
       ProviderHealthStrip()
       attachments
       PromptEditor(

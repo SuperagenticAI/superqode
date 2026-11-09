@@ -299,7 +299,8 @@ struct TurnDiffSheet: View {
       } else if let document = review.document {
         if !document.issue.isEmpty { Text(document.issue).font(.caption).foregroundStyle(.orange) }
         if document.truncated { Text("Incomplete diff preview.").font(.caption).foregroundStyle(.orange) }
-        DiffView(text: diff).frame(maxWidth: .infinity, maxHeight: .infinity)
+        CommentableDiff(document: document).frame(maxWidth: .infinity, maxHeight: .infinity)
+        PendingCommentsTray(store: app.pendingComments)
       }
       Spacer(minLength: 0)
     }
