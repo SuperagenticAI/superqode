@@ -12,10 +12,16 @@ import os
 import re
 import shutil
 import subprocess
-from pathlib import Path
+from pathlib import Path, PurePosixPath
 
 ACTIVE = ("running", "needs_approval", "queued", "cancelling")
 SENSITIVE_PARTS = {".git", ".ssh", ".aws", ".gnupg"}
+# Engine state kept inside projects (checkpoint snapshots, work orders, drafts).
+# Never listed for commit and never staged from here.
+PRIVATE_PARTS = {".superqode"}
+PRIVATE_PREFIXES = (".superqode-",)
+# Git methods that change the repository. They hold the project writer lease.
+MUTATIONS = {"ship.commit", "ship.push", "ship.create_branch"}
 MAX_OUTPUT = 200_000
 _BRANCH = re.compile(r"^[A-Za-z0-9._/-]{1,200}$")
 
@@ -119,32 +125,109 @@ def _gh_path() -> str | None:
     return shutil.which("gh", path=_env()["PATH"])
 
 
-def _assert_idle(service, project: str) -> None:
+def assert_idle(service, project: str) -> None:
+    """Refuse while any run in the project is active or still reaping."""
     placeholders = ",".join("?" for _ in ACTIVE)
-    if service._all(
+    rows = service._all(
         f"SELECT id FROM jobs WHERE project=? AND status IN ({placeholders})",
         (project, *ACTIVE),
-    ):
+    )
+    others = service._all("SELECT id FROM jobs WHERE project=?", (project,))
+    if rows or any(row["id"] in getattr(service, "processes", {}) for row in others):
         raise ValueError("Finish or stop the active run before committing or pushing")
+
+
+_assert_idle = assert_idle
+
+
+def is_private(relative: str) -> bool:
+    """True for engine state inside the project, such as .superqode/checkpoints."""
+    parts = PurePosixPath(relative).parts
+    return any(part in PRIVATE_PARTS or part.startswith(PRIVATE_PREFIXES) for part in parts)
+
+
+def _real_root(root: Path) -> Path:
+    return Path(os.path.realpath(root))
+
+
+def _relative_path(root: Path, value) -> str:
+    """Validate one project-relative path and return it in POSIX form."""
+    if not isinstance(value, str) or not value or "\0" in value or len(value) > 4096:
+        raise ValueError("Invalid file path")
+    if value.startswith(("/", "~")) or os.path.isabs(value) or "\\" in value:
+        raise ValueError("Files must be given relative to the project")
+    parts = value.split("/")
+    if any(part in {"", ".", ".."} for part in parts):
+        raise ValueError("Files must be inside the project")
+    real_root = _real_root(root)
+    # realpath follows symlinks, so a link pointing outside the project is refused.
+    target = Path(os.path.realpath(real_root / value))
+    if target != real_root and not target.is_relative_to(real_root):
+        raise ValueError("Files must be inside the project")
+    if target == real_root:
+        raise ValueError("Choose files, not the whole project")
+    relative = PurePosixPath(value)
+    if any(part in SENSITIVE_PARTS for part in relative.parts) or relative.name.startswith(".env"):
+        raise ValueError(f"{relative} looks sensitive and cannot be committed from here")
+    if is_private(value):
+        raise ValueError(f"{relative} is SuperQode project state and is never committed")
+    return value
 
 
 def _paths(root: Path, values) -> list[str]:
     if not isinstance(values, list) or not values or len(values) > 2000:
         raise ValueError("Choose the files to commit")
-    result = []
-    for value in values:
-        if not isinstance(value, str) or not value or "\0" in value:
-            raise ValueError("Invalid file path")
-        target = (root / value).absolute()
-        if not target.is_relative_to(root):
-            raise ValueError("Files must be inside the project")
-        relative = target.relative_to(root)
-        if any(part in SENSITIVE_PARTS for part in relative.parts) or relative.name.startswith(
-            ".env"
-        ):
-            raise ValueError(f"{relative} looks sensitive and cannot be committed from here")
-        result.append(":(literal)" + str(relative))
-    return result
+    return [":(literal)" + _relative_path(root, value) for value in values]
+
+
+def _prefix(root: Path) -> str:
+    """The project's path inside its repository, for example "apps/web/" or ""."""
+    return _git(root, "rev-parse", "--show-prefix").strip()
+
+
+def changed_files(root: Path) -> list[dict]:
+    """Changed files inside the project, relative to the project root.
+
+    Git reports porcelain paths relative to the repository top level, so a
+    project below the top level has its prefix removed. Renames keep their
+    source path when it is inside the project too.
+    """
+    prefix = _prefix(root)
+    raw = _git(root, "status", "--porcelain=v1", "-z", "--untracked-files=all", "--", ".")
+    entries = raw.split("\0")
+    files = []
+    index = 0
+
+    def local(path: str) -> str | None:
+        if prefix and not path.startswith(prefix):
+            return None
+        return path[len(prefix) :]
+
+    while index < len(entries):
+        entry = entries[index]
+        index += 1
+        if len(entry) < 4:
+            continue
+        code, path = entry[:2], entry[3:]
+        source = ""
+        if code[0] in "RC" or code[1] in "RC":
+            source = entries[index] if index < len(entries) else ""
+            index += 1
+        relative = local(path)
+        if not relative or is_private(relative):
+            continue
+        item = {
+            "path": relative,
+            "code": code.strip() or code,
+            "staged": code[0] not in " ?",
+            # Changes in the working tree that still need staging.
+            "unstaged": code[1] != " ",
+        }
+        original = local(source) if source else None
+        if original and not is_private(original):
+            item["original"] = original
+        files.append(item)
+    return files
 
 
 def _branch_name(name) -> str:
@@ -155,6 +238,7 @@ def _branch_name(name) -> str:
 
 def status(root: Path) -> dict:
     _git(root, "rev-parse", "--is-inside-work-tree")
+    prefix = _prefix(root)
     branch = _git(root, "branch", "--show-current").strip()
     has_commits = _run(root, ["git", "rev-parse", "--verify", "HEAD"]).returncode == 0
     upstream = ""
@@ -184,19 +268,7 @@ def status(root: Path) -> dict:
             ):
                 default_branch = candidate
                 break
-    files = []
-    raw = _git(root, "status", "--porcelain=v1", "-z", "--untracked-files=all")
-    entries = raw.split("\0")
-    index = 0
-    while index < len(entries):
-        entry = entries[index]
-        index += 1
-        if len(entry) < 4:
-            continue
-        code, path = entry[:2], entry[3:]
-        if code[0] in "RC":
-            index += 1  # skip the rename source
-        files.append({"path": path, "code": code.strip() or code, "staged": code[0] not in " ?"})
+    files = changed_files(root)
     gh = _gh_path()
     gh_ready = False
     if gh:
@@ -212,6 +284,7 @@ def status(root: Path) -> dict:
         "default_branch": default_branch,
         "on_default_branch": bool(branch) and branch in {default_branch, "main", "master"},
         "files": files[:2000],
+        "repository_prefix": prefix,
         "gh_installed": bool(gh),
         "gh_ready": gh_ready,
     }
@@ -237,22 +310,46 @@ def draft_message(root: Path, paths: list[str], prompt: str) -> dict:
 
 
 def commit(service, root: Path, params: dict) -> dict:
-    _assert_idle(service, params["project"])
-    paths = _paths(root, params.get("paths"))
+    assert_idle(service, params["project"])
+    selected = [_relative_path(root, value) for value in _list(params.get("paths"))]
     message = str(params.get("message") or "").strip()
     if not message or len(message) > 5000:
         raise ValueError("Enter a commit message of up to 5,000 characters")
     if not _git(root, "branch", "--show-current").strip():
         raise ValueError(plain_error("HEAD detached"))
-    _git(root, "add", "-A", "--", *paths)
+    # A renamed file commits with its source so the old path is not left behind.
+    changed = {f["path"]: f for f in changed_files(root)}
+    sources = {path: f.get("original") for path, f in changed.items()}
+    originals = {source for source in sources.values() if source}
+    chosen = list(dict.fromkeys(selected))
+    for path in selected:
+        original = sources.get(path)
+        if original and original not in chosen:
+            chosen.append(_relative_path(root, original))
+    paths = [":(literal)" + path for path in chosen]
+    # Stage only working tree changes; a path already staged (such as a
+    # rename source) has nothing left to add and would fail the pathspec.
+    to_add = [
+        ":(literal)" + path
+        for path in chosen
+        if path not in originals and (path not in changed or changed[path].get("unstaged", True))
+    ]
+    if to_add:
+        _git(root, "add", "-A", "--", *to_add)
     # Hooks and signing run as configured; they may take a while.
     output = _git(root, "commit", "-m", message, "--", *paths, timeout=180)
     sha = _git(root, "rev-parse", "--short", "HEAD").strip()
     return {"ok": True, "sha": sha, "output": output[-4000:]}
 
 
+def _list(values) -> list:
+    if not isinstance(values, list) or not values or len(values) > 2000:
+        raise ValueError("Choose the files to commit")
+    return values
+
+
 def push(service, root: Path, params: dict) -> dict:
-    _assert_idle(service, params["project"])
+    assert_idle(service, params["project"])
     branch = _git(root, "branch", "--show-current").strip()
     if not branch:
         raise ValueError(plain_error("HEAD detached"))
@@ -272,7 +369,7 @@ def push(service, root: Path, params: dict) -> dict:
 
 
 def create_branch(service, root: Path, params: dict) -> dict:
-    _assert_idle(service, params["project"])
+    assert_idle(service, params["project"])
     name = _branch_name(params.get("name"))
     _git(root, "check-ref-format", "--branch", name)
     _git(root, "switch", "-c", name)

@@ -64,6 +64,8 @@ class DesktopService:
         self._project_leases = {}
         self._reapers = {}
         self.lock = threading.RLock()
+        # Projects with a Git commit, push or branch switch in progress.
+        self._ship_projects: set[str] = set()
         self._external_scan_lock = threading.Lock()
         self.db = sqlite3.connect(self.root / "desktop.sqlite", check_same_thread=False)
         self.db.row_factory = sqlite3.Row
@@ -501,6 +503,10 @@ class DesktopService:
             if self._closing:
                 raise ValueError("The desktop engine is shutting down")
             root = self.project(project_id)
+            if project_id in self._ship_projects:
+                raise ValueError(
+                    "A Git commit or push is in progress for this project. Start the run when it finishes."
+                )
             if kind in {"evaluation", "optimization"}:
                 from .experiments import reviewed_suite
 
@@ -969,9 +975,34 @@ class DesktopService:
 
     def _dispatch(self, method: str, params: dict):
         if method.startswith("ship."):
-            from .ship import action as ship_action
+            from .ship import MUTATIONS, action as ship_action, assert_idle
 
-            return ship_action(self, self.project(params["project"]), method, params)
+            project_id = params["project"]
+            root = self.project(project_id)
+            if method not in MUTATIONS:
+                return ship_action(self, root, method, params)
+            from .ownership import Lease, project_lease_path
+
+            # Check and hold atomically with respect to start(): while the
+            # writer lease is held, no run can start in this project, and a
+            # run that already holds it makes the lease attempt fail here.
+            with self.lock:
+                if project_id in self._ship_projects:
+                    raise ValueError("Another Git action is already running for this project")
+                assert_idle(self, project_id)
+                try:
+                    lease = Lease(project_lease_path(self.root, root))
+                except ValueError:
+                    raise ValueError(
+                        "A run or worker still owns this project. Wait for it to stop before committing or pushing."
+                    ) from None
+                self._ship_projects.add(project_id)
+            try:
+                return ship_action(self, root, method, params)
+            finally:
+                with self.lock:
+                    self._ship_projects.discard(project_id)
+                lease.close()
         if method == "turns.changes":
             from .turn_changes import summary
 
