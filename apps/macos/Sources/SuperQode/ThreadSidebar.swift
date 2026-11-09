@@ -228,7 +228,15 @@ struct ThreadSidebarRow: View {
       Text(harnessLabel).lineLimit(1).foregroundStyle(.secondary).help("Last used harness: " + harnessLabel)
       Spacer(minLength: 2)
       ThreadStatusIndicator(status: status)
-      Text(statusTitle).foregroundStyle(ThreadStatusIndicator.color(status)).lineLimit(1)
+      Group {
+        if status == "running", let started = RunStats.startDate(row) {
+          LiveElapsedText(prefix: "Working for ", since: started)
+        } else if let waiting = RunStats.waitingSince(row) {
+          LiveElapsedText(prefix: "Waiting for you ", since: waiting, compact: true)
+        } else {
+          Text(statusTitle)
+        }
+      }.foregroundStyle(ThreadStatusIndicator.color(status)).lineLimit(1).layoutPriority(1)
     }.font(.system(size: 10))
   }
 }

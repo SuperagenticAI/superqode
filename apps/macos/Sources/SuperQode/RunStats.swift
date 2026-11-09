@@ -156,6 +156,22 @@ enum RunStatsFormat {
     return "\(total / 3600)h \((total % 3600) / 60)m"
   }
 
+  /// Live working time: "42s", "12m 03s", "1h 04m".
+  static func elapsed(_ seconds: TimeInterval) -> String {
+    let total = max(0, Int(seconds))
+    if total < 60 { return "\(total)s" }
+    if total < 3600 { return "\(total / 60)m " + String(format: "%02ds", total % 60) }
+    return "\(total / 3600)h " + String(format: "%02dm", (total % 3600) / 60)
+  }
+
+  /// Coarse waiting time: "42s", "2m", "1h 4m".
+  static func compactElapsed(_ seconds: TimeInterval) -> String {
+    let total = max(0, Int(seconds))
+    if total < 60 { return "\(total)s" }
+    if total < 3600 { return "\(total / 60)m" }
+    return "\(total / 3600)h \((total % 3600) / 60)m"
+  }
+
   static func tokens(_ count: Int) -> String {
     if count < 1000 { return String(count) }
     if count < 1_000_000 { return String(format: "%.1fk", Double(count) / 1000) }
@@ -166,6 +182,34 @@ enum RunStatsFormat {
     let code = (currency?.isEmpty == false ? currency! : "USD").uppercased()
     let digits = value < 0.01 ? 4 : 2
     return value.formatted(.currency(code: code).precision(.fractionLength(digits)))
+  }
+}
+
+/// A label that ticks once a second. The timeline is scoped to this text so
+/// the transcript and sidebar around it are not re-rendered.
+struct LiveElapsedText: View {
+  let prefix: String
+  let since: Date
+  var compact = false
+  var body: some View {
+    TimelineView(.periodic(from: .now, by: 1)) { context in
+      let seconds = context.date.timeIntervalSince(since)
+      Text(prefix + (compact ? RunStatsFormat.compactElapsed(seconds) : RunStatsFormat.elapsed(seconds)))
+        .monospacedDigit()
+    }
+    .help("Since " + RunStatsFormat.full(since))
+  }
+}
+
+extension RunStats {
+  /// When the selected or listed run started, falling back to its creation time.
+  static func startDate(_ row: [String: Any]) -> Date? {
+    date(row["started_at"]) ?? date(row["created"])
+  }
+  /// When a run waiting for approval entered that state. The engine stamps
+  /// `updated` on every status change.
+  static func waitingSince(_ row: [String: Any]) -> Date? {
+    string(row, "status") == "needs_approval" ? date(row["updated"]) : nil
   }
 }
 

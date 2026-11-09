@@ -1246,8 +1246,9 @@ struct EventStream: View {
               }.padding(20).frame(maxWidth: .infinity, alignment: .leading).modifier(ConversationSurface())
                 .id("response:" + app.selectedJob)
             }
-            if isTask {
-              RunStatsFooter(stats: stats, active: app.active).padding(.horizontal, 4)
+            // While the agent works, the pinned working card shows the live timer.
+            if isTask && !app.active {
+              RunStatsFooter(stats: stats).padding(.horizontal, 4)
             }
             if messages.isEmpty && !app.hasMoreRunEvents && !app.eventStreamOpen && !app.active {
               VStack(alignment: .leading, spacing: 8) {
@@ -1299,7 +1300,11 @@ struct EventStream: View {
       if app.active || !activity.isEmpty {
         Divider()
         VStack(spacing: 6) {
-          if app.active { AgentWorkingCard(status: app.activityStatus, activity: currentAgentActivity(app.events)) }
+          if app.active {
+            AgentWorkingCard(
+              status: app.activityStatus, activity: currentAgentActivity(app.events),
+              startedAt: RunStats.startDate(app.detail), waitingSince: RunStats.waitingSince(app.detail))
+          }
           if !activity.isEmpty {
             AgentActivityView(events: activity, active: app.active && app.activityStatus != "needs_approval")
               .id(app.selectedJob)

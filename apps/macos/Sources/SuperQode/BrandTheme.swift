@@ -249,12 +249,29 @@ struct BrandActivityIndicator: View {
 struct AgentWorkingCard: View {
   let status: String
   var activity = ""
+  /// Run start, for "Working for 12m 03s".
+  var startedAt: Date?
+  /// When the run began waiting for approval, for "Waiting for you 2m".
+  var waitingSince: Date?
   var body: some View {
     HStack(spacing: 12) {
       BrandMark().frame(width: 25, height: 25)
       VStack(alignment: .leading, spacing: 8) {
         if status == "needs_approval" || status == "cancelling" {
-          Text(BrandActivityIndicator(status: status).label).font(.system(size: 13, weight: .semibold)).modifier(BrandText())
+          HStack(spacing: 10) {
+            Text(BrandActivityIndicator(status: status).label).font(.system(size: 13, weight: .semibold)).modifier(BrandText())
+            if status == "needs_approval", let waitingSince {
+              LiveElapsedText(prefix: "Waiting for you ", since: waitingSince, compact: true)
+                .font(.system(size: 12)).foregroundStyle(.secondary)
+            } else if let startedAt {
+              LiveElapsedText(prefix: "", since: startedAt)
+                .font(.system(size: 12)).foregroundStyle(.secondary)
+            }
+          }
+        } else if let startedAt {
+          LiveElapsedText(prefix: "Working for ", since: startedAt)
+            .font(.system(size: 13, weight: .semibold)).modifier(BrandText())
+            .accessibilityLabel("Working")
         } else {
           WorkingStatusText().font(.system(size: 13, weight: .semibold)).modifier(BrandText())
         }
