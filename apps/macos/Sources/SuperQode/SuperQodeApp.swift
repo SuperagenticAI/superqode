@@ -1298,6 +1298,8 @@ struct EventStream: View {
                 .padding(.bottom, 10)
                 .id("prompt:" + app.selectedJob)
             }
+            let plan = PlanSnapshot.latest(app.events)
+            if isTask && !plan.isEmpty { PlanCard(items: plan) }
             let messages = rows.filter { string($0, "type") != "activity_group" }
             if !messages.isEmpty {
               VStack(alignment: .leading, spacing: 16) {
@@ -1375,7 +1377,8 @@ struct EventStream: View {
           if app.active {
             AgentWorkingCard(
               status: app.activityStatus, activity: currentAgentActivity(app.events),
-              startedAt: RunStats.startDate(app.detail), waitingSince: RunStats.waitingSince(app.detail))
+              startedAt: RunStats.startDate(app.detail), waitingSince: RunStats.waitingSince(app.detail),
+              planLine: PlanSnapshot.compactLine(PlanSnapshot.latest(app.events)))
           }
           if !activity.isEmpty {
             AgentActivityView(events: activity, active: app.active && app.activityStatus != "needs_approval")

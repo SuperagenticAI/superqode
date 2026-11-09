@@ -253,6 +253,8 @@ struct AgentWorkingCard: View {
   var startedAt: Date?
   /// When the run began waiting for approval, for "Waiting for you 2m".
   var waitingSince: Date?
+  /// Compact plan progress, e.g. "Plan 2 of 5 done · Run tests".
+  var planLine = ""
   var body: some View {
     HStack(spacing: 12) {
       BrandMark().frame(width: 25, height: 25)
@@ -276,6 +278,10 @@ struct AgentWorkingCard: View {
           WorkingStatusText().font(.system(size: 13, weight: .semibold)).modifier(BrandText())
         }
         if status != "needs_approval" { ThinkingBar().frame(maxWidth: 320) }
+        if !planLine.isEmpty {
+          Label(planLine, systemImage: "checklist").font(.system(size: 12)).foregroundStyle(.secondary)
+            .lineLimit(1).truncationMode(.tail).help(planLine)
+        }
         if status == "needs_approval" || status == "cancelling" || !activity.isEmpty {
           Text(status == "needs_approval" ? "Waiting for your approval" : status == "cancelling" ? "Waiting for the agent to stop" : activity)
             .font(.system(size: 12, design: .monospaced)).foregroundStyle(.secondary)
