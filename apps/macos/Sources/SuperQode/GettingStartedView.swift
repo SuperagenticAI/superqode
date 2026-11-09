@@ -14,6 +14,68 @@ struct GettingStartedView: View {
   }
   var body: some View {
     ScrollView {
+      if !app.project.isEmpty && !((showStarterGuide && !hasRun) || app.starterTourRequested) {
+        newThreadStart
+      } else {
+        guide
+      }
+    }.defaultScrollAnchor(.top)
+  }
+  /// The first screen of a new thread: one question, and the connection front and centre.
+  private var newThreadStart: some View {
+    VStack(spacing: 22) {
+      BrandMark().frame(width: 44, height: 44)
+      Text("What should we work on?")
+        .font(.system(size: 28, weight: .semibold)).multilineTextAlignment(.center)
+      if app.connectionDisconnected {
+        VStack(spacing: 14) {
+          Label("Connect an agent or a model to start", systemImage: "cable.connector")
+            .font(.system(size: 15, weight: .semibold))
+          Text("Use a coding agent you already have, or your own model through a local runtime or API key.")
+            .font(.callout).foregroundStyle(.secondary).multilineTextAlignment(.center)
+            .fixedSize(horizontal: false, vertical: true)
+          HStack(spacing: 12) {
+            Button { app.openConnections("menu:vendors") } label: {
+              Label("Agent", systemImage: "person.crop.circle.badge.checkmark")
+                .font(.system(size: 14, weight: .semibold)).frame(minWidth: 130, minHeight: 30)
+            }.buttonStyle(BrandButtonStyle())
+              .help("Connect a coding agent with its existing subscription or sign-in.")
+            Button { app.openConnections("menu:harness") } label: {
+              Label("Model", systemImage: "cpu")
+                .font(.system(size: 14, weight: .semibold)).frame(minWidth: 130, minHeight: 30)
+            }.controlSize(.large)
+              .help("Use a local model or your API key with a SuperQode harness.")
+          }.disabled(app.connectionPickerDisabled)
+          if !app.connected {
+            Text("Waiting for the local engine…").font(.caption).foregroundStyle(.secondary)
+          }
+        }
+        .padding(24).frame(maxWidth: 520)
+        .background(Color.qPanel.opacity(0.6), in: RoundedRectangle(cornerRadius: 14))
+        .overlay(RoundedRectangle(cornerRadius: 14).stroke(Color.orange.opacity(0.45), lineWidth: 1))
+      } else {
+        HStack(spacing: 12) {
+          if let identity = app.composerHarnessIdentity { HarnessIcon(identity: identity, size: 30) }
+          VStack(alignment: .leading, spacing: 2) {
+            Text("Connected").font(.caption).foregroundStyle(.secondary)
+            Text(app.connectionDisplayName).font(.system(size: 14, weight: .medium)).lineLimit(1)
+          }
+          Spacer(minLength: 12)
+          Button("Change") { app.openConnections() }.disabled(app.connectionPickerDisabled)
+        }
+        .padding(14).frame(maxWidth: 520)
+        .background(Color.qPanel.opacity(0.6), in: RoundedRectangle(cornerRadius: 12))
+        .overlay(RoundedRectangle(cornerRadius: 12).stroke(Color.secondary.opacity(0.25), lineWidth: 1))
+        Text("Describe a change below. Review tool requests and inspect the result as your agent works.")
+          .font(.callout).foregroundStyle(.secondary).multilineTextAlignment(.center)
+      }
+      Button("Getting started & learning") { app.showLearningGuide = true }
+        .buttonStyle(.link).font(.caption)
+    }
+    .padding(.horizontal, 28).padding(.top, 56).padding(.bottom, 28)
+    .frame(maxWidth: .infinity)
+  }
+  private var guide: some View {
       VStack(alignment: .leading, spacing: 22) {
         if app.project.isEmpty {
           BrandMark().frame(width: 62, height: 62)
@@ -55,8 +117,11 @@ struct GettingStartedView: View {
             Text("Describe your change").foregroundStyle(.secondary)
           }.font(.caption)
           if !hasConnection {
-            Button("Choose connection…") { app.showConnection = true }.buttonStyle(
-              BrandButtonStyle())
+            HStack(spacing: 12) {
+              Button("Connect an agent…") { app.openConnections("menu:vendors") }
+                .buttonStyle(BrandButtonStyle())
+              Button("Use a model…") { app.openConnections("menu:harness") }
+            }.disabled(app.connectionPickerDisabled)
           }
           Button("Start with a project overview") {
             app.draft =
@@ -75,17 +140,9 @@ struct GettingStartedView: View {
               app.starterTourRequested = false
             }.font(.caption)
           }
-        } else {
-          PageTitle(
-            eyebrow: "Agent Space", title: "What shall we build?",
-            subtitle:
-              "Describe a change below. Review tool requests and inspect the result as your agent works."
-          )
-          Button("Getting started & learning") { app.showLearningGuide = true }
         }
       }.padding(28).frame(maxWidth: 680, alignment: .leading).frame(
         maxWidth: .infinity, alignment: .leading)
-    }.defaultScrollAnchor(.top)
   }
   private func step(_ number: Int, _ title: String, _ detail: String, done: Bool) -> some View {
     HStack(alignment: .top, spacing: 12) {

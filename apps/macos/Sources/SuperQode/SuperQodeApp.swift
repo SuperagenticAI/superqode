@@ -664,12 +664,6 @@ struct CodingComposer: View {
   private var route: [String: Any] {
     app.harnesses.first { string($0, "id") == app.harness } ?? [:]
   }
-  private var routeDisplayName: String {
-    if app.connectionDisconnected { return "Connect an agent" }
-    let name = string(route, "name", app.harness)
-    if app.model.isEmpty { return app.isManaged ? name : name + " · Choose model" }
-    return name + " · " + app.model
-  }
   private var continuesConversation: Bool {
     app.canContinueConversation
   }
@@ -728,15 +722,24 @@ struct CodingComposer: View {
             Button("Disconnect", action: app.disconnectConnection).disabled(app.anyActive || app.busy)
           }
         } label: {
-          HStack(spacing: 7) {
+          HStack(spacing: 8) {
             if let identity = app.composerHarnessIdentity {
-              HarnessIcon(identity: identity, size: 23)
+              HarnessIcon(identity: identity, size: 26)
             } else {
-              Image(systemName: "cable.connector").foregroundStyle(.secondary)
-                .frame(width: 23, height: 23)
+              Image(systemName: "exclamationmark.circle.fill").foregroundStyle(.orange)
+                .font(.system(size: 18)).frame(width: 26, height: 26)
             }
-            Text(routeDisplayName).font(.system(size: 11)).lineLimit(1)
+            Text(app.connectionDisplayName)
+              .font(.system(size: 13, weight: .medium)).lineLimit(1)
+              .foregroundStyle(app.connectionDisconnected ? Color.orange : Color.primary)
+            if app.connectionDisconnected {
+              Text("Connect").font(.system(size: 12, weight: .semibold)).foregroundStyle(.orange)
+            }
           }
+          .padding(.horizontal, 8).padding(.vertical, 4)
+          .background(
+            (app.connectionDisconnected ? Color.orange.opacity(0.12) : Color.secondary.opacity(0.08)),
+            in: RoundedRectangle(cornerRadius: 8))
         }.menuStyle(.borderlessButton).fixedSize(horizontal: false, vertical: true)
           .help(app.connectionDisconnected ? "No agent connected. Choose a connection for this new thread." : "Connection for your next message. Compatible sessions resume; other routes receive bounded thread context.")
           .popover(isPresented: $showOptions, arrowEdge: .top) { connectionOptions }
