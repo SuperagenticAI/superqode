@@ -803,9 +803,16 @@ struct CodingComposer: View {
       }
     }
   }
+  /// A new, unconnected thread shows the connection grid above. Until a
+  /// connection is chosen the composer collapses to its connection bar so the
+  /// grid fits small screens. A kept draft always keeps the editor visible.
+  private var awaitingConnection: Bool {
+    app.connected && app.connectionDisconnected && app.selectedJob.isEmpty
+      && draftStore.text.isEmpty && app.imageAttachments.isEmpty && app.contextFiles.isEmpty
+  }
   private var composer: some View {
-    VStack(alignment: .leading, spacing: 10) {
-      resizeHandle.padding(.top, -8).padding(.bottom, -4)
+    VStack(alignment: .leading, spacing: awaitingConnection ? 0 : 10) {
+      if !awaitingConnection { resizeHandle.padding(.top, -8).padding(.bottom, -4) }
       HStack(spacing: 8) {
         Menu {
           Button(app.connectionDisconnected ? "Connect an agent…" : "Change agent or model…") { app.openConnections() }
@@ -839,7 +846,11 @@ struct CodingComposer: View {
           .help(app.connectionDisconnected ? "No agent connected. Choose a connection for this new thread." : "Connection for your next message. Compatible sessions resume; other routes receive bounded thread context.")
           .popover(isPresented: $showOptions, arrowEdge: .top) { connectionOptions }
         Spacer(minLength: 0)
+        if awaitingConnection {
+          Text("Choose a connection above to start.").font(.caption).foregroundStyle(.secondary)
+        }
       }
+      VStack(alignment: .leading, spacing: 10) {
       if app.isManaged || app.routeStatus["ready"] as? Bool == false {
         HStack {
           if app.checkingConnection { ProgressView().controlSize(.small) }
@@ -963,6 +974,15 @@ struct CodingComposer: View {
           .disabled(!app.canSubmitDraft)
           .keyboardShortcut(.return, modifiers: .command)
       }
+      }
+      // Collapse without unmounting, so the native editor keeps its identity.
+      .frame(height: awaitingConnection ? 0 : nil, alignment: .top).clipped()
+      .opacity(awaitingConnection ? 0 : 1)
+      .disabled(awaitingConnection).allowsHitTesting(!awaitingConnection)
+      .accessibilityHidden(awaitingConnection)
+    }
+    .onChange(of: awaitingConnection) { _, collapsed in
+      if collapsed { blurRequest += 1 }
     }
     .onAppear {
       if !app.enforcesSessionControls && app.interactionMode == "plan" { app.interactionMode = "code" }
