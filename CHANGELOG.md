@@ -7,6 +7,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [2.31.6] - 2026-11-10
+
 ### Added
 
 - macOS 0.3.9 (build 25): the new-thread connection grid fits small screens, and the composer collapses to a slim Not connected bar until a connection is chosen.
@@ -19,19 +21,6 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - The Advanced local harness catalog now shows only documented local integrations with a wired adapter: SuperQode Core, stable OpenCode 1.19.5+ within major 1 and stable Goose 1.58.0+ within major 1. Unwired integrations and unverified versions are hidden across the RPC catalog, saved profiles and Swift picker. Missing binaries retain an installation link.
 - An official-source [local harness support audit](docs/integrations/local-harness-support.md), with machine-readable evidence, covers all bundled ACP descriptors, native runtimes and built-in/optional harnesses. Documented support alone does not create a runnable adapter.
 
-### Fixed
-
-- Goose local launches now use its documented native Ollama or LM Studio provider. Ollama receives the contract's input limit as num_ctx; LM Studio uses its own chat-completions provider. Provider selection, token limits and private config agree without generic OpenAI-model-name routing.
-
-### Notes
-
-- The newcomer Local AI layout, connection-grid Local model and guided setup are unchanged; only the starter catalog reads scoped local evaluation evidence. No global harness config files are edited. Configuration/preflight is not a model quality or tool-calling guarantee; external tools and extensions can still access the network.
-- Included in macOS 0.3.9 (build 25) with engine 2.31.6; no installer, signing or notarization was produced here.
-
-## [2.31.6] - 2026-11-09
-
-### Added
-
 - macOS 0.3.8 (build 24): a newcomer Local AI screen from Local model and Models, with Ollama and LM Studio detection, reviewed runtime installation, server controls and model downloads with progress. Other runtimes remain under Advanced.
 - Your Mac panel, approximate Fits/Tight/Too large working-set guidance, refreshed starter suggestions and an amber responsible-use notice with a Learn more sheet.
 - A shared local context, output and KV cache contract with conservative hardware limits, LM Studio v1 loaded-context parsing, tool-schema-aware request estimates and complete-old-turn trimming before send. Oversized current prompts get actionable errors.
@@ -41,11 +30,18 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Fixed
 
+- Goose local launches now use its documented native Ollama or LM Studio provider. Ollama receives the contract's input limit as num_ctx; LM Studio uses its own chat-completions provider. Provider selection, token limits and private config agree without generic OpenAI-model-name routing.
+
 - Model-family defaults no longer silently raise the selected Ollama context. App-started Ollama uses quantized KV cache and Flash Attention; adopted servers keep their settings.
 - Reviewed LM Studio Stop uses its CLI instead of requiring an owned PID. Unload frees model memory without deleting downloaded files.
 - macOS bundling refreshes engine distribution metadata from the packaged source version so an older base runtime cannot advertise a stale engine version.
 
 - macOS: getting-started and connection-health links open All connections instead of jumping straight to subscriptions.
+
+### Notes
+
+- The newcomer Local AI layout, connection-grid Local model and guided setup are unchanged; only the starter catalog reads scoped local evaluation evidence. No global harness config files are edited. Configuration/preflight is not a model quality or tool-calling guarantee; external tools and extensions can still access the network.
+- Included in macOS 0.3.9 (build 25) with engine 2.31.6; no installer, signing or notarization was produced here.
 
 ## [2.31.5] - 2026-11-09
 
