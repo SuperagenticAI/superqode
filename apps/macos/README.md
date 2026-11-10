@@ -335,4 +335,12 @@ apps/macos/scripts/package-distribution.sh
 
 SwiftPM pins SwiftTerm for the AppKit project terminal; its license is bundled with the app. The runtime builder pins the compatible Omni optimizer revision and records dependencies and source provenance. Model weights, user configuration and credentials are excluded from the bundle. Python is an execution dependency; all desktop presentation, navigation, lifecycle, dialogs and integration are Swift.
 
+To build a shareable release in one step (signs, notarizes, staples, verifies and writes `SuperQode-X.Y.Z-arm64.dmg.sha256` next to the DMG):
+
+```sh
+SIGNING_IDENTITY="Developer ID Application: Name (TEAMID)" apps/macos/scripts/release.sh
+```
+
+It needs a Developer ID Application certificate in Keychain and a notary profile created once with `xcrun notarytool store-credentials superqode-notary --apple-id YOU --team-id TEAMID`. Set `UPLOAD=1` to also publish to superqode.dev, or `SKIP_ENGINE=1` to reuse the existing engine payload.
+
 For development, `swift build --package-path apps/macos` builds the executable. The packaging script selects full Xcode when available and places compiler caches inside `.build`. `CONFIGURATION=debug apps/macos/scripts/build-app.sh` packages a debug build. Open `Package.swift` in Xcode to work on the native sources.
