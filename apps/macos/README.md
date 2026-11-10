@@ -82,7 +82,7 @@ so unload them too. Existing servers are adopted without changing their settings
 The amber notice and **Learn more** cover memory, heat, battery and responsible
 use. Models run on this Mac, but tools and configured services may use the network.
 Other runtimes, the library, storage and compatibility controls stay under
-**Advanced**. See the 0.3.8 release smoke checklist in [BETA-NOTES.md](BETA-NOTES.md).
+**Advanced**. See the 0.3.9 release smoke checklist in [BETA-NOTES.md](BETA-NOTES.md).
 
 Recommended search includes Hugging Face families. Select an exact GGUF or MLX
 conversion to review its immutable revision, files and download size. Original

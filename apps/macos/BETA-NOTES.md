@@ -1,8 +1,8 @@
-# SuperQode for macOS public beta 0.3.8
+# SuperQode for macOS public beta 0.3.9
 
 Native coding workspace for Apple Silicon Macs running macOS 14 or later. Intel Macs are not supported by this build. This is beta software, with manual updates and incomplete terminal feature parity.
 
-## Unreleased: local evaluation and native small-model reliability
+## 0.3.9: local evaluation and native small-model reliability
 
 The newcomer Local AI layout has no new controls, harness choices or evaluation workflow. Its suggestions now use a curated registry: all shipped models are catalog-verified, never labelled tested without an explicitly imported passing Mac run. Applicable tested choices take preference for the same engine and memory tier only, and still have to fit. Existing installed models and saved setup remain available.
 
@@ -10,9 +10,9 @@ Advanced CLI `superqode local eval` exercises five fixed coding/tool tasks and s
 
 The native SuperQode engine automatically uses a minimal base prompt and a compact core toolset for local models at most 9B or effective context at most 8192. Custom/project instructions and permission checks remain. Fenced JSON, single quotes, trailing commas, explicit text calls and unambiguous argument aliases can be repaired. Invalid batches execute nothing, with at most two corrective retries in both run modes. Broad discovery/delegation is unavailable in lean mode; external harnesses are not changed. Lean status and local-only aggregate counters are in doctor JSON and the existing context status tool, not newcomer controls.
 
-These are unreleased source changes. App 0.3.8 (24) and engine 2.31.6 are unchanged. No Xcode build, Swift test, installer, signing or notarization was performed on the box.
+Included in app 0.3.9 (25) with engine 2.31.6. No Xcode build, Swift test, installer, signing or notarization was performed on the box.
 
-## Unreleased: Advanced local harnesses
+## 0.3.9: Advanced local harnesses
 
 **Advanced > Local harnesses**, Harness Hub and Command-K **Advanced: Harnesses on local models** open a separate page for experienced users. The Local model connection tile and newcomer Local AI screen have no new choices or harness picker.
 
@@ -51,6 +51,15 @@ Open a disposable or backed-up Git project, choose Connect, select the agent or 
 - This app is not an OS sandbox. Agent tools and the terminal can run as your macOS user. Use trusted agents and repositories, review permissions and commands, and keep backups. A UI file boundary is not a security boundary for arbitrary shell commands.
 - Optional app-managed credentials use macOS Keychain. Existing agent credentials are managed by those agents. Local application data is under `~/Library/Application Support/SuperQode`. Removing the app does not remove this data, Keychain entries or credentials stored by external agents.
 - History, terminal output and evidence exports can contain private project content. Inspect and redact anything you choose to share. There is no automatic crash-report upload in this beta.
+
+## Version 0.3.9
+
+Version 0.3.9 (build 25) bundles Python engine 2.31.6. Signing, notarization and device verification happen separately from code preparation.
+
+- A new thread with nothing connected shows the connection grid first. Its tiles and heading are compact so the grid fits small Mac screens, and the composer collapses to a slim Not connected bar until a connection is chosen. A draft, attachments, an existing thread or an offline local engine keep the full composer.
+- Advanced > Local harnesses runs documented local-capable harnesses on a model loaded in Ollama or LM Studio, kept separate from the newcomer Local AI screen.
+- Advanced CLI local evaluation and lean small-model tool reliability, described above.
+- `apps/macos/scripts/release.sh` builds, signs, notarizes, staples and checksums the DMG in one command.
 
 ## Version 0.3.8
 
@@ -365,9 +374,9 @@ Report issues at https://github.com/SuperagenticAI/superqode/issues with the app
 If a task fails, inspect its recorded status and Git diff before retrying. Interrupted runs are not automatically replayed. Stop using the beta on important repositories if you encounter data loss, unintended execution or an authentication/credential exposure issue, and report it.
 
 
-## 0.3.8 release smoke checklist (on a Mac)
+## 0.3.9 release smoke checklist (on a Mac)
 
-- Build in Xcode or with the normal Mac build script. Confirm About and Info.plist show 0.3.8 (24). Inspect the staged runtime: one superqode dist-info, version 2.31.6, matching manifest and imported source. Rebuild using an older base payload and confirm no 2.31.4 metadata remains.
+- Build in Xcode or with the normal Mac build script. Confirm About and Info.plist show 0.3.9 (25). Inspect the staged runtime: one superqode dist-info, version 2.31.6, matching manifest and imported source. Rebuild using an older base payload and confirm no 2.31.4 metadata remains.
 - New thread: exercise every connection grid tile, Back and All connections. Local model opens the newcomer screen. API-key setup and existing agent routes still work.
 - Send to thread: Command-Shift-T, whole history and starting turn, existing and new destination, existing draft preservation, omission warning and cancel. Confirm no prompt is sent until explicitly submitted.
 - Local AI before opening a project: inspect device and engine detection, notice and Learn more. Ensure merely opening it never installs, downloads or sends a model request.
