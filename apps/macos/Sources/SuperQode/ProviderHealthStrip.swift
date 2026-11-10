@@ -71,7 +71,8 @@ struct ProviderHealthStrip: View {
         broken("Local engine offline. Your draft is kept.", action: "Reconnect") {
           app.perform { try await app.engine.stopAndWait(); await app.boot() }
         }
-      } else if app.connectionDisconnected {
+      } else if app.connectionDisconnected && !app.selectedJob.isEmpty {
+        // A new thread already shows the connection grid above the composer.
         broken("No agent or model connected for this thread.", action: "Connect…") { app.openConnections("menu:root") }
       } else if !health.authFailure.isEmpty && !app.active {
         broken("The last run could not sign in to " + app.connectionDisplayName + ".", action: "Fix connection…") {

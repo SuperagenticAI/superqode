@@ -40,14 +40,15 @@ struct GettingStartedView: View {
   }
   /// The first screen of a new thread: one question, and the connection front and centre.
   private var newThreadStart: some View {
-    VStack(spacing: 22) {
-      BrandMark().frame(width: 44, height: 44)
-      Text("What should we work on?")
-        .font(.system(size: 28, weight: .semibold)).multilineTextAlignment(.center)
-      if app.connectionDisconnected {
-        VStack(spacing: 14) {
-          Label("Connect an agent or a model to start", systemImage: "cable.connector")
-            .font(.system(size: 15, weight: .semibold))
+    // Disconnected: the connection grid is the whole task, so keep it compact
+    // enough to sit above the composer without scrolling in a normal window.
+    let disconnected = app.connectionDisconnected
+    return VStack(spacing: disconnected ? 14 : 22) {
+      BrandMark().frame(width: disconnected ? 32 : 44, height: disconnected ? 32 : 44)
+      Text(disconnected ? "Connect an agent or a model to start" : "What should we work on?")
+        .font(.system(size: disconnected ? 22 : 28, weight: .semibold)).multilineTextAlignment(.center)
+      if disconnected {
+        VStack(spacing: 12) {
           Text("Use a coding agent you already have, or your own model through a local runtime or API key.")
             .font(.callout).foregroundStyle(.secondary).multilineTextAlignment(.center)
             .fixedSize(horizontal: false, vertical: true)
@@ -56,7 +57,7 @@ struct GettingStartedView: View {
             Text("Waiting for the local engine…").font(.caption).foregroundStyle(.secondary)
           }
         }
-        .padding(24).frame(maxWidth: 800)
+        .padding(16).frame(maxWidth: 860)
         .background(Color.qPanel.opacity(0.6), in: RoundedRectangle(cornerRadius: 14))
         .overlay(RoundedRectangle(cornerRadius: 14).stroke(Color.orange.opacity(0.45), lineWidth: 1))
       } else {
@@ -78,7 +79,7 @@ struct GettingStartedView: View {
       Button("Getting started & learning") { app.showLearningGuide = true }
         .buttonStyle(.link).font(.caption)
     }
-    .padding(.horizontal, 28).padding(.top, 56).padding(.bottom, 28)
+    .padding(.horizontal, 28).padding(.top, app.connectionDisconnected ? 20 : 56).padding(.bottom, 20)
     .frame(maxWidth: .infinity)
   }
   private var guide: some View {

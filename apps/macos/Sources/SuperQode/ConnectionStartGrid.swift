@@ -24,20 +24,20 @@ struct ConnectionStartGrid: View {
   ]
 
   var body: some View {
-    VStack(spacing: 16) {
-      LazyVGrid(columns: [GridItem(.adaptive(minimum: 210), spacing: 12)], spacing: 12) {
+    VStack(spacing: 10) {
+      LazyVGrid(columns: [GridItem(.adaptive(minimum: 180), spacing: 10)], spacing: 10) {
         ForEach(Self.tiles) { tile in
           Button { app.openConnections(tile.page) } label: {
-            VStack(alignment: .leading, spacing: 8) {
+            VStack(alignment: .leading, spacing: 4) {
               HStack {
                 Image(systemName: tile.symbol).foregroundStyle(Color.qAccent)
                 Spacer(minLength: 0)
                 if tile.recommended { Text("Recommended").font(.caption2).foregroundStyle(.secondary) }
               }
-              Text(tile.title).font(.headline)
+              Text(tile.title).font(.system(size: 13, weight: .semibold))
               Text(tile.detail).font(.caption).foregroundStyle(.secondary)
-                .fixedSize(horizontal: false, vertical: true)
-            }.padding(14).frame(maxWidth: .infinity, minHeight: 120, alignment: .topLeading)
+                .lineLimit(2).fixedSize(horizontal: false, vertical: true)
+            }.padding(10).frame(maxWidth: .infinity, minHeight: 84, alignment: .topLeading)
               .background(Color.primary.opacity(0.04), in: RoundedRectangle(cornerRadius: 10))
               .overlay(RoundedRectangle(cornerRadius: 10).stroke(Color.secondary.opacity(0.25)))
               .contentShape(RoundedRectangle(cornerRadius: 10))
