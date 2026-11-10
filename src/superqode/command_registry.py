@@ -567,6 +567,8 @@ COMMANDS = [
     ":local pack",
     ":local pack init",
     ":local bench",
+    ":local eval",
+    ":local promote",
     ":local migrate",
     ":local optimize",
     ":local search",
@@ -1062,6 +1064,14 @@ DEFAULT_COMMANDS: list[SlashCommand] = [
     SlashCommand(":models cached", "List cached local model artifacts", category="workflow"),
     SlashCommand(":local init", "Generate a local-first harness", category="workflow"),
     SlashCommand(":local smoke", "Run local model smoke checks", category="workflow"),
+    SlashCommand(
+        ":local eval",
+        "Advanced: evaluate local coding tasks with explicit consent",
+        category="workflow",
+    ),
+    SlashCommand(
+        ":local promote", "Advanced: import passing local model evidence", category="workflow"
+    ),
     SlashCommand(":local servers", "Show local model server status", category="workflow"),
     SlashCommand(":local stop", "Stop a managed local model server", category="workflow"),
     SlashCommand(":local airplane prepare", "Prepare offline Airplane Mode", category="workflow"),

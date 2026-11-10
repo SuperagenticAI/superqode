@@ -305,3 +305,32 @@ def test_prompt_mode_parser_preserves_invalid_arguments_for_correction():
         '<tool_call>{"name":"get_context_remaining","arguments":"broken"}</tool_call>'
     )
     assert calls[0]["function"]["arguments"] == "broken"
+
+
+def test_scoped_file_tool_aliases_remain_in_the_lean_catalog(tmp_path):
+    from types import SimpleNamespace
+
+    loop = make_loop(tmp_path)
+    loop.tools = ToolRegistry.empty()
+    for name in ("read", "edit"):
+        loop.tools.register(
+            SimpleNamespace(name=name, description="Scoped file operation", parameters=SCHEMA)
+        )
+    loop._cached_tool_defs_version = -1
+    assert {d.name for d in loop._get_tool_definitions()} == {"read", "edit"}
+    assert loop._prepare_tool_call(call('{"path":"fixture.txt"}', name="read"))[3] is None
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize("asynchronous", [False, True])
+async def test_invalid_batch_accepts_sync_and_async_observer_callbacks(tmp_path, asynchronous):
+    from unittest.mock import Mock
+
+    loop = make_loop(tmp_path)
+    observer = AsyncMock if asynchronous else Mock
+    loop.on_tool_call = observer(return_value=None)
+    loop.on_tool_result = observer(return_value=None)
+    results = await loop._execute_tool_batch([call("invalid json")])
+    assert not results[0][3].success
+    loop.on_tool_call.assert_called_once()
+    loop.on_tool_result.assert_called_once()

@@ -2804,6 +2804,8 @@ class AgentLoop:
           bash, MCP, unknown) runs sequentially in call order so concurrent
           mutations can never race.
         """
+        from inspect import isawaitable
+
         from .loop_guard import DoomLoopAbort
         from .tool_args import invalid_arguments_message
 
@@ -2835,9 +2837,13 @@ class AgentLoop:
                         metadata={"invalid_arguments": True, "tool": name},
                     )
                     if self.on_tool_call:
-                        await self.on_tool_call(name, args)
+                        callback = self.on_tool_call(name, args)
+                        if isawaitable(callback):
+                            await callback
                     if self.on_tool_result:
-                        await self.on_tool_result(name, result)
+                        callback = self.on_tool_result(name, result)
+                        if isawaitable(callback):
+                            await callback
                     rejected.append((name, call_id, args, result))
                 return rejected
             counters("valid_calls", len(parsed))

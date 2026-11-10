@@ -357,8 +357,66 @@ def test_lmstudio_api_capability_errors_are_actionable(monkeypatch, code, advice
     import urllib.error
 
     def reject(*args, **kwargs):
-        raise urllib.error.HTTPError(api.BASE, code, "fixture", {}, None)
+        raise urllib.error.HTTPError(args[0].full_url, code, "fixture", {}, None)
 
     monkeypatch.setattr(api.urllib.request, "urlopen", reject)
     with pytest.raises(ValueError, match=advice):
         api.request("/models")
+
+
+def test_lmstudio_operations_share_app_port_and_ignore_shell_host(monkeypatch):
+    import io
+    from dataclasses import replace
+    from superqode.local import lmstudio_api as api, servers
+
+    monkeypatch.setitem(
+        servers.SPECS, "lmstudio", replace(servers.SPECS["lmstudio"], default_port=43210)
+    )
+    monkeypatch.setenv("LMSTUDIO_HOST", "http://127.0.0.1:1/v1")
+    seen = []
+
+    def open_request(req, **kwargs):
+        seen.append((req.full_url, json.loads(req.data) if req.data else None))
+        return io.BytesIO(b'{"models": [], "status": "completed"}')
+
+    monkeypatch.setattr(api.urllib.request, "urlopen", open_request)
+    assert api.models() == []
+    api.load("fixture", 8192)
+    api.download("fixture", lambda *args: None)
+    assert [url for url, _ in seen] == [
+        "http://127.0.0.1:43210/api/v1/models",
+        "http://127.0.0.1:43210/api/v1/models/load",
+        "http://127.0.0.1:43210/api/v1/models/download",
+    ]
+
+
+def test_lmstudio_compatible_listing_does_not_invent_loaded_context(monkeypatch):
+    from superqode.local import lmstudio_api as api
+
+    calls = []
+
+    def request(path, **kwargs):
+        calls.append((path, kwargs))
+        return {"data": [{"id": "fixture"}]}
+
+    monkeypatch.setattr(api, "request", request)
+    assert api.models() == [{"key": "fixture", "type": "llm", "loaded_instances": []}]
+    assert calls == [("/models", {}), ("/models", {"openai": True})]
+
+
+@pytest.mark.parametrize("status", [401, 403])
+def test_lmstudio_model_listing_never_falls_back_after_auth_rejection(monkeypatch, status):
+    import io
+    import urllib.error
+    from superqode.local import lmstudio_api as api
+
+    calls = []
+
+    def reject(req, **kwargs):
+        calls.append(req.full_url)
+        raise urllib.error.HTTPError(req.full_url, status, "Rejected", {}, io.BytesIO())
+
+    monkeypatch.setattr(api.urllib.request, "urlopen", reject)
+    with pytest.raises(ValueError, match="authentication"):
+        api.models()
+    assert len(calls) == 1

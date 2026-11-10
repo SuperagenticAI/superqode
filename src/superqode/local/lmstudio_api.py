@@ -6,13 +6,23 @@ import urllib.error
 import urllib.parse
 import urllib.request
 
-BASE = "http://127.0.0.1:1234/api/v1"
+
+def base_url(*, openai=False):
+    """Use the same app-owned loopback port for model listing and operations.
+
+    Resolve SPECS per call so a configured port is not captured at import time.
+    Shell provider hosts never redirect the desktop's local model operations.
+    """
+    from .servers import SPECS
+
+    prefix = "/v1" if openai else "/api/v1"
+    return f"http://127.0.0.1:{SPECS['lmstudio'].default_port}{prefix}"
 
 
-def request(path, payload=None, *, timeout=30):
+def request(path, payload=None, *, timeout=30, openai=False):
     body = json.dumps(payload).encode() if payload is not None else None
     req = urllib.request.Request(
-        BASE + path, data=body, headers={"Content-Type": "application/json"}
+        base_url(openai=openai) + path, data=body, headers={"Content-Type": "application/json"}
     )
     try:
         with urllib.request.urlopen(req, timeout=timeout) as response:
@@ -30,10 +40,27 @@ def request(path, payload=None, *, timeout=30):
 
 
 def models():
+    """Prefer native metadata; older compatible servers expose model IDs only."""
+    try:
+        payload = request("/models")
+    except ValueError as exc:
+        # Only missing native API capability permits a compatibility fallback.
+        # Authentication errors must not be retried through another endpoint.
+        if not isinstance(exc.__cause__, urllib.error.HTTPError) or exc.__cause__.code != 404:
+            raise
+        payload = {}
+    native = payload.get("models") if isinstance(payload, dict) else None
+    if isinstance(native, list):
+        return [
+            row
+            for row in native
+            if isinstance(row, dict) and row.get("type") in {"llm", "decision"}
+        ]
+    compatible = request("/models", openai=True)
     return [
-        row
-        for row in request("/models").get("models", [])
-        if isinstance(row, dict) and row.get("type") in {"llm", "decision"}
+        {"key": row["id"], "type": "llm", "loaded_instances": []}
+        for row in compatible.get("data", [])
+        if isinstance(row, dict) and isinstance(row.get("id"), str) and 0 < len(row["id"]) <= 4096
     ]
 
 

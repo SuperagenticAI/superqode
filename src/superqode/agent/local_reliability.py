@@ -14,11 +14,15 @@ from referencing.exceptions import Unresolvable
 from .tool_args import parse_tool_arguments
 
 LOCAL_PROVIDERS = frozenset({"ollama", "lmstudio", "lm_studio"})
+# Scoped harness registries use read/write/edit; only registered tools are exposed.
 LEAN_TOOLS = frozenset(
     {
         "read_file",
         "write_file",
         "edit_file",
+        "read",
+        "write",
+        "edit",
         "bash",
         "glob",
         "grep",

@@ -117,6 +117,7 @@ Provider API keys (`OPENAI_API_KEY`, `ANTHROPIC_API_KEY`, `GEMINI_API_KEY`, ...)
 
 | Variable | Values | Default | Effect |
 |---|---|---|---|
+| `SUPERQODE_LOCAL_CONTEXT_CONTRACT` | JSON object | unset | Worker-scoped local model context/output contract with `provider`, `model`, `context` and `max_tokens`. Only an exact Ollama or LM Studio provider/model match applies. Invalid values fall back to saved or hardware-derived defaults; this does not alter other threads or saved settings. |
 | `SUPERQODE_OLLAMA_NUM_CTX` | int | unset | Request this context length from Ollama per call. Ollama's MLX backend honors only Modelfile-baked values. |
 | `SUPERQODE_OLLAMA_KEEP_ALIVE` | duration | unset | Optional override for Ollama model residency. When unset, the server's keep-alive policy applies. Set `0` to unload after each response. |
 | `SUPERQODE_CAPABILITY_TIMEOUT` | seconds | `2` | Maximum wait when asking a local runtime what a model supports (for example Ollama's capability list). On timeout the model is treated as tool-capable rather than silently downgraded. |
@@ -130,6 +131,15 @@ Provider API keys (`OPENAI_API_KEY`, `ANTHROPIC_API_KEY`, `GEMINI_API_KEY`, ...)
 | `SUPERQODE_LAGUNA_GGUF` | absolute path | unset | Pin the Laguna S 2.1 GGUF file instead of using automatic cache discovery. |
 | `SUPERQODE_MLX_INPROCESS` | `0`/`1` | on | Serve MLX models in-process; set `0` to require an external server. |
 | `SUPERQODE_UTILITY_PROVIDER` | `apple-fm` or `provider/model` | unset | Route utility calls (rubric grading, memory extraction) to a cheaper model; `apple-fm` uses the on-device Apple Foundation Model. Falls back to the session model. See [Local Stack Doctor](../advanced/local-stack.md). |
+
+`SUPERQODE_LOCAL_CONTEXT_CONTRACT` is normally set by the reviewed desktop
+worker launch, not exported globally. For example:
+`{"provider":"ollama","model":"qwen3.5:4b","context":8192,"max_tokens":2048}`.
+Context accepts integers from 512 to 262144; maximum output accepts integers from
+128 to 65536. Malformed JSON, unmatched identities and out-of-range fields are
+ignored. Loaded context and the remaining prompt budget still constrain sends.
+The override is not a credential and does not authorize a tool or change its
+permissions.
 
 ## Channel daemon
 

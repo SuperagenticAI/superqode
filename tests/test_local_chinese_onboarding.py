@@ -11,7 +11,7 @@ from superqode.local.hardware import HardwareProfile
 from superqode.providers.registry import PROVIDERS
 
 
-def test_hf_families_and_ds4_survive_recommended_projection(monkeypatch):
+def test_hf_families_remain_searchable_but_ds4_is_advanced_only(monkeypatch):
     monkeypatch.setattr(
         workbench,
         "detect_hardware",
@@ -24,7 +24,11 @@ def test_hf_families_and_ds4_survive_recommended_projection(monkeypatch):
     )
     deepseek = workbench.search("DeepSeek")
     assert any(row["source"] == "hf" for row in deepseek)
-    assert any(row.get("manual_setup") and row["engines"] == ["ds4"] for row in deepseek)
+    assert not any("ds4" in row["engines"] for row in deepseek)
+    # The full runtime catalog keeps DS4 available without suggesting it to newcomers.
+    assert "ds4" in workbench.ENGINES
+    assert workbench.PROVIDERS["ds4"] == "ds4"
+    assert PROVIDERS["ds4"].id == "ds4"
 
 
 def test_recommended_hf_formats_are_inferred_from_artifacts_not_engine_hint(monkeypatch):
@@ -80,7 +84,7 @@ def test_qwen_setup_launches_interactive_cli_not_acp_or_removed_auth(desktop, mo
     assert "/auth" in plan["instructions"] and "region" in plan["instructions"]
 
 
-def test_all_running_engines_precede_hardware_presets(desktop, monkeypatch):
+def test_newcomer_shows_only_primary_engines_with_installed_models_first(desktop, monkeypatch):
     service, project, _ = desktop
     engines = workbench.ENGINES
     monkeypatch.setattr(
@@ -91,11 +95,18 @@ def test_all_running_engines_precede_hardware_presets(desktop, monkeypatch):
         local_models, "servers", lambda _: [{"id": e, "name": e, "running": True} for e in engines]
     )
     monkeypatch.setattr(local_models, "available", lambda e: {"models": [e + "-existing-model"]})
-    rows = local_quickstart.catalog(service, project["id"])["choices"]
-    assert {r["engine"] for r in rows[:5]} == set(engines)
-    presets = {r["preset"]: r for r in rows[5:]}
-    assert {"fast", "balanced", "capable"} <= presets.keys()
-    assert presets["fast"]["suggested_context"] < presets["capable"]["suggested_context"]
+    result = local_quickstart.catalog(service, project["id"])
+    rows = result["choices"]
+    assert {row["engine"] for row in rows} == {"ollama", "lmstudio"}
+    assert {row["id"] for row in result["engines"]} == {"ollama", "lmstudio"}
+    assert all(row["installed"] for row in rows[:2])
+    assert all(not row["installed"] for row in rows[2:])
+    assert {row["engine"] for row in rows[:2]} == {"ollama", "lmstudio"}
+    assert all(row["preset"] == "suggested" and row["fit"]["rating"] == "Fits" for row in rows[2:])
+    # Advanced server controls still expose all configured engines and running states.
+    advanced = local_models.servers(service)
+    assert {row["id"] for row in advanced} == set(engines)
+    assert all(row["running"] for row in advanced)
 
 
 def test_quickstart_records_context_and_tool_probes_alongside_actual_core_check(
@@ -146,3 +157,31 @@ def test_quickstart_records_context_and_tool_probes_alongside_actual_core_check(
     assert report["readiness"]["warnings"]
     assert result["scope"] == "local-coding-readiness"
     assert result["harness_certified"] is False
+
+
+def test_advanced_server_rpc_keeps_other_engines_and_manual_ds4_setup(desktop, monkeypatch):
+    from superqode.local import servers
+
+    service, _, _ = desktop
+
+    class Manager:
+        def __init__(self, **kwargs):
+            pass
+
+        def precheck(self, engine):
+            return servers.LocalReadiness(
+                engine, False, False, "http://127.0.0.1", "missing", "", True
+            )
+
+        def _load(self, engine):
+            return None
+
+        def _ds4_binary(self):
+            return None
+
+    monkeypatch.setattr(servers, "ServerManager", Manager)
+    rows = service.dispatch("local.models.servers", {})
+    assert {row["id"] for row in rows} == set(workbench.ENGINES)
+    ds4 = next(row for row in rows if row["id"] == "ds4")
+    assert not ds4["install"]["automatic"]
+    assert ds4["install"]["docs_url"] == "https://github.com/antirez/ds4"

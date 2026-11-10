@@ -201,7 +201,7 @@ final class RepositoryComposerTests: XCTestCase {
   }
 
   @MainActor func testCreatorStaysInTheCatalogAndPermissionIsNotRecoveryState() throws {
-    XCTAssertEqual(Sections.names.last, "Super Agent")
+    XCTAssertEqual(Sections.names.last, "Local harnesses")
     XCTAssertEqual(Sections.names.count, Sections.icons.count)
     XCTAssertEqual(Sections.names.first, "Workspace")
     XCTAssertTrue(Sections.names.contains("Tools"))

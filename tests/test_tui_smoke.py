@@ -9025,3 +9025,17 @@ def test_fresh_acp_switch_resets_warm_session_before_sending(monkeypatch):
     app._run_acp_jsonrpc_client("New task", "opencode", "model", "OpenCode", SessionLog())
     assert client.events == ["new_session", "prompt"]
     assert app._pending_acp_fresh_target is None
+
+
+@pytest.mark.parametrize("command", ["eval", "promote"])
+def test_local_evidence_commands_use_existing_cli_passthrough(command):
+    from unittest.mock import MagicMock
+    from superqode.app.constants import COMMANDS
+    from superqode.app.mixins.local_models import LocalModelsMixin
+
+    app, log = MagicMock(), MagicMock()
+    assert f":local {command}" in COMMANDS
+    LocalModelsMixin._local_cmd(app, f'{command} "results with spaces.json"', log)
+    app._run_cli_passthrough.assert_called_once_with(
+        ["local", command, "results with spaces.json"], log, "Local command"
+    )

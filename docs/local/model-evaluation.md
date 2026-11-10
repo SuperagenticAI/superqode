@@ -107,6 +107,10 @@ the Mac, not evidence that either model passed here.
 
 ## Promotion and scope
 
+`superqode local promote REPORT.json` explicitly imports a passing run produced
+by `superqode local eval`. The `"$SQ"` examples above invoke those same commands
+from the checked-out engine, rather than an older installed executable.
+
 Promotion imports the complete report into `~/.superqode/local-model-evals.json`.
 It does not edit the shipped registry, global harness config or anyone else's
 results. Nothing is uploaded. Failed, partial, no-tool, simulated, unknown-identity

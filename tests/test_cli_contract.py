@@ -12,7 +12,7 @@ import click
 from superqode.main import cli_main
 
 
-EXPECTED_COMMAND_COUNT = 329
+EXPECTED_COMMAND_COUNT = 331
 # Rebaselined for `superqode update` (261 -> 262: exactly one command added),
 # and again for the `copilot-cli` / `grok-cli` subscription runtimes, which
 # widen the --runtime choice list without adding a Click command. The same work
@@ -172,11 +172,13 @@ EXPECTED_COMMAND_COUNT = 329
 # (321 -> 326). Both Click renderers were verified against the new help tree.
 # Strands adds its setup group and setup/doctor commands (326 -> 329),
 # plus the governed ACP harness options and registry-derived choices.
-EXPECTED_HELP_TREE_SHA256 = "74cd88d28b5d44d2cb41bd1853bc1634d86f3d3283241349a2b8dd8f010ead55"
+# Local evaluation adds only `local eval` and `local promote` (329 -> 331).
+# Removing those two registrations reproduces both prior renderer digests.
+EXPECTED_HELP_TREE_SHA256 = "a1c14672065eb1d16100550758085a07422da8d9e3f0ac57cf1c5ac683439dc2"
 # Click 8.5 renders optional group commands as [COMMAND] and case-insensitive
 # choices in lower case. Both verified renders expose the same command tree.
 EXPECTED_MODERN_CLICK_HELP_TREE_SHA256 = (
-    "de9aced4f0f79d63183ef80a33984488cbbb0e482825ca57fe1b0f37b1e3d117"
+    "0d6da438fd1eacd23716f12ba9cb97d17136aa589004680a1664f7cfcd4fa55e"
 )
 
 
