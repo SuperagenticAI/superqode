@@ -9,6 +9,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
+- A curated local starter registry with explicit catalog-verified status, official Ollama and LM Studio tags, memory thresholds and opt-in Mac evaluation evidence. Your Mac suggestions prefer fitting tested entries only for the same engine, memory tier and sufficient tested context, with the existing verified fallback otherwise. All shipped entries remain catalog-verified.
+- Advanced CLI `superqode local eval` and `local promote`: five fixed coding/tool tasks, real fixture edits and test execution after explicit consent, bounded turns/retries, local JSON evidence and explicit scoped promotion. No model was run on the build box. [Mac commands and limitations](docs/local/model-evaluation.md).
+- Native small-local-model lean prompts and compact core schemas, schema-checked argument repair, explicit text-call recovery and at most two corrective retries per user run. Local-only counters are visible in doctor JSON and the context status tool. External harnesses retain their own behavior.
+
 - macOS Advanced: Harnesses on local models, separate from newcomer Local AI. Pick SuperQode Core, a reviewed OpenCode version 1 ACP build or a reviewed Goose version 1 ACP build and an already loaded Ollama or LM Studio model. Review per-launch settings and send your first message to start a thread.
 - Local harness catalog, preflight, launch and status RPCs with project-scoped profiles, fixed loopback endpoints, shared context/output budgets, conservative loaded-window fit checks and per-worker credential isolation. Continuations revalidate the same immutable configuration.
 - The Advanced local harness catalog now shows only documented local integrations with a wired adapter: SuperQode Core, stable OpenCode 1.19.5+ within major 1 and stable Goose 1.58.0+ within major 1. Unwired integrations and unverified versions are hidden across the RPC catalog, saved profiles and Swift picker. Missing binaries retain an installation link.
@@ -20,7 +24,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Notes
 
-- Newcomer Local AI, connection-grid Local model and guided setup are unchanged. No global harness config files are edited. Configuration/preflight is not a model quality or tool-calling guarantee; external tools and extensions can still access the network.
+- The newcomer Local AI layout, connection-grid Local model and guided setup are unchanged; only the starter catalog reads scoped local evaluation evidence. No global harness config files are edited. Configuration/preflight is not a model quality or tool-calling guarantee; external tools and extensions can still access the network.
 - Unreleased source changes only. App 0.3.8 (24) and engine 2.31.6 are unchanged until the next versioned release; no installer, signing or notarization was produced here.
 
 ## [2.31.6] - 2026-11-09

@@ -110,7 +110,10 @@ def local_doctor(json_output, repo_path, guardrails, generate_path, name, pack_n
     report = run_doctor(str(repo_path) if repo_path else None, include_guardrails=guardrails)
 
     if json_output:
+        from superqode.local.diagnostics import counters
+
         payload = {
+            "local_reliability": counters(),
             "hardware": asdict(report.hardware),
             "tier": report.hardware.tier,
             "engines": {k: asdict(v) for k, v in report.engines.items()},
@@ -1403,3 +1406,73 @@ def local_stop(engine):
 
 
 __all__ = ["local"]
+
+
+@local.command("eval")
+@click.option("--engine", required=True, type=click.Choice(["ollama", "lmstudio"]))
+@click.option("--registry-model", required=True, help="Curated id, for example qwen3.5:4b")
+@click.option(
+    "--model", "runtime_model", help="Exact runtime id, required for an LM Studio loaded alias"
+)
+@click.option("--base-url", help="Literal loopback endpoint; defaults to the selected engine")
+@click.option(
+    "--context", type=click.IntRange(512, 262144), help="Lower the shared context contract"
+)
+@click.option("--output", required=True, type=click.Path(path_type=Path, dir_okay=False))
+@click.option(
+    "--allow-execution",
+    is_flag=True,
+    help="Consent to running model-written Python with your user permissions, not an OS sandbox",
+)
+def local_eval(engine, registry_model, runtime_model, base_url, context, output, allow_execution):
+    """Advanced: run five fixed coding tasks on a local model, with local JSON evidence."""
+    import httpx
+    from superqode.local.eval_runner import run_evaluation
+
+    if not allow_execution:
+        raise click.ClickException(
+            "Read docs/local/model-evaluation.md, then pass --allow-execution. "
+            "Model-written Python runs with your permissions and is not sandboxed."
+        )
+    try:
+        report = run_evaluation(
+            engine,
+            registry_model,
+            runtime_model,
+            output=output,
+            base_url=base_url,
+            context=context,
+            allow_execution=True,
+        )
+    except (ValueError, OSError, httpx.HTTPError) as exc:
+        raise click.ClickException(str(exc)) from exc
+    click.echo(f"Results: {output}\nFixtures retained: {report['workspace']}")
+    for task in report["tasks"]:
+        click.echo(
+            f"{task['id']}: {'PASS' if task['passed'] else 'FAIL'}; "
+            f"valid tools={task['tool_calls_valid']}; {task['elapsed_seconds']:.2f}s; "
+            f"tokens/sec={task['tokens_per_second']}"
+        )
+    if not report["passed"]:
+        raise click.ClickException(
+            "Evaluation did not pass. Results were saved; nothing was promoted."
+        )
+    click.echo(
+        "Nothing promoted automatically. Inspect the report, then use superqode local promote."
+    )
+
+
+@local.command("promote")
+@click.argument("report", type=click.Path(exists=True, dir_okay=False, path_type=Path))
+def local_promote(report):
+    """Advanced: explicitly import a passing Mac evaluation into your local registry."""
+    from superqode.local.starter_registry import evidence_path, promote
+
+    try:
+        result = promote(report)
+    except (ValueError, TypeError, KeyError, OSError) as exc:
+        raise click.ClickException(str(exc)) from exc
+    click.echo(
+        f"Tested locally: {result['registry_model']} on {result['engine']}, "
+        f"{result['memory_tier']} GB memory tier. Evidence: {evidence_path()}"
+    )

@@ -50,6 +50,7 @@ class GetContextRemainingTool(Tool):
             return ToolResult(success=False, output="", error=f"Context status failed: {e}")
 
         window = int(status.get("window") or 0)
+        reliability = status.get("local_reliability")
         used = status.get("used")
         threshold = int(status.get("compaction_threshold") or 0)
         if not window:
@@ -68,6 +69,13 @@ class GetContextRemainingTool(Tool):
             f"Used: ~{used:,} tokens ({percent}%)",
             f"Remaining before automatic compaction: ~{remaining:,} tokens",
         ]
+        if reliability:
+            counts = reliability["counters"]
+            lines.append(
+                f"Local lean mode: {'on' if reliability['lean_mode'] else 'off'}; "
+                f"repaired calls: {counts['repaired_calls']}; "
+                f"corrective retries: {counts['corrective_retries']}"
+            )
         if threshold:
             lines.append(
                 f"Compaction triggers near ~{threshold:,} tokens; stale tool outputs are pruned first, so finishing soon preserves the most context."
@@ -81,6 +89,7 @@ class GetContextRemainingTool(Tool):
                 "remaining": remaining,
                 "compaction_threshold": threshold,
                 "percent_used": percent,
+                **({"local_reliability": reliability} if reliability else {}),
             },
         )
 

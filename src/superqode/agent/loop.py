@@ -1033,26 +1033,69 @@ class AgentLoop:
 
         return self.config.tools_enabled and is_prompt_format(self.config.tool_call_format)
 
+    def _local_lean_profile(self) -> bool:
+        from .local_reliability import lean_profile
+
+        if not self._is_local_reliability():
+            return False
+        return lean_profile(
+            self.config.provider, self.config.model, self._effective_context_window()
+        )
+
+    def _is_local_reliability(self) -> bool:
+        from .local_reliability import LOCAL_PROVIDERS
+
+        return (self.config.provider or "").lower() in LOCAL_PROVIDERS
+
     def _system_prompt_for_run(self) -> str:
-        """System prompt, plus the rendered tool catalog in prompt-tool mode."""
+        """Keep project/custom instructions; use a lean base on small local models."""
+        prompt = self.system_prompt
+        if self._local_lean_profile():
+            from .local_reliability import LEAN_INSTRUCTIONS
+
+            prompt = (
+                _cached_system_prompt(
+                    level=SystemPromptLevel.MINIMAL,
+                    working_directory=str(self.config.working_directory),
+                    custom_prompt=self.config.custom_system_prompt,
+                    job_description=self.config.job_description,
+                    provider=self.config.provider,
+                    model=self.config.model,
+                )
+                + "\n"
+                + LEAN_INSTRUCTIONS
+            )
         if not self._prompt_tool_mode():
-            return self.system_prompt
+            return prompt
         from .text_tool_calls import render_tool_catalog
 
         catalog = render_tool_catalog(self._get_tool_definitions())
-        return f"{self.system_prompt}\n{catalog}" if catalog else self.system_prompt
+        return f"{prompt}\n{catalog}" if catalog else prompt
 
     def _extract_prompt_tool_calls(
         self, content: str, native_tool_calls: Optional[List[Dict]]
     ) -> Tuple[str, Optional[List[Dict]]]:
-        """In prompt-tool mode, lift <tool_call> blocks out of response text."""
-        if not self._prompt_tool_mode() or native_tool_calls:
+        """Lift explicit local text calls only when tools are enabled for this run."""
+        if not self.config.tools_enabled:
+            return content, None
+        if self.config.plan_mode:
             return content, native_tool_calls
-        from .text_tool_calls import extract_text_tool_calls
+        if native_tool_calls:
+            return content, native_tool_calls
+        if self._is_local_reliability():
+            from .local_reliability import extract_local_calls
+            from superqode.local.diagnostics import counters
 
-        cleaned, extracted = extract_text_tool_calls(content or "")
-        if extracted:
-            return cleaned, extracted
+            cleaned, extracted = extract_local_calls(content)
+            if extracted:
+                counters("text_calls", len(extracted))
+                return cleaned, extracted
+        if self._prompt_tool_mode():
+            from .text_tool_calls import extract_text_tool_calls
+
+            cleaned, extracted = extract_text_tool_calls(content or "")
+            if extracted:
+                return cleaned, extracted
         return content, native_tool_calls
 
     def _get_peer_manager(self):
@@ -1137,6 +1180,9 @@ class AgentLoop:
         from .loop_guard import DoomLoopDetector
 
         self._doom_guard = DoomLoopDetector(self._doom_threshold())
+        from .local_reliability import ToolRetryBudget
+
+        self._local_tool_retry_budget = ToolRetryBudget()
 
     # ------------------------------------------------------------------
     # In-run steering: messages typed while the agent works
@@ -1301,11 +1347,37 @@ class AgentLoop:
             self._cached_tool_defs_version = version
         from superqode.project_commands import command_tool_allowed
 
-        return [
+        definitions = [
             definition
             for definition in self._cached_tool_defs
             if command_tool_allowed(definition.name)
         ]
+        if self._local_lean_profile():
+            from .local_reliability import LEAN_TOOLS, compact_schema
+
+            # Deferral is a schema-budget policy, not a permission boundary.
+            # Keep the few permitted helpers usable without broad discovery.
+            by_name = {d.name: d for d in definitions}
+            excluded = resolve_model_profile(self.config.provider, self.config.model).excluded_tools
+            for name in sorted(LEAN_TOOLS):
+                tool = self.tools.get(name)
+                if (
+                    name not in by_name
+                    and name not in excluded
+                    and tool is not None
+                    and command_tool_allowed(name)
+                ):
+                    by_name[name] = ToolDefinition(name, tool.description, tool.parameters)
+            definitions = [
+                ToolDefinition(
+                    name=d.name,
+                    description=d.description.split("\n")[0][:120],
+                    parameters=compact_schema(d.parameters),
+                )
+                for d in (by_name[name] for name in sorted(by_name))
+                if d.name in LEAN_TOOLS
+            ]
+        return definitions
 
     def _convert_message(self, m: AgentMessage) -> Message:
         """Convert a single message with caching."""
@@ -1481,6 +1553,12 @@ class AgentLoop:
     def _record_request_payload(self, messages, tools) -> None:
         from ..providers.request_metrics import measure_request_payload
 
+        if self._is_local_reliability():
+            from superqode.local.diagnostics import counters
+
+            counters("request_attempts")
+            if self._local_lean_profile():
+                counters("lean_requests")
         metrics = measure_request_payload(messages, tools)
         self.last_request_payload = metrics
         if self.config.harness_store is not None and self.config.harness_run_id:
@@ -1521,7 +1599,15 @@ class AgentLoop:
                 used = self.context_manager.count_tokens(msg_dicts)
             except Exception:
                 used = None
-        return {"window": window, "used": used, "compaction_threshold": threshold}
+        status = {"window": window, "used": used, "compaction_threshold": threshold}
+        if self._is_local_reliability():
+            from superqode.local.diagnostics import counters
+
+            status["local_reliability"] = {
+                "lean_mode": self._local_lean_profile(),
+                "counters": counters(),
+            }
+        return status
 
     def _lifecycle_context(self) -> "LifecycleContext":
         """Build the lifecycle context passed to hooks."""
@@ -1786,6 +1872,13 @@ class AgentLoop:
         even for permission denials and unknown-tool errors, so audit/log
         hooks see every attempted call.
         """
+        if self._local_lean_profile():
+            from .local_reliability import LEAN_TOOLS
+
+            if name not in LEAN_TOOLS:
+                return ToolResult(
+                    success=False, output="", error="Tool is unavailable in local lean mode."
+                )
         from ..acp.tool_call_context import acp_tool_call_context
         from .hooks import AFTER_TOOL_CALL, BEFORE_TOOL_CALL, CONTEXT_RETRIEVAL
 
@@ -2622,10 +2715,29 @@ class AgentLoop:
         """
         from .tool_args import parse_tool_arguments
 
+        if not isinstance(tc, dict):
+            return "", str(uuid.uuid4()), {}, "Tool call must be an object."
         function = tc.get("function", {}) or {}
+        if not isinstance(function, dict):
+            function = {}
         tool_name = function.get("name", "") or tc.get("name", "")
         raw_args = function.get("arguments", "{}")
         tool_call_id = tc.get("id", str(uuid.uuid4()))
+        if self._is_local_reliability():
+            from .local_reliability import repair_arguments
+            from superqode.local.diagnostics import counters
+
+            definition = next(
+                (d for d in self._get_tool_definitions() if d.name == tool_name), None
+            )
+            if definition is None:
+                return tool_name, tool_call_id, {}, "Tool is not in the active tool list."
+            tool_args, parse_error, repaired = repair_arguments(raw_args, definition.parameters)
+            if repaired:
+                counters("repaired_calls")
+            if parse_error is None:
+                function["arguments"] = json.dumps(tool_args)
+            return tool_name, tool_call_id, tool_args, parse_error
         tool_args, parse_error = parse_tool_arguments(raw_args)
         return tool_name, tool_call_id, tool_args, parse_error
 
@@ -2695,12 +2807,48 @@ class AgentLoop:
         from .loop_guard import DoomLoopAbort
         from .tool_args import invalid_arguments_message
 
+        if self._is_local_reliability():
+            from .local_reliability import ToolRetryBudget
+            from superqode.local.diagnostics import counters
+
+            parsed = [self._prepare_tool_call(tc) for tc in tool_calls]
+            invalid = [row for row in parsed if row[3] is not None]
+            if invalid:
+                counters("invalid_calls", len(invalid))
+                budget = getattr(self, "_local_tool_retry_budget", None)
+                if budget is None:
+                    budget = self._local_tool_retry_budget = ToolRetryBudget()
+                if not budget.correction():
+                    counters("retry_limit_hits")
+                    raise DoomLoopAbort(
+                        "Invalid local tool call after two corrective retries. "
+                        "Stopped without executing this tool batch."
+                    )
+                counters("corrective_retries")
+                error = invalid[0][3]
+                rejected = []
+                for name, call_id, args, _ in parsed:
+                    result = ToolResult(
+                        success=False,
+                        output="",
+                        error=f"Batch not executed: {error} Send only listed tools with schema-matching JSON arguments.",
+                        metadata={"invalid_arguments": True, "tool": name},
+                    )
+                    if self.on_tool_call:
+                        await self.on_tool_call(name, args)
+                    if self.on_tool_result:
+                        await self.on_tool_result(name, result)
+                    rejected.append((name, call_id, args, result))
+                return rejected
+            counters("valid_calls", len(parsed))
+        else:
+            parsed = [self._prepare_tool_call(tc) for tc in tool_calls]
+
         n = len(tool_calls)
         prepared: List[Tuple[str, str, Dict[str, Any]]] = []
         results: Dict[int, Tuple[str, str, Dict, ToolResult]] = {}
 
-        for i, tc in enumerate(tool_calls):
-            tool_name, tool_call_id, tool_args, parse_error = self._prepare_tool_call(tc)
+        for i, (tool_name, tool_call_id, tool_args, parse_error) in enumerate(parsed):
             prepared.append((tool_name, tool_call_id, tool_args))
             if parse_error is not None:
                 result = ToolResult(
@@ -3102,7 +3250,9 @@ class AgentLoop:
             # Check for tool calls
             if response.tool_calls:
                 # Check if tool calls look malformed (common with local models)
-                if _is_malformed_tool_call_response(response_content, response.tool_calls):
+                if not self._is_local_reliability() and _is_malformed_tool_call_response(
+                    response_content, response.tool_calls
+                ):
                     # For malformed tool calls, try to extract text from content
                     # or if it's a simple query, just return the content as-is
                     content = response_content
@@ -3183,9 +3333,7 @@ class AgentLoop:
                     )
                 except DoomLoopAbort as abort:
                     if self.on_thinking:
-                        await self.on_thinking(
-                            "Loop guard: aborting run (model kept repeating the same call)."
-                        )
+                        await self.on_thinking(str(abort))
                     return await _finish(
                         AgentResponse(
                             content=str(abort),
@@ -3755,9 +3903,7 @@ class AgentLoop:
                     return
                 except DoomLoopAbort as abort:
                     if self.on_thinking:
-                        await self.on_thinking(
-                            "Loop guard: aborting run (model kept repeating the same call)."
-                        )
+                        await self.on_thinking(str(abort))
                     yield f"\n\n[{abort}]"
                     return
                 for tool_name, tool_call_id, tool_args, result in results:

@@ -1,0 +1,89 @@
+{
+  "schema_version": 1,
+  "models": [
+    {
+      "id": "qwen3.5:4b",
+      "status": "catalog-verified",
+      "minimum_memory_gb": 16,
+      "parameters_b": 4,
+      "engines": {
+        "ollama": "qwen3.5:4b",
+        "lmstudio": "qwen/qwen3.5-4b"
+      },
+      "sources": {
+        "ollama": "https://ollama.com/library/qwen3.5",
+        "lmstudio": "https://lmstudio.ai/models/qwen/qwen3.5-4b"
+      }
+    },
+    {
+      "id": "qwen3.5:9b",
+      "status": "catalog-verified",
+      "minimum_memory_gb": 16,
+      "parameters_b": 9,
+      "engines": {
+        "ollama": "qwen3.5:9b",
+        "lmstudio": "qwen/qwen3.5-9b"
+      },
+      "sources": {
+        "ollama": "https://ollama.com/library/qwen3.5",
+        "lmstudio": "https://lmstudio.ai/models/qwen/qwen3.5-9b"
+      }
+    },
+    {
+      "id": "devstral-small-2:24b",
+      "status": "catalog-verified",
+      "minimum_memory_gb": 24,
+      "parameters_b": 24,
+      "engines": {
+        "ollama": "devstral-small-2:24b",
+        "lmstudio": "mistralai/devstral-small-2-2512"
+      },
+      "sources": {
+        "ollama": "https://ollama.com/library/devstral-small-2",
+        "lmstudio": "https://lmstudio.ai/models/mistralai/devstral-small-2-2512"
+      }
+    },
+    {
+      "id": "qwen3.6:27b",
+      "status": "catalog-verified",
+      "minimum_memory_gb": 32,
+      "parameters_b": 27,
+      "engines": {
+        "ollama": "qwen3.6:27b",
+        "lmstudio": "qwen/qwen3.6-27b"
+      },
+      "sources": {
+        "ollama": "https://ollama.com/library/qwen3.6",
+        "lmstudio": "https://lmstudio.ai/models/qwen/qwen3.6-27b"
+      }
+    },
+    {
+      "id": "qwen3.6:35b",
+      "status": "catalog-verified",
+      "minimum_memory_gb": 48,
+      "parameters_b": 35,
+      "engines": {
+        "ollama": "qwen3.6:35b",
+        "lmstudio": "qwen/qwen3.6-35b-a3b"
+      },
+      "sources": {
+        "ollama": "https://ollama.com/library/qwen3.6",
+        "lmstudio": "https://lmstudio.ai/models/qwen/qwen3.6-35b-a3b"
+      }
+    },
+    {
+      "id": "qwen3-coder-next:q4_K_M",
+      "status": "catalog-verified",
+      "minimum_memory_gb": 96,
+      "parameters_b": 80,
+      "engines": {
+        "ollama": "qwen3-coder-next:q4_K_M",
+        "lmstudio": "qwen/qwen3-coder-next"
+      },
+      "sources": {
+        "ollama": "https://ollama.com/library/qwen3-coder-next",
+        "lmstudio": "https://lmstudio.ai/models/qwen/qwen3-coder-next"
+      }
+    }
+  ]
+}

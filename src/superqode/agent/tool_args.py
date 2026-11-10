@@ -5,7 +5,7 @@ do not. Observed failure shapes include markdown code fences around the
 JSON, Python-dict syntax (single quotes, ``True``/``False``/``None``),
 trailing commas, double-encoded JSON strings, and prose wrapped around an
 otherwise valid object. Silently treating those as ``{}`` (the previous
-behavior) executes the tool with no arguments — usually a confusing
+behavior) executes the tool with no arguments - usually a confusing
 failure several steps later.
 
 :func:`parse_tool_arguments` recovers every shape it safely can, and when
@@ -21,7 +21,6 @@ import re
 from typing import Any, Dict, Optional, Tuple
 
 _FENCE_RE = re.compile(r"^```[a-zA-Z0-9_-]*\s*\n?(.*?)\n?```\s*$", re.DOTALL)
-_TRAILING_COMMA_RE = re.compile(r",\s*([}\]])")
 
 
 def _strip_code_fence(text: str) -> str:
@@ -84,12 +83,39 @@ def _coerce_dict(value: Any) -> Optional[Dict[str, Any]]:
     return None
 
 
+def _remove_trailing_commas(text: str) -> str:
+    """Never alter a comma or brace inside a JSON string."""
+    result = []
+    quoted = False
+    escaped = False
+    for index, char in enumerate(text):
+        if quoted:
+            result.append(char)
+            if escaped:
+                escaped = False
+            elif char == "\\":
+                escaped = True
+            elif char == '"':
+                quoted = False
+            continue
+        if char == '"':
+            quoted = True
+        if char == ",":
+            next_index = index + 1
+            while next_index < len(text) and text[next_index].isspace():
+                next_index += 1
+            if next_index < len(text) and text[next_index] in "}]":
+                continue
+        result.append(char)
+    return "".join(result)
+
+
 def parse_tool_arguments(raw: Any) -> Tuple[Dict[str, Any], Optional[str]]:
     """Parse tool-call arguments as emitted by a model.
 
     Returns ``(arguments, error)``. Exactly one of the following holds:
     the parse succeeded (possibly after repair) and ``error`` is ``None``,
-    or the arguments were unrecoverable and ``error`` describes why —
+    or the arguments were unrecoverable and ``error`` describes why -
     callers should send that error back to the model rather than execute
     the tool with empty arguments.
     """
@@ -126,7 +152,7 @@ def parse_tool_arguments(raw: Any) -> Tuple[Dict[str, Any], Optional[str]]:
         return literal, None
 
     # 4. Trailing commas in otherwise valid JSON.
-    detrailed = _TRAILING_COMMA_RE.sub(r"\1", text)
+    detrailed = _remove_trailing_commas(text)
     if detrailed != text:
         coerced = _coerce_dict(_try_json(detrailed))
         if coerced is not None:
@@ -138,7 +164,7 @@ def parse_tool_arguments(raw: Any) -> Tuple[Dict[str, Any], Optional[str]]:
     if block is not None and block != text:
         coerced = _coerce_dict(_try_json(block))
         if coerced is None:
-            coerced = _coerce_dict(_try_json(_TRAILING_COMMA_RE.sub(r"\1", block)))
+            coerced = _coerce_dict(_try_json(_remove_trailing_commas(block)))
         if coerced is None:
             coerced = _coerce_dict(_try_python_literal(block))
         if coerced is not None:

@@ -26,6 +26,8 @@ LM_STARTERS = {
     "qwen/qwen3.5-9b": "qwen3.5:9b",
     "qwen/qwen3.6-27b": "qwen3.6:27b",
     "qwen/qwen3.6-35b-a3b": "qwen3.6:35b",
+    "mistralai/devstral-small-2-2512": "devstral-small-2:24b",
+    "qwen/qwen3-coder-next": "qwen3-coder-next:q4_K_M",
 }
 
 

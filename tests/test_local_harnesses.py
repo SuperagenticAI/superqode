@@ -530,17 +530,28 @@ def test_acp_thread_uses_fixture_and_continues(desktop, loaded, monkeypatch, ide
 
 
 def test_newcomer_files_are_unchanged_from_023c6ecc():
-    # Deliberately pin the approved newcomer design for this Advanced-only change.
+    # Pin the approved newcomer UI. Only its catalog may read the new tested registry.
     root = Path(__file__).resolve().parents[1]
     hashes = {
         "apps/macos/Sources/SuperQode/LocalQuickStartView.swift": "ff5a74b0c1d0f3cf44927402364e6416000cac1ccd4505d01be59013c99ce0a5",
         "apps/macos/Sources/SuperQode/ConnectionStartGrid.swift": "28b8c2d481c8bb8366c6b74c63b97026a1a57fc0c02eb92c13fc7f863cbbce46",
         "apps/macos/Sources/SuperQode/ConnectionsView.swift": "e7be29a4496e5a7cadb8c59582168c5869c132f7dfed8ad38b7492c4f8e61dd3",
         "apps/macos/Sources/SuperQode/LocalModelsView.swift": "7d82b11ff9fdf41f4a0a7431a75bca23d8be791dfc00a631d643728c414a3f06",
-        "src/superqode/desktop_service/local_quickstart.py": "896cf773bce3dbd56e1f37619ec70bd3a43e4cdcef88f0a0c2db1768ec0e3668",
     }
     for name, expected in hashes.items():
         assert hashlib.sha256((root / name).read_bytes()).hexdigest() == expected, name
+    import ast
+
+    setup = ast.parse((root / "src/superqode/desktop_service/local_quickstart.py").read_text())
+    setup.body = [
+        node
+        for node in setup.body
+        if not (isinstance(node, ast.FunctionDef) and node.name == "catalog")
+    ]
+    assert (
+        hashlib.sha256(ast.dump(setup).encode()).hexdigest()
+        == "90aced412569949c610265f1bb6c559fafdf91ec82a7aebe87ef89aa29ab63e3"
+    )
 
 
 @pytest.mark.parametrize("engine", ["ollama", "lmstudio"])

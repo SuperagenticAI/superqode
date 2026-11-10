@@ -1,6 +1,6 @@
 """Prompt-based tool calling: catalog rendering + in-text call extraction.
 
-Some local models have no native tool-calling head at all — they can only
+Some local models have no native tool-calling head at all - they can only
 emit tool calls as text. The harness ``tool_call_format: prompt`` mode
 serves them: tool schemas are rendered into the system prompt and the
 model is instructed to emit
@@ -94,16 +94,22 @@ def extract_text_tool_calls(content: str) -> Tuple[str, List[Dict[str, Any]]]:
         if not name:
             continue
         arguments = envelope.get("arguments", envelope.get("parameters", {}))
+        raw_arguments = arguments
         if isinstance(arguments, str):
-            arguments, _err = parse_tool_arguments(arguments)
-        if not isinstance(arguments, dict):
-            arguments = {}
-        arguments = _normalize_prompt_argument(arguments)
+            parsed, error = parse_tool_arguments(arguments)
+            arguments = parsed if error is None else raw_arguments
+        if isinstance(arguments, dict):
+            arguments = _normalize_prompt_argument(arguments)
         tool_calls.append(
             {
                 "id": f"text-{uuid.uuid4().hex[:8]}",
                 "type": "function",
-                "function": {"name": name, "arguments": json.dumps(arguments)},
+                "function": {
+                    "name": name,
+                    "arguments": (
+                        arguments if isinstance(arguments, str) else json.dumps(arguments)
+                    ),
+                },
             }
         )
         consumed_spans.append(match.span())

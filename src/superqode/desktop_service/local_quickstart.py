@@ -30,7 +30,7 @@ def catalog(service, project):
     engines = local_models.servers(service)
     choices = {}
     from dataclasses import asdict
-    from superqode.local.context_contract import choose_contract, LM_STARTERS
+    from superqode.local.context_contract import choose_contract
     from superqode.local.guardrails import build_guardrails
 
     def add(
@@ -86,48 +86,35 @@ def catalog(service, project):
             except (OSError, ValueError):
                 pass
     memory = hardware.available_memory_gb
-    if memory and memory >= 8:
-        suggestions = ["qwen3.5:4b", "qwen3.5:9b"]
-        if memory >= 24:
-            suggestions += ["devstral-small-2:24b"]
-        if memory >= 32:
-            suggestions += ["qwen3.6:27b"]
-        if memory >= 48:
-            suggestions += ["qwen3.6:35b"]
-        if memory >= 96:
-            suggestions += ["qwen3-coder-next:q4_K_M"]
-        for model in reversed(suggestions):
-            contract = choose_contract(model, hardware)
-            # Keep safe fallback choices. Do not call a tight 24B artifact a
-            # starter for a 24 GB machine merely because it is in that tier.
-            if contract.fit["rating"] != "Fits":
-                continue
-            add(
-                "ollama",
-                model,
-                "Ollama · " + model,
-                "Suggested starting model, not a measured quality guarantee.",
-                False,
-                preset="suggested",
-                context=contract.context,
-            )
-            for lm_model, ollama_model in LM_STARTERS.items():
-                if model == ollama_model:
-                    add(
-                        "lmstudio",
-                        lm_model,
-                        "LM Studio · " + lm_model,
-                        "Official catalog suggestion. LM Studio selects the artifact; check its reported size.",
-                        False,
-                        preset="suggested",
-                        context=contract.context,
-                    )
+    from superqode.local.starter_registry import suggestions
+
+    for row in suggestions(hardware):
+        engine, model = row["engine"], row["model"]
+        name = "Ollama" if engine == "ollama" else "LM Studio"
+        detail = (
+            "Tested in a local five-task run for this engine and Mac memory tier."
+            if row["status"] == "tested"
+            else "Catalog-verified suggestion, not a measured quality guarantee."
+        )
+        add(
+            engine,
+            model,
+            name + " · " + model,
+            detail,
+            False,
+            preset="suggested",
+            context=row["context"],
+        )
+        identity = hashlib.sha256((engine + "\n" + model).encode()).hexdigest()[:24]
+        if identity in choices:
+            choices[identity]["evaluation_status"] = row["status"]
     saved = _read(service, project) if project else {}
     previous = saved.get("selection")
     if previous and previous["id"] not in choices:
         choices[previous["id"]] = {
-            **previous,
+            **{key: value for key, value in previous.items() if key != "evaluation_status"},
             "installed": False,
+            "preset": "previous",
             "detail": "Previous setup · check its server and recorded progress.",
         }
     return {

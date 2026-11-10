@@ -2,6 +2,16 @@
 
 Native coding workspace for Apple Silicon Macs running macOS 14 or later. Intel Macs are not supported by this build. This is beta software, with manual updates and incomplete terminal feature parity.
 
+## Unreleased: local evaluation and native small-model reliability
+
+The newcomer Local AI layout has no new controls, harness choices or evaluation workflow. Its suggestions now use a curated registry: all shipped models are catalog-verified, never labelled tested without an explicitly imported passing Mac run. Applicable tested choices take preference for the same engine and memory tier only, and still have to fit. Existing installed models and saved setup remain available.
+
+Advanced CLI `superqode local eval` exercises five fixed coding/tool tasks and saves local JSON with outcomes, tool validity, timing, reported throughput, context, hardware and artifact metadata. `local promote` explicitly imports passing Mac evidence. Model-written Python executes with user permissions after `--allow-execution`; this is not an OS sandbox. Nothing uploads results or promotes automatically. See [exact Mac commands, evidence scope and limitations](../../docs/local/model-evaluation.md). No model was evaluated on the build box.
+
+The native SuperQode engine automatically uses a minimal base prompt and a compact core toolset for local models at most 9B or effective context at most 8192. Custom/project instructions and permission checks remain. Fenced JSON, single quotes, trailing commas, explicit text calls and unambiguous argument aliases can be repaired. Invalid batches execute nothing, with at most two corrective retries in both run modes. Broad discovery/delegation is unavailable in lean mode; external harnesses are not changed. Lean status and local-only aggregate counters are in doctor JSON and the existing context status tool, not newcomer controls.
+
+These are unreleased source changes. App 0.3.8 (24) and engine 2.31.6 are unchanged. No Xcode build, Swift test, installer, signing or notarization was performed on the box.
+
 ## Unreleased: Advanced local harnesses
 
 **Advanced > Local harnesses**, Harness Hub and Command-K **Advanced: Harnesses on local models** open a separate page for experienced users. The Local model connection tile and newcomer Local AI screen have no new choices or harness picker.
@@ -379,3 +389,12 @@ If a task fails, inspect its recorded status and Git diff before retrying. Inter
 - Switch to an unrelated thread and confirm its endpoint, keys, model and context are unchanged. Restart the app and reopen the local thread. Change/unload its model or stop its engine; continuation must block with a visible error, never fall back to a cloud model.
 - Check configuration files before and after launch: global files must remain unchanged. Retry the same accepted launch command after a lost response and confirm no duplicate job. Exercise light/dark mode, narrow layout, keyboard access, project switching during preflight and draft preservation on launch failure.
 - Run LocalHarnessNavigationTests and the existing macOS unit tests in Xcode. Python fixture tests cover configuration and thread routing, not real installed third-party harness versions or macOS compilation.
+
+### Local model evaluation and reliability smoke checks (on a Mac)
+
+- Build the bundled engine and app in Xcode. Exercise the connection grid and Send to Thread again. Confirm Local model still opens the same simple newcomer screen, with no new controls, harness choices or evaluation prompts. All shipped starter descriptions must be catalog-verified, with no fabricated Tested claim.
+- On a disposable Mac account, follow the linked evaluation guide for Ollama and LM Studio separately. Explicitly consent, inspect all five task outcomes and retained fixtures, and confirm a failing/partial/simulated report cannot promote. Unknown token usage must stay null. No report may be overwritten automatically.
+- Import a passing run, refresh Local AI and check only fitting tested suggestions for that engine/tier take priority. Other engines and lower-memory or larger-context setups must retain catalog-verified fallbacks. Installed models and saved selection must remain available. Inspect recorded artifact/quantization before interpreting Tested.
+- In a disposable native local thread, check a 4B/9B model and an unknown-size alias at 8K context use the compact toolset. Check a larger model above 8K and a cloud thread keep their ordinary profiles. Ensure custom/project instructions remain and permission prompts still apply.
+- Exercise fenced arguments, single quotes, trailing commas, an explicit text call and an unambiguous wrong argument name. Check repaired values, especially file content, are unchanged. Conflicting names and wrong types must not execute a tool. An invalid batch must not execute valid sibling edits either.
+- Make the model return three invalid batches in streaming and non-streaming turns. Confirm exactly two corrective retries and a visible stop, no repeated mutations or infinite loop. Check doctor JSON and get_context_remaining report local counters and lean mode; no counters, prompts or results should be uploaded.

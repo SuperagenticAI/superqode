@@ -243,6 +243,7 @@ superqode = [
     "data/eval_packs/*.yaml",
     "systemone/packs/*.yaml",
     "local/data/*.yaml",
+    "local/data/*.json",
     "local/data/model-packs/*.yaml",
     "py.typed",
 ]

@@ -244,3 +244,27 @@ def test_lmstudio_catalog_alias_resolves_exact_downloaded_artifact(setup, monkey
     review = local_quickstart.prepare(service, {**params, "choice": row["id"]})
     assert review["step"] == "load"
     assert review["plan"]["model"] == key
+
+
+def test_curated_tested_list_preserves_installed_models_and_previous_selection(setup, monkeypatch):
+    from test_local_starter_registry import passing_report
+
+    service, params, status, models, original = setup
+    previous = original[0]
+    local_quickstart._save(
+        service, params["project"], {"choice": previous["id"], "selection": previous}
+    )
+    monkeypatch.setattr(
+        "superqode.local.starter_registry.load_evidence", lambda *args: [passing_report()]
+    )
+    status.update(installed=True, running=True)
+    models.append("custom-local-model")
+    result = local_quickstart.catalog(service, params["project"])
+    rows = result["choices"]
+    recommended = [r for r in rows if r["preset"] == "suggested"]
+    assert [r["model"] for r in recommended] == ["qwen3.5:4b"]
+    assert recommended[0]["evaluation_status"] == "tested"
+    assert "Tested in a local five-task run" in recommended[0]["detail"]
+    assert rows[0]["model"] == "custom-local-model" and rows[0]["installed"]
+    assert result["selected"] == previous["id"]
+    assert next(r for r in rows if r["id"] == previous["id"])["preset"] == "previous"

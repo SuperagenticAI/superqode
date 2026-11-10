@@ -32,11 +32,21 @@ superqode local COMMAND [OPTIONS]
 | `warm` | Preload a model and report first-token latency |
 | `smoke` | Non-destructive coding-readiness smoke test |
 | `bench` | Measure TTFT and decode speed |
+| `eval` | Advanced opt-in five-task local coding evaluation with JSON evidence |
+| `promote` | Explicitly import a complete passing Mac evaluation into the local starter registry |
 | `optimize` | Benchmark candidates and recommend role routing |
 | `guardrails` | Recommend conservative runtime limits for this machine |
 | `airplane` | Prepare and verify strict offline local coding sessions |
 
 ---
+
+## Advanced model evidence
+
+See [Local model evaluation](../local/model-evaluation.md) for exact Mac commands,
+consent, retained fixtures and the scope of Tested status. `local eval` executes
+model-written Python with user permissions, not in an OS sandbox. It is distinct
+from the non-destructive `local smoke` probe. Nothing is automatically promoted or
+uploaded. All shipped starter entries remain catalog-verified.
 
 ## Getting Started
 
