@@ -101,4 +101,23 @@ final class WorkbenchReviewTests: XCTestCase {
     app.connected = true
     XCTAssertTrue(app.canSubmitDraft)
   }
+
+  @MainActor func testLocalServerJobDoesNotDisableSend() {
+    let pipe = Pipe(); let engine = Engine(requestTimeout: .seconds(2), input: pipe.fileHandleForWriting)
+    defer { engine.stop() }
+    let suite = "workbench.local-send.\(UUID().uuidString)"; let defaults = UserDefaults(suiteName: suite)!
+    defer { defaults.removePersistentDomain(forName: suite) }
+    let app = Workspace(recoveryStore: WorkspaceRecoveryStore(directory: nil), preferences: defaults, engine: engine)
+    app.connected = true
+    app.project = ["id": "p"]
+    app.harness = "pipy"
+    app.provider = "ollama"
+    app.model = "qwen3:8b"
+    app.draft = "hello"
+    app.jobs = [["id": "server", "project": "local-model-workspace", "kind": "local", "status": "running"]]
+    app.selectedJob = "server"
+    app.detail = ["id": "server", "kind": "local", "status": "running", "project": "local-model-workspace"]
+    XCTAssertFalse(app.active)
+    XCTAssertTrue(app.canSubmitDraft)
+  }
 }

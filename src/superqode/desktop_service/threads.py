@@ -5,6 +5,7 @@ from __future__ import annotations
 import base64
 import json
 import math
+import shutil
 import time
 
 ACTIVE = {"running", "needs_approval", "queued", "cancelling"}
@@ -177,6 +178,138 @@ def update_thread(service, params):
             (project, identity, values["title"], values["pinned"], values["archived"], time.time()),
         )
     return {"conversation_id": identity, **changes}
+
+
+def delete_thread(service, params):
+    """Remove one conversation from this Mac. Project files stay."""
+    project = params["project"]
+    service.project(project)
+    job_id = params.get("id")
+    if not isinstance(job_id, str) or not job_id.strip() or any(c in job_id for c in "/\\\x00"):
+        raise ValueError("Choose a thread")
+    job_id = job_id.strip()
+    with service.lock:
+        index_runs(service, project)
+        found = service._all(
+            "SELECT conversation FROM thread_runs WHERE job=? AND project=?",
+            (job_id, project),
+        )
+        if found:
+            identity = found[0]["conversation"]
+            rows = service._all(
+                "SELECT j.id AS id, j.status AS status FROM jobs j "
+                "JOIN thread_runs t ON t.job=j.id WHERE t.project=? AND t.conversation=?",
+                (project, identity),
+            )
+        else:
+            identity = ""
+            rows = service._all(
+                "SELECT id, status FROM jobs WHERE id=? AND project=?",
+                (job_id, project),
+            )
+        if not rows:
+            raise ValueError("Thread not found in this project")
+        if any(row["status"] in ACTIVE for row in rows):
+            raise ValueError("Stop this thread before deleting it")
+        ids = [row["id"] for row in rows]
+        extras = _compaction_jobs(service, project, ids)
+        if any(row["status"] in ACTIVE for row in extras):
+            raise ValueError("Stop this thread before deleting it")
+        ids.extend(row["id"] for row in extras if row["id"] not in set(ids))
+        _reject_queued_followups(service, project, ids)
+        _delete_job_records(service, project, ids, identity)
+        removed = set(ids)
+        stale = [
+            key
+            for key, root in service._conversation_roots.items()
+            if key in removed or (isinstance(root, dict) and root.get("id") in removed)
+        ]
+        for key in stale:
+            service._conversation_roots.pop(key, None)
+    for removed_id in ids:
+        _remove_run_directory(service, removed_id)
+    return {"conversation_id": identity or job_id, "removed": len(ids)}
+
+
+def _compaction_jobs(service, project, ids):
+    found = []
+    for start in range(0, len(ids), 200):
+        chunk = ids[start : start + 200]
+        marks = ",".join("?" for _ in chunk)
+        found.extend(
+            service._all(
+                "SELECT id, status FROM jobs WHERE project=? AND kind='compaction' "
+                f"AND json_extract(request,'$.source_job') IN ({marks})",
+                (project, *chunk),
+            )
+        )
+    return found
+
+
+def _reject_queued_followups(service, project, ids):
+    known = set(ids)
+    for item in service._all(
+        "SELECT id, request, state, job FROM task_queue WHERE project=?", (project,)
+    ):
+        parent = ""
+        try:
+            parent = str(json.loads(item["request"] or "{}").get("parent_id") or "")
+        except (TypeError, ValueError):
+            parent = ""
+        if item["job"] in known or parent in known:
+            if item["state"] == "running":
+                raise ValueError("Stop this thread before deleting it")
+
+
+def _delete_job_records(service, project, ids, conversation):
+    known = set(ids)
+    for start in range(0, len(ids), 200):
+        chunk = ids[start : start + 200]
+        marks = ",".join("?" for _ in chunk)
+        service.db.execute(f"DELETE FROM events WHERE job IN ({marks})", chunk)
+        service.db.execute(f"DELETE FROM job_timing WHERE job IN ({marks})", chunk)
+        service.db.execute(f"DELETE FROM desktop_notifications WHERE job IN ({marks})", chunk)
+        service.db.execute(
+            f"DELETE FROM jobs WHERE project=? AND id IN ({marks})", (project, *chunk)
+        )
+    queued = []
+    for item in service._all("SELECT id, request, job FROM task_queue WHERE project=?", (project,)):
+        parent = ""
+        try:
+            parent = str(json.loads(item["request"] or "{}").get("parent_id") or "")
+        except (TypeError, ValueError):
+            parent = ""
+        if item["job"] in known or parent in known:
+            queued.append(item["id"])
+    for start in range(0, len(queued), 200):
+        chunk = queued[start : start + 200]
+        marks = ",".join("?" for _ in chunk)
+        service.db.execute(
+            f"DELETE FROM task_queue WHERE project=? AND id IN ({marks})", (project, *chunk)
+        )
+    if conversation:
+        service.db.execute(
+            "DELETE FROM thread_runs WHERE project=? AND conversation=?",
+            (project, conversation),
+        )
+        service.db.execute(
+            "DELETE FROM thread_metadata WHERE project=? AND conversation=?",
+            (project, conversation),
+        )
+    service.db.commit()
+
+
+def _remove_run_directory(service, job_id):
+    if not job_id or job_id in {".", ".."} or any(c in job_id for c in "/\\\x00"):
+        return
+    root = (service.root / "runs").resolve()
+    directory = (root / job_id).resolve()
+    if directory.parent != root or not directory.is_dir():
+        return
+    try:
+        shutil.rmtree(directory)
+    except OSError:
+        return
 
 
 def get_thread(service, params):

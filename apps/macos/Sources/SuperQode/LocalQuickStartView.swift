@@ -6,6 +6,7 @@ struct LocalQuickStartView: View {
   @DialogDismiss private var dismiss
   let project: String
   var embedded = false
+  var showInstalled = true
   @State private var hardware: [String: Any] = [:]
   @State private var engines: [[String: Any]] = []
   @State private var warnings: [String] = []
@@ -24,86 +25,35 @@ struct LocalQuickStartView: View {
   @State private var output = ""
   @State private var command = UUID().uuidString
   @State private var closed = false
+  @State private var showSetup = false
   private var state: String { string(step, "step") }
   private var plan: [String: Any] { step["plan"] as? [String: Any] ?? [:] }
   private var validProject: Bool { app.projectID == project && !closed && !app.openingProject }
 
   var body: some View {
+    ScrollView {
     VStack(alignment: .leading, spacing: 16) {
       HStack {
         Text("Local AI").font(.title2.weight(.semibold))
         Spacer()
         Button("Advanced…") { advanced = true }
       }
-      LocalAINotice(learnMore: $learnMore)
-      devicePanel
-      enginePanel
-      Text("Choose a model marked Fits. Review each install, download and load before it runs.").foregroundStyle(.secondary)
-      Picker("Model", selection: $selection) {
-        Text("Choose a model").tag("")
-        ForEach(choices, id: \.projectRowID) { row in Text(string(row, "name") + " · " + string(row["fit"] as? [String: Any] ?? [:], "rating", "Unknown")).tag(string(row, "id")) }
-      }.disabled(busy || state == "working")
-      if let row = choices.first(where: { string($0, "id") == selection }) {
-        Text(string(row, "detail")).font(.callout).foregroundStyle(.secondary)
-        if let context = row["suggested_context"] as? Int {
-          Text("Requested context: \(context.formatted()) tokens · output up to \(row["max_tokens"] as? Int ?? 2048) · KV cache: " + string(row, "kv_cache", "auto"))
-            .font(.caption).foregroundStyle(.secondary)
+      if showInstalled {
+        InstalledLocalModelPicker(project: project, dismissOnUse: !embedded)
+          .id(project)
+        DisclosureGroup(isExpanded: $showSetup) {
+          VStack(alignment: .leading, spacing: 16) {
+            LocalAINotice(learnMore: $learnMore)
+            setupGuide
+          }.padding(.top, 8)
+        } label: {
+          Text("Download or set up a model").font(.headline)
         }
+      } else {
+        LocalAINotice(learnMore: $learnMore)
+        setupGuide
       }
-      if let row = choices.first(where: { string($0, "id") == selection }) {
-        Text(string(row["fit"] as? [String: Any] ?? [:], "verdict")).font(.caption)
-      }
-      Text("Fit includes weights, context/KV cache, buffers and headroom. It is an estimate, not a guarantee.").font(.caption).foregroundStyle(.secondary)
-      ScrollView {
-        VStack(alignment: .leading, spacing: 12) {
-          if state == "working" {
-            ProgressView("Setting up your local model…")
-            if !progress.isEmpty { LocalDownloadProgress(value: progress) }
-            Text("You can close this guide and reopen it to check progress. Engine shutdown interrupts active work.").font(.caption).foregroundStyle(.secondary)
-          } else if state == "ready" {
-            Label("Ready to start coding", systemImage: "checkmark.circle.fill").foregroundStyle(.green)
-            Text("The model completed a read-tool check on generated data. Editing and full coding quality still depend on the model and task.")
-            Text("The primary model uses this machine. Other tools or project configuration may use the network.").font(.caption).foregroundStyle(.secondary)
-          } else if !plan.isEmpty {
-            Text(stepTitle).font(.headline)
-            if let requested = plan["context"] as? Int {
-              Text("This reviewed step requests \(requested.formatted()) context tokens.").font(.caption)
-            }
-            Text(string(plan, "note", string(plan, "guidance"))).font(.callout)
-            if state == "download" {
-              Text("Download size is reported during transfer. Free disk: " + localBytes(plan["disk_free_bytes"]))
-              Text("Existing cached weights are reused. No coding prompt is sent by downloading.").font(.caption)
-            }
-            if state == "verify" { Text("Checks loaded context, tool-call shapes and context recall, then runs a Core read-tool check on generated data. No project files are read.").font(.caption) }
-            DisclosureGroup("Advanced operation details") {
-              Text(string(plan, "command")).font(.caption.monospaced()).textSelection(.enabled)
-            }
-          } else if !string(step, "message").isEmpty {
-            Text(string(step, "message"))
-            if let url = URL(string: string(step, "url")), url.scheme == "https" { Link("Open official installation guide", destination: url) }
-          }
-          if let verification = step["verification"] as? [String: Any], !verification.isEmpty {
-            LocalReadinessSummary(verification: verification)
-          }
-          if !output.isEmpty { DisclosureGroup("Setup output") { Text(output).font(.caption.monospaced()).textSelection(.enabled) } }
-          if !failure.isEmpty { Text(failure).foregroundStyle(.orange).textSelection(.enabled) }
-          if choices.isEmpty && !busy { Text("No suitable starter or running model was found. Use Advanced setup to inspect runtimes and model requirements.") }
-        }.frame(maxWidth: .infinity, alignment: .leading)
-      }
-      HStack {
-        if !embedded { Button("Close") { closed = true; dismiss() } }
-        if state == "working" { Button("Cancel setup") { app.perform { _ = try await app.engine.call("jobs.cancel", ["id": string(step, "job")]) } } }
-        Spacer()
-        Button("Re-detect engines") { Task { await load() } }.disabled(busy)
-        Button("Check again") { Task { await refresh() } }.disabled(busy || selection.isEmpty || project.isEmpty || !validProject)
-        if state == "ready" {
-          Button("Start coding") { Task { await useModel() } }.buttonStyle(BrandButtonStyle()).disabled(busy || app.anyActive || !validProject)
-        } else if !plan.isEmpty {
-          Button(stepTitle) { Task { await runStep() } }.buttonStyle(BrandButtonStyle()).disabled(busy || app.anyActive || !validProject)
-        } else if state == "retry" {
-          Button("Retry remaining setup") { Task { await refresh(retry: true) } }.disabled(busy || !validProject)
-        }
-      }
+    }
     }.padding(24).frame(width: embedded ? nil : 780, height: embedded ? nil : 760)
       .centeredDialog(isPresented: $learnMore, title: "About Local AI") {
         LocalAILearnMoreView()
@@ -137,6 +87,81 @@ struct LocalQuickStartView: View {
       .onDisappear { closed = true }
   }
 
+  private var setupGuide: some View {
+    VStack(alignment: .leading, spacing: 16) {
+      devicePanel
+      if !showInstalled { enginePanel }
+      Text("Download a starter model only when it is not already installed. Review each install, download and load before it runs.").foregroundStyle(.secondary)
+      Picker("Model", selection: $selection) {
+        Text("Choose a model to download").tag("")
+        ForEach(downloads, id: \.projectRowID) { row in Text(string(row, "name") + " · " + string(row["fit"] as? [String: Any] ?? [:], "rating", "Unknown")).tag(string(row, "id")) }
+      }.disabled(busy || state == "working")
+      if let row = choices.first(where: { string($0, "id") == selection }) {
+        Text(string(row, "detail")).font(.callout).foregroundStyle(.secondary)
+        if let context = row["suggested_context"] as? Int {
+          Text("Requested context: \(context.formatted()) tokens · output up to \(row["max_tokens"] as? Int ?? 2048) · KV cache: " + string(row, "kv_cache", "auto"))
+            .font(.caption).foregroundStyle(.secondary)
+        }
+      }
+      if let row = choices.first(where: { string($0, "id") == selection }) {
+        Text(string(row["fit"] as? [String: Any] ?? [:], "verdict")).font(.caption)
+      }
+      Text("Fit includes weights, context/KV cache, buffers and headroom. It is an estimate, not a guarantee.").font(.caption).foregroundStyle(.secondary)
+      VStack(alignment: .leading, spacing: 12) {
+        if state == "working" {
+          ProgressView("Setting up your local model…")
+          if !progress.isEmpty { LocalDownloadProgress(value: progress) }
+          Text("You can close this guide and reopen it to check progress. Engine shutdown interrupts active work.").font(.caption).foregroundStyle(.secondary)
+        } else if state == "ready" {
+          Label("Ready to start coding", systemImage: "checkmark.circle.fill").foregroundStyle(.green)
+          Text("The model completed a read-tool check on generated data. Editing and full coding quality still depend on the model and task.")
+          Text("The primary model uses this machine. Other tools or project configuration may use the network.").font(.caption).foregroundStyle(.secondary)
+        } else if !plan.isEmpty {
+          Text(stepTitle).font(.headline)
+          if let requested = plan["context"] as? Int {
+            Text("This reviewed step requests \(requested.formatted()) context tokens.").font(.caption)
+          }
+          Text(string(plan, "note", string(plan, "guidance"))).font(.callout)
+          if state == "download" {
+            Text("Download size is reported during transfer. Free disk: " + localBytes(plan["disk_free_bytes"]))
+            Text("Existing cached weights are reused. No coding prompt is sent by downloading.").font(.caption)
+          }
+          if state == "verify" { Text("Checks loaded context, tool-call shapes and context recall, then runs a Core read-tool check on generated data. No project files are read.").font(.caption) }
+          DisclosureGroup("Advanced operation details") {
+            Text(string(plan, "command")).font(.caption.monospaced()).textSelection(.enabled)
+          }
+        } else if !string(step, "message").isEmpty {
+          Text(string(step, "message"))
+          if let url = URL(string: string(step, "url")), url.scheme == "https" { Link("Open official installation guide", destination: url) }
+        }
+        if let verification = step["verification"] as? [String: Any], !verification.isEmpty {
+          LocalReadinessSummary(verification: verification)
+        }
+        if !output.isEmpty { DisclosureGroup("Setup output") { Text(output).font(.caption.monospaced()).textSelection(.enabled) } }
+        if !failure.isEmpty { Text(failure).foregroundStyle(.orange).textSelection(.enabled) }
+        if downloads.isEmpty && !busy {
+          Text(showInstalled
+            ? "No starter download is suggested for this Mac. Use an installed model above, or open Advanced setup."
+            : "No starter download is suggested for this Mac.")
+        }
+      }.frame(maxWidth: .infinity, alignment: .leading)
+      HStack {
+        if !embedded { Button("Close") { closed = true; dismiss() } }
+        if state == "working" { Button("Cancel setup") { app.perform { _ = try await app.engine.call("jobs.cancel", ["id": string(step, "job")]) } } }
+        Spacer()
+        Button("Re-detect engines") { Task { await load() } }.disabled(busy)
+        Button("Check again") { Task { await refresh() } }.disabled(busy || selection.isEmpty || project.isEmpty || !validProject)
+        if state == "ready" {
+          Button("Start coding") { Task { await useModel() } }.buttonStyle(BrandButtonStyle()).disabled(busy || app.anyActive || !validProject)
+        } else if !plan.isEmpty {
+          Button(stepTitle) { Task { await runStep() } }.buttonStyle(BrandButtonStyle()).disabled(busy || app.anyActive || !validProject)
+        } else if state == "retry" {
+          Button("Retry remaining setup") { Task { await refresh(retry: true) } }.disabled(busy || !validProject)
+        }
+      }
+    }
+  }
+
   private var memoryLabel: String {
     if let memory = hardware["unified_memory_gb"] as? Int { return "\(memory) GB" }
     return "Memory not reported"
@@ -150,31 +175,43 @@ struct LocalQuickStartView: View {
       if project.isEmpty { Text("Open a project to finish guided model setup and start coding. Engine controls remain available here.").font(.caption) }
     }
   }
+  private var agentBusy: Bool {
+    app.jobs.contains {
+      string($0, "kind") != "local"
+        && ["running", "needs_approval", "queued", "cancelling"].contains(string($0, "status"))
+    }
+  }
   private var enginePanel: some View {
     VStack(alignment: .leading, spacing: 8) {
       ForEach(engines, id: \.projectRowID) { row in
+        let installed = row["installed"] as? Bool == true
+        let running = row["running"] as? Bool == true
+        let identifier = string(row, "id")
         HStack {
           VStack(alignment: .leading) {
             Text(string(row, "name")).font(.headline)
-            Text(row["running"] as? Bool == true ? "Server running" : row["installed"] as? Bool == true ? "Installed · server stopped" : "Not installed").font(.caption).foregroundStyle(.secondary)
+            Text(running ? "Server running" : installed ? "Installed · server stopped" : "Not installed").font(.caption).foregroundStyle(.secondary)
           }
           Spacer()
-          if string(row, "id") == "lmstudio" && row["cli_available"] as? Bool != true && row["running"] as? Bool != true {
+          if identifier == "lmstudio" && row["cli_available"] as? Bool != true && !running {
             Button("Install LM Studio (recommended)…") { operation = ["action": "install", "engine": "lmstudio"] }
           }
-          if string(row, "id") == "ollama" {
+          if identifier == "ollama" {
             Link("Get Ollama", destination: URL(string: "https://ollama.com/download")!)
-            if row["installed"] as? Bool != true && (row["install"] as? [String: Any])?["automatic"] as? Bool == true {
+            if !installed && (row["install"] as? [String: Any])?["automatic"] as? Bool == true {
               Button("Install with Homebrew…") { operation = ["action": "install", "engine": "ollama"] }
             }
           }
-          if row["installed"] as? Bool == true && row["running"] as? Bool != true && (string(row, "id") != "lmstudio" || row["cli_available"] as? Bool == true) {
-            Button("Start…") { operation = ["action": "serve", "engine": string(row, "id")] }
+          if installed && (identifier != "lmstudio" || row["cli_available"] as? Bool == true || running) {
+            Button(running ? "Context and server…" : "Start server…") {
+              operation = ["action": "serve", "engine": identifier]
+            }.disabled(agentBusy || busy || state == "working")
           }
           if row["can_stop"] as? Bool == true {
-            Button("Stop…") { operation = ["action": "stop", "engine": string(row, "id")] }
+            Button("Stop…") { operation = ["action": "stop", "engine": identifier] }
+              .disabled(agentBusy || busy || state == "working")
           }
-        }.disabled(app.anyActive || busy || state == "working").font(.caption)
+        }.font(.caption)
       }
       if let row = choices.first(where: { string($0, "id") == selection }), row["installed"] as? Bool == true {
         Button("Unload selected model…") { operation = ["action": "unload", "engine": string(row, "engine"), "model": string(row, "model")] }
@@ -206,6 +243,7 @@ struct LocalQuickStartView: View {
     } catch { failure = error.localizedDescription }
   }
 
+  private var downloads: [[String: Any]] { choices.filter { $0["installed"] as? Bool != true } }
   private var stepTitle: String {
     switch state {
     case "install": return "Install runtime (consent)"
@@ -227,8 +265,13 @@ struct LocalQuickStartView: View {
       warnings = (result["guardrails"] as? [String: Any])?["warnings"] as? [String] ?? []
       choices = result["choices"] as? [[String: Any]] ?? []
       let saved = selection.isEmpty ? string(result, "selected") : selection
-      let preferred = choices.first { $0["installed"] as? Bool == true } ?? choices.first { string($0, "engine") == "lmstudio" }
-      selection = choices.contains(where: { string($0, "id") == saved }) ? saved : (preferred ?? choices.first).map { string($0, "id") } ?? ""
+      let savedRow = choices.first { string($0, "id") == saved }
+      // Installed models are chosen from the list above. Do not open them as a download.
+      if savedRow?["installed"] as? Bool == true || !choices.contains(where: { string($0, "id") == saved }) {
+        selection = ""
+      } else {
+        selection = saved
+      }
     } catch { failure = error.localizedDescription }
   }
   private func refresh(retry: Bool = false) async {
@@ -264,11 +307,26 @@ struct LocalQuickStartView: View {
     busy = true
     defer { busy = false }
     do {
-      let result = try await app.engine.call("local.models.use", ["project": project, "engine": string(step, "engine"), "model": string(step, "model"), "harness": "core"]) as? [String: Any] ?? [:]
+      let requested = app.harness.isEmpty ? "core" : app.harness
+      let result = try await connect(requested)
       guard validProject, !app.anyActive else { return }
-      app.chooseHarness("core"); app.chooseModelRoute(string(result, "provider"), string(result, "model"))
+      app.chooseHarness(string(result, "harness")); app.chooseModelRoute(string(result, "provider"), string(result, "model"))
+      try await app.warmLocalModel(
+        endpoint: string(result, "endpoint"), model: string(result, "model"), server: string(result, "provider"))
       app.section = "Workspace"; closed = true; dismiss()
     } catch { failure = error.localizedDescription }
+  }
+  private func connect(_ requested: String) async throws -> [String: Any] {
+    do {
+      return try await app.engine.call("local.models.use", [
+        "project": project, "engine": string(step, "engine"), "model": string(step, "model"), "harness": requested,
+      ]) as? [String: Any] ?? [:]
+    } catch {
+      if requested == "core" { throw error }
+      return try await app.engine.call("local.models.use", [
+        "project": project, "engine": string(step, "engine"), "model": string(step, "model"), "harness": "core",
+      ]) as? [String: Any] ?? [:]
+    }
   }
 }
 

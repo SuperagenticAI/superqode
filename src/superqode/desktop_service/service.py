@@ -57,6 +57,11 @@ class DesktopService:
         # Child processes use the state folder, never the home folder, as their
         # fallback working directory (see superqode.agents.client).
         os.environ.setdefault("SUPERQODE_STATE_DIR", str(self.root))
+        from .app_setup import activate_bundled_extras, publish_cli
+
+        activate_bundled_extras(self.root)
+        if os.environ.get("SUPERQODE_APP") == "1":
+            publish_cli(self.root)
         from .ownership import Lease
 
         self._engine_lease = Lease(self.root / "engine.lock")
@@ -891,6 +896,7 @@ class DesktopService:
                     credential_env = {}
                     inherited = worker_environment(os.environ, params["_local_harness"])
                 from superqode.tools.env_policy import is_secret_name
+                from .app_setup import engine_pythonpath
 
                 key_vars = set(credential_env) | {
                     name for name in inherited if is_secret_name(name) and name != "SSH_AUTH_SOCK"
@@ -918,7 +924,7 @@ class DesktopService:
                             tool_plan["secrets"] if tool_plan else []
                         ),
                         "PYTHONUNBUFFERED": "1",
-                        "PYTHONPATH": str(Path(__file__).resolve().parents[2]),
+                        "PYTHONPATH": engine_pythonpath(self.root),
                         "SUPERQODE_DESKTOP_PARENT_PID": str(os.getpid()),
                         "SUPERQODE_DESKTOP_LEASE_FD": str(lease.fd),
                     },
@@ -1337,6 +1343,16 @@ class DesktopService:
                 return local_models.jobs(self)
             if method == "local.models.harnesses":
                 return local_models.harnesses(self, params["project"])
+            if method == "local.models.install":
+                return local_models.install(self, params)
+            if method == "local.models.install.status":
+                return local_models.install_status(self, params)
+            if method == "local.models.warm":
+                return local_models.warm(self, params)
+            if method == "local.models.warm.status":
+                return local_models.warm_status(self, params)
+            if method == "local.models.installed":
+                return local_models.installed(self)
             if method == "local.models.available":
                 return local_models.available(params["engine"])
             if method == "local.models.use":
@@ -1431,6 +1447,10 @@ class DesktopService:
             from .threads import update_thread
 
             return update_thread(self, params)
+        if method == "threads.delete":
+            from .threads import delete_thread
+
+            return delete_thread(self, params)
         if method == "threads.get":
             from .threads import get_thread
 
@@ -1644,6 +1664,26 @@ class DesktopService:
                 root, include_all=True, expand_protocol_catalog=True, include_live_registry=False
             )
             return build_hub_index(root, items=items, include_local_paths=True)
+        if method == "rlm.overview":
+            from .recursive import overview
+
+            return overview()
+        if method == "rlm.monty.install":
+            from .recursive import monty_install
+
+            return monty_install(self)
+        if method == "rlm.monty.status":
+            from .recursive import monty_status
+
+            return monty_status(params)
+        if method == "rlm.inspect":
+            from .recursive import inspect as inspect_session
+
+            return inspect_session(self, params)
+        if method == "rlm.command":
+            from .recursive import command
+
+            return command(self, params)
         if method == "connect.options":
             from .configuration import options
 

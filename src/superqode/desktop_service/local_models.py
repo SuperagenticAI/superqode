@@ -1,7 +1,9 @@
 """Native adapters around shared local-AI services and reviewed operation jobs."""
 
 import json
+import threading
 import time
+import uuid
 
 from superqode.local import workbench
 
@@ -165,30 +167,272 @@ def jobs(service, *, checks_only=False):
     ]
 
 
+# Backends that run an Ollama or LM Studio model themselves. ACP attachments
+# are intentionally absent: those agents own their own model setup.
+_LOCAL_MODEL_BACKENDS = {
+    "builtin",
+    "pipy",
+    "rlm",
+    "adk",
+    "openai-agents",
+    "pydanticai",
+    "codegem",
+    "strands",
+    "deepagents",
+    "deepseek-harness",
+    "tau",
+    "rlm-code",
+}
+# Missing backends the app can install. The value is the pyproject extra, or
+# "strands" for that harness's separate runtime.
+_INSTALLABLE = {
+    "adk": "adk",
+    "openai-agents": "openai-agents",
+    "pydanticai": "pydanticai",
+    "deepagents": "deepagents",
+    "deepseek-harness": "deepseek-harness",
+    "tau": "tau",
+    "rlm-code": "rlm-code",
+    "strands": "strands",
+}
+_install_lock = threading.Lock()
+_installs: dict[str, dict] = {}
+_install_ids: dict[str, str] = {}
+
+
 def harnesses(service, project):
     from superqode.harness.catalog import list_harnesses
     from superqode.harness.backends.registry import backend_capabilities
 
     rows = []
     for definition in list_harnesses(root=service.project(project)):
+        if definition.id == "no-tool" or definition.source == "built-in-template":
+            continue
+        if definition.category == "model-preset":
+            continue
         backend = definition.spec.runtime.backend
+        if backend not in _LOCAL_MODEL_BACKENDS:
+            continue
         supported = (
-            backend in {"builtin", "pipy", "rlm", "adk", "openai-agents", "pydanticai"}
-            and definition.available
-            and backend_capabilities(backend).availability == "available"
+            definition.available and backend_capabilities(backend).availability == "available"
         )
+        extra = "" if supported else _INSTALLABLE.get(backend, "")
+        if not supported and not extra:
+            continue
         rows.append(
             {
                 "id": definition.id,
                 "name": definition.display_name,
                 "backend": backend,
+                "group": "superqode",
                 "selectable": supported,
-                "note": "Accepts a local provider/model route; model tool use still needs testing."
-                if supported
-                else "Backend-specific local routing needs configuration/verification; not automatically rewired here.",
+                "install_extra": extra,
+                "note": (
+                    "Runs this model on your Mac."
+                    if supported
+                    else "One install, then it can use a model on this Mac."
+                ),
             }
         )
     return rows
+
+
+def install(service, params):
+    """Start a background install for a harness whose package is missing."""
+    project = params["project"]
+    harness_id = str(params.get("harness") or "")
+    row = next((item for item in harnesses(service, project) if item["id"] == harness_id), None)
+    if row is None:
+        raise ValueError("Choose a harness that can use a local model")
+    if row["selectable"]:
+        return {"status": "completed", "harness": harness_id}
+    if not row["install_extra"]:
+        raise ValueError("This harness cannot be installed from the app")
+    with _install_lock:
+        current = _installs.get(harness_id)
+        if current and current["status"] == "running":
+            return {"id": current["id"], "status": "running", "harness": harness_id}
+        job_id = uuid.uuid4().hex
+        _installs[harness_id] = {
+            "id": job_id,
+            "status": "running",
+            "harness": harness_id,
+            "progress": f"Installing {row['name']} and checking that it loads…",
+            "error": "",
+        }
+        _install_ids[job_id] = harness_id
+    thread = threading.Thread(
+        target=_run_install,
+        args=(service, harness_id, job_id, row["install_extra"]),
+        daemon=True,
+    )
+    thread.start()
+    return {"id": job_id, "status": "running", "harness": harness_id}
+
+
+def install_status(service, params):
+    job_id = str(params.get("id") or "")
+    with _install_lock:
+        harness_id = _install_ids.get(job_id)
+        if harness_id is None or harness_id not in _installs:
+            raise ValueError("That install is no longer running")
+        return dict(_installs[harness_id])
+
+
+_warm_lock = threading.Lock()
+_warms: dict[str, dict] = {}
+
+
+def warm(service, params):
+    """Preload a connected local model so the first prompt does not pay load time."""
+    endpoint = _loopback_endpoint(params.get("endpoint"))
+    model = str(params.get("model") or "").strip()
+    if not model or len(model) > 4096:
+        raise ValueError("Choose a local model")
+    engine = str(params.get("engine") or "")
+    job_id = uuid.uuid4().hex
+    with _warm_lock:
+        _warms[job_id] = {
+            "id": job_id,
+            "status": "running",
+            "progress": "Warming the model…",
+            "error": "",
+        }
+    threading.Thread(
+        target=_run_warm,
+        args=(job_id, endpoint, model, engine),
+        daemon=True,
+    ).start()
+    return {"id": job_id, "status": "running"}
+
+
+def warm_status(service, params):
+    job_id = str(params.get("id") or "")
+    with _warm_lock:
+        row = _warms.get(job_id)
+        if row is None:
+            raise ValueError("That warmup is no longer running")
+        return dict(row)
+
+
+def _run_warm(job_id, endpoint, model, engine):
+    try:
+        from superqode.local.bench import run_bench
+
+        extra = {"think": False} if engine == "ollama" else None
+        result = run_bench(
+            endpoint,
+            model,
+            prompt="Reply with exactly: ok",
+            max_tokens=8,
+            extra=extra,
+        )
+        if not result.ok:
+            raise RuntimeError(result.error or "The model did not respond.")
+    except Exception as exc:
+        message = str(exc).strip() or "The model did not finish warming up."
+        _finish_warm(job_id, "failed", message[-500:])
+        return
+    _finish_warm(job_id, "completed", "")
+
+
+def _finish_warm(job_id, status, error):
+    with _warm_lock:
+        row = _warms.get(job_id)
+        if row is None:
+            return
+        row["status"] = status
+        row["error"] = error
+        row["progress"] = "" if status != "running" else row["progress"]
+
+
+def _loopback_endpoint(value) -> str:
+    import urllib.parse
+
+    endpoint = str(value or "").strip()
+    parsed = urllib.parse.urlparse(endpoint)
+    if parsed.scheme != "http" or parsed.hostname not in {"127.0.0.1", "localhost"}:
+        raise ValueError("Warmup only runs against a local model")
+    if parsed.port is None:
+        raise ValueError("Choose a local model endpoint")
+    return endpoint.rstrip("/")
+
+
+def _run_install(service, harness_id, job_id, extra):
+    try:
+        if extra == "strands":
+            _install_strands(service)
+        elif extra:
+            from .app_setup import install_extra
+
+            install_extra(service.root, extra)
+        else:
+            raise ValueError("This harness cannot be installed from the app")
+    except Exception as exc:
+        _finish_install(harness_id, job_id, "failed", _plain_install_error(exc))
+        return
+    _finish_install(harness_id, job_id, "completed", "")
+
+
+def _install_strands(service):
+    import subprocess
+
+    from superqode.harness.strands_setup import setup_runtime
+
+    from .app_setup import ensure_uv
+
+    ensure_uv(service.root / "bin")
+    try:
+        setup_runtime(install=True)
+    except (OSError, ValueError, subprocess.CalledProcessError) as exc:
+        raise RuntimeError(_plain_install_error(exc)) from exc
+    from superqode.harness.backends.strands import strands_installation_status
+
+    ready, issue = strands_installation_status()
+    if not ready:
+        raise RuntimeError(issue or "Strands installed, but it does not load.")
+
+
+def _finish_install(harness_id, job_id, status, error):
+    with _install_lock:
+        current = _installs.get(harness_id)
+        if not current or current["id"] != job_id:
+            return
+        current["status"] = status
+        current["error"] = error
+        current["progress"] = ""
+
+
+def _plain_install_error(exc) -> str:
+    text = str(exc).strip() or "The install did not finish."
+    for phrase in (
+        "Install uv first, then run `superqode harness strands setup`.",
+        "Run `superqode harness strands setup`, then `superqode harness strands doctor`.",
+        "Strands runtime not found. Run `superqode harness strands setup`.",
+    ):
+        text = text.replace(phrase, "The install did not finish.")
+    return text[-500:]
+
+
+def installed(service):
+    """Chat models already installed for Ollama or LM Studio, plus engine status."""
+    from superqode.local.inventory import installed_chat_models
+
+    status = {row["id"]: row for row in servers(service)}
+    models = []
+    for row in installed_chat_models():
+        engine = status.get(row["engine"], {})
+        models.append(
+            {
+                **{key: value for key, value in row.items() if key != "metadata"},
+                "server_running": bool(engine.get("running")),
+                "server_installed": bool(engine.get("installed") or engine.get("running")),
+            }
+        )
+    return {
+        "models": models,
+        "engines": [status[name] for name in ("ollama", "lmstudio") if name in status],
+    }
 
 
 def available(engine):
@@ -199,15 +443,44 @@ def available(engine):
         raise ValueError("Choose a supported local runtime")
     endpoint = f"http://127.0.0.1:{SPECS[engine].default_port}/v1"
     if engine == "lmstudio":
-        from superqode.local.lmstudio_api import models as lm_models
+        from superqode.local.inventory import lmstudio_advertised_models
 
-        rows = lm_models()
+        rows = lmstudio_advertised_models()
         return {
             "endpoint": endpoint,
-            "models": [r["key"] for r in rows if r.get("key")],
-            "loaded_models": [r["key"] for r in rows if r.get("key") and r.get("loaded_instances")],
-            "metadata": rows,
+            "models": [r["model"] for r in rows],
+            "loaded_models": [r["model"] for r in rows if r.get("loaded")],
+            "metadata": [r.get("metadata", {}) for r in rows],
             "provider": "lmstudio",
+        }
+    if engine == "ollama":
+        from superqode.local.inventory import _chat_model, ollama_advertised_models
+
+        # /api/tags is the installed library the terminal lists. /v1/models can
+        # be empty or unavailable while those models are still on disk.
+        listed = ollama_advertised_models()
+        library = [row["model"] for row in listed]
+        loaded = [row["model"] for row in listed if row.get("loaded")]
+        openai_ids = []
+        try:
+            with urllib.request.urlopen(endpoint + "/models", timeout=3) as response:
+                payload = json.loads(response.read(2_000_000))
+            openai_ids = [
+                row["id"]
+                for row in payload.get("data", [])
+                if isinstance(row, dict)
+                and isinstance(row.get("id"), str)
+                and _chat_model(row["id"])
+            ]
+        except (OSError, ValueError, json.JSONDecodeError):
+            if not library:
+                raise
+        models = list(dict.fromkeys([*library, *openai_ids]))
+        return {
+            "endpoint": endpoint,
+            "models": models,
+            "loaded_models": loaded,
+            "provider": "ollama",
         }
     # Fixed loopback endpoints; never inherit a remote host from shell settings.
     with urllib.request.urlopen(endpoint + "/models", timeout=3) as response:
@@ -233,6 +506,8 @@ def available(engine):
 def use(service, params):
     project = params["project"]
     service.project(project)
+    if str(params.get("harness") or "").startswith("attach:"):
+        raise ValueError("Choose a harness that runs the local model itself")
     harness = next(
         (
             row
@@ -242,7 +517,7 @@ def use(service, params):
         None,
     )
     if not harness:
-        raise ValueError("Choose a native harness with a supported local model route")
+        raise ValueError("Choose a harness that can use this local model")
     route = available(params["engine"])
     model = params.get("model")
     if model not in route["models"] or any(word in model.lower() for word in ("embed", "rerank")):

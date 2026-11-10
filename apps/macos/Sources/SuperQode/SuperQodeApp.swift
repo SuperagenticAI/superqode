@@ -180,11 +180,12 @@ enum Sections {
   static let names = [
     "Workspace", "Harness Hub", "Models", "Evaluations", "Optimization", "Files", "Tools",
     "Terminal", "Checkpoints", "Review", "Threads", "Agent activity", "Harness Studio", "Super Agent", "Local harnesses",
+    "Recursive agents",
   ]
   static let icons = [
     "chevron.left.forwardslash.chevron.right", "square.stack.3d.up", "cpu", "checkmark.seal",
     "slider.horizontal.3", "folder", "wrench.and.screwdriver", "terminal", "clock.arrow.circlepath", "text.magnifyingglass", "bubble.left.and.bubble.right", "square.stack.3d.up", "hammer",
-    "arrow.triangle.2.circlepath", "cpu.fill",
+    "arrow.triangle.2.circlepath", "cpu.fill", "arrow.triangle.branch",
   ]
 }
 extension Color {
@@ -292,6 +293,7 @@ struct RootView: View {
     case "Agent activity": AgentFleetView()
     case "Harness Hub": HubView()
     case "Local harnesses": LocalHarnessesView().id(app.projectID)
+    case "Recursive agents": RecursiveAgentsView().id(app.projectID)
     case "Super Agent": CreatorModeView().id(app.projectID)
     case "Evaluations", "Optimization":
       ExperimentView(optimize: app.section == "Optimization").id(app.projectID)
@@ -593,12 +595,21 @@ struct CodingView: View {
         Text("Changes").tag("Changes")
         Text("Checks").tag("Checks")
         Text("Evidence").tag("Evidence")
+        if showsRecursiveAgents { Text("Agents").tag("Agents") }
       }.pickerStyle(.segmented).labelsHidden().padding(10)
       Divider()
       if inspectorTab == "Changes" {
         WorkbenchChangesView(review: review, scope: $scope, fullReview: openFullReview, refresh: refreshReview)
+      } else if inspectorTab == "Agents", showsRecursiveAgents {
+        AgentsInspector()
       } else { InspectorView(fixedTab: inspectorTab) }
     }
+    .onChange(of: app.harness) { _, _ in
+      if !showsRecursiveAgents, inspectorTab == "Agents" { inspectorTab = "Changes" }
+    }
+  }
+  private var showsRecursiveAgents: Bool {
+    ["rlm", "rlm-docker", "rlm-monty", "deepseek-harness", "dsh", "deepseek"].contains(app.harness)
   }
   private var conversation: some View {
     Group {
@@ -716,11 +727,11 @@ struct CodingComposer: View {
   @State private var dragStartHeight: CGFloat?
   @State private var resizeCursorPushed = false
   private static let lineHeight: CGFloat = 20
-  private static let minEditorHeight: CGFloat = 4 * lineHeight + 12
-  /// Grow to min(260pt, 35% of the window) while the conversation keeps at
-  /// least 300pt. About 150pt goes to the composer's own controls.
+  private static let minEditorHeight: CGFloat = 3 * lineHeight + 12
+  /// Keep the message box to about six lines. The conversation above it
+  /// stays at least 460pt, including the activity line and composer controls.
   private var maxEditorHeight: CGFloat {
-    max(Self.minEditorHeight, min(260, availableHeight * 0.35, availableHeight - 300 - 150))
+    max(Self.minEditorHeight, min(132, availableHeight * 0.22, availableHeight - 460 - 120))
   }
   private var composerHeight: CGFloat {
     // Count at most a screenful of lines. Avoid allocating every line of a
@@ -990,10 +1001,10 @@ struct CodingComposer: View {
     .onChange(of: app.enforcesSessionControls) { _, enforced in
       if !enforced && app.interactionMode == "plan" { app.interactionMode = "code" }
     }
-    .padding(16).brandSurface()
+    .padding(12).brandSurface()
     // Same readable column as the conversation, centred in wide windows.
     .frame(maxWidth: 840).frame(maxWidth: .infinity)
-    .padding(.horizontal, 20).padding(.bottom, 16).padding(.top, 8)
+    .padding(.horizontal, 20).padding(.bottom, 10).padding(.top, 4)
   }
   private var connectionOptions: some View {
     VStack(alignment: .leading, spacing: 16) {
@@ -1130,11 +1141,25 @@ func displayEvents(_ events: [[String: Any]]) -> [[String: Any]] {
   for event in events {
     let data = event["data"] as? [String: Any] ?? [:]
     let payload = data["payload"] as? [String: Any] ?? [:]
+    let name = string(data, "event")
     let delta = string(event, "type") == "harness_event"
-      && ["delta", "model_delta", "message.delta"].contains(string(data, "event"))
+      && ["delta", "model_delta", "message.delta"].contains(name)
+    let committed = string(event, "type") == "harness_event" && name == "message"
     let answer = string(event, "type") == "answer"
-    if delta || answer {
-      parts.append(answer ? string(data, "text") : string(payload, "text", string(payload, "content")))
+    if delta || answer || committed {
+      let text = answer ? string(data, "text") : string(payload, "text", string(payload, "content"))
+      if committed {
+        let joined = parts.joined()
+        if text.isEmpty {
+          // An empty commit is bookkeeping, not a second answer.
+        } else if joined.isEmpty || text.hasPrefix(joined) {
+          parts = [text]
+        } else if !joined.hasPrefix(text) {
+          parts.append(text)
+        }
+      } else {
+        parts.append(text)
+      }
     } else {
       flush()
       rows.append(event)
@@ -1348,7 +1373,7 @@ struct EventStream: View {
                   if index > 0 { Divider() }
                   EventRow(event: event, embeddedResponse: true)
                 }
-              }.padding(20).frame(maxWidth: .infinity, alignment: .leading).modifier(ConversationSurface())
+              }.padding(14).frame(maxWidth: .infinity, alignment: .leading).modifier(ConversationSurface())
                 .hoverCopy("Copy response as Markdown") { app.selectedResponseText }
                 .id("response:" + app.selectedJob)
             }
@@ -1371,7 +1396,7 @@ struct EventStream: View {
           }.scrollTargetLayout().padding(24)
             // Readable line length: about 800pt of text, centred in wide windows.
             .frame(maxWidth: 848, alignment: .leading).frame(maxWidth: .infinity)
-        }.scrollPosition(id: $visibleAnchor, anchor: follow ? .bottom : .top)
+        }.scrollPosition(id: $visibleAnchor, anchor: follow && app.active ? .bottom : .top)
         .environmentObject(turnChanges)
         .environment(\.turnChangesWorkspace, app)
         .background(TranscriptScrollObserver { readingEarlier in
@@ -1393,8 +1418,12 @@ struct EventStream: View {
         .onChange(of: app.loadingHistory) { _, _ in restorePosition(proxy) }
         .onChange(of: follow) { _, value in
           guard initialized else { return }
-          if value { pendingAnchor = nil; positionNotice = ""; proxy.scrollTo("bottom", anchor: .bottom) }
+          if value { pendingAnchor = nil; positionNotice = ""; followLatest(proxy) }
           savePosition()
+        }
+        .onChange(of: app.active) { _, _ in
+          guard follow && initialized else { return }
+          followLatest(proxy)
         }
         .onChange(of: visibleAnchor) { _, _ in
           if initialized && !restoringPosition && pendingAnchor == nil { savePosition() }
@@ -1406,7 +1435,7 @@ struct EventStream: View {
           Task { @MainActor in
             try? await Task.sleep(for: .milliseconds(150))
             followScrollScheduled = false
-            if follow && initialized { proxy.scrollTo("bottom", anchor: .bottom) }
+            if follow && initialized { followLatest(proxy) }
           }
         }
       }
@@ -1418,16 +1447,25 @@ struct EventStream: View {
               status: app.activityStatus, activity: currentAgentActivity(app.events),
               startedAt: RunStats.startDate(app.detail), waitingSince: RunStats.waitingSince(app.detail),
               planLine: PlanSnapshot.compactLine(plan))
-          }
-          if !activity.isEmpty {
-            AgentActivityView(events: activity, active: app.active && app.activityStatus != "needs_approval")
+          } else if !activity.isEmpty {
+            AgentActivityView(events: activity, active: false)
               .id(app.selectedJob)
           }
-        }.padding(.horizontal, 24).padding(.vertical, 10)
+        }.padding(.horizontal, 24).padding(.vertical, 6)
       }
     }
     .background(TurnChangesSheets(store: turnChanges))
     .onDisappear { savePosition(); app.scheduleRecoverySave() }
+  }
+  /// While a run is streaming, keep the newest token in view. Once it
+  /// finishes, show the start of the reply so it is not hidden above the fold.
+  private func followLatest(_ proxy: ScrollViewProxy) {
+    let response = "response:" + app.selectedJob
+    if !app.active && availableAnchors.contains(response) {
+      proxy.scrollTo(response, anchor: .top)
+    } else {
+      proxy.scrollTo("bottom", anchor: .bottom)
+    }
   }
   private func savePosition() {
     guard initialized else { return }
@@ -1436,7 +1474,7 @@ struct EventStream: View {
   }
   private func restorePosition(_ proxy: ScrollViewProxy) {
     guard initialized, savedJob == app.selectedJob, savedProject == app.projectID else { return }
-    if follow { proxy.scrollTo("bottom", anchor: .bottom); return }
+    if follow { followLatest(proxy); return }
     guard let anchor = pendingAnchor else { return }
     if availableAnchors.contains(anchor) {
       restoringPosition = true

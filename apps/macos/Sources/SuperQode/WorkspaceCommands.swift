@@ -42,6 +42,10 @@ import AppKit
         detail: "Run a supported harness on a loaded Ollama or LM Studio model",
         symbol: "cpu.fill", keywords: "advanced local harness opencode goose codex",
         disabledReason: projectReason ?? idleReason),
+      .init(action: .section("Recursive agents"), title: "Recursive agents",
+        detail: "Explore RLM, Monty, and agent-to-agent.",
+        symbol: "arrow.triangle.branch", keywords: "advanced rlm monty docker a2a recursive subagent deepseek super agent",
+        disabledReason: projectReason ?? idleReason),
       .init(action: .connectionPage("builder"), title: "Build Your Own Harness…",
         detail: "Create or import a project HarnessSpec", symbol: "hammer", keywords: "custom harness yaml preset",
         disabledReason: projectReason ?? idleReason),
@@ -79,7 +83,7 @@ import AppKit
       .init(action: .learning, title: "Getting Started & Learning", detail: "Open the local learning guide",
         symbol: "book", keywords: "help documentation guide", key: "?"),
     ]
-    commands += Sections.names.enumerated().filter { !["Agent activity", "Models", "Local harnesses"].contains($0.element) }.map { index, name in
+    commands += Sections.names.enumerated().filter { !["Agent activity", "Models", "Local harnesses", "Recursive agents"].contains($0.element) }.map { index, name in
       WorkspaceCommand(action: .section(name), title: Sections.title(for: name),
         detail: "Navigate to " + Sections.title(for: name), symbol: Sections.icons[index],
         keywords: name == "Workspace" ? "chat conversation coding" : name.lowercased(),

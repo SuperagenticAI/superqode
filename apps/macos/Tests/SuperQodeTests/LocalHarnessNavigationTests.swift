@@ -43,6 +43,33 @@ final class LocalHarnessNavigationTests: XCTestCase {
     XCTAssertEqual(app.section, "Local harnesses")
   }
 
+  func testRecursiveAgentsAreAMainRailTab() {
+    let group = WorkspaceNavigationGroup.containing("Recursive agents")
+    XCTAssertEqual(group.id, "recursive")
+    XCTAssertEqual(group.sections, ["Recursive agents"])
+    XCTAssertEqual(WorkspaceNavigationGroup.containing("Local harnesses").sections, ["Local harnesses"])
+    XCTAssertFalse(WorkspaceNavigationGroup.usesCodingWorkspace("Recursive agents"))
+    XCTAssertTrue(WorkspaceNavigationRail.starterSections.contains("Recursive agents"))
+    XCTAssertFalse(WorkspaceNavigationRail.starterSections.contains("Local harnesses"))
+  }
+
+  @MainActor func testRecursiveAgentsCommandStaysOffTheNumberedRail() {
+    let preferences = UserDefaults(suiteName: "RecursiveAgentsTests." + UUID().uuidString)!
+    let app = Workspace(recoveryStore: WorkspaceRecoveryStore(directory: nil), preferences: preferences)
+    let action = WorkspaceCommandAction.section("Recursive agents")
+    XCTAssertFalse(app.workspaceCommand(action)?.isEnabled ?? true)
+    app.connected = true
+    app.project = ["id": "project", "path": "/tmp/project"]
+    let matches = app.workspaceCommands.filter { $0.action == action }
+    XCTAssertEqual(matches.count, 1)
+    XCTAssertEqual(matches.first?.title, "Recursive agents")
+    XCTAssertTrue(matches.first?.isEnabled ?? false)
+    let numbered = app.workspaceCommands.filter { $0.key != nil && $0.action == action }
+    XCTAssertTrue(numbered.isEmpty)
+    app.runWorkspaceCommand(action)
+    XCTAssertEqual(app.section, "Recursive agents")
+  }
+
   @MainActor func testSelectingAnotherModelLeavesTheFixedLocalProfile() {
     let preferences = UserDefaults(suiteName: "LocalHarnessTests." + UUID().uuidString)!
     let app = Workspace(recoveryStore: WorkspaceRecoveryStore(directory: nil), preferences: preferences)

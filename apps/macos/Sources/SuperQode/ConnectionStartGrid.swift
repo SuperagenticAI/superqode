@@ -13,9 +13,9 @@ struct ConnectionStartGrid: View {
     var recommended = false
   }
   private static let tiles: [Tile] = [
-    Tile(id: "agent", title: "Your agent", detail: "An existing harness with its own tools, model and sign-in.", symbol: "person.crop.circle", page: "menu:agents"),
+    Tile(id: "agent", title: "Your agent", detail: "Open all connections and choose the agent you already use.", symbol: "person.crop.circle", page: "menu:root"),
     Tile(id: "harness", title: "SuperQode harness", detail: "Core, RLM, PiPy, CodeGem or Workbench with your model.", symbol: "sparkles", page: "menu:harness", recommended: true),
-    Tile(id: "local", title: "Local model", detail: "Run on your Mac with Ollama or LM Studio.", symbol: "desktopcomputer", page: "source:local"),
+    Tile(id: "local", title: "Local model", detail: "Pick an installed Ollama or LM Studio model and start coding.", symbol: "desktopcomputer", page: "source:local"),
     Tile(id: "key", title: "API key", detail: "Your provider key with API billing.", symbol: "key", page: "source:key"),
     Tile(id: "acp", title: "ACP agent", detail: "A coding agent you run as a local process.", symbol: "link", page: "acp"),
     Tile(id: "protocols", title: "Protocols", detail: "Reach an agent over ACP, A2A or UHP.", symbol: "network", page: "menu:protocols"),
@@ -46,8 +46,14 @@ struct ConnectionStartGrid: View {
             .accessibilityLabel(tile.title + ". " + tile.detail)
         }
       }
-      Button("All connections and runtimes…") { app.openConnections("menu:root") }
-        .accessibilityIdentifier("start.allConnections")
+      Button {
+        app.openConnections("menu:root")
+      } label: {
+        Text("All connections").frame(maxWidth: .infinity)
+      }
+      .buttonStyle(.bordered)
+      .controlSize(.large)
+      .accessibilityIdentifier("start.allConnections")
     }.disabled(app.connectionPickerDisabled)
   }
 }

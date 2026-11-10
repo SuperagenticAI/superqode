@@ -178,6 +178,9 @@ struct ThreadsView: View {
         Button(row["archived"] as? Bool == true ? "Restore thread" : "Archive thread") {
           update(row, changes: ["archived": row["archived"] as? Bool != true])
         }.disabled(row["working"] as? Bool == true && row["archived"] as? Bool != true)
+        Divider()
+        Button("Delete Thread", role: .destructive) { app.deleteThread(row) }
+          .disabled(row["working"] as? Bool == true || mutation)
         Button("Copy thread ID") { NSPasteboard.general.clearContents(); NSPasteboard.general.setString(string(row, "conversation_id"), forType: .string) }
       } label: { Image(systemName: "ellipsis") }
         .menuStyle(.borderlessButton).frame(width: 28).disabled(mutation)
@@ -209,6 +212,33 @@ extension Dictionary where Key == String, Value == Any {
 }
 
 @MainActor extension Workspace {
+  func deleteThread(_ row: [String: Any]) {
+    let title = string(row, "conversation_title", string(row, "title", "This thread"))
+    let status = string(row, "status")
+    if row["working"] as? Bool == true
+      || ["running", "needs_approval", "queued", "cancelling"].contains(status)
+    {
+      notice = "Stop this thread before deleting it."
+      return
+    }
+    guard confirm(
+      "Delete this thread?",
+      "“\(title)” is removed from this Mac. Project files stay. This cannot be undone.",
+      button: "Delete Thread")
+    else { return }
+    let project = projectID
+    let job = string(row, "id")
+    let conversation = string(row, "conversation_id", job)
+    perform {
+      _ = try await self.engine.call("threads.delete", ["project": project, "id": job])
+      guard self.projectID == project else { return }
+      self.unreadThreads.remove(conversation)
+      await self.refreshJobs()
+      self.closeThreadTab(conversation)
+      self.notice = "Deleted “\(title)”."
+    }
+  }
+
   func restoreSelectedThread() {
     let project = projectID
     let job = selectedJob

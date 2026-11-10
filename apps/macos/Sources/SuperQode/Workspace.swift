@@ -715,11 +715,14 @@ private func jobStamp(_ row: [String: Any]) -> Double {
   }
   var active: Bool {
     let live: Set<String> = ["running", "needs_approval", "queued", "cancelling"]
+    // A local server job stays running while Ollama or LM Studio is up. It is not an agent turn.
+    if string(detail, "kind") == "local" { return false }
     let detailStatus = string(detail, "status")
     if !detailStatus.isEmpty { return live.contains(detailStatus) }
     guard !selectedJob.isEmpty, let row = jobs.first(where: { string($0, "id") == selectedJob }) else {
       return false
     }
+    if string(row, "kind") == "local" { return false }
     return live.contains(string(row, "status"))
   }
   /// Detail loads after the jobs list. The working bar uses the list status until then.
@@ -967,6 +970,26 @@ private func jobStamp(_ row: [String: Any]) -> Double {
       model = string(local, "local_model", model)
     }
     savePreferences()
+  }
+  /// Load a just-connected local model so the first prompt does not wait on a cold start.
+  func warmLocalModel(endpoint: String, model: String, server: String) async throws {
+    let started = try await self.engine.call("local.models.warm", [
+      "endpoint": endpoint, "model": model, "engine": server,
+    ]) as? [String: Any] ?? [:]
+    if string(started, "status") == "completed" { return }
+    let id = string(started, "id")
+    guard !id.isEmpty else { throw EngineError(message: "Could not warm the model.") }
+    for _ in 0..<200 {
+      try await Task.sleep(for: .seconds(1))
+      try Task.checkCancellation()
+      let status = try await self.engine.call("local.models.warm.status", ["id": id]) as? [String: Any] ?? [:]
+      let state = string(status, "status")
+      if state == "completed" { return }
+      if state == "failed" {
+        throw EngineError(message: string(status, "error", "The model did not finish warming up."))
+      }
+    }
+    throw EngineError(message: "The model is still warming up. Your first question may take longer.")
   }
   func chooseModelRoute(_ provider: String, _ model: String) {
     if isManaged || connectionDisconnected || harness.hasPrefix("local-harness:") {
@@ -1390,6 +1413,7 @@ private func jobStamp(_ row: [String: Any]) -> Double {
           restoreComposer(conversationID: identity)
           restoreSessionDestination()
         }
+        guard id == selectedJob, generation == detailGeneration else { return }
         if firstLoad && adoptPhoneConnection,
           string(result, "kind") == "task", let request = result["request"] as? [String: Any],
           let selection = phoneConnection(fromJobRequest: request) {

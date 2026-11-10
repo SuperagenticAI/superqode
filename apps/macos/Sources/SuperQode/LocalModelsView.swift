@@ -474,6 +474,11 @@ struct LocalModelConnectionView: View {
   @State private var checking = false
   var body: some View {
     VStack(alignment: .leading, spacing: 16) {
+      if busy {
+        ModelWarmupCard(
+          message: "Warming the model so your first question is ready…",
+          subject: model)
+      } else {
       Text("Code with a local model").font(.title2)
       Text("Choose a model advertised by this loopback server. Selecting a route does not start inference.").foregroundStyle(.secondary)
       Picker("Served model", selection: $model) { ForEach(models, id: \.self) { Text($0).tag($0) } }
@@ -484,7 +489,9 @@ struct LocalModelConnectionView: View {
       DisclosureGroup("Other harness adapters") {
         ForEach(harnesses.filter { $0["selectable"] as? Bool != true }, id: \.projectRowID) { row in Text(string(row, "name") + ": " + string(row, "note")).font(.caption).foregroundStyle(.secondary) }
       }
+      }
       if !failure.isEmpty { Text(failure).foregroundStyle(.orange) }
+      if !busy {
       HStack {
         Button("Build a harness…") { dismiss(); app.openConnections("builder") }; Spacer()
         Button("Review readiness check…") { checking = true }.disabled(busy || model.isEmpty || app.anyActive)
@@ -496,10 +503,13 @@ struct LocalModelConnectionView: View {
               let result = try await app.engine.call("local.models.use", ["engine": engine, "project": project, "model": model, "harness": harness]) as? [String: Any] ?? [:]
               guard !closed, app.projectID == project, !app.busy, !app.anyActive else { return }
               app.chooseHarness(string(result, "harness")); app.chooseModelRoute(string(result, "provider"), string(result, "model"))
-              app.section = "Workspace"; app.notice = "Local route selected. Test model checks basic inference; run a coding task to verify tool use."; dismiss()
+              try await app.warmLocalModel(
+                endpoint: string(result, "endpoint"), model: string(result, "model"), server: string(result, "provider"))
+              app.section = "Workspace"; app.notice = "The model is ready. Describe a change to start coding."; dismiss()
             } catch { failure = error.localizedDescription }
           }
         }.buttonStyle(BrandButtonStyle()).disabled(busy || model.isEmpty || harness.isEmpty || app.projectID != project || app.anyActive)
+      }
       }
     }.padding(24).frame(width: 780, height: 540)
       .centeredDialog(isPresented: $checking, title: "Check local model readiness") {

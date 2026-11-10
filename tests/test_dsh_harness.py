@@ -217,6 +217,89 @@ def test_settings_resolve_paths_against_the_working_directory(tmp_path: Path) ->
     assert settings.session_root == str((tmp_path / "sessions").resolve())
 
 
+def test_config_kwargs_match_the_sdk_that_is_installed(tmp_path: Path) -> None:
+    """0.1.5 rejects session_root; older SDKs still receive it."""
+    from dataclasses import dataclass
+
+    from superqode.harness.backends.dsh import _harness_config_kwargs
+
+    @dataclass
+    class CurrentSdk:
+        provider: str = ""
+        model: str = ""
+        max_tokens: int | None = None
+        cwd: str | None = None
+        dsh_bin: str | None = None
+        dsh_home: str | None = None
+        env: dict | None = None
+        patches: tuple = ()
+        request_timeout_seconds: float | None = None
+        shutdown_timeout_seconds: float | None = None
+        base_url: str | None = None
+        api_key: str | None = None
+
+    @dataclass
+    class OlderSdk:
+        provider: str = ""
+        model: str = ""
+        max_tokens: int | None = None
+        cwd: str | None = None
+        session_root: str | None = None
+        cordis: str | None = None
+        runtime_bin: str | None = None
+        env: dict | None = None
+        request_timeout_seconds: float | None = None
+        shutdown_timeout_seconds: float | None = None
+        base_url: str | None = None
+        api_key: str | None = None
+
+    request = _request(tmp_path, cordis="cordis.yml", session_root="sessions", runtime_bin="dsh")
+    settings = DSHSettings.from_request(request)
+
+    current = _harness_config_kwargs(CurrentSdk, request, settings)
+    CurrentSdk(**current)
+    assert current["dsh_home"] == settings.session_root
+    assert current["dsh_bin"] == "dsh"
+    assert current["patches"] == (settings.cordis,)
+    assert current["env"]["DSH_HOME"] == settings.session_root
+    assert "session_root" not in current
+    assert "cordis" not in current
+    assert "runtime_bin" not in current
+
+    older = _harness_config_kwargs(OlderSdk, request, settings)
+    OlderSdk(**older)
+    assert older["session_root"] == settings.session_root
+    assert older["cordis"] == settings.cordis
+    assert older["runtime_bin"] == "dsh"
+    assert "dsh_home" not in older
+    assert "patches" not in older
+    assert "reasoning_effort" not in current
+    assert "reasoning_effort" not in older
+
+
+def test_reasoning_effort_is_offered_only_when_the_sdk_accepts_it(tmp_path: Path) -> None:
+    from dataclasses import dataclass
+
+    from superqode.harness.backends.dsh import _harness_config_kwargs
+
+    @dataclass
+    class AcceptsEffort:
+        reasoning_effort: str | None = None
+
+    request = _request(tmp_path, reasoning_effort="high")
+    settings = DSHSettings.from_request(request)
+    assert settings.reasoning_effort == "high"
+    offered = _harness_config_kwargs(AcceptsEffort, request, settings)
+    AcceptsEffort(**offered)
+    assert offered["reasoning_effort"] == "high"
+
+    quiet = DSHSettings.from_request(_request(tmp_path))
+    assert quiet.reasoning_effort is None
+    assert "reasoning_effort" not in _harness_config_kwargs(
+        AcceptsEffort, _request(tmp_path), quiet
+    )
+
+
 def test_settings_default_session_root_stays_inside_superqode(tmp_path: Path) -> None:
     settings = DSHSettings.from_request(_request(tmp_path))
 
@@ -552,6 +635,46 @@ async def test_a_second_turn_reuses_the_runtime_for_the_same_session(tmp_path: P
     assert harness.start_calls == 1
     assert harness.closed is False
     assert len(harness.client.prompts) == 2
+
+
+@pytest.mark.asyncio
+async def test_a_committed_message_is_shown_when_nothing_was_streamed(tmp_path: Path) -> None:
+    session = wire_session_id()
+    notes = [
+        SimpleNamespace(
+            method="session.event",
+            payload={
+                "sessionId": session,
+                "event": {
+                    "type": "agent/inbox/spliced",
+                    "data": {"inserted": [{"id": MESSAGE_ID}]},
+                },
+            },
+        ),
+        SimpleNamespace(
+            method="session.event",
+            payload={
+                "sessionId": session,
+                "event": {
+                    "type": "assistant/message",
+                    "data": {
+                        "message": {
+                            "role": "assistant",
+                            "content": [{"type": "text", "text": "Hello!"}],
+                        }
+                    },
+                },
+            },
+        ),
+        SimpleNamespace(
+            method="session.status",
+            payload={"sessionId": session, "status": "idle"},
+        ),
+    ]
+
+    events = [event async for event in _backend(FakeHarness(notes)).stream(_request(tmp_path))]
+
+    assert [event.data["text"] for event in events if event.type == "model_delta"] == ["Hello!"]
 
 
 def test_the_wire_session_id_is_scoped_to_this_process() -> None:

@@ -11,6 +11,7 @@ import runpy
 # when a later companion inventory explicitly accounts for it.
 MAC_ONLY_SECTIONS = {
     "Local harnesses": "Advanced local harness configuration and launch controls exist only in the Mac UI.",
+    "Recursive agents": "The Advanced Recursive agents page and its RLM inspector exist only in the Mac UI.",
 }
 
 
@@ -38,7 +39,7 @@ def test_mobile_inventory_covers_current_mac_navigation_and_tools():
     )
     workflow_names = set(re.findall(r'\w+ = "([^"]+)"', workflows))
     covered = {name for item in entries for name in item["mac_sections"]}
-    assert sections - covered == MAC_ONLY_SECTIONS.keys(), (
+    assert sections - covered == set(MAC_ONLY_SECTIONS), (
         "Review every new Mac-only section explicitly"
     )
     assert not covered - sections, "Mobile inventory names a removed Mac section"

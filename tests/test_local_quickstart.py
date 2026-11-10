@@ -26,6 +26,7 @@ def setup(desktop, monkeypatch):
     )
     monkeypatch.setattr(local_models, "servers", lambda service: [status])
     monkeypatch.setattr(local_models, "available", lambda engine: {"models": list(models)})
+    monkeypatch.setattr("superqode.local.inventory.installed_chat_models", lambda: [])
 
     def prepare(service, options):
         plan = {**options, "id": options["action"], "digest": options["action"]}
@@ -244,6 +245,47 @@ def test_lmstudio_catalog_alias_resolves_exact_downloaded_artifact(setup, monkey
     review = local_quickstart.prepare(service, {**params, "choice": row["id"]})
     assert review["step"] == "load"
     assert review["plan"]["model"] == key
+
+
+def test_installed_disk_model_starts_or_refreshes_instead_of_downloading(setup, monkeypatch):
+    service, params, status, _, _ = setup
+    monkeypatch.setattr(
+        "superqode.local.inventory.installed_chat_models",
+        lambda: [{"engine": "ollama", "model": "qwen3:8b", "name": "qwen3:8b"}],
+    )
+    status.update(installed=True, running=False)
+    rows = local_quickstart.catalog(service, params["project"])["choices"]
+    row = next(item for item in rows if item["model"] == "qwen3:8b")
+    assert row["installed"] is True
+    assert row["preset"] != "suggested"
+    reviewed = local_quickstart.prepare(service, {**params, "choice": row["id"]})
+    assert reviewed["step"] == "serve"
+
+    status["running"] = True
+    reviewed = local_quickstart.prepare(service, {**params, "choice": row["id"]})
+    assert reviewed["step"] == "manual"
+    assert "will not download" in reviewed["message"]
+
+
+def test_installed_lmstudio_weight_loads_instead_of_downloading(setup, monkeypatch):
+    service, params, status, _, _ = setup
+    status.update(id="lmstudio", name="LM Studio", installed=True, running=True)
+    monkeypatch.setattr(
+        local_models, "available", lambda engine: {"models": [], "loaded_models": []}
+    )
+    monkeypatch.setattr(
+        "superqode.local.inventory.installed_chat_models",
+        lambda: [
+            {
+                "engine": "lmstudio",
+                "model": "publisher/model/file.gguf",
+                "name": "file.gguf",
+            }
+        ],
+    )
+    rows = local_quickstart.catalog(service, params["project"])["choices"]
+    row = next(item for item in rows if item["model"] == "publisher/model/file.gguf")
+    assert local_quickstart.prepare(service, {**params, "choice": row["id"]})["step"] == "load"
 
 
 def test_curated_tested_list_preserves_installed_models_and_previous_selection(setup, monkeypatch):

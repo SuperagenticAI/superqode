@@ -794,6 +794,11 @@ class LiteLLMGateway(GatewayInterface):
                 result["reasoning_effort"] = "none" if level == "off" else level
             return result
 
+        if provider == "ollama":
+            # Keep the caller's level. LiteLLM turns "off" into think=false and
+            # low/medium/high into think=true for the Ollama chat API.
+            return {"reasoning_effort": level}
+
         if provider == "moonshot" and (model or "").lower().split("/")[-1] == "kimi-k3":
             # K3's pay-as-you-go API currently exposes only max effort and
             # always has thinking enabled. Collapse the provider-neutral
@@ -1022,6 +1027,11 @@ class LiteLLMGateway(GatewayInterface):
             if keep_alive:
                 request_kwargs.setdefault("keep_alive", keep_alive)
             request_kwargs.setdefault("num_ctx", self._ollama_num_ctx_for(model))
+            # Qwen and other local models think before the first visible token.
+            # A greeting then sits on a blank screen for minutes. LiteLLM maps
+            # reasoning_effort "off" to Ollama's think=false. An explicit effort
+            # from the caller is left alone.
+            request_kwargs.setdefault("reasoning_effort", "off")
 
     # Patterns the in-band extractor recognizes. Order matters: try the
     # most specific (XML-style tag) first to avoid greedy code-fence matches

@@ -198,17 +198,38 @@ struct ThreadSidebarRow: View {
     default: return "Workspace"
     }
   }
+  private var working: Bool {
+    ["running", "needs_approval", "queued", "cancelling"].contains(status)
+  }
   var body: some View {
-    Button(action: openThread) { rowContent }
-      .buttonStyle(.plain)
-      .onHover { value in hovered = value }
-      .help(Text(verbatim: rowDescription))
-      .accessibilityLabel(Text(verbatim: rowDescription))
-      .accessibilityAddTraits(selected ? .isSelected : [])
-      .contextMenu {
-        Button("Send to thread…") { app.openSendToThread(source: string(row, "id")) }
-          .disabled(string(row, "kind") != "task" || !["completed", "failed", "cancelled", "interrupted"].contains(status) || app.busy)
+    HStack(spacing: 2) {
+      Button(action: openThread) { rowContent }
+        .buttonStyle(.plain)
+        .help(Text(verbatim: rowDescription))
+        .accessibilityLabel(Text(verbatim: rowDescription))
+        .accessibilityAddTraits(selected ? .isSelected : [])
+      Button { app.deleteThread(row) } label: {
+        Image(systemName: "trash")
+          .font(.system(size: 12, weight: .medium))
+          .foregroundStyle(working ? Color.secondary.opacity(0.35) : Color.secondary)
+          .frame(width: 28, height: 32)
+          .contentShape(Rectangle())
       }
+      .buttonStyle(.plain)
+      .disabled(working)
+      .help(working ? "Stop this thread before deleting it" : "Delete thread")
+      .accessibilityLabel("Delete " + title)
+    }
+    .padding(.trailing, 4)
+    .background(rowFill, in: RoundedRectangle(cornerRadius: 8))
+    .overlay(RoundedRectangle(cornerRadius: 8).stroke(selected ? Color.primary.opacity(0.18) : Color.clear))
+    .onHover { value in hovered = value }
+    .contextMenu {
+      Button("Send to thread…") { app.openSendToThread(source: string(row, "id")) }
+        .disabled(string(row, "kind") != "task" || !["completed", "failed", "cancelled", "interrupted"].contains(status) || app.busy)
+      Button("Delete Thread", role: .destructive) { app.deleteThread(row) }
+        .disabled(working)
+    }
   }
   private var unread: Bool { !selected && app.unreadThreads.contains(identity) }
   private var rowDescription: String {
@@ -224,9 +245,8 @@ struct ThreadSidebarRow: View {
         titleLine
         statusLine
       }
-    }.padding(.horizontal, 10).padding(.vertical, 11).contentShape(Rectangle())
-      .background(rowFill, in: RoundedRectangle(cornerRadius: 8))
-      .overlay(RoundedRectangle(cornerRadius: 8).stroke(selected ? Color.primary.opacity(0.18) : Color.clear))
+    }.padding(.leading, 10).padding(.vertical, 11).frame(maxWidth: .infinity, alignment: .leading)
+      .contentShape(Rectangle())
   }
   private var titleLine: some View {
     HStack(spacing: 5) {

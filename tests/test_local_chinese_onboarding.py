@@ -95,6 +95,7 @@ def test_newcomer_shows_only_primary_engines_with_installed_models_first(desktop
         local_models, "servers", lambda _: [{"id": e, "name": e, "running": True} for e in engines]
     )
     monkeypatch.setattr(local_models, "available", lambda e: {"models": [e + "-existing-model"]})
+    monkeypatch.setattr("superqode.local.inventory.installed_chat_models", lambda: [])
     result = local_quickstart.catalog(service, project["id"])
     rows = result["choices"]
     assert {row["engine"] for row in rows} == {"ollama", "lmstudio"}

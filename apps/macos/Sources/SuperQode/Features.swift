@@ -216,14 +216,16 @@ struct ModelRoutesView: View {
               }
               Spacer()
               if row["loaded"] as? Bool == true { Pill(title: "LOADED", color: .green) }
-              if string(row, "source").lowercased().contains("ollama") {
+              let source = string(row, "source").lowercased()
+              if source == "ollama" || source == "lmstudio" {
                 Button("Use model") {
-                  app.chooseModelRoute("ollama", modelName(string(row, "model_id")))
-                  app.notice = "Model route updated."
+                  let provider = source == "lmstudio" ? "lmstudio" : "ollama"
+                  app.chooseModelRoute(provider, modelName(string(row, "model_id")))
+                  app.notice = "Model route updated. Start the local server if it is not already running."
                 }.disabled(
                   string(row, "model_id").localizedCaseInsensitiveContains("embed")
                     || string(row, "model_id").localizedCaseInsensitiveContains("rerank")
-                ).help("Embedding and reranking models cannot run coding tasks.")
+                ).help("Use this installed model with the current harness.")
               } else {
                 Pill(title: "WEIGHTS ON DISK")
               }

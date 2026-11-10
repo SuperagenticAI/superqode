@@ -187,6 +187,63 @@ def test_thread_resolution_finds_latest_turn_from_stable_root(desktop):
         service.dispatch("threads.get", {"project": project["id"], "id": "missing"})
 
 
+def test_delete_removes_one_thread_and_leaves_the_project(desktop):
+    service, project, _ = desktop
+    task(service, project["id"], "root", title="Morning notes")
+    task(service, project["id"], "followup", parent="root", updated=2)
+    task(service, project["id"], "other", title="Keep me", updated=3)
+    service.append("root", {"type": "output", "data": {"text": "PRIVATE_THREAD"}})
+    service.append("other", {"type": "output", "data": {"text": "KEEP_EVENT"}})
+    service.dispatch(
+        "threads.update",
+        {"project": project["id"], "id": "root", "pinned": True, "title": "Morning notes"},
+    )
+    service._write(
+        "INSERT INTO jobs VALUES(?,?,?,?,?,?,?,?,?)",
+        (
+            "compact",
+            project["id"],
+            "compaction",
+            "compact",
+            "completed",
+            json.dumps({"source_job": "followup"}),
+            "{}",
+            4,
+            4,
+        ),
+    )
+    (service.root / "runs" / "root").mkdir(parents=True)
+    (service.root / "runs" / "root" / "result.json").write_text("{}", encoding="utf-8")
+    (service.root / "runs" / "other").mkdir(parents=True)
+    removed = service.dispatch("threads.delete", {"project": project["id"], "id": "followup"})
+    assert removed["conversation_id"] == "root"
+    assert removed["removed"] == 3
+    assert [
+        row["id"]
+        for row in service.dispatch("threads.list", {"project": project["id"], "view": "all"})[
+            "items"
+        ]
+    ] == ["other"]
+    payloads = [row["payload"] for row in service._all("SELECT payload FROM events")]
+    assert (
+        len(payloads) == 1 and "KEEP_EVENT" in payloads[0] and "PRIVATE_THREAD" not in payloads[0]
+    )
+    assert service._all("SELECT * FROM thread_metadata") == []
+    assert not (service.root / "runs" / "root").exists()
+    assert (service.root / "runs" / "other").is_dir()
+    with pytest.raises(ValueError, match="not found"):
+        service.dispatch("jobs.get", {"id": "root"})
+    with pytest.raises(ValueError, match="Stop this thread"):
+        service._status("other", "running")
+        service.dispatch("threads.delete", {"project": project["id"], "id": "other"})
+    assert service.dispatch("jobs.get", {"id": "other"})["title"] == "Keep me"
+    service._status("other", "completed")
+    with pytest.raises(ValueError, match="not found"):
+        service.dispatch("threads.delete", {"project": project["id"], "id": "missing"})
+    with pytest.raises(ValueError, match="Choose a thread"):
+        service.dispatch("threads.delete", {"project": project["id"], "id": "../runs"})
+
+
 def test_harness_badges_include_full_history_and_survive_restart(desktop):
     service, project, _ = desktop
     task(

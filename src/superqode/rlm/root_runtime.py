@@ -195,6 +195,41 @@ class RootRuntimeClient:
         )
         return command_id
 
+    def submit_if_running(self, operation: str, payload: Mapping[str, Any] | None = None) -> str:
+        """Queue a command for a worker that is already alive.
+
+        This does not call ``ensure`` and does not start a process. A stopped
+        session stays stopped.
+        """
+        status = self.status()
+        if not status.alive:
+            raise RootRuntimeError("The RLM worker is not running.")
+        command_id = f"cmd_{uuid4().hex}"
+        operational = operation == "admin" and dict(payload or {}).get("command") in {
+            "profile",
+            "budget",
+            "usage",
+            "history",
+            "jobs",
+            "job",
+            "routing",
+            "peers",
+            "delegations",
+            "inbox",
+        }
+        _append_jsonl(
+            self.controls_path if operational else self.commands_path,
+            {
+                "protocol": ROOT_RUNTIME_PROTOCOL,
+                "id": command_id,
+                "operation": operation,
+                "payload": dict(payload or {}),
+                "generation": status.generation,
+                "created_at": time.time(),
+            },
+        )
+        return command_id
+
     async def control(self, operation: str, payload: Mapping[str, Any] | None = None) -> None:
         status = await self.ensure()
         _append_jsonl(

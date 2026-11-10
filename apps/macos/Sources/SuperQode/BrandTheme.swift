@@ -206,6 +206,116 @@ struct ThinkingBar: View {
   }
 }
 
+/// Full-pane wait while a local model loads into memory.
+struct ModelWarmupCard: View {
+  var message: String
+  var subject: String = ""
+  @Environment(\.accessibilityReduceMotion) private var reduceMotion
+  @Environment(\.colorSchemeContrast) private var contrast
+  @AppStorage("animatedInterface") private var animated = true
+
+  private var warming: Bool { message.localizedCaseInsensitiveContains("warm") }
+  private var motion: Bool { animated && !reduceMotion }
+  private var headline: String {
+    if warming {
+      return subject.isEmpty ? "Warming the model" : "Warming \(subject)"
+    }
+    let trimmed = message.trimmingCharacters(in: CharacterSet(charactersIn: ".… "))
+    return trimmed.isEmpty ? "Getting ready" : trimmed
+  }
+  private var detail: String {
+    warming ? "Loading it into memory so your first question is ready." : ""
+  }
+
+  var body: some View {
+    VStack(spacing: 18) {
+      WarmupOrb(active: motion, emphasized: contrast == .increased)
+      Text(headline)
+        .font(.title2.weight(.semibold))
+        .multilineTextAlignment(.center)
+        .lineLimit(3)
+      if !detail.isEmpty {
+        Text(detail)
+          .font(.callout)
+          .foregroundStyle(.secondary)
+          .multilineTextAlignment(.center)
+          .frame(maxWidth: 420)
+      }
+      ThinkingBar().frame(width: 196)
+    }
+    .padding(32)
+    .frame(maxWidth: .infinity, maxHeight: .infinity)
+    .background {
+      RoundedRectangle(cornerRadius: 18, style: .continuous)
+        .fill(Color.primary.opacity(0.04))
+    }
+    .overlay {
+      RoundedRectangle(cornerRadius: 18, style: .continuous)
+        .strokeBorder(
+          contrast == .increased
+            ? AnyShapeStyle(Color.primary.opacity(0.55))
+            : AnyShapeStyle(LinearGradient(
+              colors: [Brand.purple.opacity(0.55), Brand.pink.opacity(0.4), Brand.orange.opacity(0.5)],
+              startPoint: .topLeading, endPoint: .bottomTrailing)),
+          lineWidth: 1)
+    }
+    .accessibilityElement(children: .combine)
+    .accessibilityLabel(detail.isEmpty ? headline : "\(headline). \(detail)")
+  }
+}
+
+/// Brand mark with expanding rings. The canvas does not publish workspace state.
+private struct WarmupOrb: View {
+  var active: Bool
+  var emphasized: Bool
+  var body: some View {
+    ZStack {
+      if active {
+        TimelineView(.animation(minimumInterval: 1.0 / 30)) { timeline in
+          Canvas { context, size in
+            let time = timeline.date.timeIntervalSinceReferenceDate
+            let center = CGPoint(x: size.width / 2, y: size.height / 2)
+            let palette: [Color] = emphasized
+              ? [.primary, .primary, .primary]
+              : [Brand.purple, Brand.pink, Brand.orange]
+            for index in 0..<3 {
+              let phase = (time / 2.6 + Double(index) / 3).truncatingRemainder(dividingBy: 1)
+              let radius = 22 + phase * 42
+              var ring = Path()
+              ring.addEllipse(in: CGRect(
+                x: center.x - radius, y: center.y - radius, width: radius * 2, height: radius * 2))
+              context.stroke(
+                ring,
+                with: .color(palette[index].opacity((1 - phase) * 0.7)),
+                lineWidth: 2)
+            }
+            let spin = time.truncatingRemainder(dividingBy: 2.4) / 2.4
+            var arc = Path()
+            arc.addArc(
+              center: center, radius: 38,
+              startAngle: .degrees(spin * 360 - 90),
+              endAngle: .degrees(spin * 360 + 78),
+              clockwise: false)
+            context.stroke(
+              arc,
+              with: .linearGradient(
+                Gradient(colors: emphasized ? [.primary, .primary] : [Brand.purple, Brand.pink, Brand.orange]),
+                startPoint: CGPoint(x: 0, y: size.height),
+                endPoint: CGPoint(x: size.width, y: 0)),
+              style: StrokeStyle(lineWidth: 3.5, lineCap: .round))
+          }
+        }
+      } else {
+        Circle().stroke(Color.primary.opacity(0.35), lineWidth: 3).padding(26)
+      }
+      Circle().fill(Color.qPanel).frame(width: 64, height: 64)
+      BrandMark().frame(width: 40, height: 40)
+    }
+    .frame(width: 148, height: 148)
+    .accessibilityHidden(true)
+  }
+}
+
 /// Animate only the status text, without publishing changes to the workspace.
 struct WorkingStatusText: View {
   @Environment(\.accessibilityReduceMotion) private var reduceMotion
@@ -256,12 +366,12 @@ struct AgentWorkingCard: View {
   /// Compact plan progress, e.g. "Plan 2 of 5 done · Run tests".
   var planLine = ""
   var body: some View {
-    HStack(spacing: 12) {
-      BrandMark().frame(width: 25, height: 25)
-      VStack(alignment: .leading, spacing: 8) {
-        if status == "needs_approval" || status == "cancelling" {
-          HStack(spacing: 10) {
-            Text(BrandActivityIndicator(status: status).label).font(.system(size: 13, weight: .semibold)).modifier(BrandText())
+    HStack(spacing: 10) {
+      BrandMark().frame(width: 18, height: 18)
+      VStack(alignment: .leading, spacing: 4) {
+        HStack(spacing: 8) {
+          if status == "needs_approval" || status == "cancelling" {
+            Text(BrandActivityIndicator(status: status).label).font(.system(size: 12, weight: .semibold)).modifier(BrandText())
             if status == "needs_approval", let waitingSince {
               LiveElapsedText(prefix: "Waiting for you ", since: waitingSince, compact: true)
                 .font(.system(size: 12)).foregroundStyle(.secondary)
@@ -269,15 +379,16 @@ struct AgentWorkingCard: View {
               LiveElapsedText(prefix: "", since: startedAt)
                 .font(.system(size: 12)).foregroundStyle(.secondary)
             }
+          } else if let startedAt {
+            LiveElapsedText(prefix: "Working for ", since: startedAt)
+              .font(.system(size: 12, weight: .semibold)).modifier(BrandText())
+              .accessibilityLabel("Working")
+          } else {
+            WorkingStatusText().font(.system(size: 12, weight: .semibold)).modifier(BrandText())
           }
-        } else if let startedAt {
-          LiveElapsedText(prefix: "Working for ", since: startedAt)
-            .font(.system(size: 13, weight: .semibold)).modifier(BrandText())
-            .accessibilityLabel("Working")
-        } else {
-          WorkingStatusText().font(.system(size: 13, weight: .semibold)).modifier(BrandText())
+          if status != "needs_approval" { ThinkingBar().frame(width: 72, height: 4) }
+          Spacer(minLength: 0)
         }
-        if status != "needs_approval" { ThinkingBar().frame(maxWidth: 320) }
         if !planLine.isEmpty {
           Label(planLine, systemImage: "checklist").font(.system(size: 12)).foregroundStyle(.secondary)
             .lineLimit(1).truncationMode(.tail).help(planLine)
@@ -285,12 +396,11 @@ struct AgentWorkingCard: View {
         if status == "needs_approval" || status == "cancelling" || !activity.isEmpty {
           Text(status == "needs_approval" ? "Waiting for your approval" : status == "cancelling" ? "Waiting for the agent to stop" : activity)
             .font(.system(size: 12, design: .monospaced)).foregroundStyle(.secondary)
-            .lineLimit(3).textSelection(.enabled).help(activity)
+            .lineLimit(1).textSelection(.enabled).help(activity)
             .accessibilityLabel("Current agent activity")
         }
       }
-      Spacer(minLength: 0)
-    }.padding(16).frame(maxWidth: .infinity, alignment: .leading)
+    }.padding(.horizontal, 12).padding(.vertical, 8).frame(maxWidth: .infinity, alignment: .leading)
       .background(Color.qPanel, in: RoundedRectangle(cornerRadius: 12))
       .overlay(RoundedRectangle(cornerRadius: 12).stroke(Color.qAccent.opacity(0.12), lineWidth: 1))
   }

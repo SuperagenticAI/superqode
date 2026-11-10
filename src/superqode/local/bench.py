@@ -168,19 +168,23 @@ def run_bench(
     prompt: str = DEFAULT_PROMPT,
     max_tokens: int = 256,
     api_key: str = "",
+    extra: dict[str, Any] | None = None,
 ) -> BenchResult:
     """Stream one chat completion and time first-token and decode rate."""
     result = BenchResult(endpoint=endpoint, model=model)
+    body: dict[str, Any] = {
+        "model": model,
+        "messages": [{"role": "user", "content": prompt}],
+        "max_tokens": max_tokens,
+        "stream": True,
+        "temperature": 0,
+    }
+    if extra:
+        body.update(extra)
     try:
         stream = _stream_chat(
             endpoint,
-            {
-                "model": model,
-                "messages": [{"role": "user", "content": prompt}],
-                "max_tokens": max_tokens,
-                "stream": True,
-                "temperature": 0,
-            },
+            body,
             api_key=api_key,
         )
     except (HTTPError, URLError, OSError, ValueError) as exc:

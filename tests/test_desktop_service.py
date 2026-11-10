@@ -1045,6 +1045,33 @@ def test_handoff_bounds_privacy_route_revision_and_failed_session(desktop):
         prepare_continuation(service, {**params, "parent_id": "busy"}, project["id"], root)
 
 
+def test_visible_answer_includes_a_committed_message_once():
+    from superqode.desktop_service.conversations import visible_answer
+
+    committed = [
+        {
+            "type": "harness_event",
+            "data": {"event": "message", "payload": {"role": "assistant", "text": "Hello!"}},
+        }
+    ]
+    streamed = [
+        {
+            "type": "harness_event",
+            "data": {"event": "model_delta", "payload": {"text": "Hello"}},
+        },
+        {
+            "type": "harness_event",
+            "data": {"event": "model_delta", "payload": {"text": "!"}},
+        },
+        {
+            "type": "harness_event",
+            "data": {"event": "message", "payload": {"text": "Hello!"}},
+        },
+    ]
+    assert visible_answer(committed) == "Hello!"
+    assert visible_answer(streamed) == "Hello!"
+
+
 def test_conversation_history_pages_keep_complete_messages(desktop):
     service, project, _ = desktop
     for index in range(25):

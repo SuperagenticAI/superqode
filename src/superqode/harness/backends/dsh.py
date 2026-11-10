@@ -15,6 +15,7 @@ from __future__ import annotations
 import asyncio
 import atexit
 import importlib.util
+import os
 import threading
 import uuid
 from collections.abc import AsyncIterator, Callable, Mapping, Sequence
@@ -74,6 +75,7 @@ class DSHSettings:
     provider: str = "deepseek-official"
     model: str = "deepseek-v4-flash"
     max_tokens: int | None = None
+    reasoning_effort: str | None = None
     cordis: str | None = None
     session_root: str | None = None
     runtime_bin: str | None = None
@@ -126,6 +128,7 @@ class DSHSettings:
                 or "deepseek-v4-flash"
             ),
             max_tokens=_optional_int(raw.get("max_tokens")),
+            reasoning_effort=_text(raw.get("reasoning_effort")),
             cordis=_resolve_optional_path(request.working_directory, cordis),
             session_root=_resolve_optional_path(
                 request.working_directory,
@@ -293,6 +296,7 @@ async def _stream_session(
         )
         deadline = asyncio.get_running_loop().time() + settings.prompt_timeout_seconds
         received = False
+        streamed = ""
         while True:
             remaining = deadline - asyncio.get_running_loop().time()
             if remaining <= 0:
@@ -321,11 +325,40 @@ async def _stream_session(
                 if not _is_inbox_receipt(notification, session_id, message_id):
                     continue
                 received = True
-            yield from_dsh_notification(notification.method, notification.payload)
+            event = from_dsh_notification(notification.method, notification.payload)
+            # SDK 0.1.5 commits the answer as assistant/message and does not
+            # stream text-delta. The desktop transcript only shows model_delta,
+            # so a committed message that was not already streamed has to be
+            # emitted as one or the reply looks blank.
+            if event.type == "model_delta":
+                streamed += str(event.data.get("text") or "")
+            elif event.type == "message":
+                extra = _unstreamed_answer(streamed, str(event.data.get("text") or ""))
+                if extra:
+                    yield HarnessEvent(
+                        type="model_delta",
+                        data={"text": extra},
+                        session_id=session_id,
+                    )
+                if event.data.get("text"):
+                    streamed = ""
+            yield event
             if _is_session_idle(notification, session_id):
                 return
     finally:
         subscription.close()
+
+
+def _unstreamed_answer(streamed: str, committed: str) -> str:
+    """Return committed answer text that was not already streamed."""
+    text = committed or ""
+    if not text:
+        return ""
+    if not streamed:
+        return text
+    if text.startswith(streamed):
+        return text[len(streamed) :]
+    return ""
 
 
 def from_dsh_notification(method: str, payload: Mapping[str, Any]) -> HarnessEvent:
@@ -499,6 +532,8 @@ def _from_assistant_chunk(
 def dsh_installation_status() -> tuple[bool, str]:
     """Return whether the DeepSeek Harness SDK is importable and why not."""
     if importlib.util.find_spec("deepseek_harness") is None:
+        if os.environ.get("SUPERQODE_APP") == "1":
+            return False, "DeepSeek Harness is not available in the app yet."
         return (
             False,
             f"DeepSeek Harness SDK is not installed; run {install_command(DSH_BACKEND_NAME)}",
@@ -512,6 +547,60 @@ def dsh_installation_status() -> tuple[bool, str]:
     return True, ""
 
 
+def _accepted_config_fields(config_type: type) -> set[str]:
+    """Return the keyword names this DeepSeek config class actually accepts."""
+    fields = getattr(config_type, "__dataclass_fields__", None)
+    if isinstance(fields, Mapping):
+        return set(fields)
+    import inspect
+
+    return {
+        name
+        for name, parameter in inspect.signature(config_type).parameters.items()
+        if name != "self"
+        and parameter.kind in (parameter.POSITIONAL_OR_KEYWORD, parameter.KEYWORD_ONLY)
+    }
+
+
+def _harness_config_kwargs(
+    config_type: type,
+    request: HarnessBackendRequest,
+    settings: DSHSettings,
+) -> dict[str, Any]:
+    """Build constructor arguments for whichever DeepSeek SDK is installed.
+
+    SDK 0.1.5 names the runtime home and binary ``dsh_home`` and ``dsh_bin``,
+    and it rejects ``session_root``, ``cordis``, and ``runtime_bin``. Earlier
+    builds used those older names. Pass a name only when this install declares
+    it, and always point the home at SuperQode's session directory so the SDK
+    does not look for ``~/.dsh``.
+    """
+    env = dict(settings.env or {})
+    if settings.session_root and not str(env.get("DSH_HOME") or "").strip():
+        env["DSH_HOME"] = settings.session_root
+    offered: dict[str, Any] = {
+        "provider": settings.provider,
+        "model": settings.model,
+        "max_tokens": settings.max_tokens,
+        "reasoning_effort": settings.reasoning_effort,
+        "cwd": str(request.working_directory),
+        "env": env,
+        "request_timeout_seconds": settings.request_timeout_seconds,
+        "shutdown_timeout_seconds": settings.shutdown_timeout_seconds,
+        "base_url": settings.base_url,
+        "api_key": settings.api_key,
+        "dsh_home": settings.session_root,
+        "session_root": settings.session_root,
+        "dsh_bin": settings.runtime_bin,
+        "runtime_bin": settings.runtime_bin,
+        "cordis": settings.cordis,
+    }
+    if settings.cordis:
+        offered["patches"] = (settings.cordis,)
+    accepted = _accepted_config_fields(config_type)
+    return {key: value for key, value in offered.items() if key in accepted and value is not None}
+
+
 def _default_harness_factory(request: HarnessBackendRequest, settings: DSHSettings) -> Any:
     available, issue = dsh_installation_status()
     if not available:
@@ -519,21 +608,10 @@ def _default_harness_factory(request: HarnessBackendRequest, settings: DSHSettin
 
     from deepseek_harness import DeepSeekHarness, DeepSeekHarnessConfig
 
+    if settings.session_root:
+        Path(settings.session_root).mkdir(parents=True, exist_ok=True)
     return DeepSeekHarness(
-        DeepSeekHarnessConfig(
-            provider=settings.provider,
-            model=settings.model,
-            max_tokens=settings.max_tokens,
-            cwd=str(request.working_directory),
-            session_root=settings.session_root,
-            cordis=settings.cordis,
-            env=dict(settings.env or {}),
-            runtime_bin=settings.runtime_bin,
-            request_timeout_seconds=settings.request_timeout_seconds,
-            shutdown_timeout_seconds=settings.shutdown_timeout_seconds,
-            base_url=settings.base_url,
-            api_key=settings.api_key,
-        )
+        DeepSeekHarnessConfig(**_harness_config_kwargs(DeepSeekHarnessConfig, request, settings))
     )
 
 

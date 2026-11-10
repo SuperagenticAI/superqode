@@ -103,6 +103,10 @@ struct GettingStartedView: View {
             app.learningTopic = "Harnesses"
             app.showLearningGuide = true
           }
+          Button("What Super Agent and DeepSeek Harness do") {
+            app.learningTopic = LearningTopics.superAgent
+            app.showLearningGuide = true
+          }
           Text("No SuperQode account required. Requests go to the agent or provider you choose.")
             .font(.caption).foregroundStyle(.secondary)
         } else if showsGuide {
@@ -135,8 +139,11 @@ struct GettingStartedView: View {
             HStack(spacing: 12) {
               Button("Connect an agent…") { app.openConnections("menu:root") }
                 .buttonStyle(BrandButtonStyle())
-              Button("Use a model…") { app.openConnections("menu:harness") }
+              Button("Use a local model…") { app.openConnections("source:local") }
+                .buttonStyle(BrandButtonStyle())
             }.disabled(app.connectionPickerDisabled)
+            Button("Use an API key or another harness…") { app.openConnections("menu:harness") }
+              .disabled(app.connectionPickerDisabled)
           }
           Button("Start with a project overview") {
             app.draft =
@@ -175,6 +182,39 @@ struct GettingStartedView: View {
   }
 }
 
+/// Plain-language lessons for people who have not used Super Agent or DeepSeek Harness.
+enum LearningTopics {
+  static let superAgent = "Super Agent"
+
+  struct Lesson: Equatable {
+    var title: String
+    var detail: String
+  }
+
+  static let superAgentLessons: [Lesson] = [
+    Lesson(
+      title: "Super Agent drafts a harness",
+      detail: "Super Agent is a SuperQode preview. You describe a job for this repository, and SuperQode prepares a harness you can read before anything is turned on. It is not a chat, and it does not start coding by itself."
+    ),
+    Lesson(
+      title: "What you do there",
+      detail: "Open a project, describe the job, and press Draft Super Agent. Read the five sections. Write why you are saving, then press Save reviewed draft. The harness stays off. Run Monty check only if you want a template printed in a read-only sandbox. Enable saved revision only when a provider and model are already on the draft. Enable opens Agent Space with that harness selected. You still type a request and press Send."
+    ),
+    Lesson(
+      title: "What drafting does not do",
+      detail: "Drafting does not call a model, install a plugin, or send a prompt. The Monty check prints a template and is not installed. If Monty is missing, the check is refused and is not run on this Mac. Recursion stays off. Saved files stay in the project under .superqode/creator."
+    ),
+    Lesson(
+      title: "DeepSeek Harness is a different tool",
+      detail: "DeepSeek Harness is a coding backend. DeepSeek runs the agent loop, and SuperQode hosts it and shows the reply. On Local AI, choose DeepSeek Harness, install it if that row asks, pick a model that is already installed, then press Start coding. Type in Agent Space and press Send, the same as any other harness. It is not the DeepSeek plugin market. Super Agent does not load DeepSeek plugins."
+    ),
+    Lesson(
+      title: "Use the one you mean",
+      detail: "Use Super Agent when you want to review a harness before it is allowed to work. Use DeepSeek Harness when you want DeepSeek to code in the thread. Opening either screen does not install DeepSeek or turn a draft on. The names are easy to mix up. They are not the same feature."
+    ),
+  ]
+}
+
 enum StarterGuide {
   static let completedKey = "nativeStarterGuideCompleted"
   /// Called after the engine accepts a message.
@@ -198,6 +238,7 @@ struct LearningGuideView: View {
         Text("Start coding").tag("Start coding")
         Text("Review your work").tag("Review your work")
         Text("Harnesses").tag("Harnesses")
+        Text("Super Agent").tag(LearningTopics.superAgent)
         Text("Go further").tag("Go further")
       }.pickerStyle(.segmented)
       ScrollView {
@@ -267,6 +308,28 @@ struct LearningGuideView: View {
               navigate("Open Evaluations", section: "Evaluations")
               navigate("Open Optimization", section: "Optimization")
             }
+          } else if app.learningTopic == LearningTopics.superAgent {
+            ForEach(Array(LearningTopics.superAgentLessons.enumerated()), id: \.offset) { _, item in
+              lesson(item.title, item.detail)
+            }
+            if app.project.isEmpty {
+              Text("Open a project before Super Agent. Local AI is available first if you want to look at DeepSeek Harness.")
+                .font(.callout).foregroundStyle(.secondary)
+            }
+            HStack(spacing: 12) {
+              Button("Open Super Agent") {
+                app.section = "Super Agent"
+                app.showWelcome = false
+                dismiss()
+              }.buttonStyle(BrandButtonStyle())
+                .disabled(app.project.isEmpty)
+              Button("Open Local AI") {
+                app.section = "Models"
+                app.showWelcome = false
+                dismiss()
+              }.buttonStyle(BrandButtonStyle())
+                .help("Choose DeepSeek Harness there when you want that coding backend.")
+            }
           } else {
             lesson(
               "Find the right harness",
@@ -284,7 +347,7 @@ struct LearningGuideView: View {
           }
         }.padding(.vertical, 12).frame(maxWidth: .infinity, alignment: .leading)
       }.defaultScrollAnchor(.top).id(app.learningTopic)
-    }.padding(24).frame(width: 650, height: 570).background { BrandBackdrop() }
+    }.padding(24).frame(width: 760, height: 570).background { BrandBackdrop() }
   }
   private func lesson(_ title: String, _ body: String) -> some View {
     VStack(alignment: .leading, spacing: 8) {

@@ -287,6 +287,7 @@ struct ConnectionView: View {
     if page.hasPrefix("protocol:") {
       return page.hasSuffix("uhp") ? "Unified Harness Protocol (UHP)" : "Agent2Agent (A2A)"
     }
+    if page == "source:local" { return "Local model" }
     if page.hasPrefix("source:") { return "Connect a model to your harness" }
     return string(menu, "title", "Connect")
   }

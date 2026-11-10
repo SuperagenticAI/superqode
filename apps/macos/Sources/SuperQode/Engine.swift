@@ -140,13 +140,19 @@ final class EngineFrames {
     child.arguments = ["-u", "-m", backgroundMode ? "superqode.desktop_service.daemon" : "superqode.desktop_service.service", "--state", state]
     if management { child.arguments?.append("--manage") }
     var env = ProcessInfo.processInfo.environment
-    env["PYTHONPATH"] =
+    let backend =
       FileManager.default.fileExists(atPath: runtime.appendingPathComponent("backend").path)
       ? runtime.appendingPathComponent("backend").path : root.appendingPathComponent("src").path
+    let extras = workingDirectory.appendingPathComponent("python-extras")
+    try? FileManager.default.createDirectory(
+      at: extras, withIntermediateDirectories: true, attributes: [.posixPermissions: 0o700])
+    env["PYTHONPATH"] = backend + ":" + extras.path
+    env["SUPERQODE_APP"] = "1"
     env["PYTHONUNBUFFERED"] = "1"
     env["PYTHONDONTWRITEBYTECODE"] = "1"
     env["LITELLM_LOCAL_MODEL_COST_MAP"] = "True"
-    env["PATH"] = Self.executablePath(runtime: runtime, inherited: env["PATH"] ?? "/usr/bin:/bin")
+    let appBin = workingDirectory.appendingPathComponent("bin").path
+    env["PATH"] = appBin + ":" + Self.executablePath(runtime: runtime, inherited: env["PATH"] ?? "/usr/bin:/bin")
     child.environment = env
     let incoming = Pipe()
     let outgoing = Pipe()

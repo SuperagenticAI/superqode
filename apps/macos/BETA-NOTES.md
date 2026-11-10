@@ -1,8 +1,53 @@
-# SuperQode for macOS public beta 0.3.9
+# SuperQode for macOS public beta 0.4.0
 
 Native coding workspace for Apple Silicon Macs running macOS 14 or later. Intel Macs are not supported by this build. This is beta software, with manual updates and incomplete terminal feature parity.
 
+## 0.4: local coding on this Mac
+
+Version 0.4.0 (build 26) bundles Python engine 2.31.6. This packages the local-model work since 0.3.8, including the 0.3.9 preparation below. Recursive agents are a main tab on the left. Signing, notarization, and the public DMG happen separately. Announce this only after the signed build is the one you have run.
+
+Connect on Local AI is three steps. Choose a harness that can run a model on this Mac. Choose an Ollama or LM Studio model that is already installed. Press Start coding. Download a model stays a separate action.
+
+The app already contains Python and SuperQode. The home screen does not ask for Python, uv, or a terminal command. Optional harnesses, including DeepSeek Harness, install from the harness row into Application Support. The install is checked on the same Python path the coding job uses before that harness is treated as ready.
+
+After Start coding, the app warms the selected local model so the first prompt is not the cold load. A reply is shown in the thread, including a DeepSeek reply that arrives as one message. Ollama thinking stays off unless a reasoning effort was set. Context and server settings stay on **Context and server…** on the model step. They are not a required connect step. A running server keeps the context it was started with until it is started again. The simple start path uses context 8192 and automatic KV cache.
+
+Send stays available after Start coding, including while a local server job is still running. Each thread in the sidebar can be deleted. The conversation is the main surface.
+
+Also in this build, from the 0.3.9 preparation: a compact new-thread connection grid, curated starter suggestions, lean prompts for small local models, and Advanced local harnesses for reviewed OpenCode and Goose.
+
+## Advanced: Recursive agents
+
+The left rail has a **Recursive agents** tab, and Command-K **Recursive agents** opens the same page. It is not inside Advanced, not on the new-thread grid, not on Local AI, and not on Getting started. Local AI’s harness list does not gain a Monty or Docker row.
+
+The page explains three boundaries. It does not download a model, start a server, or send a prompt.
+
+- **On this Mac.** Persistent Python. It runs as you, with no approval prompt. It can edit the project and start child agents. Template `rlm`.
+- **In Docker.** The Python kernel runs in a container. Writes stay there. Networking is off. The card is disabled, with the reason, when Docker is not running. Template `rlm-docker`.
+- **With Monty.** Read-only Python. No files, no shell, and no network. If Monty is not installed, **Install Monty** uses the same Application Support installer as DeepSeek and then checks that `pydantic_monty` loads. That is Monty 1.x. Strands keeps Monty 0.0.23 in its own runtime and is not a fourth card. Template `rlm-monty`.
+
+Choosing a card selects that harness and opens the normal model step.
+
+**Talk to another agent (A2A)** and **Set up A2A…** open the existing RLM routing form. A2A is the agent-to-agent protocol. It stays off until a peer is saved. Hosted peers and credit caps stay off. Protocols remains the way to call one Agent Card without RLM. This build does not open an A2A port.
+
+The same page names DeepSeek and Super Agent. Super Agent still only drafts a reviewed harness and runs its check in Monty. Nothing is installed, and it does not load DeepSeek plugins. DeepSeek Harness remains a separate coding backend: DeepSeek owns the loop, and SuperQode hosts it. It is not the plugin market.
+
+On an Agent Space thread whose harness is `rlm`, `rlm-docker`, `rlm-monty`, or DeepSeek, the inspector gains **Agents**. It shows which boundary is running, the current limits (depth 3, 8 children, 4 at once), whether agent-to-agent is on, and child agents already recorded. Follow-up, steer, cancel, goal, and autonomous gates are available only while a host or Docker worker is already running. Opening the panel does not start a worker. Autonomous gates stay off until turned on. Monty refuses those controls and says so. DeepSeek shows child start and finish events from the thread. Fork, export, tree, inbox, compact, history handles, and the rest of the terminal `:rlm` commands stay in the terminal.
+
+## 0.4 release smoke checklist (on a Mac)
+
+- Build with the normal Mac build script. Confirm About and Info.plist show 0.4.0 (26). The staged engine stays 2.31.6.
+- New thread: the connection grid has no Recursive agents tile. Getting started does not mention it. Local AI harness chips include the native `rlm` backend and do not include With Monty or In Docker.
+- Local AI: harness, then an installed model, then Start coding. Send works on the new thread, including while a local server job is running. **Context and server…** is on the model step only.
+- The left rail **Recursive agents** tab and Command-K **Recursive agents** open the page. Advanced still contains only Local harnesses.
+- With no project, the three choices stay disabled. With a project, On this Mac opens the model step on harness `rlm`. Docker is disabled when the daemon is down and says why. Monty offers Install Monty when `pydantic_monty` is missing, and that install does not add a Local AI row.
+- Allow other agents… opens the routing form and does not turn agent-to-agent on by itself.
+- On a non-RLM thread the inspector has Changes, Checks, and Evidence only. On an RLM thread it adds Agents. Refresh does not start a Python worker. Monty hides follow-up, steer, cancel, goal, and autonomous. A stopped host worker says those controls do not start one.
+- Super Agent still drafts only. Open Super Agent and Open Local AI from the corner go to those existing screens.
+
 ## 0.3.9: local evaluation and native small-model reliability
+
+The notes in this 0.3.9 section describe that preparation. The 0.4 section above is the current newcomer path.
 
 The newcomer Local AI layout has no new controls, harness choices or evaluation workflow. Its suggestions now use a curated registry: all shipped models are catalog-verified, never labelled tested without an explicitly imported passing Mac run. Applicable tested choices take preference for the same engine and memory tier only, and still have to fit. Existing installed models and saved setup remain available.
 

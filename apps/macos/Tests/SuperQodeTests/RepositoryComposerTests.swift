@@ -200,8 +200,65 @@ final class RepositoryComposerTests: XCTestCase {
     XCTAssertEqual(ChangeSummary.line(stat: "", status: " M a\n M b", diff: "", error: ""), "2 changed files")
   }
 
+  func testLearningGuideSeparatesSuperAgentFromDeepSeekHarness() {
+    XCTAssertEqual(LearningTopics.superAgent, "Super Agent")
+    let titles = LearningTopics.superAgentLessons.map(\.title)
+    XCTAssertEqual(titles, [
+      "Super Agent drafts a harness",
+      "What you do there",
+      "What drafting does not do",
+      "DeepSeek Harness is a different tool",
+      "Use the one you mean",
+    ])
+    let text = LearningTopics.superAgentLessons.map(\.detail).joined(separator: "\n")
+    XCTAssertTrue(text.contains("does not call a model"))
+    XCTAssertTrue(text.contains("does not start coding by itself"))
+    XCTAssertTrue(text.contains("DeepSeek runs the agent loop"))
+    XCTAssertTrue(text.contains("does not load DeepSeek plugins"))
+    XCTAssertTrue(text.contains("They are not the same feature."))
+    XCTAssertFalse(text.contains("Super Agent is DeepSeek"))
+  }
+
+  func testSuperAgentGuideWalksTheDraftSteps() {
+    XCTAssertEqual(SuperAgentGuide.steps.map(\.title), [
+      "Open a project",
+      "Describe the job",
+      "Press Draft Super Agent",
+      "Read the five sections, then save",
+      "Run the Monty check",
+      "Enable the saved revision",
+    ])
+    XCTAssertEqual(
+      SuperAgentGuide.current(hasProject: false, hasDescription: true, reviewed: true, saved: true, checked: true),
+      1)
+    XCTAssertEqual(
+      SuperAgentGuide.current(hasProject: true, hasDescription: false, reviewed: false, saved: false, checked: false),
+      2)
+    XCTAssertEqual(
+      SuperAgentGuide.current(hasProject: true, hasDescription: true, reviewed: false, saved: false, checked: false),
+      3)
+    XCTAssertEqual(
+      SuperAgentGuide.current(hasProject: true, hasDescription: true, reviewed: true, saved: false, checked: false),
+      4)
+    XCTAssertEqual(
+      SuperAgentGuide.current(hasProject: true, hasDescription: true, reviewed: true, saved: true, checked: false),
+      5)
+    XCTAssertEqual(
+      SuperAgentGuide.current(hasProject: true, hasDescription: true, reviewed: true, saved: true, checked: true),
+      6)
+    XCTAssertTrue(SuperAgentGuide.guidance(step: 3, canEnable: false).contains("Nothing is saved"))
+    XCTAssertTrue(SuperAgentGuide.guidance(step: 5, canEnable: true).contains("does not send a prompt"))
+    XCTAssertTrue(SuperAgentGuide.guidance(step: 6, canEnable: false).contains("draft again"))
+    XCTAssertTrue(SuperAgentGuide.guidance(step: 6, canEnable: true).contains("press Send"))
+    XCTAssertTrue(SuperAgentGuide.steps[4].detail.contains("not installed"))
+    XCTAssertTrue(SuperAgentGuide.steps[2].detail.contains("Nothing is saved"))
+  }
+
   @MainActor func testCreatorStaysInTheCatalogAndPermissionIsNotRecoveryState() throws {
-    XCTAssertEqual(Sections.names.last, "Local harnesses")
+    XCTAssertEqual(Sections.names.last, "Recursive agents")
+    XCTAssertTrue(Sections.names.contains("Local harnesses"))
+    XCTAssertEqual(WorkspaceNavigationGroup.containing("Recursive agents").id, "recursive")
+    XCTAssertFalse(WorkspaceNavigationGroup.usesCodingWorkspace("Recursive agents"))
     XCTAssertEqual(Sections.names.count, Sections.icons.count)
     XCTAssertEqual(Sections.names.first, "Workspace")
     XCTAssertTrue(Sections.names.contains("Tools"))

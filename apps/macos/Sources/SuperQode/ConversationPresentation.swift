@@ -88,8 +88,10 @@ func currentAgentActivity(_ events: [[String: Any]]) -> String {
   for (index, event) in events.enumerated() {
     let data = event["data"] as? [String: Any] ?? [:]
     let name = string(data, "event", string(event, "type"))
-    if ["thinking", "reasoning", "model.thinking", "model.reasoning"].contains(name) { fallback = "" }
-    if ["delta", "model_delta", "message.delta", "answer"].contains(name) { fallback = "" }
+    if ["thinking", "reasoning", "model.thinking", "model.reasoning"].contains(name) {
+      fallback = "Thinking…"
+    }
+    if ["delta", "model_delta", "message.delta", "message", "answer"].contains(name) { fallback = "" }
     guard (starts + updates + ends).contains(name) else { continue }
     let payload = data["payload"] as? [String: Any] ?? data
     let id = string(payload, "toolCallId", string(payload, "tool_call_id", string(payload, "call_id", string(payload, "id", string(payload, "tool_name", "anonymous")))))

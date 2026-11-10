@@ -20,6 +20,18 @@ struct CreatorModeView: View {
     let route = draft["route"] as? [String: Any] ?? [:]
     return !string(route, "provider").isEmpty && !string(route, "model").isEmpty
   }
+  private var trimmedDescription: String {
+    description.trimmingCharacters(in: .whitespacesAndNewlines)
+  }
+  private var descriptionTooLong: Bool { trimmedDescription.count > 4000 }
+  private var guideStep: Int {
+    SuperAgentGuide.current(
+      hasProject: !app.projectID.isEmpty,
+      hasDescription: !trimmedDescription.isEmpty,
+      reviewed: ready,
+      saved: !savedName.isEmpty,
+      checked: !montyOutput.isEmpty)
+  }
 
   var body: some View {
     ScrollView {
@@ -27,15 +39,33 @@ struct CreatorModeView: View {
         PageTitle(
           eyebrow: "Super Agent",
           title: "Draft a Super Agent",
-          subtitle: "This is a reviewed preview. SuperQode writes a harness definition, a next-prompt note, and a pure-Python check. The check prints a template in Monty. It does not call a model, start a child agent, or install anything. Enabling the harness is a separate step."
+          subtitle: "Describe the job, review what SuperQode writes, then turn the harness on when you want it."
         )
-        Text(
-          "The draft keeps Agent Space, Review, Files, Terminal, and Tools. The generated harness uses the builtin runtime, ordinary coding tools, and Ask. Recursion is not connected. Gauges, factory, and RLM stay in Tools."
-        ).font(.callout).foregroundStyle(.secondary)
+        howTo
+        Button("What is Super Agent, and how is DeepSeek Harness different?") {
+          app.learningTopic = LearningTopics.superAgent
+          app.showLearningGuide = true
+        }.buttonStyle(.link)
+        Text(SuperAgentGuide.guidance(step: guideStep, canEnable: boundRoute))
+          .font(.callout).foregroundStyle(.secondary)
+          .fixedSize(horizontal: false, vertical: true)
+          .accessibilityAddTraits(.updatesFrequently)
+        Text("What should this agent do?").font(.headline)
+        Text("Up to 4,000 characters. For example: review this repository and suggest one small fix. Do not edit files until I say so.")
+          .font(.callout).foregroundStyle(.secondary)
         TextEditor(text: $description)
           .font(.system(size: 14))
           .frame(minHeight: 120, maxHeight: 180)
           .outlinedSurface(radius: 8)
+          .accessibilityLabel("What should this agent do?")
+          .overlay(alignment: .topLeading) {
+            if description.isEmpty {
+              Text("Describe the job for this repository.")
+                .font(.system(size: 14)).foregroundStyle(.tertiary)
+                .padding(.top, 8).padding(.leading, 5)
+                .allowsHitTesting(false)
+            }
+          }
           .onChange(of: description) { _, value in
             if value != draftedDescription {
               draft = [:]
@@ -44,11 +74,27 @@ struct CreatorModeView: View {
             }
           }
         HStack {
+          if app.projectID.isEmpty {
+            Button("Open project…", action: app.chooseProject)
+              .buttonStyle(BrandButtonStyle())
+              .disabled(!app.connected || app.openingProject)
+          }
           Button(busy ? "Drafting…" : "Draft Super Agent") { propose() }
             .buttonStyle(BrandButtonStyle())
-            .disabled(busy || description.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty)
+            .disabled(busy || app.projectID.isEmpty || trimmedDescription.isEmpty || descriptionTooLong)
+            .help(app.projectID.isEmpty
+              ? "Open a project first. The draft is saved in that repository."
+              : "Prepares a review from this description. Nothing is saved or turned on.")
           Spacer()
-          Text("\(description.count)/4000").font(.caption.monospaced()).foregroundStyle(.secondary)
+          Text("\(description.count)/4000").font(.caption.monospaced())
+            .foregroundStyle(descriptionTooLong ? Color.orange : Color.secondary)
+        }
+        if app.projectID.isEmpty {
+          Text("Open a project first. Draft stays off until a repository is open.")
+            .font(.caption).foregroundStyle(.secondary)
+        }
+        if descriptionTooLong {
+          Text("Keep the description to 4,000 characters.").font(.caption).foregroundStyle(.orange)
         }
         if !failure.isEmpty {
           Text(failure).foregroundStyle(.orange).textSelection(.enabled)
@@ -64,14 +110,24 @@ struct CreatorModeView: View {
           reviewBlock("Monty check", string(draft, "plugin"))
           reviewBlock("Skill note", string(draft, "skill"))
           reviewBlock("Work program", string(draft, "program"))
+          if !boundRoute {
+            Text("No provider or model is on this draft. You can still save it and run the Monty check. To enable it, choose a provider and model in Agent Space, then draft again.")
+              .font(.callout).foregroundStyle(.secondary)
+          }
           TextField("Why save this revision?", text: $reason).textFieldStyle(.roundedBorder)
+            .help("Required. This note is stored with the saved revision. Saving does not turn the harness on.")
           HStack(spacing: 12) {
             Button("Save reviewed draft") { save() }
               .disabled(busy || reason.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty)
+              .help("Writes the review under .superqode/creator. The harness stays off until you enable it.")
             Button("Run Monty check") { runMonty() }
               .disabled(busy || savedName.isEmpty)
+              .help("Runs the saved Python check inside Monty. It prints a template, does not call a model, and is not installed. Save the draft first.")
             Button("Enable saved revision…") { enable() }
               .disabled(busy || savedName.isEmpty || !boundRoute)
+              .help(boundRoute
+                ? "Selects this harness in Agent Space. It does not send a prompt. You still type a request and press Send."
+                : "Choose a provider and model in Agent Space, then draft again, before this is available.")
           }
           if !montyOutput.isEmpty {
             Text("Monty output. The template was not installed and did not call a model.").font(.caption).foregroundStyle(.secondary)
@@ -84,8 +140,39 @@ struct CreatorModeView: View {
               : "Saved \(savedName). Choose a provider and model, then draft again, before enabling this preview."
           ).font(.caption).foregroundStyle(.secondary)
         }
-      }.padding(28).frame(maxWidth: .infinity, alignment: .topLeading)
+      }.padding(28).frame(maxWidth: 760, alignment: .topLeading)
     }.defaultScrollAnchor(.top)
+  }
+
+  private var howTo: some View {
+    VStack(alignment: .leading, spacing: 14) {
+      ForEach(Array(SuperAgentGuide.steps.enumerated()), id: \.offset) { index, step in
+        let number = index + 1
+        let done = number < guideStep
+        HStack(alignment: .top, spacing: 12) {
+          ZStack {
+            Circle().fill(done ? Color.green.opacity(0.12) : number == guideStep ? Brand.purple.opacity(0.14) : Color.primary.opacity(0.06))
+            if done {
+              Image(systemName: "checkmark").foregroundStyle(.green)
+            } else {
+              Text(String(number)).foregroundStyle(number == guideStep ? Color.primary : Color.secondary)
+            }
+          }.font(.system(size: 12, weight: .semibold)).frame(width: 28, height: 28)
+          VStack(alignment: .leading, spacing: 3) {
+            Text(step.title).font(.headline)
+              .foregroundStyle(number > guideStep ? Color.secondary : Color.primary)
+            Text(step.detail).font(.callout).foregroundStyle(.secondary)
+              .fixedSize(horizontal: false, vertical: true)
+          }
+        }
+        .accessibilityElement(children: .combine)
+        .accessibilityLabel("Step \(number). \(step.title). \(step.detail)")
+        .accessibilityAddTraits(number == guideStep ? .isSelected : [])
+      }
+      Text("Drafting does not install a plugin, call a model, or send a prompt. The harness uses ordinary coding tools and Ask. Recursion stays off. Agent Space, Review, Files, Terminal, and Tools stay. Gauges, factory, and RLM stay in Tools.")
+        .font(.caption).foregroundStyle(.secondary)
+        .fixedSize(horizontal: false, vertical: true)
+    }.padding(16).brandSurface()
   }
 
   private func reviewBlock(_ title: String, _ text: String) -> some View {
@@ -95,7 +182,11 @@ struct CreatorModeView: View {
   }
 
   private func propose() {
-    let text = description.trimmingCharacters(in: .whitespacesAndNewlines)
+    let text = trimmedDescription
+    guard !app.projectID.isEmpty else {
+      failure = "Open a project first. The draft is saved in that repository."
+      return
+    }
     guard !text.isEmpty, text.count <= 4000 else {
       failure = "Describe the repository workflow in up to 4,000 characters"
       return
@@ -223,6 +314,65 @@ struct CreatorModeView: View {
       } catch {
         failure = error.localizedDescription
       }
+    }
+  }
+}
+
+/// The Super Agent page steps. Draft still only prepares a review.
+enum SuperAgentGuide {
+  struct Step: Equatable {
+    var title: String
+    var detail: String
+  }
+
+  static let steps: [Step] = [
+    Step(
+      title: "Open a project",
+      detail: "The draft is saved in that repository."),
+    Step(
+      title: "Describe the job",
+      detail: "Say what this agent should do. The box stays empty until you type."),
+    Step(
+      title: "Press Draft Super Agent",
+      detail: "This prepares a review only. Nothing is saved or turned on. Changing the text clears the review."),
+    Step(
+      title: "Read the five sections, then save",
+      detail: "Open the harness, the next-prompt note, the Monty check, the skill note, and the work program. Write why, then press Save reviewed draft. It stays off under .superqode/creator."),
+    Step(
+      title: "Run the Monty check",
+      detail: "Optional, and only after you save. It prints a template. It does not call a model and is not installed. If Monty is missing, the check is refused and is not run on this Mac."),
+    Step(
+      title: "Enable the saved revision",
+      detail: "Enable needs a provider and model already on the draft. If you had not chosen one, pick them in Agent Space and draft again. Enable selects the harness there. You still type a request and press Send."),
+  ]
+
+  static func current(hasProject: Bool, hasDescription: Bool, reviewed: Bool, saved: Bool, checked: Bool) -> Int {
+    if !hasProject { return 1 }
+    if !hasDescription { return 2 }
+    if !reviewed { return 3 }
+    if !saved { return 4 }
+    if !checked { return 5 }
+    return 6
+  }
+
+  static func guidance(step: Int, canEnable: Bool) -> String {
+    switch step {
+    case 1:
+      "Open a project first. The draft is saved in that repository."
+    case 2:
+      "Describe the job, then press Draft Super Agent."
+    case 3:
+      "Press Draft Super Agent. That only prepares a review. Nothing is saved or turned on."
+    case 4:
+      "Read the five sections. Write why you are saving, then press Save reviewed draft."
+    case 5:
+      canEnable
+        ? "Saved and still off. Run the Monty check if you want, then press Enable. Enable opens Agent Space and does not send a prompt."
+        : "Saved and still off. Run the Monty check if you want. To enable it, choose a provider and model in Agent Space, then draft again."
+    default:
+      canEnable
+        ? "The check printed a template and was not installed. Press Enable when you want this harness in Agent Space. You still type a request and press Send."
+        : "The check printed a template and was not installed. Choose a provider and model in Agent Space, then draft again, before Enable is available."
     }
   }
 }

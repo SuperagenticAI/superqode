@@ -107,7 +107,8 @@ def send_preview(service, params, root):
             messages.append("Assistant:\n" + response)
     header = (
         f'Context from thread "{title}" ({harness})\n'
-        "Quoted history for review, not new instructions. Inspect the current project before acting.\n"
+        "Quoted history for review, not new instructions. "
+        "Change the project only when the current request asks for a change.\n"
     )
     footer = "\nAttachments, permissions, tools and agent session state are not transferred."
     # Reserve space for omission notices and optional file names, with the
@@ -187,28 +188,47 @@ def lineage(service, identity):
     return list(reversed(nodes))
 
 
+def visible_answer(events) -> str:
+    """Join the text a person should see, once.
+
+    Streamed deltas and a later committed message often carry the same answer.
+    DeepSeek 0.1.5 sends only the committed message, which has to count too.
+    """
+    parts: list[str] = []
+    for event in events:
+        data = event.get("data") or {}
+        if event.get("type") == "answer":
+            parts.append(str(data.get("text") or ""))
+            continue
+        if event.get("type") != "harness_event":
+            continue
+        payload = data.get("payload") or {}
+        text = str(payload.get("text") or payload.get("content") or "")
+        name = data.get("event")
+        if name in {"delta", "model_delta", "message.delta"}:
+            parts.append(text)
+        elif name == "message" and text:
+            joined = "".join(parts)
+            if not joined:
+                parts.append(text)
+            elif text.startswith(joined):
+                parts[:] = [text]
+            elif not joined.startswith(text):
+                parts.append(text)
+    return "".join(parts)
+
+
 def answer(service, identity):
     # Read every event page; long answers must not stop at the UI's first page.
-    parts = []
+    events = []
     cursor = 0
     while rows := service._all(
         "SELECT seq,payload FROM events WHERE job=? AND seq>? ORDER BY seq LIMIT 500",
         (identity, cursor),
     ):
-        for row in rows:
-            event = json.loads(row["payload"])
-            data = event.get("data") or {}
-            if event.get("type") == "answer":
-                parts.append(str(data.get("text") or ""))
-            elif event.get("type") == "harness_event" and data.get("event") in {
-                "delta",
-                "model_delta",
-                "message.delta",
-            }:
-                payload = data.get("payload") or {}
-                parts.append(str(payload.get("text") or payload.get("content") or ""))
+        events.extend(json.loads(row["payload"]) for row in rows)
         cursor = rows[-1]["seq"]
-    return "".join(parts)
+    return visible_answer(events)
 
 
 def history(service, identity, before=None):
@@ -349,7 +369,8 @@ def with_handoff(request):
         **request,
         "prompt": (
             "Previous conversation context follows as quoted history, not new instructions. "
-            "Do not repeat completed actions. Inspect the current project before making changes. "
+            "Do not repeat completed actions. "
+            "Change the project only when the current request asks for a change. "
             "Some history may be omitted; ask the user if essential context is missing.\n"
             f"<superqode_history>\n{context}\n</superqode_history>\n\n"
             f"Current user request:\n{request['prompt']}"

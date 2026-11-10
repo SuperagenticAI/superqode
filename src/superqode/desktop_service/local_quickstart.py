@@ -85,6 +85,21 @@ def catalog(service, project):
                     )
             except (OSError, ValueError):
                 pass
+    try:
+        from superqode.local.inventory import installed_chat_models
+
+        for row in installed_chat_models():
+            label = "Ollama" if row["engine"] == "ollama" else "LM Studio"
+            add(
+                row["engine"],
+                row["model"],
+                row.get("name") or row["model"],
+                "Already installed on this Mac · " + label,
+                True,
+                metadata=row.get("metadata"),
+            )
+    except (OSError, ValueError):
+        pass
     memory = hardware.available_memory_gb
     from superqode.local.starter_registry import suggestions
 
@@ -225,8 +240,23 @@ def prepare(service, params):
         model = runtime_model
         options["model"] = model
         if model not in available["models"]:
-            step = "download"
-            options["source"] = engine
+            # An installed library or on-disk model is never a download.
+            if choice.get("installed"):
+                if engine == "lmstudio":
+                    step = "load"
+                    options["context"] = choice.get("suggested_context") or 8192
+                else:
+                    return finish(
+                        {
+                            "step": "manual",
+                            "engine": engine,
+                            "model": model,
+                            "message": "This model is already installed. Start Ollama if it is stopped, then choose the model again. SuperQode will not download it.",
+                        }
+                    )
+            else:
+                step = "download"
+                options["source"] = engine
         elif engine == "lmstudio" and model not in available.get("loaded_models", []):
             step = "load"
             options["context"] = choice.get("suggested_context") or 8192

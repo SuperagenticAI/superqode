@@ -59,6 +59,8 @@ struct WorkspaceNavigationGroup: Identifiable {
       sections: ["Threads", "Agent activity"]),
     .init(id: "advanced", title: "Advanced", symbol: "slider.horizontal.3",
       sections: ["Local harnesses"]),
+    .init(id: "recursive", title: "Recursive agents", symbol: "arrow.triangle.branch",
+      sections: ["Recursive agents"]),
     .init(id: "tools", title: "Tools", symbol: "wrench.and.screwdriver", sections: ["Tools"]),
   ]
 
@@ -78,30 +80,41 @@ struct WorkspaceNavigationGroup: Identifiable {
 }
 
 struct WorkspaceNavigationRail: View {
+  /// Main left-hand tabs. Local harnesses stay in Features → Advanced.
+  static let starterSections = [
+    "Workspace", "Harness Hub", "Harness Studio", "Super Agent", "Recursive agents",
+    "Evaluations", "Optimization", "Models", "Tools",
+  ]
   @EnvironmentObject var app: Workspace
   var body: some View {
     VStack(spacing: 4) {
       Button { app.showWelcome = true } label: { BrandMark().frame(width: 30, height: 30).padding(.vertical, 10) }
         .buttonStyle(.plain).accessibilityLabel("Welcome to SuperQode")
-      ForEach(["Workspace", "Harness Hub", "Harness Studio", "Super Agent", "Evaluations", "Optimization", "Models", "Tools"], id: \.self) { section in
-        let selected = section == "Workspace"
-          ? WorkspaceNavigationGroup.isWorkbench(app.section) || ["Threads", "Agent activity"].contains(app.section)
-          : app.section == section
-        Button { app.section = section } label: {
-          VStack(spacing: 5) {
-            Image(systemName: section == "Workspace" ? "bubble.left.and.bubble.right" : WorkspaceNavigationGroup.symbol(for: section))
-              .font(.system(size: 17, weight: .medium))
-            Text(section == "Workspace" ? "Threads" : Sections.title(for: section))
-              .font(.system(size: 11, weight: .medium)).lineLimit(1).fixedSize(horizontal: true, vertical: false)
-          }.frame(width: 104, height: 52)
-            .foregroundStyle(selected ? Color.primary : Color.primary.opacity(0.65))
-            .background(selected ? Color.primary.opacity(0.07) : Color.clear, in: RoundedRectangle(cornerRadius: 8))
-        }.buttonStyle(.plain).help(Sections.title(for: section))
-          .accessibilityLabel(section == "Workspace" ? "Threads workspace" : Sections.title(for: section))
-          .accessibilityAddTraits(selected ? .isSelected : [])
-          .disabled(!WorkspaceNavigationGroup.available(section, hasProject: !app.projectID.isEmpty))
-      }
-      Spacer(minLength: 12)
+      ScrollView {
+        VStack(spacing: 4) {
+          ForEach(Self.starterSections, id: \.self) { section in
+            let selected = section == "Workspace"
+              ? WorkspaceNavigationGroup.isWorkbench(app.section) || ["Threads", "Agent activity"].contains(app.section)
+              : app.section == section
+            Button { app.section = section } label: {
+              VStack(spacing: 5) {
+                Image(systemName: section == "Workspace" ? "bubble.left.and.bubble.right" : WorkspaceNavigationGroup.symbol(for: section))
+                  .font(.system(size: 17, weight: .medium))
+                Text(section == "Workspace" ? "Threads" : Sections.title(for: section))
+                  .font(.system(size: section == "Recursive agents" ? 10 : 11, weight: .medium))
+                  .lineLimit(section == "Recursive agents" ? 2 : 1)
+                  .multilineTextAlignment(.center)
+                  .fixedSize(horizontal: section != "Recursive agents", vertical: false)
+              }.frame(width: 104, height: section == "Recursive agents" ? 64 : 52)
+                .foregroundStyle(selected ? Color.primary : Color.primary.opacity(0.65))
+                .background(selected ? Color.primary.opacity(0.07) : Color.clear, in: RoundedRectangle(cornerRadius: 8))
+            }.buttonStyle(.plain).help(Sections.title(for: section))
+              .accessibilityLabel(section == "Workspace" ? "Threads workspace" : Sections.title(for: section))
+              .accessibilityAddTraits(selected ? .isSelected : [])
+              .disabled(!WorkspaceNavigationGroup.available(section, hasProject: !app.projectID.isEmpty))
+          }
+        }
+      }.scrollIndicators(.hidden)
       Button { app.showFeatureBrowser.toggle() } label: {
         VStack(spacing: 6) {
           Image(systemName: "square.grid.2x2").font(.system(size: 18))

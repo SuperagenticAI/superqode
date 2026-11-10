@@ -114,6 +114,22 @@ def test_ollama_unknown_model_uses_hardware_contract():
     assert gw._ollama_num_ctx_for(model) == requested_context("ollama", model)
 
 
+def test_ollama_shaping_turns_thinking_off_unless_the_caller_asked_for_it():
+    gw = LiteLLMGateway()
+    kwargs: dict = {}
+    gw._apply_local_request_shaping("ollama", "qwen3.5:9b", kwargs, has_tools=True)
+    assert kwargs["reasoning_effort"] == "off"
+    explicit: dict = {"reasoning_effort": "high"}
+    gw._apply_local_request_shaping("ollama", "qwen3.5:9b", explicit, has_tools=False)
+    assert explicit["reasoning_effort"] == "high"
+    from litellm.llms.ollama.chat.transformation import OllamaChatConfig
+
+    mapped = OllamaChatConfig().map_openai_params(
+        {"reasoning_effort": "off"}, {}, "qwen3.5:9b", False
+    )
+    assert mapped["think"] is False
+
+
 def test_shaping_keeps_server_residency_policy_and_sets_num_ctx(monkeypatch):
     monkeypatch.delenv("SUPERQODE_OLLAMA_KEEP_ALIVE", raising=False)
     gw = LiteLLMGateway()
