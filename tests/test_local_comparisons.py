@@ -217,6 +217,17 @@ def test_shared_context_and_identical_candidates_are_rejected(configured):
         )
 
 
+def test_immutable_identity_distinguishes_artifact_changes_from_residency_metadata():
+    digest = "a" * 64
+    assert not local_comparisons.identity_changed(
+        {"digest": digest, "size": 4}, {"digest": digest, "size": 8}
+    )
+    assert local_comparisons.identity_changed({"digest": digest}, {"digest": "b" * 64})
+    assert local_comparisons.identity_changed({"quantization": "Q4"}, {"quantization": "Q8"})
+    assert not local_comparisons.identity_changed(None, {"digest": digest})
+    assert local_comparisons.immutable_identity({"revision": "main"}) is None
+
+
 def test_error_candidate_is_recorded_without_losing_baseline_results(configured):
     service, project, _, params = configured
     route = next(

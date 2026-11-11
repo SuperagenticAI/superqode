@@ -34,6 +34,20 @@ def immutable_identity(artifact):
     return None
 
 
+def identity_changed(before, after):
+    if not before or not after:
+        return False  # Missing observations are unknown, not evidence of drift.
+    old, new = immutable_identity(before), immutable_identity(after)
+    if old and new:
+        return old != new
+    # Generic API sizes may describe changing resident allocations. Only
+    # compare stable identity fields that both observations actually report.
+    return any(
+        before.get(k) is not None and after.get(k) is not None and before[k] != after[k]
+        for k in ("key", "digest", "revision", "quantization", "selected_variant")
+    )
+
+
 def starter_suite():
     """Fixed independent verifiers, executed only after native plan review."""
     tasks = []
@@ -392,12 +406,14 @@ async def observe_identity(route, key):
         if isinstance(payload.get("version"), str):
             result["runtime_version"] = payload["version"][:200]
         for row in payload.get("models", payload.get("data", [])):
+            if not isinstance(row, dict):
+                continue
             loaded = next(
                 (i for i in row.get("loaded_instances", []) if i.get("id") == route["model"]), None
             )
             if (
                 route["model"]
-                not in {row.get("id"), row.get("name"), row.get("model"), row.get("key")}
+                not in (row.get("id"), row.get("name"), row.get("model"), row.get("key"))
                 and loaded is None
             ):
                 continue
@@ -419,11 +435,9 @@ async def observe_identity(route, key):
             if artifact and path != "/api/ps":
                 result["artifact"] = {**(result["artifact"] or {}), **artifact}
             config = (loaded or {}).get("config") or row
-            result["loaded_context"] = (
-                config.get("context_length")
-                or config.get("context_window")
-                or result["loaded_context"]
-            )
+            context = config.get("context_length") or config.get("context_window")
+            if type(context) is int and context >= 512:
+                result["loaded_context"] = context
             if row.get("size_vram") is not None:
                 result["residency"] = {"vram_bytes": row["size_vram"], "reported_by": "server"}
     return result
@@ -540,10 +554,11 @@ async def run(request, directory, emit, secrets):
                 "max_tokens": plan["max_tokens"],
                 "before": before,
                 "after": after,
-                "identity_changed": bool(
-                    before["artifact"]
-                    and after["artifact"]
-                    and before["artifact"] != after["artifact"]
+                "identity_changed": identity_changed(before["artifact"], after["artifact"])
+                or bool(
+                    before["runtime_version"]
+                    and after["runtime_version"]
+                    and before["runtime_version"] != after["runtime_version"]
                 ),
                 "identity_verified": bool(
                     immutable_identity(before["artifact"])
