@@ -126,12 +126,10 @@ def catalog(service, project):
     from superqode.local.presets import setup_presets
 
     presets = setup_presets(list(choices.values()), hardware)
-    for preset in presets:
-        if preset["choice"]:
-            choices[preset["choice"]["id"]] = preset["choice"]
+    preset_ids = {p["choice"]["id"] for p in presets if p["choice"]}
     saved = _read(service, project) if project else {}
     previous = saved.get("selection")
-    if previous and previous["id"] not in choices:
+    if previous and previous["id"] not in choices and previous["id"] not in preset_ids:
         choices[previous["id"]] = {
             **{key: value for key, value in previous.items() if key != "evaluation_status"},
             "installed": False,
@@ -196,9 +194,11 @@ def prepare(service, params):
             )
         return result
 
-    choice = next(
-        (row for row in catalog(service, project)["choices"] if row["id"] == choice_id), None
-    )
+    available = catalog(service, project)
+    options = available["choices"] + [
+        p["choice"] for p in available["setup_presets"] if p["choice"]
+    ]
+    choice = next((row for row in options if row["id"] == choice_id), None)
     if not choice:
         raise ValueError("Refresh model choices; this model is no longer available here")
     if choice.get("setup_preset"):

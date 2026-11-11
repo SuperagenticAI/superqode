@@ -28,8 +28,9 @@ Open **Local AI → Compare** after loading models in their runtimes.
    use the shared gateway. This initial flow accepts single-agent harnesses;
    agents with explicit delegated model routes need separate evaluation.
 2. Choose a shared context cap that every selected runtime supports. The
-   per-request output cap is up to 2,048 tokens and the iteration limit is 12.
-   A candidate has a five-minute execution bound. Runtime/model ceilings can
+   per-request output cap is up to 2,048 tokens and the model-policy iteration
+   target is 12. Backend-specific controls remain visible in the effective
+   harness snapshot. A candidate has a five-minute execution bound. Runtime/model ceilings can
    still constrain requests; reported loaded context is retained in evidence.
 3. Use the two built-in coding tasks, or enter a project suite path. Custom
    suites use independent repository, contains or decision graders. Suite-level

@@ -323,6 +323,11 @@ struct LocalQuickStartView: View {
       warnings = (result["guardrails"] as? [String: Any])?["warnings"] as? [String] ?? []
       choices = result["choices"] as? [[String: Any]] ?? []
       presets = result["setup_presets"] as? [[String: Any]] ?? []
+      for preset in presets {
+        if let choice = preset["choice"] as? [String: Any], !choices.contains(where: { string($0, "id") == string(choice, "id") }) {
+          choices.append(choice)
+        }
+      }
       let saved = selection.isEmpty ? string(result, "selected") : selection
       let savedRow = choices.first { string($0, "id") == saved }
       // Installed models are chosen from the list above. Do not open them as a download.
