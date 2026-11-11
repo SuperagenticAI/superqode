@@ -1053,6 +1053,29 @@ mlx_lm.download mlx-community/Qwen2.5-Coder-3B-4bit
 
 ### Slow Inference
 
+Separate the wait before the first token from the speed after text starts.
+In the Mac app, compare Direct Chat and Code with the same local connection.
+PiPy and recursive harnesses can add tool or model steps; Monty executes generated
+Python and does not accelerate model inference.
+
+For a short measurement against the model server, run:
+
+```bash
+superqode local warm mlx --model YOUR_MODEL
+```
+
+Replace `mlx` with your running engine, such as `ollama` or `lmstudio`. Repeat
+once to distinguish a cold model load from a warm request. If the direct server
+responds promptly but the app waits, inspect the app/harness path. If both wait,
+check server load, model fit and the chosen context window.
+
+MLX responses use incremental OpenAI-compatible streaming; a stream should not
+wait for the complete answer before displaying text. Older versions buffered
+MLX completions. Native and inline tool arguments are assembled before delivery,
+and an interrupted stream is not automatically replayed. Local context checks
+still read the loaded window on each request, using provider-specific endpoints
+and concurrent fallback probes rather than stacking unrelated timeouts.
+
 **Solutions**:
 - Use quantized models
 - Reduce context length

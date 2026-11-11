@@ -490,14 +490,12 @@ async def test_mlx_chat_native_tool_calls_are_normalized(monkeypatch):
 
 @pytest.mark.asyncio
 async def test_mlx_stream_extracts_inline_tool_calls(monkeypatch):
-    """MLX streaming path (which actually does a non-streaming call
-    under the hood for KV-cache safety) must apply the same tool-call
-    rescue as the non-streaming path."""
+    """A server returning one JSON response still uses inline tool rescue, without replay."""
     import superqode.providers.local.mlx as mlx_mod
     from superqode.providers.gateway.base import Message
 
-    async def fake_async_request(self, method, endpoint, data, timeout=120.0):
-        return {
+    async def fake_stream_request(self, endpoint, data, timeout=120.0):
+        yield {
             "model": "gemma-mlx",
             "choices": [
                 {
@@ -511,7 +509,7 @@ async def test_mlx_stream_extracts_inline_tool_calls(monkeypatch):
             "usage": {"prompt_tokens": 1, "completion_tokens": 1, "total_tokens": 2},
         }
 
-    monkeypatch.setattr(mlx_mod.MLXClient, "_async_request", fake_async_request)
+    monkeypatch.setattr(mlx_mod.MLXClient, "_async_stream_request", fake_stream_request)
 
     gw = LiteLLMGateway()
     chunks = [

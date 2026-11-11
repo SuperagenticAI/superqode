@@ -255,6 +255,42 @@ class MLXClient(LocalProviderClient):
             None, lambda: self._request(method, endpoint, data, timeout)
         )
 
+    async def _async_stream_request(self, endpoint: str, data: Dict, timeout: float = 300.0):
+        """Read one OpenAI-compatible SSE request without buffering or replaying it."""
+        import aiohttp
+
+        base = self.host.rstrip("/").removesuffix("/v1")
+        limits = aiohttp.ClientTimeout(total=timeout, sock_connect=min(10, timeout))
+        async with aiohttp.ClientSession(
+            timeout=limits, trust_env=True, read_bufsize=1024 * 1024
+        ) as session:
+            async with session.post(
+                base + endpoint, json=data, headers={"Accept": "text/event-stream"}
+            ) as response:
+                if response.status >= 400:
+                    detail = (await response.content.read(1000)).decode("utf-8", errors="replace")
+                    raise URLError(f"MLX server error ({response.status}): {detail}")
+                if response.content_type == "application/json":
+                    # Older servers can ignore stream=true. Consume that same response;
+                    # never send a second model request as a fallback.
+                    yield await response.json()
+                    return
+                lines = []
+                async for raw in response.content:
+                    line = raw.decode("utf-8").rstrip("\r\n")
+                    if line.startswith("data:"):
+                        lines.append(line[5:].lstrip(" "))
+                    elif not line and lines:
+                        payload = "\n".join(lines)
+                        lines = []
+                        if payload.strip() == "[DONE]":
+                            return
+                        yield json.loads(payload)
+                if lines:
+                    payload = "\n".join(lines)
+                    if payload.strip() != "[DONE]":
+                        yield json.loads(payload)
+
     async def is_available(self) -> bool:
         """Check if MLX server is running."""
         try:

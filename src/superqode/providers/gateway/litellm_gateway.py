@@ -956,7 +956,9 @@ class LiteLLMGateway(GatewayInterface):
 
         base = kwargs.get("api_base") or kwargs.get("base_url")
         if base:
-            loaded = await probe_base_url(base.rstrip("/").removesuffix("/v1"), model)
+            loaded = await probe_base_url(
+                base.rstrip("/").removesuffix("/v1"), model, provider=provider
+            )
         else:
             loaded = await resolve_local_context_window(provider, model)
         window = effective_context(provider, model, loaded[0] if loaded else None)
@@ -2276,7 +2278,7 @@ class LiteLLMGateway(GatewayInterface):
         """Handle MLX streaming completion directly."""
         from ..local.mlx import MLXClient
 
-        client = MLXClient()
+        client = MLXClient(host=kwargs.get("api_base") or kwargs.get("base_url"))
 
         # Convert messages to OpenAI format
         openai_messages = []
@@ -2290,13 +2292,7 @@ class LiteLLMGateway(GatewayInterface):
                 openai_msg["tool_call_id"] = msg.tool_call_id
             openai_messages.append(openai_msg)
 
-        # Build request - MLX server may not support streaming properly, so use non-streaming
-        request_data = {
-            "model": model,
-            "messages": openai_messages,
-            # Note: Not setting stream=True as MLX server streaming may cause KV cache issues
-        }
-
+        request_data = {"model": model, "messages": openai_messages, "stream": True}
         if temperature is not None:
             request_data["temperature"] = temperature
         if max_tokens is not None:
@@ -2305,65 +2301,25 @@ class LiteLLMGateway(GatewayInterface):
             request_data["tools"] = self._convert_tools(tools)
         if tool_choice:
             request_data["tool_choice"] = tool_choice
-
-        # Same local-model shaping (temp clamp) as the non-streaming path.
         self._apply_local_request_shaping("mlx", model, request_data, bool(tools))
+        from ..local.mlx_stream import MLXStream
 
+        from contextlib import aclosing
+
+        stream = MLXStream(self, model)
         try:
-            # Make non-streaming request to MLX server (streaming causes KV cache issues)
-            response_data = await client._async_request(
-                "POST", "/v1/chat/completions", request_data, timeout=300.0
-            )
-
-            # Extract response and yield as single chunk
-            choice = response_data["choices"][0]
-            message = choice["message"]
-
-            # Get content and clean it up
-            content = message.get("content", "")
-
-            # Clean up MLX response content - remove special tokens that might confuse users
-            if content:
-                # Some MLX models return content with special tokens like <|channel|>, <|message|>, etc.
-                # Clean these up for better user experience
-                content = (
-                    content.replace("<|channel|>", "")
-                    .replace("<|message|>", "")
-                    .replace("<|end|>", "")
-                    .replace("<|start|>", "")
+            async with aclosing(
+                client._async_stream_request(
+                    "/v1/chat/completions", request_data, timeout=self.timeout
                 )
-                content = content.replace(
-                    "assistant", ""
-                ).strip()  # Remove duplicate assistant markers
+            ) as packets:
+                async for packet in packets:
+                    for chunk in stream.feed(packet):
+                        yield chunk
+            yield stream.final()
 
-            # Same tool-call rescue as the non-streaming MLX path: normalize
-            # native tool_calls, else scan for inline tool calls (Gemma/Llama
-            # variants under MLX often emit <tool_call> tags instead).
-            tool_calls = self._normalize_tool_calls(message.get("tool_calls"))
-            if not tool_calls and isinstance(content, str) and content:
-                stripped, extracted = self._extract_inline_tool_calls(content)
-                if extracted:
-                    tool_calls = extracted
-                    content = stripped
-
-            yield StreamChunk(
-                content=content,
-                role=message.get("role"),
-                finish_reason="tool_calls" if tool_calls else choice.get("finish_reason"),
-                tool_calls=tool_calls,
-                usage=(
-                    Usage(
-                        prompt_tokens=int(response_data.get("usage", {}).get("prompt_tokens") or 0),
-                        completion_tokens=int(
-                            response_data.get("usage", {}).get("completion_tokens") or 0
-                        ),
-                        total_tokens=int(response_data.get("usage", {}).get("total_tokens") or 0),
-                    )
-                    if response_data.get("usage")
-                    else None
-                ),
-            )
-
+        except GatewayError:
+            raise
         except Exception as e:
             # Provide more specific MLX error messages
             error_msg = str(e)
@@ -2392,7 +2348,11 @@ class LiteLLMGateway(GatewayInterface):
                     provider="mlx",
                     model=model,
                 ) from e
-            elif "Connection timed out" in error_msg or "timeout" in error_msg.lower():
+            elif (
+                isinstance(e, TimeoutError)
+                or "Connection timed out" in error_msg
+                or "timeout" in error_msg.lower()
+            ):
                 raise GatewayError(
                     f"MLX server timed out. Large MLX models (like {model}) can take 1-2 minutes for first response.\n\n"
                     f"Please wait and try again. If this persists:\n"
@@ -2403,8 +2363,9 @@ class LiteLLMGateway(GatewayInterface):
                     model=model,
                 ) from e
             else:
-                # Convert to gateway error
-                self._handle_litellm_error(e, "mlx", model)
+                raise GatewayError(
+                    f"MLX request failed: {error_msg}", provider="mlx", model=model
+                ) from e
 
     async def chat_completion(
         self,
@@ -2727,10 +2688,15 @@ class LiteLLMGateway(GatewayInterface):
 
         # Special handling for MLX - use direct client instead of LiteLLM
         if provider == "mlx":
-            async for chunk in self._mlx_stream_completion(
-                messages, model, temperature, max_tokens, tools, tool_choice, **kwargs
-            ):
-                yield chunk
+            from contextlib import aclosing
+
+            async with aclosing(
+                self._mlx_stream_completion(
+                    messages, model, temperature, max_tokens, tools, tool_choice, **kwargs
+                )
+            ) as stream:
+                async for chunk in stream:
+                    yield chunk
             return
 
         # DS4 - use /v1/messages streaming for better tool calling and KV cache support
