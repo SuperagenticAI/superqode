@@ -307,6 +307,14 @@ def main():
         if len(raw) > 1_000_000:
             raise ValueError("Job request too large")
         request = json.loads(raw)
+        if request.get("kind") == "task" and request.get("provider") == "local-openai":
+            from superqode.local.runtimes import selected_runtime
+
+            cap = selected_runtime().context
+            requested = request.get("context_window")
+            request["context_window"] = (
+                min(cap, requested) if type(requested) is int and requested > 0 else cap
+            )
         from .ownership import watch_parent
 
         owner = int(os.environ.get("SUPERQODE_DESKTOP_PARENT_PID") or os.getppid())
@@ -365,6 +373,10 @@ def main():
             from superqode.harness.verification import run
 
             run(request["studio_plan"], directory, emit)
+        elif request["kind"] == "local-runtime":
+            from .local_runtimes import worker
+
+            asyncio.run(worker(request, emit))
         elif request["kind"] == "local":
             from superqode.local.workbench import run
 

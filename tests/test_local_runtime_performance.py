@@ -52,7 +52,7 @@ def test_benchmark_counts_reported_tokens_not_fragments_and_separates_thinking(m
 
     ticks = iter([0, 1, 3, 8])
     monkeypatch.setattr(bench, "urlopen", respond)
-    monkeypatch.setattr(bench.time, "monotonic", lambda: next(ticks))
+    monkeypatch.setattr(bench, "time", SimpleNamespace(monotonic=lambda: next(ticks)))
     result = bench.run_bench("http://127.0.0.1:1234/v1", "fixture")
     assert result.ok
     assert result.completion_tokens == 101

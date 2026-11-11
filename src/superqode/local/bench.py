@@ -339,6 +339,30 @@ def _reasoning_delta(delta: dict[str, Any]) -> str:
 
 
 def _stream_chat(endpoint: str, body: dict[str, Any], api_key: str = "") -> StreamResult:
+    from urllib.parse import urlsplit
+    import ipaddress
+    from .execution import LocalTurn, enabled
+
+    host = urlsplit(endpoint).hostname
+    try:
+        local = host == "localhost" or ipaddress.ip_address(host or "").is_loopback
+    except ValueError:
+        local = False
+    if not local or not enabled():
+        return _raw_stream_chat(endpoint, body, api_key)
+    with LocalTurn("local-benchmark", body.get("model", "")) as turn:
+        result = _raw_stream_chat(endpoint, body, api_key)
+        turn.data.update(
+            first_output_s=result.ttft_s,
+            first_text_s=result.first_text_s,
+            output_tokens=result.completion_tokens,
+            output_limit=body.get("max_tokens"),
+        )
+        turn.terminal = result.ttft_s is not None
+        return result
+
+
+def _raw_stream_chat(endpoint: str, body: dict[str, Any], api_key: str = "") -> StreamResult:
     """Stream one chat completion and collect text plus tool-call deltas."""
     url = endpoint.rstrip("/") + "/chat/completions"
     encoded = json.dumps(body).encode("utf-8")

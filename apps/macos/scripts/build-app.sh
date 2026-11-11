@@ -22,6 +22,8 @@ mkdir -p "$DEST/Contents/MacOS" "$DEST/Contents/Resources"
 # Publish a new executable inode so running previews retain their mapped binary.
 cp "$BINARY_DIR/SuperQode" "$DEST/Contents/MacOS/SuperQode.next"
 mv -f "$DEST/Contents/MacOS/SuperQode.next" "$DEST/Contents/MacOS/SuperQode"
+cp "$BINARY_DIR/SuperQodeAppleModel" "$DEST/Contents/MacOS/SuperQodeAppleModel.next"
+mv -f "$DEST/Contents/MacOS/SuperQodeAppleModel.next" "$DEST/Contents/MacOS/SuperQodeAppleModel"
 cp "$APP_DIR/resources/Info.plist" "$DEST/Contents/Info.plist"
 # SwiftPM dependency resources (including the native terminal renderer).
 for RESOURCE_BUNDLE in "$BINARY_DIR"/*.bundle; do

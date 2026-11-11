@@ -15,6 +15,7 @@ and callers fall back to their normal model.
 from __future__ import annotations
 
 import asyncio
+import os
 from typing import Any, Optional
 
 _availability_cache: Optional[bool] = None
@@ -29,6 +30,10 @@ def _load_sdk() -> Any:
 def apple_fm_available() -> bool:
     """True when the on-device system model can answer requests right now."""
     global _availability_cache
+    if os.environ.get("SUPERQODE_APPLE_HELPER"):
+        from superqode.local.apple import status
+
+        return status().get("available") is True
     if _availability_cache is not None:
         return _availability_cache
     try:
@@ -71,6 +76,17 @@ def _generate_sync(prompt: str, system: str = "", max_tokens: int = 600) -> str:
 
 async def apple_fm_generate(prompt: str, system: str = "", max_tokens: int = 600) -> str:
     """One on-device completion, off the event loop. Raises on failure."""
+    if os.environ.get("SUPERQODE_APPLE_HELPER"):
+        from .gateway.litellm_gateway import LiteLLMGateway
+        from .gateway.base import Message
+
+        result = await LiteLLMGateway().chat_completion(
+            messages=[Message("system", system), Message("user", prompt)],
+            model="system-on-device",
+            provider="apple-foundation",
+            max_tokens=max_tokens,
+        )
+        return result.content
     return await asyncio.to_thread(_generate_sync, prompt, system, max_tokens)
 
 

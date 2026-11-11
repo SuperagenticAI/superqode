@@ -148,6 +148,9 @@ final class EngineFrames {
       at: extras, withIntermediateDirectories: true, attributes: [.posixPermissions: 0o700])
     env["PYTHONPATH"] = backend + ":" + extras.path
     env["SUPERQODE_APP"] = "1"
+    if let executable = Bundle.main.executableURL {
+      env["SUPERQODE_APPLE_HELPER"] = executable.deletingLastPathComponent().appendingPathComponent("SuperQodeAppleModel").path
+    }
     env["PYTHONUNBUFFERED"] = "1"
     env["PYTHONDONTWRITEBYTECODE"] = "1"
     env["LITELLM_LOCAL_MODEL_COST_MAP"] = "True"

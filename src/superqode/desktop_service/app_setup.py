@@ -191,10 +191,18 @@ def _publish_cli(root: Path, home: Path) -> None:
     shim = bin_dir / "superqode"
     extras = shlex.quote(str((Path(root) / "python-extras").resolve()))
     pythonpath = shlex.quote(os.environ.get("PYTHONPATH", ""))
+    native_helper = os.environ.get("SUPERQODE_APPLE_HELPER")
+    native_environment = (
+        f"export SUPERQODE_APPLE_HELPER={shlex.quote(native_helper)}\n"
+        if native_helper and Path(native_helper).is_file()
+        else ""
+    )
     shim.write_text(
         "#!/bin/sh\n"
         f"export PYTHONPATH={pythonpath}:{extras}\n"
-        f'exec {shlex.quote(sys.executable)} -m superqode.main "$@"\n',
+        + native_environment
+        + f"export SUPERQODE_STATE_DIR={shlex.quote(str(Path(root).resolve()))}\n"
+        + f'exec {shlex.quote(sys.executable)} -m superqode.main "$@"\n',
         encoding="utf-8",
     )
     shim.chmod(0o755)

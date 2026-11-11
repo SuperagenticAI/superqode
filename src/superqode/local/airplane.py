@@ -554,7 +554,13 @@ def smoke_airplane(
         spec = load_harness_spec(harness)
         policy = spec.execution_policy
         routes = (spec.model_policy.primary, *spec.model_policy.fallbacks)
-        local_ids = set(all_local_provider_ids()) | {"llama.cpp"}
+        from superqode.providers.registry import PROVIDERS
+
+        local_ids = {
+            identity
+            for identity in all_local_provider_ids()
+            if PROVIDERS[identity].deployment_mode != "cloud"
+        } | {"llama.cpp"}
         ok = (
             policy.allow_network is False
             and set(NETWORK_BLOCKED_CATEGORIES).issubset(policy.blocked_categories)

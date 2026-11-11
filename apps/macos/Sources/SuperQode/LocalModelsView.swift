@@ -49,11 +49,13 @@ struct ModelsView: View {
     VStack(spacing: 0) {
       Picker("Model workspace", selection: $tab) {
         Text("Local AI · discover and run").tag("local")
+        Text("Runtimes & performance").tag("runtimes")
         Text("Existing models and provider routes").tag("routes")
       }.pickerStyle(.segmented).padding(.horizontal, 28).padding(.top, 20)
       if tab == "local" {
         if active { LocalQuickStartView(project: app.projectID, embedded: true).id(app.projectID) }
-      } else { ModelRoutesView() }
+      } else if tab == "runtimes" { LocalRuntimeWorkspace(active: active) }
+      else { ModelRoutesView() }
     }
   }
 }

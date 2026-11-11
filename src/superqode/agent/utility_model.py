@@ -55,6 +55,12 @@ async def utility_completion(
     route = utility_route()
     if route is not None:
         route_provider, route_model = route
+        if route_provider == "apple-foundation":
+            # The native Mac option is explicit and on-device. Never send its
+            # utility input to a cloud/session model if availability changes.
+            return await _gateway_completion(
+                gateway, route_provider, route_model or "system-on-device", system, user, max_tokens
+            )
         if route_provider == "apple-fm":
             try:
                 from ..providers.apple_fm import apple_fm_available, apple_fm_generate

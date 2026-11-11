@@ -966,6 +966,9 @@ class LiteLLMGateway(GatewayInterface):
         explicit = kwargs.get("num_ctx") or (kwargs.get("options") or {}).get("num_ctx")
         if type(explicit) is int and explicit >= 512:
             window = min(window, explicit)
+        from superqode.local.execution import annotate
+
+        annotate(context=window, context_source=loaded[1] if loaded else "configured/fallback")
         kept, output = guard_request(
             self._convert_messages(messages),
             self._convert_tools(tools) if tools else None,
@@ -2370,6 +2373,120 @@ class LiteLLMGateway(GatewayInterface):
 
     async def chat_completion(
         self,
+        messages,
+        model,
+        provider=None,
+        temperature=None,
+        max_tokens=None,
+        tools=None,
+        tool_choice=None,
+        **kwargs,
+    ):
+        from superqode.local.execution import LocalTurn, is_local
+
+        route = provider or split_provider_model_ref(model).provider
+        if not is_local(route):
+            return await self._chat_completion(
+                messages, model, provider, temperature, max_tokens, tools, tool_choice, **kwargs
+            )
+        async with LocalTurn(route, model) as turn:
+            result = await turn.run(
+                self._chat_completion(
+                    messages, model, provider, temperature, max_tokens, tools, tool_choice, **kwargs
+                )
+            )
+            turn.observe(
+                text=bool(result.content),
+                thinking=bool(result.thinking_content),
+                terminal=bool(result.finish_reason),
+                usage=result.usage,
+            )
+            return result
+
+    async def stream_completion(
+        self,
+        messages,
+        model,
+        provider=None,
+        temperature=None,
+        max_tokens=None,
+        tools=None,
+        tool_choice=None,
+        **kwargs,
+    ):
+        from contextlib import aclosing
+        from superqode.local.execution import LocalTurn, is_local
+
+        route = provider or split_provider_model_ref(model).provider
+        async with aclosing(
+            self._stream_completion(
+                messages, model, provider, temperature, max_tokens, tools, tool_choice, **kwargs
+            )
+        ) as chunks:
+            if not is_local(route):
+                async for chunk in chunks:
+                    yield chunk
+                return
+            async with LocalTurn(route, model) as turn:
+                while True:
+                    try:
+                        chunk = await turn.next(chunks)
+                    except StopAsyncIteration:
+                        break
+                    turn.observe(
+                        text=bool(chunk.content),
+                        thinking=bool(chunk.thinking_content),
+                        terminal=bool(chunk.finish_reason),
+                        usage=chunk.usage,
+                    )
+                    yield chunk
+
+    async def _native_local_stream(
+        self, messages, model, provider, temperature, max_tokens, tools, tool_choice
+    ):
+        from contextlib import aclosing
+
+        if tool_choice == "none":
+            tools = None
+        elif tool_choice not in {None, "auto"}:
+            raise InvalidRequestError(
+                "This local runtime accepts automatic tools or no tools; forced tool selection is unavailable",
+                provider=provider,
+            )
+        if provider == "apple-foundation":
+            from superqode.local.apple import stream as source
+
+            chunks = source(
+                messages, model, tools=tools, max_tokens=max_tokens, temperature=temperature
+            )
+        else:
+            from superqode.local.runtimes import selected_runtime, stream as source
+
+            chunks = source(
+                selected_runtime(),
+                messages,
+                model,
+                key=os.environ.get("LOCAL_RUNTIME_API_KEY"),
+                tools=tools,
+                max_tokens=max_tokens,
+                temperature=temperature,
+            )
+        try:
+            async with aclosing(chunks):
+                async for chunk in chunks:
+                    yield chunk
+        except GatewayError:
+            raise
+        except Exception as exc:
+            # Do not include vendor bodies/headers that could echo a credential.
+            if isinstance(exc, ValueError):
+                message = str(exc)
+            else:
+                message = "Local model request failed. Check the server, model, API key and loaded context in Local AI."
+            raise GatewayError(message, provider=provider, model=model) from None
+
+    async def _chat_completion(
+        self,
         messages: List[Message],
         model: str,
         provider: Optional[str] = None,
@@ -2401,6 +2518,28 @@ class LiteLLMGateway(GatewayInterface):
         task_budget: Optional[TaskTokenBudget] = kwargs.get("task_budget")
         if task_budget is not None:
             task_budget.check()
+
+        if provider in {"local-openai", "apple-foundation"}:
+            content, thinking, calls, usage, finish = [], [], None, None, None
+            async for chunk in self._native_local_stream(
+                messages, model, provider, temperature, max_tokens, tools, tool_choice
+            ):
+                content.append(chunk.content)
+                thinking.append(chunk.thinking_content or "")
+                calls, usage, finish = (
+                    chunk.tool_calls or calls,
+                    chunk.usage or usage,
+                    chunk.finish_reason or finish,
+                )
+            return GatewayResponse(
+                content="".join(content),
+                thinking_content="".join(thinking) or None,
+                tool_calls=calls,
+                usage=usage,
+                finish_reason=finish,
+                model=model,
+                provider=provider,
+            )
 
         # Special handling for MLX - use direct client instead of LiteLLM
         if provider == "mlx":
@@ -2656,7 +2795,7 @@ class LiteLLMGateway(GatewayInterface):
         except Exception as e:
             self._handle_litellm_error(e, provider, model)
 
-    async def stream_completion(
+    async def _stream_completion(
         self,
         messages: List[Message],
         model: str,
@@ -2686,6 +2825,13 @@ class LiteLLMGateway(GatewayInterface):
         task_budget: Optional[TaskTokenBudget] = kwargs.get("task_budget")
         if task_budget is not None:
             task_budget.check()
+
+        if provider in {"local-openai", "apple-foundation"}:
+            async for chunk in self._native_local_stream(
+                messages, model, provider, temperature, max_tokens, tools, tool_choice
+            ):
+                yield chunk
+            return
 
         # Special handling for MLX - use direct client instead of LiteLLM
         if provider == "mlx":

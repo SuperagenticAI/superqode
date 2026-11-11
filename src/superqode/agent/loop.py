@@ -2088,6 +2088,7 @@ class AgentLoop:
     _LOCAL_PROVIDERS = frozenset(
         {
             "ollama",
+            "local-openai",
             "lmstudio",
             "lm-studio",
             "lm_studio",

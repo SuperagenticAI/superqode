@@ -754,7 +754,10 @@ class CodeGemStream:
         if requested is not None:
             if isinstance(requested, bool) or not isinstance(requested, int) or requested <= 0:
                 raise ValueError("CodeGem max_tokens must be a positive integer")
-            return min(limit, requested) if limit is not None else requested
+            limit = min(limit, requested) if limit is not None else requested
+        from superqode.local.execution import annotate
+
+        annotate(output_limit=limit)
         return limit
 
     async def _sleep(self, seconds, signal):
@@ -838,6 +841,35 @@ class CodeGemStream:
         )
 
     async def __call__(self, model, context, options):
+        from contextlib import aclosing
+        from superqode.local.execution import LocalTurn, is_local
+
+        async with aclosing(self._events(model, context, options)) as events:
+            if not is_local(model.provider):
+                async for event in events:
+                    yield event
+                return
+            async with LocalTurn(model.provider, model.id) as turn:
+                while True:
+                    try:
+                        event = await turn.next(events)
+                    except StopAsyncIteration:
+                        break
+                    turn.observe(
+                        text=isinstance(event, TextDeltaEvent),
+                        thinking=isinstance(event, ThinkingDeltaEvent),
+                        terminal=isinstance(event, AssistantDoneEvent),
+                    )
+                    if isinstance(event, AssistantDoneEvent):
+                        from superqode.providers.gateway.base import Usage as GatewayUsage
+
+                        usage = event.message.usage
+                        turn.observe(
+                            usage=GatewayUsage(usage.input, usage.output, usage.total_tokens)
+                        )
+                    yield event
+
+    async def _events(self, model, context, options):
         message = AssistantMessage(model=model.id, provider=model.provider, api=model.api)
         yield AssistantStartEvent(message)
         try:
@@ -1388,6 +1420,17 @@ class CodeGemStream:
             raise ValueError(data["error"])
         if not data.get("done"):
             raise ValueError("Ollama response is incomplete; tool calls will not execute")
+        from superqode.local.execution import annotate
+
+        annotate(
+            context=model.context_window or None,
+            context_source="CodeGem harness/server contract",
+            server_load_s=data.get("load_duration", 0) / 1e9 if "load_duration" in data else None,
+            server_prefill_s=data.get("prompt_eval_duration", 0) / 1e9
+            if "prompt_eval_duration" in data
+            else None,
+            server_decode_s=data.get("eval_duration", 0) / 1e9 if "eval_duration" in data else None,
+        )
         result = data.get("message", {})
         text = result.get("content") or ""
         calls = result.get("tool_calls") or []

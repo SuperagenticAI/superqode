@@ -773,6 +773,18 @@ private func jobStamp(_ row: [String: Any]) -> Double {
             + error.localizedDescription
         }
       }
+      // Only explicitly remembered, app-owned local keys are restored. This
+      // metadata lookup does not probe servers, scan folders or load models.
+      if let runtimes = try await engine.call("local.runtimes.catalog") as? [String: Any] {
+        for row in runtimes["profiles"] as? [[String: Any]] ?? [] where row["remember_key"] as? Bool == true {
+          let identity = string(row, "id"); let account = "local-runtime:" + identity; let store = credentialStore
+          do {
+            if let key = try await Task.detached(operation: { try store.read(account) }).value {
+              _ = try await engine.call("local.runtimes.key", ["id": identity, "key": key, "restore": true])
+            }
+          } catch { notice = "A saved local runtime key could not be loaded. Reconnect it in Local AI. " + error.localizedDescription }
+        }
+      }
       await refreshProviders()
       projects = try await engine.call("projects.list") as? [[String: Any]] ?? []
       packs = try await engine.call("evals.packs") as? [[String: Any]] ?? []
@@ -992,6 +1004,7 @@ private func jobStamp(_ row: [String: Any]) -> Double {
     throw EngineError(message: "The model is still warming up. Your first question may take longer.")
   }
   func chooseModelRoute(_ provider: String, _ model: String) {
+    if provider == "apple-foundation" { chooseHarness("no-tool", restoreRemembered: false); interactionMode = "chat" }
     if isManaged || connectionDisconnected || harness.hasPrefix("local-harness:") {
       chooseHarness(
         harnesses.first(where: { string($0, "id") == "core" })?.projectRowID

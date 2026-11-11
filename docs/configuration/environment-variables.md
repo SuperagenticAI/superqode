@@ -268,3 +268,18 @@ See [Themes](../advanced/themes.md) for system detection and named light/dark pa
 
 Use the CLI options to configure the logger. Setting these reporting variables
 alone does not open a log file or enable provider SDK request dumps.
+
+## Local runtime coordination
+
+| Variable | Values | Default | Effect |
+| --- | --- | --- | --- |
+| `SUPERQODE_LOCAL_RUNTIME` | JSON profile | unset | Private desktop-to-worker local runtime specification. Contains the loopback endpoint and declared context/tools, never the API key. Configure profiles in Local AI instead of editing this variable. |
+| `SUPERQODE_LOCAL_ENDPOINT` | loopback URL | unset | Bound local-compatible endpoint for the selected runtime profile. |
+| `LOCAL_RUNTIME_API_KEY` | token | unset | Session-only key passed to the selected local runtime worker; app persistence uses Mac Keychain. Never embedded in profiles or prompts. |
+| `SUPERQODE_APPLE_HELPER` | executable path | bundled helper | Native on-device model bridge. Set by the macOS bundle; source builds can point to their compiled `SuperQodeAppleModel`. No HTTP listener is created. |
+
+The Mac app coordinates local inference using its state directory. One generation
+at a time is the default across projects; the Local AI performance panel can
+raise the limit to four. Model slots are released before tool execution, on
+cancellation and when a worker process exits. This controls SuperQode's requests;
+it does not schedule other applications using the same server.

@@ -774,6 +774,30 @@ PROVIDERS: Dict[str, ProviderDef] = {
     # =========================================================================
     # 🏠 LOCAL/SELF-HOSTED - Local Tier
     # =========================================================================
+    "local-openai": ProviderDef(
+        id="local-openai",
+        name="Local runtime",
+        tier=ProviderTier.LOCAL,
+        category=ProviderCategory.LOCAL,
+        env_vars=["LOCAL_RUNTIME_API_KEY"],
+        litellm_prefix="openai/",
+        docs_url="https://superqode.dev/docs/providers/local/",
+        base_url_env="SUPERQODE_LOCAL_ENDPOINT",
+        deployment_mode="local",
+        notes="Explicit saved loopback runtime profile; supports compatible local servers.",
+    ),
+    "apple-foundation": ProviderDef(
+        id="apple-foundation",
+        name="Apple on-device model",
+        tier=ProviderTier.LOCAL,
+        category=ProviderCategory.LOCAL,
+        env_vars=[],
+        litellm_prefix="",
+        docs_url="https://developer.apple.com/documentation/foundationmodels",
+        example_models=["system-on-device"],
+        deployment_mode="local",
+        notes="Apple Intelligence system model for chat and lightweight tasks. No API key or cloud fallback.",
+    ),
     "ollama": ProviderDef(
         id="ollama",
         name="Ollama",
