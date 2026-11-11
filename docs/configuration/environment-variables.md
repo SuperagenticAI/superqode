@@ -169,6 +169,10 @@ configuration. See [Harness System](../advanced/harness-system.md#observability-
 
 ## ACP connections
 
+`SUPERQODE_APP` is set to `1` internally by the macOS bundle. It enables desktop CLI
+publication and app-specific runtime/setup messages. Leave it unset for normal
+terminal use; it is not a model-performance setting.
+
 | Variable | Values | Default | Effect |
 |---|---|---|---|
 | `SUPERQODE_ACP_CLIENT` | client id | unset | Pin which ACP client implementation the TUI uses. |

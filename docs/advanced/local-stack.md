@@ -308,8 +308,9 @@ and endpoint metadata so teams can check in the measured routing plan.
 
 ## Run an MLX server
 
-On Apple Silicon, `mlx_lm.server` is the fastest serving path for models in
-your Hugging Face cache:
+On Apple Silicon, `mlx_lm.server` is a native serving option for MLX-compatible
+models in your Hugging Face cache. Compare it with your other engines using the
+same model, quantization, context and workload before choosing a default:
 
 ```bash
 uv pip install mlx-lm

@@ -128,7 +128,7 @@ class CodeGemHarnessProtocolAdapter(PiPyHarnessProtocolAdapter):
                 guarded.append(replace(tool, execute_fn=denied))
         stream_fn = CodeGemStream(config)
         token_limit = request.metadata.get("agent_max_tokens")
-        if request.provider in {"google", "gemini"} and token_limit is not None:
+        if token_limit is not None:
             provider_stream = stream_fn
 
             def stream_fn(model, context, stream_options):

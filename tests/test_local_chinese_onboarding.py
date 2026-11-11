@@ -100,6 +100,7 @@ def test_newcomer_shows_only_primary_engines_with_installed_models_first(desktop
     rows = result["choices"]
     assert {row["engine"] for row in rows} == {"ollama", "lmstudio"}
     assert {row["id"] for row in result["engines"]} == {"ollama", "lmstudio"}
+    assert {row["id"] for row in result["other_engines"]} == {"mlx", "llama.cpp", "ds4"}
     assert all(row["installed"] for row in rows[:2])
     assert all(not row["installed"] for row in rows[2:])
     assert {row["engine"] for row in rows[:2]} == {"ollama", "lmstudio"}

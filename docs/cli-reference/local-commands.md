@@ -137,9 +137,16 @@ local search tools.
 | `doctor` | Check local roots, ripgrep, semantic search, model fit, and health warnings |
 | `prepare` | Write the no-network harness and manifest |
 | `index` | Build or rebuild the SQLite FTS5 local code-search index |
-| `smoke` | Fast offline readiness check |
+| `smoke` | Check local readiness and the saved harness's declared network/model policy |
 | `models` | Show neutral "fits this machine" suggestions |
 | `health` | Show memory, swap, battery, CPU, and temperature signals where available |
+
+`smoke` inspects the harness recorded by `prepare` (inside the project) or
+`superqode.airplane.yaml`. It fails the policy check if the harness is missing,
+allows network tools, or declares cloud primary/fallback models. This is a
+static readiness check, not a test of operating-system egress isolation. Review
+server URLs, shell commands, MCP, delegation and tool configuration separately;
+a local primary model alone does not establish fully offline execution.
 
 ### `local init`
 
@@ -468,7 +475,12 @@ superqode local smoke --repo .
 
 ### `local bench`
 
-Measure TTFT and decode speed with a coding prompt. Without `--endpoint`, benches the first model of every running engine. TTFT (prefill) matters most for agent loops.
+Measure first-output latency and a token-rate estimate with a coding prompt.
+Without `--endpoint`, benches the first model of every running engine.
+TTFT includes thinking or tool data; JSON `first_text_s` records visible text
+separately. `completion_tokens` uses server-reported usage and is `null` when
+unavailable. `output_chunks` counts streamed fragments, not tokens. Decode
+estimates use reported tokens and client timing; missing usage produces `n/a`.
 
 ```bash
 superqode local bench

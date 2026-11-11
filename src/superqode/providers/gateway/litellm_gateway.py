@@ -797,7 +797,8 @@ class LiteLLMGateway(GatewayInterface):
         if provider == "ollama":
             # Keep the caller's level. LiteLLM turns "off" into think=false and
             # low/medium/high into think=true for the Ollama chat API.
-            return {"reasoning_effort": level}
+            # Passing "max" unchanged would also become think=false.
+            return {"reasoning_effort": "high" if level == "max" else level}
 
         if provider == "moonshot" and (model or "").lower().split("/")[-1] == "kimi-k3":
             # K3's pay-as-you-go API currently exposes only max effort and

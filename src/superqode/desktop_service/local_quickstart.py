@@ -138,6 +138,7 @@ def catalog(service, project):
         "memory_gb": memory,
         "hardware": asdict(hardware),
         "engines": [e for e in engines if e["id"] in {"ollama", "lmstudio"}],
+        "other_engines": [e for e in engines if e["id"] not in {"ollama", "lmstudio"}],
         "guardrails": build_guardrails(hardware).to_dict(),
         "note": "Starting suggestions, not measured coding-quality guarantees. Context and other apps also need memory.",
     }

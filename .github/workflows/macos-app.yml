@@ -55,6 +55,8 @@ jobs:
           tests/test_local_response_latency.py tests/test_local_model_optimizations.py
           tests/test_codegem_response_lifecycle.py tests/test_codegem_streaming.py
           tests/test_codegem_reliability.py
+          tests/test_codegem_local_streaming.py tests/test_local_runtime_performance.py
+          tests/test_local_airplane.py tests/test_local_stack.py
           tests/test_context_probe.py tests/test_local_context_contract.py -q
       - name: Install isolated Strands runtime and check actual SDK adapters
         env:

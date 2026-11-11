@@ -293,7 +293,7 @@ superqode harness validate codegem.yaml
 
 Useful `runtime.config` settings include `tool_mode` (`auto`, `native`, or
 `json` for Gemma), `max_turns`, `context_window`, `max_output_tokens`,
-`temperature`, `thinking`, `stream` (Gemini), and `embedding`. Use `base_url`
+`temperature`, `thinking`, `stream`, and `embedding`. Use `base_url`
 for LM Studio, llama.cpp or vLLM, `ollama_base_url` for Ollama, and native `thinking_config` for Gemini
 thinking controls. Start with defaults and tune against your own coding tasks.
 New model generations do not inherit guessed thinking controls or context limits.
@@ -335,8 +335,13 @@ entire task's cumulative usage.
 
 Conversations live in `.superqode/codegem/sessions/`. Reuse `--session <id>` to
 continue a headless run. Start a fresh session when changing models, especially
-with Gemini signed history. Gemini text streams live by default; local Gemma
-text is emitted after a complete response.
+with Gemini signed history. Gemini and local Gemma text stream live by default.
+Local Gemma uses Ollama NDJSON or OpenAI-compatible SSE. Native tool arguments
+stay private until the complete turn validates; JSON tool envelopes are buffered
+until they can be parsed safely. `stream: false` retains buffered operation.
+Legacy servers returning a single JSON response are accepted from that same
+request; an interrupted stream fails instead of replaying generation. Explicit
+per-request output limits also apply to local Gemma.
 
 Cost estimates use Google's published Standard prices: cached prompt tokens are
 charged at the published context-cache rate, Gemini 3.1 Pro prompts over 200k

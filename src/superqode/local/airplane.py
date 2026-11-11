@@ -533,17 +533,47 @@ def smoke_airplane(
 ) -> AirplaneReport:
     """Fast offline smoke: no model calls, only local readiness contracts."""
     report = doctor_airplane(repo_path=repo_path, refs=refs)
-    text = "\n".join(["allow_network: false", "fetch", "download", str(int(time.time()))])
-    if "allow_network: false" not in text:
-        report.checks.append(
-            AirplaneCheck(
-                "network_policy", False, "offline harness must set allow_network: false", "error"
-            )
+    from superqode.harness.loader import load_harness_spec
+    from superqode.providers.local.smoke import all_local_provider_ids
+    from yaml import YAMLError
+
+    repo = Path(report.repo)
+    manifest = repo / ".superqode" / "airplane" / "manifest.json"
+    harness = repo / "superqode.airplane.yaml"
+    ok = False
+    detail = "No valid prepared Airplane harness. Run local airplane prepare, then retry."
+    try:
+        if manifest.is_file():
+            saved = json.loads(manifest.read_text(encoding="utf-8"))
+            harness = Path(saved.get("harness_path") or harness).expanduser()
+            if not harness.is_absolute():
+                harness = repo / harness
+        # A project manifest is not permission to read arbitrary external files.
+        if not harness.resolve().is_relative_to(repo.resolve()):
+            raise ValueError("The saved harness is outside this project")
+        spec = load_harness_spec(harness)
+        policy = spec.execution_policy
+        routes = (spec.model_policy.primary, *spec.model_policy.fallbacks)
+        local_ids = set(all_local_provider_ids()) | {"llama.cpp"}
+        ok = (
+            policy.allow_network is False
+            and set(NETWORK_BLOCKED_CATEGORIES).issubset(policy.blocked_categories)
+            and policy.config.get("strict_network") is True
+            and all(route and route.split("/", 1)[0] in local_ids for route in routes)
         )
-    else:
-        report.checks.append(
-            AirplaneCheck("network_policy", True, "offline harness denies network")
+        report.harness_path = str(harness)
+        detail = (
+            "Saved harness declares network denial and local primary/fallback routes."
+            if ok
+            else "Saved harness must deny network/fetch/download and use only local model routes."
         )
+    except (OSError, ValueError, TypeError, AttributeError, YAMLError):
+        pass
+    report.checks.append(AirplaneCheck("network_policy", ok, detail, "info" if ok else "error"))
+    report.warnings.append(
+        "This is a static readiness check, not an egress-isolation test. Inspect local server "
+        "hosts, tools, shell commands and delegation before relying on offline execution."
+    )
     report.status = (
         "ready" if all(c.ok or c.severity == "warning" for c in report.checks) else "warning"
     )
