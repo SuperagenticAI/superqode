@@ -858,6 +858,7 @@ class CodeGemStream:
                     turn.observe(
                         text=isinstance(event, TextDeltaEvent),
                         thinking=isinstance(event, ThinkingDeltaEvent),
+                        tools=isinstance(event, ToolCallStartEvent),
                         terminal=isinstance(event, AssistantDoneEvent),
                     )
                     if isinstance(event, AssistantDoneEvent):

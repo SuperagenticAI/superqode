@@ -291,13 +291,13 @@ class LocalTurn:
         # Never retain a ContextVar token across those yields.
         return await self.run(anext(source))
 
-    def observe(self, *, text=False, thinking=False, terminal=False, usage=None):
+    def observe(self, *, text=False, thinking=False, tools=False, terminal=False, usage=None):
         self.terminal = self.terminal or terminal
         if not self.active or self.started is None:
             return
         changed = False
         elapsed = time.monotonic() - self.started
-        if (text or thinking) and self.data["first_output_s"] is None:
+        if (text or thinking or tools) and self.data["first_output_s"] is None:
             self.data["first_output_s"] = elapsed
             changed = True
         if text and self.data["first_text_s"] is None:

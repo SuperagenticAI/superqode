@@ -2398,6 +2398,7 @@ class LiteLLMGateway(GatewayInterface):
             turn.observe(
                 text=bool(result.content),
                 thinking=bool(result.thinking_content),
+                tools=bool(result.tool_calls),
                 terminal=bool(result.finish_reason),
                 usage=result.usage,
             )
@@ -2436,6 +2437,7 @@ class LiteLLMGateway(GatewayInterface):
                     turn.observe(
                         text=bool(chunk.content),
                         thinking=bool(chunk.thinking_content),
+                        tools=bool(chunk.tool_calls),
                         terminal=bool(chunk.finish_reason),
                         usage=chunk.usage,
                     )
@@ -2445,6 +2447,9 @@ class LiteLLMGateway(GatewayInterface):
         self, messages, model, provider, temperature, max_tokens, tools, tool_choice, **kwargs
     ):
         from contextlib import aclosing
+
+        budget = kwargs.get("task_budget")
+        credited = 0
 
         if tool_choice == "none":
             tools = None
@@ -2494,6 +2499,12 @@ class LiteLLMGateway(GatewayInterface):
                 )
             async with aclosing(chunks):
                 async for chunk in chunks:
+                    if budget is not None and chunk.usage is not None:
+                        # Usage can be repeated on a terminal chunk. Credit
+                        # cumulative totals once for both completion modes.
+                        total = chunk.usage.total_tokens
+                        budget.credit(max(0, total - credited))
+                        credited = max(credited, total)
                     yield chunk
         except GatewayError:
             raise

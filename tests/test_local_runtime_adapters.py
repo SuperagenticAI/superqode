@@ -189,3 +189,50 @@ async def test_gateway_refuses_endpoint_override_before_sending_any_request(monk
             provider="local-openai",
             api_base="http://127.0.0.1:9000/v1",
         )
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize("streaming", [False, True])
+async def test_native_local_usage_exhausts_the_shared_task_budget(monkeypatch, streaming):
+    from superqode.providers.gateway.base import TaskTokenBudget, TaskBudgetExceeded
+    from superqode.providers.gateway.litellm_gateway import LiteLLMGateway
+
+    spec = runtimes.validate({"id": "budget", "endpoint": "http://127.0.0.1:8000/v1"})
+    monkeypatch.setenv("SUPERQODE_LOCAL_RUNTIME", json.dumps(spec.public()))
+    requests = []
+
+    def respond(request):
+        requests.append(request)
+        return httpx.Response(
+            200,
+            json={
+                "choices": [{"message": {"content": "ok"}, "finish_reason": "stop"}],
+                "usage": {"prompt_tokens": 3, "completion_tokens": 2},
+            },
+        )
+
+    original = httpx.AsyncClient
+    monkeypatch.setattr(
+        httpx,
+        "AsyncClient",
+        lambda **kwargs: original(**{**kwargs, "transport": httpx.MockTransport(respond)}),
+    )
+    budget = TaskTokenBudget(5)
+    gateway = LiteLLMGateway()
+    params = dict(
+        messages=[Message("user", "Hello")],
+        provider="local-openai",
+        model="fixture",
+        task_budget=budget,
+    )
+
+    async def generate():
+        if streaming:
+            return [chunk async for chunk in gateway.stream_completion(**params)]
+        return await gateway.chat_completion(**params)
+
+    await generate()
+    assert budget.used == 5
+    with pytest.raises(TaskBudgetExceeded):
+        await generate()
+    assert len(requests) == 1, "An exhausted task must fail before another inference request"

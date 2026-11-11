@@ -311,7 +311,11 @@ async def stream(
                             usage=Usage(
                                 prompt_tokens=usage.get("prompt_tokens", 0),
                                 completion_tokens=usage.get("completion_tokens", 0),
-                                total_tokens=usage.get("total_tokens", 0),
+                                total_tokens=usage.get(
+                                    "total_tokens",
+                                    usage.get("prompt_tokens", 0)
+                                    + usage.get("completion_tokens", 0),
+                                ),
                             )
                             if usage
                             else None,

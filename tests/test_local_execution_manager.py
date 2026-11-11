@@ -107,3 +107,12 @@ async def test_timing_records_do_not_store_prompts_or_credentials(monkeypatch):
     data = json.dumps(snapshot())
     assert "private-cloud-key" not in data
     assert "prompt" not in data and "reply" not in data
+
+
+@pytest.mark.asyncio
+async def test_tool_only_output_has_a_first_output_time_without_fabricating_text():
+    async with LocalTurn("local-openai", "tool-only") as turn:
+        turn.observe(tools=True, terminal=True)
+    record = snapshot()["requests"][0]
+    assert record["first_output_s"] is not None
+    assert record["first_text_s"] is None

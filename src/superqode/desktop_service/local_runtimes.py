@@ -275,6 +275,7 @@ async def verify(profile, model, token):
             turn.observe(
                 text=bool(chunk.content),
                 thinking=bool(chunk.thinking_content),
+                tools=bool(chunk.tool_calls),
                 terminal=bool(chunk.finish_reason),
                 usage=chunk.usage,
             )
