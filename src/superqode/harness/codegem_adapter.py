@@ -126,10 +126,20 @@ class CodeGemHarnessProtocolAdapter(PiPyHarnessProtocolAdapter):
                     raise PermissionError(f"CodeGem execution policy denies {name}")
 
                 guarded.append(replace(tool, execute_fn=denied))
+        stream_fn = CodeGemStream(config)
+        token_limit = request.metadata.get("agent_max_tokens")
+        if request.provider in {"google", "gemini"} and token_limit is not None:
+            provider_stream = stream_fn
+
+            def stream_fn(model, context, stream_options):
+                return provider_stream(
+                    model, context, replace(stream_options, max_tokens=token_limit)
+                )
+
         options = CodingSessionOptions(
             cwd=working_directory,
             model=model,
-            stream_fn=CodeGemStream(config),
+            stream_fn=stream_fn,
             tool_names=(),
             extra_tools=tuple(guarded),
             tool_transform=guard_pipy_tools,

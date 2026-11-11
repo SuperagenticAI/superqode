@@ -48,7 +48,7 @@ from superqode.pipy.provider_events import (
     ToolCallEndEvent,
 )
 from superqode.pipy.signals import is_aborted
-from .profiles import resolve_profile
+from .profiles import gemini_thinking_level, resolve_profile
 
 # Google's latest-model guide for Gemini 4: "Remove temperature, top_p, top_k,
 # and candidate_count ... sampling parameters are ignored".
@@ -937,6 +937,16 @@ class CodeGemStream:
             # models keep the 32,768 default.
             cap = _STREAMING_CAP if stream and gemini4 else _NON_STREAMING_CAP
             generation["maxOutputTokens"] = int(self.config.get("max_output_tokens", cap))
+        if options.max_tokens is not None:
+            if (
+                isinstance(options.max_tokens, bool)
+                or not isinstance(options.max_tokens, int)
+                or options.max_tokens <= 0
+            ):
+                raise ValueError("CodeGem max_tokens must be a positive integer")
+            generation["maxOutputTokens"] = min(
+                generation.get("maxOutputTokens", options.max_tokens), options.max_tokens
+            )
         if gemini4:
             ignored = [k for k in _SAMPLING_KEYS if k in self.config]
             if ignored:
@@ -957,6 +967,10 @@ class CodeGemStream:
         if gemma and not raw_thinking and "thinking" in self.config:
             # Gemma on the Gemini API: "high" for enabled, "minimal" for disabled.
             raw_thinking = {"thinkingLevel": "HIGH" if self.config["thinking"] else "MINIMAL"}
+        if not raw_thinking and options.reasoning is not None:
+            raw_thinking = {
+                "thinkingLevel": gemini_thinking_level(model.id, profile, options.reasoning)
+            }
         thinking = _thinking_config(raw_thinking, model.id, profile)
         if thinking:
             generation["thinkingConfig"] = thinking
@@ -999,7 +1013,14 @@ class CodeGemStream:
             done = None
             try:
                 async for item in self._gemini_hops(
-                    client, url, body, headers, options.signal, profile, stream
+                    client,
+                    url,
+                    body,
+                    headers,
+                    options.signal,
+                    profile,
+                    stream,
+                    output_limited=options.max_tokens is not None,
                 ):
                     if item[0] == "parts":
                         for part in item[1]:
@@ -1036,7 +1057,9 @@ class CodeGemStream:
             "length" if reason == "MAX_TOKENS" else "toolUse" if message.tool_calls else "stop"
         )
 
-    async def _gemini_hops(self, client, url, body, headers, signal, profile, stream=False):
+    async def _gemini_hops(
+        self, client, url, body, headers, signal, profile, stream=False, *, output_limited=False
+    ):
         """Run (stream)GenerateContent, following long-decode continuation tokens.
 
         Per Google's long decode guide, each hop resends the same request plus
@@ -1108,6 +1131,11 @@ class CodeGemStream:
             hop_parts = (candidate.get("content") or {}).get("parts") or []
             parts.extend(copy.deepcopy(hop_parts))
             token = candidate.get("continuationToken")
+            # An explicit per-turn budget must not silently start more decode
+            # requests (or raise the output cap). Report truncation to the caller.
+            if output_limited and reason in {"CONTINUATION", "MAX_TOKENS"}:
+                reason = "MAX_TOKENS"
+                token = None
             if reason == "CONTINUATION" and token:
                 hops += 1
                 continue
@@ -1199,6 +1227,8 @@ class CodeGemStream:
                             last_usage = chunk["usageMetadata"]
                         if chunk.get("promptFeedback"):
                             feedback = chunk["promptFeedback"]
+                            if feedback.get("blockReason"):
+                                break
                         candidates = chunk.get("candidates") or []
                         if not candidates:
                             continue
@@ -1209,6 +1239,10 @@ class CodeGemStream:
                             yield ("parts", new)
                         if candidate.get("finishReason"):
                             final = candidate
+                            # The terminal frame completes this hop, even if
+                            # the server/proxy keeps its HTTP connection open.
+                            # Close it before any tools or continuation hop run.
+                            break
                         if candidate.get("continuationToken") and not candidate.get("finishReason"):
                             committed.extend(pending)
                             pending = []
