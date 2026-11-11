@@ -1410,7 +1410,7 @@ class DesktopService:
                 return local_comparisons.start(self, params)
             if action == "history":
                 return self._all(
-                    "SELECT id,title,status,created,result FROM jobs WHERE project=? AND kind='local-comparison' ORDER BY created DESC LIMIT 30",
+                    "SELECT id,title,status,created FROM jobs WHERE project=? AND kind='local-comparison' ORDER BY created DESC LIMIT 30",
                     (params["project"],),
                 )
             raise ValueError("Unknown local comparison action")

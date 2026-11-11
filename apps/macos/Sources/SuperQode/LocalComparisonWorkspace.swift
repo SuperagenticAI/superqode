@@ -136,7 +136,7 @@ struct LocalComparisonWorkspace: View {
         Spacer()
         if running { Button("Stop") { app.perform { _ = try await app.engine.call("jobs.cancel", ["id": job]) } } }
       }
-      DisclosureGroup("Progress and output") {
+      DisclosureGroup("Recent progress and output") {
         Text((detail["events"] as? [[String: Any]] ?? []).compactMap { row -> String? in
           let data = row["data"] as? [String: Any] ?? [:]
           return data["message"] as? String ?? data["text"] as? String
@@ -222,6 +222,8 @@ struct LocalComparisonWorkspace: View {
   }
   private func poll() async {
     guard !job.isEmpty, !polling else { return }
+    if !detail.isEmpty, !running, detail["has_more_events"] as? Bool != true,
+      detail["event_stream_open"] as? Bool != true { return }
     polling = true
     defer { polling = false }
     let identity = job
@@ -232,7 +234,7 @@ struct LocalComparisonWorkspace: View {
       after = page.nextSequence
       value["events"] = Array(((detail["events"] as? [[String: Any]] ?? []) + page.events).suffix(60))
       let finished = (detail.isEmpty || running) && !["running", "queued", "cancelling", "needs_approval"].contains(string(value, "status"))
-      detail = value
+      if !NSDictionary(dictionary: detail).isEqual(to: value) { detail = value }
       if finished { history = try await app.engine.call("local.comparisons.history", ["project": app.projectID]) as? [[String: Any]] ?? [] }
     } catch { if !Task.isCancelled { failure = error.localizedDescription } }
   }

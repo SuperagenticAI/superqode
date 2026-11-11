@@ -185,6 +185,8 @@ def test_review_then_real_worker_grades_models_independently_without_changing_pr
     assert all(b["max_tokens"] <= 1024 for b in models["requests"])
     assert not (root / "sq_local_trial.py").exists()
     assert (root / "README.md").read_text() == "PRESERVE_ME"
+    history = service.dispatch("local.comparisons.history", {"project": project["id"]})
+    assert history[0]["id"] == job["id"] and "result" not in history[0]
     assert models["key"] not in "\n".join(service.db.iterdump())
     assert models["key"] not in (service.root / (job["id"] + ".log")).read_text()
 
