@@ -21,6 +21,7 @@ class RuntimeSpec:
     tools: bool | None = None
     docs_url: str = ""
     template: str = "custom"
+    include_usage: bool = True
 
     def public(self):
         return asdict(self)
@@ -92,6 +93,9 @@ def validate(data):
     tools = data.get("tools")
     if type(context) is not int or not 512 <= context <= 262144:
         raise ValueError("Choose context between 512 and 262144 tokens")
+    include_usage = data.get("include_usage", True)
+    if type(include_usage) is not bool:
+        raise ValueError("Usage reporting must be enabled or disabled")
     if tools is not None and type(tools) is not bool:
         raise ValueError("Tool capability must be supported, unsupported or unknown")
     if not name or len(name) > 100 or any(ord(c) < 32 for c in name):
@@ -112,6 +116,7 @@ def validate(data):
         tools=tools,
         docs_url=docs,
         template=template,
+        include_usage=include_usage,
     )
 
 
@@ -173,6 +178,9 @@ async def stream(
     max_tokens=None,
     temperature=None,
     transport=None,
+    response_format=None,
+    reasoning_effort=None,
+    timeout=180,
 ):
     from superqode.providers.gateway.base import StreamChunk, Usage
     from superqode.providers.local.wire_stream import local_response
@@ -186,8 +194,34 @@ async def stream(
     body_messages = [
         {k: v for k, v in asdict(message).items() if v is not None} for message in messages
     ]
-    # Provider maxima do not override the user's explicit loaded-context cap.
-    output = min(max_tokens or 2048, max(128, spec.context // 4))
+    if max_tokens is not None and (type(max_tokens) is not int or max_tokens <= 0):
+        raise ValueError("Local output limit must be a positive integer")
+    import math
+
+    if temperature is not None and (
+        type(temperature) not in {int, float} or not math.isfinite(temperature) or temperature < 0
+    ):
+        raise ValueError("Local temperature must be a finite, non-negative number")
+    if type(timeout) not in {int, float} or not math.isfinite(timeout) or not 1 <= timeout <= 1800:
+        raise ValueError("Local request timeout must be between 1 and 1800 seconds")
+    if response_format is not None and (
+        not isinstance(response_format, dict)
+        or response_format.get("type") not in {"text", "json_object", "json_schema"}
+    ):
+        raise ValueError("Use an OpenAI-compatible response_format dictionary for this runtime")
+    if reasoning_effort is not None and reasoning_effort not in (
+        "off",
+        "none",
+        "minimal",
+        "low",
+        "medium",
+        "high",
+        "max",
+    ):
+        raise ValueError("Choose a supported reasoning effort for the local server")
+    # Explicit output bounds are honoured up to the available context. The
+    # smaller quarter-window value is only the default, not a hidden override.
+    output = max_tokens if max_tokens is not None else min(2048, max(128, spec.context // 4))
     tool_wire = [{"type": "function", "function": asdict(t)} for t in tools] if tools else None
     kept, output = guard_request(body_messages, tool_wire, spec.context, output)
     from .execution import annotate
@@ -203,8 +237,13 @@ async def stream(
         "messages": body_messages,
         "max_tokens": output,
         "stream": True,
-        "stream_options": {"include_usage": True},
     }
+    if spec.include_usage:
+        body["stream_options"] = {"include_usage": True}
+    if response_format is not None:
+        body["response_format"] = response_format
+    if reasoning_effort is not None:
+        body["reasoning_effort"] = reasoning_effort
     if temperature is not None:
         body["temperature"] = temperature
     if tool_wire:
@@ -214,7 +253,7 @@ async def stream(
         trust_env=False,
         follow_redirects=False,
         transport=transport,
-        timeout=httpx.Timeout(180, connect=5),
+        timeout=httpx.Timeout(timeout, connect=5),
     ) as client:
         async with client.stream(
             "POST", spec.endpoint + "/chat/completions", json=body, headers=headers
@@ -222,6 +261,18 @@ async def stream(
             if response.is_redirect:
                 raise ValueError(
                     "Local inference redirects are refused; use the direct loopback URL"
+                )
+            if response.status_code in {401, 403}:
+                raise ValueError(
+                    "The local server rejected its API key. Update this profile's key and retry."
+                )
+            if response.status_code == 404:
+                raise ValueError(
+                    "The selected model or API route was not found. Check the base URL and refresh the server's models."
+                )
+            if response.status_code == 400:
+                raise ValueError(
+                    "The local server rejected the request. Check context, tool parser, reasoning/structured-output options and usage reporting support."
                 )
             response.raise_for_status()
             async with aclosing(local_response(response, protocol="openai", live=True)) as events:

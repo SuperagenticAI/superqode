@@ -21,7 +21,20 @@ import Foundation
     catch { rejected = error.localizedDescription.contains("changed") }
     let after = try await engine.call("local.models.jobs") as? [[String: Any]] ?? []
     guard rejected, before.count == after.count else { throw EngineError(message: "Reviewing a model download started an operation or accepted a stale plan.") }
-    return "passed; shared catalog, storage/Hub setup, 28-runtime matrix and digest-bound download/Core-check review without transferring weights or making model calls"
+    let runtimeID = "native-smoke-" + UUID().uuidString.lowercased()
+    let saved = try await engine.call("local.runtimes.save", ["id": runtimeID, "template": "custom", "name": "Native fixture", "endpoint": "http://127.0.0.1:9/v1", "context": 4096, "include_usage": false]) as? [String: Any] ?? [:]
+    let runtimes = try await engine.call("local.runtimes.catalog") as? [String: Any] ?? [:]
+    let execution = try await engine.call("local.execution.status") as? [String: Any] ?? [:]
+    let apple = try await engine.call("local.apple.status") as? [String: Any] ?? [:]
+    let recipe = try await engine.call("local.runtimes.setup.plan", ["id": runtimeID]) as? [String: Any] ?? [:]
+    _ = try await engine.call("local.runtimes.delete", ["id": runtimeID])
+    guard saved["context"] as? Int == 4096, saved["include_usage"] as? Bool == false,
+      (runtimes["profiles"] as? [[String: Any]])?.contains(where: { string($0, "id") == runtimeID }) == true,
+      (execution["concurrency"] as? Int ?? 0) > 0,
+      apple["available"] is Bool, !string(apple, "guidance").isEmpty,
+      recipe["automatic"] as? Bool == false
+    else { throw EngineError(message: "Native runtime profiles, execution status, Apple availability or manual setup guidance failed.") }
+    return "passed; shared catalog, 28-runtime matrix, digest-bound review, compatible profile round-trip, execution status and native Apple availability without transferring weights or making model calls"
   }
 
   func smokeBackgroundEngine() async throws -> String {

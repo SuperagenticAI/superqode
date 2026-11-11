@@ -91,6 +91,9 @@ def dispatch(service, action, params):
         }
         record["credential_revision"] = previous.get("credential_revision", "")
         record["remember_key"] = params.get("remember_key") is True
+        for field in ("last_check_job", "last_operation_job"):
+            if previous.get(field):
+                record[field] = previous[field]
         save(service, record)
         return record
     identity = str(params.get("id") or "")
@@ -117,6 +120,13 @@ def dispatch(service, action, params):
         return {"configured": value is not None}
     if action == "delete":
         with service.lock:
+            service._write(
+                "DELETE FROM local_model_bindings WHERE provider='local-openai' AND EXISTS "
+                "(SELECT 1 FROM local_runtime_bindings r WHERE r.runtime=? "
+                "AND r.project=local_model_bindings.project "
+                "AND r.harness=local_model_bindings.harness AND r.model=local_model_bindings.model)",
+                (identity,),
+            )
             service._write("DELETE FROM settings WHERE key=?", (PREFIX + identity,))
             service._write("DELETE FROM local_runtime_bindings WHERE runtime=?", (identity,))
             service.runtime_keys.pop(identity, None)
@@ -135,7 +145,7 @@ def dispatch(service, action, params):
             raise ValueError(reviewed["guidance"])
         if params.get("expected_digest") != reviewed["digest"]:
             raise ValueError("Runtime installation plan changed; review it again")
-        return service.start(
+        job = service.start(
             str(params.get("project") or ""),
             "local-runtime",
             {
@@ -143,6 +153,11 @@ def dispatch(service, action, params):
                 "command_id": params.get("command_id") or uuid4().hex,
             },
         )
+        with service.lock:
+            current = read(service, identity)
+            current["last_operation_job"] = job["id"]
+            save(service, current)
+        return job
     if action == "probe":
         try:
             models = asyncio.run(runtimes.models(spec, key(service, identity)))
@@ -172,8 +187,12 @@ def dispatch(service, action, params):
                 "command_id": params.get("command_id") or uuid4().hex,
             },
         )
-        profile["last_check_job"] = job["id"]
-        save(service, profile)
+        with service.lock:
+            current = read(service, identity)
+            current["last_operation_job"] = job["id"]
+            if action == "test":
+                current["last_check_job"] = job["id"]
+            save(service, current)
         return job
     if action == "use":
         project = str(params.get("project") or "")
@@ -190,7 +209,10 @@ def dispatch(service, action, params):
             if not checked(profile, model):
                 raise ValueError("Run the read-only tool check before choosing a coding harness")
             if not any(
-                row["id"] == harness and row["selectable"] for row in harnesses(service, project)
+                row["id"] == harness
+                and row["selectable"]
+                and row["backend"] in {"builtin", "pipy", "rlm"}
+                for row in harnesses(service, project)
             ):
                 raise ValueError("Choose a compatible local coding harness")
         with service.lock:

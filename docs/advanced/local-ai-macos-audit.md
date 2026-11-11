@@ -63,12 +63,12 @@ and evaluate their coding behavior rather than reproduce their GPU engines.
 | [LM Studio](https://lmstudio.ai/docs/developer/openai-compat/chat-completions) | OpenAI-compatible streaming; [native model metadata](https://lmstudio.ai/docs/developer/rest/list) distinguishes loaded instances from model maxima. | Guided setup, load context, installed inventory and binding. Core/PiPy stream through the gateway; CodeGem now streams compatible Gemma. API authentication and older native API versions still need their own setup handling. |
 | [MLX LM](https://github.com/ml-explore/mlx-lm) | Apple Silicon inference, streaming generation, quantization and prompt caching. Its [server source](https://github.com/ml-explore/mlx-lm/blob/main/mlx_lm/server.py) exposes compatible HTTP routes. | Isolated runtime install and reviewed model/server operations in advanced Local AI; newly visible on the first screen. Gateway MLX streaming is fixed in this PR. Guided newcomer downloads remain focused on Ollama and LM Studio. MLX files and GGUF files are different formats. |
 | [llama.cpp](https://github.com/ggml-org/llama.cpp/blob/master/tools/server/README.md) | GGUF serving, Metal support, context/slots, KV-cache types, compatible streaming, template-dependent tools and prompt reuse. | Managed advanced operations and provider routing, now visible from the first screen. The server's loaded context and correct tool template remain necessary; a model-card maximum is insufficient. |
-| [vLLM Metal](https://github.com/vllm-project/vllm-metal) | Apple Silicon plugin using MLX, paged scheduling and model-specific support. Official [memory-tier recipes](https://docs.vllm.ai/projects/vllm-metal/en/latest/recipes/) cover coding/tool parsers. | Existing `vllm` provider is a possible HTTP integration boundary. There is no dedicated, tested vLLM Metal install/load lifecycle in the Mac workbench. Do not use the Linux/NVIDIA installation recipe on a Mac or claim first-class support before testing the exact model/parser. |
-| [oMLX](https://github.com/jundot/omlx) | Compatible APIs, streaming usage, multi-model serving and memory/SSD prefix-cache tiers; tools depend on the model template. | Candidate external compatible server. No dedicated SuperQode adapter, credential/setup flow or tested lifecycle yet. SSD caching can help repeated prefixes but introduces disk and eviction tradeoffs; it is not a universal speedup. |
-| [Jan](https://docs.jan.ai/desktop/api-server) | Configurable compatible local API, default `127.0.0.1:1337/v1`, optional API key. | No named discovery or managed setup. A future custom endpoint flow must handle authentication, context discovery and tools explicitly rather than impersonate LM Studio. |
-| [GPT4All](https://docs.gpt4all.io/gpt4all_api_server/home.html) | Opt-in localhost compatible server, default port 4891. | No named integration. Chat compatibility does not establish tool-capable coding compatibility. |
-| [llamafile](https://github.com/mozilla-ai/llamafile) | Local distribution built on llama.cpp; current API behavior depends on its version. | No dedicated managed lifecycle or certification. Check its actual endpoint and tool template before reusing a compatible route. |
-| [Apple Foundation Models](https://developer.apple.com/documentation/foundationmodels) | Framework includes on-device and server model access, availability checks, structured generation and tools. | No native Foundation Models backend. A useful candidate for lightweight local classification or summarization after evaluation, not an assumed replacement for a coding model. Explicit on-device selection would be required for an offline claim. |
+| [vLLM Metal](https://github.com/vllm-project/vllm-metal) | Apple Silicon plugin using MLX, paged scheduling and model-specific support. Official [memory-tier recipes](https://docs.vllm.ai/projects/vllm-metal/en/latest/recipes/) cover coding/tool parsers. | Existing `vllm` provider is a possible HTTP integration boundary. The Mac runtime workspace now has a named profile, reviewed Homebrew installation and tool checks. Model loading/server startup uses the official vendor recipe; exact artifacts/parsers still need real hardware evaluation. |
+| [oMLX](https://github.com/jundot/omlx) | Compatible APIs, streaming usage, multi-model serving and memory/SSD prefix-cache tiers; tools depend on the model template. | A named compatible profile now handles its endpoint, session/Keychain key, reviewed Homebrew setup and supervised tool checks. Server/model lifecycle remains vendor-owned. SSD caching can help repeated prefixes but introduces disk and eviction tradeoffs; it is not a universal speedup. |
+| [Jan](https://docs.jan.ai/desktop/api-server) | Configurable compatible local API, default `127.0.0.1:1337/v1`, optional API key. | A named profile template now accepts its explicit loopback URL and key without impersonating LM Studio. Vendor setup is manual; the shared adapter probes models and requires a tool check before coding. |
+| [GPT4All](https://docs.gpt4all.io/gpt4all_api_server/home.html) | Opt-in localhost compatible server, default port 4891. | A named profile defaults to chat-only. Chat compatibility does not establish tool-capable coding compatibility. |
+| [llamafile](https://github.com/mozilla-ai/llamafile) | Local distribution built on llama.cpp; current API behavior depends on its version. | The custom compatible profile can use its loopback endpoint. There is no dedicated managed lifecycle or certification; check its actual API and tool template. |
+| [Apple Foundation Models](https://developer.apple.com/documentation/foundationmodels) | Framework includes on-device and server model access, availability checks, structured generation and tools. | The app now bundles an explicit native on-device text bridge with availability, streaming and cancellation, plus opt-in utility routing. No coding tools/images or cloud fallback. The older optional Python utility adapter remains supported; actual model quality/performance still needs evaluation. |
 
 SGLang and other self-hosted provider routes also exist in the engine. They are
 not automatically managed or verified Mac installations. Open WebUI and similar
@@ -88,7 +88,7 @@ The underlying engine also has local policy packs, model discovery, repository
 sizing, local code indexing, optional local embeddings, endpoint benchmarks,
 local coding evaluations, role recommendations and Airplane planning. Some are
 reached through general workflow forms or the CLI rather than dedicated Mac
-screens. Their existence in Python is not full native UX parity.
+screens. Their existence in Python is not full native UX parity. The new runtime workspace brings shared queue/latency/memory observations, compatible profiles and explicit Apple availability into native controls; it links to the existing benchmark/evaluation workflows.
 
 For Qwen, GLM, DeepSeek, MiniMax, Kimi and Gemma, validate the complete tuple:
 model artifact and revision, quantization, runtime version, chat/tool parser,
@@ -127,13 +127,14 @@ engine benchmarking. `n/a` is more accurate than fabricating missing data.
 2. **Unified native performance report.** Put measured timings, loaded context,
    output limits, residency and evaluation history beside the active model.
    Explain whether a wait is loading, prefill, thinking, queueing or tools.
-   Current workflows expose parts of this; there is no single complete native
-   diagnostic panel or shared model scheduler across all projects/harnesses.
-3. **First-class custom endpoints.** Add named/manual external runtimes with
-   explicit loopback URL, optional key, capability/context probe and read-only
-   smoke test. The workbench currently uses fixed loopback ports. Provider env
-   overrides in the engine are a separate mechanism, not a finished Mac setup
-   flow for Jan, oMLX or vLLM Metal.
+   A native panel and shared local turn coordinator are now implemented.
+   Server-only loading/prefill/decode data still varies by protocol, and GPU
+   model attribution and production-model performance need further work.
+3. **Extend tested runtime coverage.** Named and custom loopback profiles now
+   provide per-profile credentials, declared context, supervised checks and
+   coding/chat bindings. Expand real model/runtime evaluations, richer loaded
+   context metadata and vendor lifecycle support. The original five-engine
+   workbench still has fixed ports; named profiles are an explicit alternative.
 4. **Expand guided setup only with evidence.** Bring installed MLX/GGUF reuse,
    memory-tier presets and supported parser selection into the same reviewed
    setup flow after the model/runtime pair passes readiness and coding tasks.
@@ -173,3 +174,20 @@ retesting and profiling before a performance release is declared ready. The
 same CI run also exposed stale source-hash assertions and missing environment
 documentation; these are corrected in this audit. Their cleanup does not prove
 that the native responsiveness gate has passed.
+
+## Implementation follow-up
+
+The runtime/Apple follow-up is documented in [Local runtimes and Apple on-device
+inference](local-runtime-workspace.md). It adds explicit profiles, reviewed
+vLLM Metal/oMLX install plans, cancellable checks/warmup, shared generation slots,
+prompt-free measurements and the bundled native Apple text bridge. The native
+bridge also plugs into existing utility hooks, so the app does not require the
+optional Python Apple SDK.
+
+The native build and first app smoke for follow-up head `b7a19363` passed in
+[CI](https://github.com/SuperagenticAI/superqode/actions/runs/43113624599), including
+the unchanged navigation responsiveness gate. Apple bridge availability was
+checked on the runner. Actual on-device generation is tested only if the system
+model is available; protocol tests with a fixture helper do not replace that.
+Subsequent revisions must keep those checks green. This source and protocol
+work does not establish a universal inference-speed improvement.

@@ -140,18 +140,15 @@ def snapshot():
     if not enabled():
         return {"enabled": False, "concurrency": 1, "requests": []}
     with database() as db:
-        rows = list(db.execute("SELECT * FROM measurements ORDER BY created DESC LIMIT 100"))
+        rows = list(
+            db.execute("SELECT * FROM measurements WHERE status IN ('queued','generating')")
+        )
         for row in rows:
-            if row["status"] in {"queued", "generating"}:
-                try:
-                    os.kill(row["pid"], 0)
-                except ProcessLookupError:
-                    db.execute(
-                        "UPDATE measurements SET status='interrupted',updated=? WHERE id=?",
-                        (time.time(), row["id"]),
-                    )
-                except PermissionError:
-                    pass
+            if not lease_alive(row["id"]):
+                db.execute(
+                    "UPDATE measurements SET status='interrupted',updated=? WHERE id=?",
+                    (time.time(), row["id"]),
+                )
         rows = list(db.execute("SELECT * FROM measurements ORDER BY created DESC LIMIT 40"))
         limit = db.execute("SELECT concurrency FROM settings WHERE id=1").fetchone()[0]
     return {
@@ -170,11 +167,34 @@ def snapshot():
     }
 
 
+def lease_alive(identity):
+    import fcntl
+
+    path = directory() / ("request-" + identity + ".lock")
+    try:
+        fd = os.open(path, os.O_RDWR | os.O_NOFOLLOW)
+    except FileNotFoundError:
+        return False
+    try:
+        fcntl.flock(fd, fcntl.LOCK_EX | fcntl.LOCK_NB)
+    except BlockingIOError:
+        return True
+    else:
+        try:
+            path.unlink()
+        except FileNotFoundError:
+            pass
+        return False
+    finally:
+        os.close(fd)
+
+
 class LocalTurn:
     def __init__(self, provider, model):
         self.provider, self.model = provider, model
         self.id = uuid4().hex
         self.fd = None
+        self.request_fd = None
         self.started = None
         self.queued = time.monotonic()
         self.terminal = False
@@ -197,6 +217,14 @@ class LocalTurn:
                 "INSERT INTO measurements VALUES(?,?,?,?,?,?) ON CONFLICT(id) DO UPDATE SET status=excluded.status,updated=excluded.updated,data=excluded.data",
                 (self.id, os.getpid(), now, now, status, json.dumps(self.data)),
             )
+
+    def queued_lease(self):
+        import fcntl
+
+        path = directory() / ("request-" + self.id + ".lock")
+        self.request_fd = os.open(path, os.O_CREAT | os.O_RDWR | os.O_NOFOLLOW, 0o600)
+        fcntl.flock(self.request_fd, fcntl.LOCK_EX | fcntl.LOCK_NB)
+        self.save("queued")
 
     def try_slot(self):
         import fcntl
@@ -223,8 +251,8 @@ class LocalTurn:
         self.sync_token = _current.set(self)
         if not self.active:
             return self
-        self.save("queued")
         try:
+            self.queued_lease()
             while not self.try_slot():
                 time.sleep(0.05)
         except BaseException:
@@ -242,8 +270,8 @@ class LocalTurn:
     async def __aenter__(self):
         if not self.active:
             return self
-        self.save("queued")
         try:
+            self.queued_lease()
             while not self.try_slot():
                 await asyncio.sleep(0.05)
         except BaseException:
@@ -284,16 +312,25 @@ class LocalTurn:
     def close(self, status):
         if not self.active:
             return
-        if self.fd is not None:
-            os.close(self.fd)
-            self.fd = None
-        if self.started is not None:
-            self.data["generation_s"] = time.monotonic() - self.started
-        self.save(status)
-        with database() as db:
-            db.execute(
-                "DELETE FROM measurements WHERE status NOT IN ('queued','generating') AND id NOT IN (SELECT id FROM measurements ORDER BY created DESC LIMIT 200)"
-            )
+        try:
+            if self.started is not None:
+                self.data["generation_s"] = time.monotonic() - self.started
+            self.save(status)
+            with database() as db:
+                db.execute(
+                    "DELETE FROM measurements WHERE status NOT IN ('queued','generating') AND id NOT IN (SELECT id FROM measurements ORDER BY created DESC LIMIT 200)"
+                )
+        finally:
+            if self.fd is not None:
+                os.close(self.fd)
+                self.fd = None
+            if self.request_fd is not None:
+                os.close(self.request_fd)
+                self.request_fd = None
+                try:
+                    (directory() / ("request-" + self.id + ".lock")).unlink()
+                except FileNotFoundError:
+                    pass
 
     async def __aexit__(self, kind, value, traceback):
         self.close(

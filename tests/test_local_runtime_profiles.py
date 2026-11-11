@@ -251,3 +251,53 @@ def test_core_executes_a_real_read_tool_through_the_external_runtime(desktop, se
         "LOCAL_READ_SENTINEL" in json.dumps(row["body"]["messages"]) for row in server["requests"]
     ), [[t["function"]["name"] for t in row["body"].get("tools", [])] for row in server["requests"]]
     assert any(row["body"].get("tools") for row in server["requests"][1:])
+
+
+def test_deleting_a_profile_clears_only_its_model_routes(desktop, server):
+    service, project, _ = desktop
+    save(service, server)
+    service.dispatch(
+        "local.runtimes.use",
+        {"id": "my-local", "project": project["id"], "model": "fixture", "harness": "no-tool"},
+    )
+    service._write(
+        "INSERT INTO local_model_bindings VALUES(?,?,?,?,?)",
+        (project["id"], "no-tool", "ollama", "fixture", "http://127.0.0.1:11434"),
+    )
+    service.dispatch("local.runtimes.delete", {"id": "my-local"})
+    rows = service._all("SELECT provider FROM local_model_bindings")
+    assert [row["provider"] for row in rows] == ["ollama"]
+    assert not service._all("SELECT * FROM local_runtime_bindings")
+    assert "my-local" not in service.runtime_keys
+
+
+def test_profile_operations_survive_saving_without_enabling_external_sdk_harnesses(
+    desktop, server, monkeypatch
+):
+    service, project, _ = desktop
+    profile = save(service, server)
+    current = local_runtimes.read(service, profile["id"])
+    current["checks"] = {
+        "fixture": {"tool_call_success": True, "digest": local_runtimes.validation_digest(current)}
+    }
+    current["last_operation_job"] = "last-install"
+    current["last_check_job"] = "last-check"
+    local_runtimes.save(service, current)
+    service.dispatch("local.runtimes.save", profile)
+    saved = local_runtimes.read(service, profile["id"])
+    assert saved["last_operation_job"] == "last-install"
+    assert saved["last_check_job"] == "last-check"
+    monkeypatch.setattr(
+        "superqode.desktop_service.local_models.harnesses",
+        lambda *_: [{"id": "external-sdk", "selectable": True, "backend": "strands"}],
+    )
+    with pytest.raises(ValueError, match="compatible local coding harness"):
+        service.dispatch(
+            "local.runtimes.use",
+            {
+                "id": "my-local",
+                "project": project["id"],
+                "model": "fixture",
+                "harness": "external-sdk",
+            },
+        )

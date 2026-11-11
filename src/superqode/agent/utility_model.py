@@ -4,12 +4,13 @@ These calls are small, frequent, and quality-tolerant, so they should not
 burn main-model tokens or main-model latency. ``SUPERQODE_UTILITY_PROVIDER``
 redirects them:
 
-- ``apple-fm``: the on-device Apple Foundation Model (free, instant, macOS)
+- ``apple-foundation/system-on-device``: the explicit native on-device route
+- ``apple-fm``: the legacy Apple model adapter
 - ``provider/model`` (for example ``ollama/gemma4:e4b``): any gateway route
 - unset: utility calls use the session's own provider and model
 
-Routing fails open: if the utility route errors, the call falls back to the
-session model rather than failing the feature.
+The explicit native Apple route never falls back. Other legacy utility routes
+retain their session-model fallback when the override errors.
 """
 
 from __future__ import annotations
@@ -50,7 +51,8 @@ async def utility_completion(
     """One utility completion, routed per SUPERQODE_UTILITY_PROVIDER.
 
     ``provider``/``model`` are the session's own route, used when no utility
-    override is set and as the fallback when the override fails.
+    override is set and as the fallback for legacy overrides. The explicit
+    native Apple route propagates errors without sending input to that fallback.
     """
     route = utility_route()
     if route is not None:

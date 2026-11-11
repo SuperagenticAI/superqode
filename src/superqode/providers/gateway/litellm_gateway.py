@@ -2442,36 +2442,56 @@ class LiteLLMGateway(GatewayInterface):
                     yield chunk
 
     async def _native_local_stream(
-        self, messages, model, provider, temperature, max_tokens, tools, tool_choice
+        self, messages, model, provider, temperature, max_tokens, tools, tool_choice, **kwargs
     ):
         from contextlib import aclosing
 
         if tool_choice == "none":
             tools = None
-        elif tool_choice not in {None, "auto"}:
+        elif tool_choice not in (None, "auto"):
             raise InvalidRequestError(
                 "This local runtime accepts automatic tools or no tools; forced tool selection is unavailable",
                 provider=provider,
             )
-        if provider == "apple-foundation":
-            from superqode.local.apple import stream as source
-
-            chunks = source(
-                messages, model, tools=tools, max_tokens=max_tokens, temperature=temperature
-            )
-        else:
-            from superqode.local.runtimes import selected_runtime, stream as source
-
-            chunks = source(
-                selected_runtime(),
-                messages,
-                model,
-                key=os.environ.get("LOCAL_RUNTIME_API_KEY"),
-                tools=tools,
-                max_tokens=max_tokens,
-                temperature=temperature,
-            )
         try:
+            if provider == "apple-foundation":
+                if (
+                    kwargs.get("response_format") is not None
+                    or kwargs.get("reasoning_effort") is not None
+                ):
+                    raise InvalidRequestError(
+                        "Apple's current integration supports plain text; structured-output and reasoning controls are not available",
+                        provider=provider,
+                    )
+                from superqode.local.apple import stream as source
+
+                chunks = source(
+                    messages, model, tools=tools, max_tokens=max_tokens, temperature=temperature
+                )
+            else:
+                from superqode.local.runtimes import selected_runtime, stream as source
+
+                spec = selected_runtime()
+                from superqode.local.runtimes import loopback_url
+
+                override = kwargs.get("api_base") or kwargs.get("base_url")
+                if override and loopback_url(override) != spec.endpoint:
+                    raise InvalidRequestError(
+                        "Reconnect the saved runtime to change its endpoint; per-request endpoint overrides are refused",
+                        provider=provider,
+                    )
+                chunks = source(
+                    spec,
+                    messages,
+                    model,
+                    key=kwargs.get("api_key") or os.environ.get("LOCAL_RUNTIME_API_KEY"),
+                    tools=tools,
+                    max_tokens=max_tokens,
+                    temperature=temperature,
+                    response_format=kwargs.get("response_format"),
+                    reasoning_effort=kwargs.get("reasoning_effort"),
+                    timeout=kwargs.get("timeout") or kwargs.get("timeout_seconds") or 180,
+                )
             async with aclosing(chunks):
                 async for chunk in chunks:
                     yield chunk
@@ -2481,6 +2501,10 @@ class LiteLLMGateway(GatewayInterface):
             # Do not include vendor bodies/headers that could echo a credential.
             if isinstance(exc, ValueError):
                 message = str(exc)
+                for secret in (kwargs.get("api_key"), os.environ.get("LOCAL_RUNTIME_API_KEY")):
+                    if isinstance(secret, str) and secret:
+                        message = message.replace(secret, "[redacted]")
+                message = message[:1000]
             else:
                 message = "Local model request failed. Check the server, model, API key and loaded context in Local AI."
             raise GatewayError(message, provider=provider, model=model) from None
@@ -2522,7 +2546,7 @@ class LiteLLMGateway(GatewayInterface):
         if provider in {"local-openai", "apple-foundation"}:
             content, thinking, calls, usage, finish = [], [], None, None, None
             async for chunk in self._native_local_stream(
-                messages, model, provider, temperature, max_tokens, tools, tool_choice
+                messages, model, provider, temperature, max_tokens, tools, tool_choice, **kwargs
             ):
                 content.append(chunk.content)
                 thinking.append(chunk.thinking_content or "")
@@ -2828,7 +2852,7 @@ class LiteLLMGateway(GatewayInterface):
 
         if provider in {"local-openai", "apple-foundation"}:
             async for chunk in self._native_local_stream(
-                messages, model, provider, temperature, max_tokens, tools, tool_choice
+                messages, model, provider, temperature, max_tokens, tools, tool_choice, **kwargs
             ):
                 yield chunk
             return

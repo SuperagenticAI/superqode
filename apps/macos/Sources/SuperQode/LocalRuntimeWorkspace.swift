@@ -36,6 +36,7 @@ struct LocalRuntimeWorkspace: View {
   @State private var capability = "unknown"
   @State private var apiKey = ""
   @State private var rememberKey = false
+  @State private var includeUsage = true
   @State private var models: [[String: Any]] = []
   @State private var model = ""
   @State private var coding = false
@@ -49,6 +50,8 @@ struct LocalRuntimeWorkspace: View {
   @State private var showSetup = false
   @State private var operation = ""
   @State private var operationDetail: [String: Any] = [:]
+  @State private var operationAfter = 0
+  @State private var pollingOperation = false
 
   private var selected: [String: Any] { library.profiles.first { string($0, "id") == identity } ?? [:] }
   private var jobRunning: Bool { ["queued", "running", "cancelling", "needs_approval"].contains(string(operationDetail, "status")) }
@@ -205,6 +208,9 @@ struct LocalRuntimeWorkspace: View {
           Text("Unknown · check first").tag("unknown"); Text("Declared supported").tag("yes"); Text("Chat only").tag("no")
         }
       }
+      Toggle("Request token usage from this server", isOn: $includeUsage).font(.caption)
+      Text("Disable usage reporting only if an older server rejects stream_options. Missing token counts are shown as unknown.")
+        .font(.caption2).foregroundStyle(.secondary)
       Text("Set the context to what the server actually loaded. A model's advertised maximum is not its loaded memory allocation. Keys stay in this session or your Mac Keychain.")
         .font(.caption).foregroundStyle(.secondary)
       HStack {
@@ -239,7 +245,7 @@ struct LocalRuntimeWorkspace: View {
         if !projectReady { Text("Open a project to run a check or start a conversation.").font(.caption).foregroundStyle(.secondary) }
       }
       if busy { ProgressView("Working with local runtime…").controlSize(.small) }
-    }.padding(18).brandSurface()
+    }.padding(18).brandSurface().disabled(busy)
   }
 
   private var guideURL: URL? {
@@ -280,13 +286,14 @@ struct LocalRuntimeWorkspace: View {
   private func reset() {
     identity = UUID().uuidString.lowercased(); name = "Local server"; template = "custom"
     endpoint = "http://127.0.0.1:8000/v1"; context = 8192; capability = "unknown"
-    apiKey = ""; rememberKey = false; models = []; model = ""; coding = false; setup = [:]
+    apiKey = ""; rememberKey = false; includeUsage = true; models = []; model = ""; coding = false; setup = [:]
+    setOperation("")
   }
   private func select(_ row: [String: Any]) {
     let next = string(row, "template", "custom")
     restoringProfile = template != next; template = next
     identity = string(row, "id"); name = string(row, "name"); endpoint = string(row, "endpoint")
-    context = row["context"] as? Int ?? 8192; rememberKey = row["remember_key"] as? Bool == true
+    context = row["context"] as? Int ?? 8192; includeUsage = row["include_usage"] as? Bool ?? true; rememberKey = row["remember_key"] as? Bool == true
     capability = row["tools"] as? Bool == true ? "yes" : row["tools"] as? Bool == false ? "no" : "unknown"
     models = []; model = ""; apiKey = ""; setup = [:]
     Task { await restoreOperation() }
@@ -295,12 +302,12 @@ struct LocalRuntimeWorkspace: View {
     let savedCapability = selected["tools"] as? Bool == true ? "yes" : selected["tools"] as? Bool == false ? "no" : "unknown"
     return !selected.isEmpty && name == string(selected, "name") && endpoint == string(selected, "endpoint")
       && context == (selected["context"] as? Int) && template == string(selected, "template", "custom")
-      && capability == savedCapability && apiKey.isEmpty && rememberKey == (selected["remember_key"] as? Bool == true)
+      && capability == savedCapability && includeUsage == (selected["include_usage"] as? Bool ?? true) && apiKey.isEmpty && rememberKey == (selected["remember_key"] as? Bool == true)
   }
   private func saveProfile() {
     action {
       let keyValue = apiKey
-      var params: [String: Any] = ["id": identity, "name": name, "template": template, "endpoint": endpoint, "context": context, "remember_key": rememberKey]
+      var params: [String: Any] = ["id": identity, "name": name, "template": template, "endpoint": endpoint, "context": context, "remember_key": rememberKey, "include_usage": includeUsage]
       if capability == "unknown" { params["tools"] = NSNull() }
       else { params["tools"] = capability == "yes" }
       if rememberKey && keyValue.isEmpty && selected["key_configured"] as? Bool == true && selected["remember_key"] as? Bool != true {
@@ -339,21 +346,29 @@ struct LocalRuntimeWorkspace: View {
   }
   private func connect() {
     action {
-      let result = try await app.engine.call("local.runtimes.use", ["id": identity, "project": app.projectID, "model": model, "harness": coding ? harness : "no-tool"]) as? [String: Any] ?? [:]
+      let project = app.projectID
+      let profileID = identity
+      let selectedModel = model
+      let useCoding = coding
+      let result = try await app.engine.call("local.runtimes.use", ["id": profileID, "project": project, "model": selectedModel, "harness": useCoding ? harness : "no-tool"]) as? [String: Any] ?? [:]
+      guard project == app.projectID, !app.openingProject, profileID == identity, selectedModel == model, !app.anyActive else {
+        message = "The selection changed while connecting. Choose the model again for this project."
+        return
+      }
       app.chooseHarness(string(result, "harness")); app.chooseModelRoute(string(result, "provider"), string(result, "model"))
-      app.interactionMode = coding ? "code" : "chat"; app.section = "Workspace"
+      app.interactionMode = useCoding ? "code" : "chat"; app.section = "Workspace"
     }
   }
   private func startWarmup() {
     action {
       let job = try await app.engine.call("local.runtimes.warm", ["id": identity, "project": app.projectID, "model": model, "command_id": UUID().uuidString]) as? [String: Any] ?? [:]
-      operation = string(job, "id"); await pollOperation()
+      setOperation(string(job, "id")); await pollOperation()
     }
   }
   private func startCheck() {
     action {
       let job = try await app.engine.call("local.runtimes.test", ["id": identity, "project": app.projectID, "model": model, "command_id": UUID().uuidString]) as? [String: Any] ?? [:]
-      operation = string(job, "id"); await pollOperation()
+      setOperation(string(job, "id")); await pollOperation()
     }
   }
   private func reviewInstall() {
@@ -367,22 +382,40 @@ struct LocalRuntimeWorkspace: View {
     showSetup = false
     action {
       let job = try await app.engine.call("local.runtimes.setup.start", ["id": identity, "project": app.projectID, "expected_digest": string(setup, "digest"), "command_id": UUID().uuidString]) as? [String: Any] ?? [:]
-      operation = string(job, "id"); await pollOperation()
+      setOperation(string(job, "id")); await pollOperation()
     }
   }
   private func loadHarnesses() async {
     guard projectReady else { harnesses = []; return }
-    do { harnesses = try await app.engine.call("local.runtimes.harnesses", ["id": identity, "project": app.projectID]) as? [[String: Any]] ?? [] }
+    let project = app.projectID
+    do {
+      let rows = try await app.engine.call("local.runtimes.harnesses", ["id": identity, "project": project]) as? [[String: Any]] ?? []
+      guard project == app.projectID, !Task.isCancelled else { return }
+      harnesses = rows
+    }
     catch { /* A new, unsaved profile can still be edited. */ }
   }
   private func restoreOperation() async {
-    if !string(selected, "last_check_job").isEmpty { operation = string(selected, "last_check_job"); await pollOperation() }
+    setOperation(string(selected, "last_operation_job", string(selected, "last_check_job")))
+    await pollOperation()
+  }
+  private func setOperation(_ id: String) {
+    guard operation != id else { return }
+    operation = id; operationAfter = 0; operationDetail = [:]
   }
   private func pollOperation() async {
-    guard !operation.isEmpty else { return }
+    guard !operation.isEmpty, !pollingOperation else { return }
+    pollingOperation = true
+    defer { pollingOperation = false }
+    let id = operation
     do {
-      let next = try await app.engine.call("jobs.get", ["id": operation]) as? [String: Any] ?? [:]
-      let finished = jobRunning && !["queued", "running", "cancelling", "needs_approval"].contains(string(next, "status"))
+      var next = try await app.engine.call("jobs.get", ["id": id, "after": operationAfter]) as? [String: Any] ?? [:]
+      guard id == operation, !Task.isCancelled else { return }
+      let page = try JobEventPage(next, after: operationAfter)
+      operationAfter = page.nextSequence
+      let previous = operationDetail["events"] as? [[String: Any]] ?? []
+      next["events"] = Array((previous + page.events).suffix(40))
+      let finished = (operationDetail.isEmpty || jobRunning) && !["queued", "running", "cancelling", "needs_approval"].contains(string(next, "status"))
       if !NSDictionary(dictionary: operationDetail).isEqual(to: next) { operationDetail = next }
       if finished { await library.load(app.engine) }
     } catch { if !Task.isCancelled { library.failure = error.localizedDescription } }

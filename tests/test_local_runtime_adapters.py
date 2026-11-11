@@ -125,3 +125,67 @@ async def test_generic_adapter_streams_text_and_waits_for_valid_tool_arguments()
     finally:
         wire.release.set()
         await events.aclose()
+
+
+@pytest.mark.asyncio
+async def test_gateway_preserves_structured_options_explicit_budget_and_usage_opt_out(
+    monkeypatch, tmp_path
+):
+    from superqode.providers.gateway.litellm_gateway import LiteLLMGateway
+
+    spec = runtimes.validate(
+        {
+            "id": "custom",
+            "endpoint": "http://127.0.0.1:8000/v1",
+            "context": 8192,
+            "include_usage": False,
+        }
+    )
+    monkeypatch.setenv("SUPERQODE_LOCAL_RUNTIME", json.dumps(spec.public()))
+    monkeypatch.setenv("SUPERQODE_STATE_DIR", str(tmp_path))
+    seen = []
+
+    def respond(request):
+        seen.append(request)
+        return httpx.Response(
+            200,
+            json={"choices": [{"message": {"content": '{"ok":true}'}, "finish_reason": "stop"}]},
+        )
+
+    original = httpx.AsyncClient
+    monkeypatch.setattr(
+        httpx,
+        "AsyncClient",
+        lambda **kwargs: original(**{**kwargs, "transport": httpx.MockTransport(respond)}),
+    )
+    response = await LiteLLMGateway().chat_completion(
+        messages=[Message("user", "Return JSON")],
+        model="fixture",
+        provider="local-openai",
+        max_tokens=4096,
+        response_format={"type": "json_object"},
+        reasoning_effort="low",
+        timeout=12,
+    )
+    body = json.loads(seen[0].content)
+    assert body["response_format"] == {"type": "json_object"}
+    assert body["reasoning_effort"] == "low" and body["max_tokens"] == 4096
+    assert "stream_options" not in body
+    assert seen[0].extensions["timeout"]["read"] == 12
+    assert response.content == '{"ok":true}' and len(seen) == 1
+
+
+@pytest.mark.asyncio
+async def test_gateway_refuses_endpoint_override_before_sending_any_request(monkeypatch):
+    from superqode.providers.gateway.base import GatewayError
+    from superqode.providers.gateway.litellm_gateway import LiteLLMGateway
+
+    spec = runtimes.validate({"id": "custom", "endpoint": "http://127.0.0.1:8000/v1"})
+    monkeypatch.setenv("SUPERQODE_LOCAL_RUNTIME", json.dumps(spec.public()))
+    with pytest.raises(GatewayError, match="overrides are refused"):
+        await LiteLLMGateway().chat_completion(
+            messages=[Message("user", "Hello")],
+            model="fixture",
+            provider="local-openai",
+            api_base="http://127.0.0.1:9000/v1",
+        )
