@@ -111,8 +111,15 @@ async def test_timing_records_do_not_store_prompts_or_credentials(monkeypatch):
 
 @pytest.mark.asyncio
 async def test_tool_only_output_has_a_first_output_time_without_fabricating_text():
+    from superqode.providers.gateway.base import Usage
+
     async with LocalTurn("local-openai", "tool-only") as turn:
         turn.observe(tools=True, terminal=True)
+        duration = snapshot()["requests"][0]["generation_s"]
+        turn.observe(usage=Usage(prompt_tokens=3, completion_tokens=2, total_tokens=5))
+        assert snapshot()["requests"][0]["status"] == "completed"
     record = snapshot()["requests"][0]
     assert record["first_output_s"] is not None
     assert record["first_text_s"] is None
+    assert record["output_tokens"] == 2
+    assert record["generation_s"] == duration, "Consumer cleanup must not extend generation time"

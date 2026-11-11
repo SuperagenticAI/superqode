@@ -304,16 +304,30 @@ class LocalTurn:
             self.data["first_text_s"] = elapsed
             changed = True
         if usage is not None:
-            self.data["input_tokens"] = usage.prompt_tokens
-            self.data["output_tokens"] = usage.completion_tokens
+            changed |= (
+                self.data["input_tokens"] != usage.prompt_tokens
+                or self.data["output_tokens"] != usage.completion_tokens
+            )
+            self.data.update(
+                input_tokens=usage.prompt_tokens, output_tokens=usage.completion_tokens
+            )
+        if self.terminal and self.data["generation_s"] is None:
+            self.data["generation_s"] = elapsed
+            changed = True
         if changed:
-            self.save("generating")
+            self.save("completed" if self.terminal else "generating")
+        if self.terminal:
+            # Completion can be consumed before the iterator is resumed or
+            # closed. Tool execution and delegated model calls must not wait
+            # for that consumer to ask for EOF. Late usage still updates this
+            # completed record, without extending generation time.
+            self.release_locks()
 
     def close(self, status):
         if not self.active:
             return
         try:
-            if self.started is not None:
+            if self.started is not None and self.data["generation_s"] is None:
                 self.data["generation_s"] = time.monotonic() - self.started
             self.save(status)
             with database() as db:
@@ -321,16 +335,19 @@ class LocalTurn:
                     "DELETE FROM measurements WHERE status NOT IN ('queued','generating') AND id NOT IN (SELECT id FROM measurements ORDER BY created DESC LIMIT 200)"
                 )
         finally:
-            if self.fd is not None:
-                os.close(self.fd)
-                self.fd = None
-            if self.request_fd is not None:
-                os.close(self.request_fd)
-                self.request_fd = None
-                try:
-                    (directory() / ("request-" + self.id + ".lock")).unlink()
-                except FileNotFoundError:
-                    pass
+            self.release_locks()
+
+    def release_locks(self):
+        if self.fd is not None:
+            os.close(self.fd)
+            self.fd = None
+        if self.request_fd is not None:
+            os.close(self.request_fd)
+            self.request_fd = None
+            try:
+                (directory() / ("request-" + self.id + ".lock")).unlink()
+            except FileNotFoundError:
+                pass
 
     async def __aexit__(self, kind, value, traceback):
         self.close(

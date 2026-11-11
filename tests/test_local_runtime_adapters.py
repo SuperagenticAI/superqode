@@ -236,3 +236,41 @@ async def test_native_local_usage_exhausts_the_shared_task_budget(monkeypatch, s
     with pytest.raises(TaskBudgetExceeded):
         await generate()
     assert len(requests) == 1, "An exhausted task must fail before another inference request"
+
+
+@pytest.mark.asyncio
+async def test_terminal_delivery_releases_local_slot_before_consumer_resumes(monkeypatch, tmp_path):
+    from superqode.providers.gateway.litellm_gateway import LiteLLMGateway
+
+    spec = runtimes.validate({"id": "terminal", "endpoint": "http://127.0.0.1:8000/v1"})
+    monkeypatch.setenv("SUPERQODE_LOCAL_RUNTIME", json.dumps(spec.public()))
+    monkeypatch.setenv("SUPERQODE_STATE_DIR", str(tmp_path))
+    original = httpx.AsyncClient
+    monkeypatch.setattr(
+        httpx,
+        "AsyncClient",
+        lambda **kwargs: original(
+            **{
+                **kwargs,
+                "transport": httpx.MockTransport(
+                    lambda request: httpx.Response(
+                        200,
+                        json={"choices": [{"message": {"content": "ok"}, "finish_reason": "stop"}]},
+                    )
+                ),
+            }
+        ),
+    )
+    gateway = LiteLLMGateway()
+    params = dict(messages=[Message("user", "Hello")], provider="local-openai", model="fixture")
+    first = gateway.stream_completion(**params)
+    try:
+        async for chunk in first:
+            if chunk.finish_reason:
+                break
+        # A consumer can act on completion before asking the iterator for EOF,
+        # e.g. executing a tool that delegates to another local model.
+        second = await asyncio.wait_for(gateway.chat_completion(**params), 1)
+        assert second.content == "ok"
+    finally:
+        await first.aclose()
