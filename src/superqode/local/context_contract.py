@@ -160,7 +160,7 @@ def _launch_contract_value(provider, model, field, low, high):
         row = json.loads(os.environ.get("SUPERQODE_LOCAL_CONTEXT_CONTRACT", "{}"))
         value = row.get(field)
         if (
-            provider in {"ollama", "lmstudio"}
+            provider in {"ollama", "lmstudio", "local-openai"}
             and row.get("provider") == provider
             and row.get("model") == model
             and type(value) is int

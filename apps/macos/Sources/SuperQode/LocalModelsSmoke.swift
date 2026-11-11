@@ -34,7 +34,18 @@ import Foundation
       apple["available"] is Bool, !string(apple, "guidance").isEmpty,
       recipe["automatic"] as? Bool == false
     else { throw EngineError(message: "Native runtime profiles, execution status, Apple availability or manual setup guidance failed.") }
-    return "passed; shared catalog, 28-runtime matrix, digest-bound review, compatible profile round-trip, execution status and native Apple availability without transferring weights or making model calls"
+    let setup = try await engine.call("local.models.quickstart.catalog", ["project": projectID]) as? [String: Any] ?? [:]
+    guard (setup["setup_presets"] as? [[String: Any]])?.count == 3 else { throw EngineError(message: "Hardware setup intentions were missing.") }
+    let compareID = "native-compare-" + UUID().uuidString.lowercased()
+    _ = try await engine.call("local.runtimes.save", ["id": compareID, "template": "custom", "endpoint": "http://127.0.0.1:1234/v1", "context": 4096, "tools": true])
+    let comparison = try await engine.call("local.comparisons.catalog", ["project": projectID]) as? [String: Any] ?? [:]
+    let localRoutes = comparison["routes"] as? [[String: Any]] ?? []
+    guard let route = localRoutes.first(where: { string($0, "runtime") == compareID }) else { throw EngineError(message: "The native comparison did not discover the loopback fixture model.") }
+    let reviewed = try await engine.call("local.comparisons.prepare", ["project": projectID, "context": 4096, "warmup": false, "selections": [["route": string(route, "id"), "harness": "core"], ["route": string(route, "id"), "harness": "no-tool"]]]) as? [String: Any] ?? [:]
+    _ = try await engine.call("local.runtimes.delete", ["id": compareID])
+    guard !string(reviewed, "digest").isEmpty, (reviewed["inspection"] as? [String: Any])?["task_count"] as? Int == 2,
+      reviewed["suite_content"] == nil else { throw EngineError(message: "The native comparison review was not pinned to its fixed tasks.") }
+    return "passed; hardware presets, independent-grader comparison review, shared catalog, 28-runtime matrix, profile round-trip and Apple availability without transferring weights or making generation requests"
   }
 
   func smokeBackgroundEngine() async throws -> String {

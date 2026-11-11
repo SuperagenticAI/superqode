@@ -117,7 +117,7 @@ Provider API keys (`OPENAI_API_KEY`, `ANTHROPIC_API_KEY`, `GEMINI_API_KEY`, ...)
 
 | Variable | Values | Default | Effect |
 |---|---|---|---|
-| `SUPERQODE_LOCAL_CONTEXT_CONTRACT` | JSON object | unset | Worker-scoped local model context/output contract with `provider`, `model`, `context` and `max_tokens`. Only an exact Ollama or LM Studio provider/model match applies. Invalid values fall back to saved or hardware-derived defaults; this does not alter other threads or saved settings. |
+| `SUPERQODE_LOCAL_CONTEXT_CONTRACT` | JSON object | unset | Worker-scoped local model context/output contract with `provider`, `model`, `context` and `max_tokens`. Only an exact Ollama, LM Studio or local-compatible provider/model match applies. Invalid values fall back to saved or hardware-derived defaults; this does not alter other threads or saved settings. |
 | `SUPERQODE_OLLAMA_NUM_CTX` | int | unset | Request this context length from Ollama per call. Ollama's MLX backend honors only Modelfile-baked values. |
 | `SUPERQODE_OLLAMA_KEEP_ALIVE` | duration | unset | Optional override for Ollama model residency. When unset, the server's keep-alive policy applies. Set `0` to unload after each response. |
 | `SUPERQODE_CAPABILITY_TIMEOUT` | seconds | `2` | Maximum wait when asking a local runtime what a model supports (for example Ollama's capability list). On timeout the model is treated as tool-capable rather than silently downgraded. |
@@ -275,6 +275,8 @@ alone does not open a log file or enable provider SDK request dumps.
 | --- | --- | --- | --- |
 | `SUPERQODE_LOCAL_RUNTIME` | JSON profile | unset | Private desktop-to-worker local runtime specification. Contains the loopback endpoint and declared context/tools, never the API key. Configure profiles in Local AI instead of editing this variable. |
 | `SUPERQODE_LOCAL_ENDPOINT` | loopback URL | unset | Bound local-compatible endpoint for the selected runtime profile. |
+| `SUPERQODE_LOCAL_COMPARISON_KEYS` | private JSON map | unset | Internal desktop-to-worker transfer of credentials for the explicitly selected local profiles. Consumed before evaluation; only the current profile's key reaches its request. Do not set or log this variable manually. |
+| `SUPERQODE_LOCAL_COMPARISON_TRACE` | internal request label | unset | Worker-scoped comparison/candidate identifier for matching prompt-free timing records. Contains no model input or credentials. |
 | `LOCAL_RUNTIME_API_KEY` | token | unset | Session-only key passed to the selected local runtime worker; app persistence uses Mac Keychain. Never embedded in profiles or prompts. |
 | `SUPERQODE_APPLE_HELPER` | executable path | bundled helper | Native on-device model bridge. Set by the macOS bundle; source builds can point to their compiled `SuperQodeAppleModel`. No HTTP listener is created. |
 

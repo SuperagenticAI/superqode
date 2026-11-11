@@ -60,6 +60,7 @@ jobs:
           tests/test_local_runtime_adapters.py tests/test_local_runtime_profiles.py
           tests/test_local_execution_manager.py tests/test_local_apple_bridge.py
           tests/test_local_runtime_setup.py
+          tests/test_local_setup_presets.py tests/test_local_comparisons.py
           tests/test_context_probe.py tests/test_local_context_contract.py -q
       - name: Install isolated Strands runtime and check actual SDK adapters
         env:

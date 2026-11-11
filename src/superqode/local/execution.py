@@ -189,6 +189,17 @@ def lease_alive(identity):
         os.close(fd)
 
 
+def comparison_records(trace):
+    if not enabled():
+        return []
+    with database() as db:
+        rows = db.execute(
+            "SELECT data,status FROM measurements WHERE json_extract(data,'$.comparison_trace')=? ORDER BY created LIMIT 200",
+            (trace,),
+        ).fetchall()
+    return [{**json.loads(r["data"]), "status": r["status"]} for r in rows]
+
+
 class LocalTurn:
     def __init__(self, provider, model):
         self.provider, self.model = provider, model
@@ -208,6 +219,9 @@ class LocalTurn:
             "input_tokens": None,
             "output_tokens": None,
         }
+        trace = os.environ.get("SUPERQODE_LOCAL_COMPARISON_TRACE", "")
+        if trace:
+            self.data["comparison_trace"] = trace[:100]
         self.active = enabled()
 
     def save(self, status):

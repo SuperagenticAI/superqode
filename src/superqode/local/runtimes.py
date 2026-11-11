@@ -222,6 +222,11 @@ async def stream(
     # Explicit output bounds are honoured up to the available context. The
     # smaller quarter-window value is only the default, not a hidden override.
     output = max_tokens if max_tokens is not None else min(2048, max(128, spec.context // 4))
+    from .context_contract import _launch_contract_value
+
+    limit = _launch_contract_value("local-openai", model, "max_tokens", 128, 65536)
+    if limit is not None:
+        output = min(output, limit)
     tool_wire = [{"type": "function", "function": asdict(t)} for t in tools] if tools else None
     kept, output = guard_request(body_messages, tool_wire, spec.context, output)
     from .execution import annotate

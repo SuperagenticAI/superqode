@@ -516,6 +516,7 @@ class DesktopService:
             "tuning",
             "local",
             "local-runtime",
+            "local-comparison",
             "studio",
         }:
             raise ValueError("Unknown job type")
@@ -786,6 +787,7 @@ class DesktopService:
                 title = {
                     "tuning": "Routing decision tuning",
                     "evaluation": "Harness evaluation",
+                    "local-comparison": "Local model and harness comparison",
                     "optimization": "Harness optimization",
                     "check": "Project check",
                     "compaction": "Compact model context",
@@ -876,6 +878,14 @@ class DesktopService:
                     secrets = tuple(set(secrets) | {self.vendor_keys["systemone"]})
                 if tool_plan:
                     secrets = tuple(set(secrets) | set(tool_plan["secrets"]))
+                if kind == "local-comparison":
+                    from .local_comparisons import environment as comparison_environment
+
+                    compare_env, compare_secrets = comparison_environment(
+                        self, params["comparison_plan"]
+                    )
+                    credential_env.update(compare_env)
+                    secrets = tuple(set(secrets) | set(compare_secrets))
                 from .local_models import binding as local_binding
 
                 binding = local_binding(
@@ -1388,6 +1398,22 @@ class DesktopService:
             if method == "local.harnesses.launch":
                 return local_harnesses.launch(self, params)
             raise ValueError("Unknown Advanced local harness method")
+        if method.startswith("local.comparisons."):
+            from . import local_comparisons
+
+            action = method.removeprefix("local.comparisons.")
+            if action == "catalog":
+                return local_comparisons.catalog(self, params["project"])
+            if action == "prepare":
+                return local_comparisons.prepare(self, params)
+            if action == "start":
+                return local_comparisons.start(self, params)
+            if action == "history":
+                return self._all(
+                    "SELECT id,title,status,created,result FROM jobs WHERE project=? AND kind='local-comparison' ORDER BY created DESC LIMIT 30",
+                    (params["project"],),
+                )
+            raise ValueError("Unknown local comparison action")
         if method.startswith("local.runtimes."):
             from .local_runtimes import dispatch
 

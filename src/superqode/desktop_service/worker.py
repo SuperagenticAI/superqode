@@ -377,6 +377,10 @@ def main():
             from .local_runtimes import worker
 
             asyncio.run(worker(request, emit))
+        elif request["kind"] == "local-comparison":
+            from .local_comparisons import run
+
+            asyncio.run(run(request, directory, emit, SECRETS))
         elif request["kind"] == "local":
             from superqode.local.workbench import run
 
