@@ -20,6 +20,7 @@ from .spec import HarnessSpec
 from .templates import (
     BUILTIN_TEMPLATES,
     core_template,
+    apple_local_template,
     deepagents_template,
     strands_template,
     deepseek_harness_template,
@@ -152,6 +153,7 @@ class HarnessDefinition:
 def builtin_harnesses() -> tuple[HarnessDefinition, ...]:
     """Return selectable harnesses shipped with SuperQode."""
     core = core_template()
+    apple_local = apple_local_template()
     workbench = workbench_template()
     systemone = systemone_template()
     no_tool = no_tool_template(name="no-tool")
@@ -248,6 +250,15 @@ def builtin_harnesses() -> tuple[HarnessDefinition, ...]:
             spec=no_tool,
             loop_policy=core_loop_policy(),
             aliases=("no_tool",),
+        ),
+        HarnessDefinition(
+            id="apple-local",
+            display_name="Apple on-device",
+            description=apple_local.description,
+            runtime="builtin",
+            source="built-in",
+            spec=apple_local,
+            loop_policy=core_loop_policy(),
         ),
     )
     reserved = {entry.id for entry in workflows}

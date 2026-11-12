@@ -103,10 +103,12 @@ class BenchResult:
     endpoint: str
     model: str
     ok: bool = False
-    ttft_s: Optional[float] = None  # time to first content token
-    decode_tps: Optional[float] = None  # tokens/second after first token
+    ttft_s: Optional[float] = None  # first output, including thinking or tool data
+    decode_tps: Optional[float] = None  # reported-token estimate using client output timing
     total_s: Optional[float] = None
-    completion_tokens: int = 0
+    completion_tokens: Optional[int] = None
+    output_chunks: int = 0
+    first_text_s: Optional[float] = None
     error: str = ""
     mode: str = "speed"
     tool_call_success: Optional[bool] = None
@@ -129,6 +131,8 @@ class StreamResult:
     ttft_s: Optional[float] = None
     total_s: Optional[float] = None
     decode_tps: Optional[float] = None
+    completion_tokens: Optional[int] = None
+    first_text_s: Optional[float] = None
 
     def __post_init__(self) -> None:
         if self.tool_calls is None:
@@ -177,6 +181,7 @@ def run_bench(
         "messages": [{"role": "user", "content": prompt}],
         "max_tokens": max_tokens,
         "stream": True,
+        "stream_options": {"include_usage": True},
         "temperature": 0,
     }
     if extra:
@@ -198,7 +203,9 @@ def run_bench(
     result.ok = True
     result.ttft_s = stream.ttft_s
     result.total_s = stream.total_s
-    result.completion_tokens = stream.chunks
+    result.completion_tokens = stream.completion_tokens
+    result.output_chunks = stream.chunks
+    result.first_text_s = stream.first_text_s
     result.decode_tps = stream.decode_tps
     return result
 
@@ -223,6 +230,8 @@ def run_agentic_bench(
         decode_tps=speed.decode_tps,
         total_s=speed.total_s,
         completion_tokens=speed.completion_tokens,
+        output_chunks=speed.output_chunks,
+        first_text_s=speed.first_text_s,
         error=speed.error,
         mode="agentic",
     )
@@ -330,6 +339,30 @@ def _reasoning_delta(delta: dict[str, Any]) -> str:
 
 
 def _stream_chat(endpoint: str, body: dict[str, Any], api_key: str = "") -> StreamResult:
+    from urllib.parse import urlsplit
+    import ipaddress
+    from .execution import LocalTurn, enabled
+
+    host = urlsplit(endpoint).hostname
+    try:
+        local = host == "localhost" or ipaddress.ip_address(host or "").is_loopback
+    except ValueError:
+        local = False
+    if not local or not enabled():
+        return _raw_stream_chat(endpoint, body, api_key)
+    with LocalTurn("local-benchmark", body.get("model", "")) as turn:
+        result = _raw_stream_chat(endpoint, body, api_key)
+        turn.data.update(
+            first_output_s=result.ttft_s,
+            first_text_s=result.first_text_s,
+            output_tokens=result.completion_tokens,
+            output_limit=body.get("max_tokens"),
+        )
+        turn.terminal = result.ttft_s is not None
+        return result
+
+
+def _raw_stream_chat(endpoint: str, body: dict[str, Any], api_key: str = "") -> StreamResult:
     """Stream one chat completion and collect text plus tool-call deltas."""
     url = endpoint.rstrip("/") + "/chat/completions"
     encoded = json.dumps(body).encode("utf-8")
@@ -339,6 +372,9 @@ def _stream_chat(endpoint: str, body: dict[str, Any], api_key: str = "") -> Stre
 
     start = time.monotonic()
     first_token_at: Optional[float] = None
+    first_text_at: Optional[float] = None
+    last_output_at: Optional[float] = None
+    completion_tokens: Optional[int] = None
     chunks = 0
     content_parts: list[str] = []
     tool_chunks: dict[int, dict[str, Any]] = {}
@@ -355,19 +391,24 @@ def _stream_chat(endpoint: str, body: dict[str, Any], api_key: str = "") -> Stre
                 event = json.loads(payload)
             except json.JSONDecodeError:
                 continue
+            reported = (event.get("usage") or {}).get("completion_tokens")
+            if type(reported) is int and reported >= 0:
+                completion_tokens = reported
             choices = event.get("choices") or []
             delta = (choices[0].get("delta") or {}) if choices else {}
             content = delta.get("content")
             reasoning = _reasoning_delta(delta)
-            if content or reasoning:
+            if content or reasoning or delta.get("tool_calls"):
+                last_output_at = time.monotonic()
                 if first_token_at is None:
-                    first_token_at = time.monotonic()
+                    first_token_at = last_output_at
+                if content and first_text_at is None:
+                    first_text_at = last_output_at
+            if content or reasoning:
                 chunks += 1
                 if content:
                     content_parts.append(str(content))
             for tool_delta in delta.get("tool_calls") or []:
-                if first_token_at is None:
-                    first_token_at = time.monotonic()
                 chunks += 1
                 index = int(tool_delta.get("index") or 0)
                 merged = tool_chunks.setdefault(
@@ -389,10 +430,14 @@ def _stream_chat(endpoint: str, body: dict[str, Any], api_key: str = "") -> Stre
         chunks=chunks,
         ttft_s=round(first_token_at - start, 2) if first_token_at is not None else None,
         total_s=round(end - start, 2),
+        completion_tokens=completion_tokens,
+        first_text_s=round(first_text_at - start, 2) if first_text_at is not None else None,
     )
-    decode_window = end - first_token_at if first_token_at is not None else 0
-    if decode_window > 0 and chunks > 1:
-        output.decode_tps = round((chunks - 1) / decode_window, 1)
+    decode_window = last_output_at - first_token_at if first_token_at is not None else 0
+    # SSE frames may contain many tokens. Only reported token counts can
+    # support a token-rate estimate; never label network chunks as tokens.
+    if decode_window > 0 and completion_tokens is not None and completion_tokens > 1:
+        output.decode_tps = round((completion_tokens - 1) / decode_window, 1)
     return output
 
 
@@ -488,7 +533,12 @@ def render_bench(results: List[BenchResult]) -> str:
     lines.append("")
     if agentic:
         lines.append("Agentic score covers tool call, edit format, shell call, and context recall.")
-    lines.append("TTFT tracks prefill speed; agent loops are prefill-dominated.")
+    lines.append(
+        "TTFT measures first output, including thinking or tool arguments; first_text_s records visible text separately."
+    )
+    lines.append(
+        "Decode rate estimates use reported tokens and client timing; unreported token counts show n/a."
+    )
     return "\n".join(lines)
 
 

@@ -108,6 +108,7 @@ class DesktopService:
             CREATE TABLE IF NOT EXISTS local_model_plans(id TEXT PRIMARY KEY,plan TEXT,created REAL);
             CREATE TABLE IF NOT EXISTS studio_reviews(id TEXT PRIMARY KEY,project TEXT,payload TEXT,created REAL);
             CREATE TABLE IF NOT EXISTS studio_check_plans(id TEXT PRIMARY KEY,project TEXT,payload TEXT,created REAL);
+            CREATE TABLE IF NOT EXISTS local_runtime_bindings(project TEXT,harness TEXT,model TEXT,runtime TEXT,digest TEXT,PRIMARY KEY(project,harness,model));
             CREATE TABLE IF NOT EXISTS local_model_bindings(project TEXT,harness TEXT,provider TEXT,model TEXT,endpoint TEXT,PRIMARY KEY(project,harness,provider,model));
             """
         )
@@ -127,6 +128,7 @@ class DesktopService:
         self._closing = False
         self._closed = False
         self.pending: dict[str, str] = {}
+        self.runtime_keys: dict[str, str] = {}
         self.credentials: dict[str, str] = {}
         self.remote_connections: dict[str, dict] = {}
         self.vendor_keys: dict[str, str] = {}
@@ -447,6 +449,18 @@ class DesktopService:
                 status = "regressed"
             if isinstance(result, dict) and result.get("status") in {"failed", "error"}:
                 status = "failed"
+            if (
+                status == "completed"
+                and isinstance(result, dict)
+                and result.get("runtime")
+                and "verification" in result
+            ):
+                from .local_runtimes import accept_result
+
+                try:
+                    accept_result(self, result)
+                except ValueError as exc:
+                    result["verification_stale"] = str(exc)
             # Keep the reported usage with the run so history can show it later.
             summary = usage.result(result)
             if isinstance(result, dict) and summary:
@@ -501,13 +515,19 @@ class DesktopService:
             "compaction",
             "tuning",
             "local",
+            "local-runtime",
+            "local-comparison",
             "studio",
         }:
             raise ValueError("Unknown job type")
         with self.lock:
             if self._closing:
                 raise ValueError("The desktop engine is shutting down")
-            root = self.project(project_id)
+            if not project_id and kind == "local-runtime" and params.get("runtime_setup"):
+                root = self.root / "runtime-operations"
+                root.mkdir(exist_ok=True, mode=0o700)
+            else:
+                root = self.project(project_id)
             if project_id in self._ship_projects:
                 raise ValueError(
                     "A Git commit or push is in progress for this project. Start the run when it finishes."
@@ -612,6 +632,19 @@ class DesktopService:
                 params["expected_digest"] = source["result"]["harness_digest"]
                 if len(str(params.get("instructions") or "")) > 4000:
                     raise ValueError("Use compaction instructions up to 4,000 characters")
+            if (
+                kind == "task"
+                and params.get("provider") == "apple-foundation"
+                and params.get("interaction_mode") != "chat"
+            ):
+                from superqode.local.apple import status
+
+                available = status()
+                if available.get("available") is not True:
+                    raise ValueError(
+                        available.get("guidance")
+                        or "Check Apple Intelligence availability in Local AI"
+                    )
             if kind == "task":
                 reference = str(params.get("harness") or "core")
                 if reference.startswith("local-harness:"):
@@ -759,11 +792,17 @@ class DesktopService:
                 title = {
                     "tuning": "Routing decision tuning",
                     "evaluation": "Harness evaluation",
+                    "local-comparison": "Local model and harness comparison",
                     "optimization": "Harness optimization",
                     "check": "Project check",
                     "compaction": "Compact model context",
                     "tool": tool_plan["title"] if tool_plan else "Advanced workflow",
                     "local": params.get("local_plan", {}).get("title", "Local model setup"),
+                    "local-runtime": "Install local runtime"
+                    if params.get("runtime_setup")
+                    else "Warm local model"
+                    if params.get("runtime_action") == "warm"
+                    else "Local runtime tool check",
                     "studio": params.get("studio_plan", {}).get("title", "Harness check"),
                 }[kind]
             from .ownership import Lease, project_lease_path
@@ -844,6 +883,14 @@ class DesktopService:
                     secrets = tuple(set(secrets) | {self.vendor_keys["systemone"]})
                 if tool_plan:
                     secrets = tuple(set(secrets) | set(tool_plan["secrets"]))
+                if kind == "local-comparison":
+                    from .local_comparisons import environment as comparison_environment
+
+                    compare_env, compare_secrets = comparison_environment(
+                        self, params["comparison_plan"]
+                    )
+                    credential_env.update(compare_env)
+                    secrets = tuple(set(secrets) | set(compare_secrets))
                 from .local_models import binding as local_binding
 
                 binding = local_binding(
@@ -862,6 +909,36 @@ class DesktopService:
                         )
                         if provider.id == "ollama":
                             credential_env["OLLAMA_HOST"] = endpoint.removesuffix("/v1")
+                if params.get("provider") == "local-openai" and kind != "check":
+                    from .local_runtimes import environment as runtime_environment
+
+                    if kind == "local-runtime":
+                        from .local_runtimes import read, key, validation_digest
+                        from superqode.local.runtimes import validate
+
+                        profile = read(self, params["runtime_profile"]["id"])
+                        if params["runtime_digest"] != validation_digest(profile):
+                            raise ValueError("Runtime settings changed before the check started")
+                        spec = validate(profile)
+                        local_env = {
+                            "SUPERQODE_LOCAL_RUNTIME": json.dumps(spec.public()),
+                            "LOCAL_RUNTIME_API_KEY": key(self, spec.id) or "",
+                        }
+                    else:
+                        local_env = runtime_environment(
+                            self, project_id, params.get("harness", ""), params.get("model", "")
+                        )
+                    credential_env.update(local_env)
+                    if local_env.get("LOCAL_RUNTIME_API_KEY"):
+                        secrets = tuple(set(secrets) | {local_env["LOCAL_RUNTIME_API_KEY"]})
+                if kind in {"task", "evaluation", "optimization", "studio", "compaction"}:
+                    configured = self._all(
+                        "SELECT value FROM settings WHERE key='apple_utility_enabled'"
+                    )
+                    if configured and json.loads(configured[0]["value"]) is True:
+                        credential_env["SUPERQODE_UTILITY_PROVIDER"] = (
+                            "apple-foundation/system-on-device"
+                        )
                 if kind == "check":
                     credential_env = {}
                     remote_config = {}
@@ -1174,6 +1251,40 @@ class DesktopService:
                     return install(self.credentials, params)
                 credentials = dict(self.credentials)
             if method == "providers.check":
+                if params.get("provider") == "apple-foundation":
+                    from superqode.local.apple import status
+
+                    apple = status()
+                    return {
+                        **apple,
+                        "ready": apple.get("available") is True,
+                        "message": apple.get("guidance", ""),
+                    }
+                if params.get("provider") == "local-openai":
+                    from .local_runtimes import environment as runtime_environment
+                    from superqode.local.runtimes import validate, models
+                    import asyncio
+
+                    selected = runtime_environment(
+                        self,
+                        params.get("project", ""),
+                        params.get("harness", "no-tool"),
+                        params.get("model", ""),
+                    )
+                    available = asyncio.run(
+                        models(
+                            validate(json.loads(selected["SUPERQODE_LOCAL_RUNTIME"])),
+                            selected.get("LOCAL_RUNTIME_API_KEY"),
+                        )
+                    )
+                    ready = any(row["id"] == params.get("model") for row in available)
+                    return {
+                        "ready": ready,
+                        "state": "local-runtime",
+                        "message": "Local server model is available."
+                        if ready
+                        else "Refresh the local server models.",
+                    }
                 if params.get("project") and params.get("harness"):
                     from .local_models import binding as local_binding
 
@@ -1292,6 +1403,51 @@ class DesktopService:
             if method == "local.harnesses.launch":
                 return local_harnesses.launch(self, params)
             raise ValueError("Unknown Advanced local harness method")
+        if method.startswith("local.comparisons."):
+            from . import local_comparisons
+
+            action = method.removeprefix("local.comparisons.")
+            if action == "catalog":
+                return local_comparisons.catalog(self, params["project"])
+            if action == "prepare":
+                return local_comparisons.prepare(self, params)
+            if action == "start":
+                return local_comparisons.start(self, params)
+            if action == "history":
+                return self._all(
+                    "SELECT id,title,status,created FROM jobs WHERE project=? AND kind='local-comparison' ORDER BY created DESC LIMIT 30",
+                    (params["project"],),
+                )
+            raise ValueError("Unknown local comparison action")
+        if method.startswith("local.runtimes."):
+            from .local_runtimes import dispatch
+
+            return dispatch(self, method.removeprefix("local.runtimes."), params)
+        if method in {"local.execution.status", "local.execution.configure"}:
+            from superqode.local.execution import snapshot, configure
+
+            return snapshot() if method.endswith("status") else configure(params.get("concurrency"))
+        if method in {"local.apple.status", "local.apple.utility"}:
+            from superqode.local.apple import status
+
+            current = status()
+            if method.endswith("utility"):
+                enabled = params.get("enabled")
+                if type(enabled) is not bool:
+                    raise ValueError("Choose whether Apple utility routing is enabled")
+                if enabled and current.get("available") is not True:
+                    raise ValueError(
+                        current.get("guidance") or "Apple's on-device model is unavailable"
+                    )
+                self._write(
+                    "INSERT OR REPLACE INTO settings VALUES('apple_utility_enabled',?)",
+                    (json.dumps(enabled),),
+                )
+            saved = self._all("SELECT value FROM settings WHERE key='apple_utility_enabled'")
+            return {
+                **current,
+                "utility_enabled": bool(saved and json.loads(saved[0]["value"]) is True),
+            }
         if method.startswith("local.models."):
             from . import local_models
             from . import hub_access

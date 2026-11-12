@@ -106,8 +106,11 @@ from superqode.providers.gateway.litellm_gateway import LiteLLMGateway
         ("anthropic", "claude-sonnet-4", "off", {"thinking": {"type": "disabled"}}),
         ("ds4", "deepseek-v4-flash", "off", {"thinking": {"type": "disabled"}}),
         ("openai", "gpt-5", "off", {}),
-        # Providers with no native reasoning concept → empty mapping.
-        ("ollama", "qwen2.5-coder", "high", {}),
+        # Ollama supports explicit thinking through LiteLLM's native mapping.
+        ("ollama", "qwen3:8b", "high", {"reasoning_effort": "high"}),
+        ("ollama", "qwen3:8b", "off", {"reasoning_effort": "off"}),
+        ("ollama", "qwen3:8b", "max", {"reasoning_effort": "high"}),
+        # Providers/models with no mapped reasoning concept → empty mapping.
         ("google", "gemini-pro", "high", {}),
         ("mlx", "Qwen2.5-Coder-7B-mlx", "max", {}),
     ],

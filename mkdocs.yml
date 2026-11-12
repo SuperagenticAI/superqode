@@ -205,6 +205,9 @@ nav:
       - 🎛️ Model Profiles: providers/profiles.md
       - 🗂️ Model Catalog: advanced/model-catalog.md
       - 🩺 Local Stack Doctor: advanced/local-stack.md
+      - Local Runtimes and Apple On-device Setup: advanced/local-runtime-workspace.md
+      - Hardware Presets and Local Comparisons: advanced/local-setup-comparisons.md
+      - macOS Local AI Architecture and Readiness: advanced/local-ai-macos-audit.md
       - 🪟 Local Context & Compaction: advanced/local-context.md
       - 🔎 Semantic Code Search: advanced/semantic-search.md
       - 🔁 Recursive Dynamic Coding: local-recursive-dynamic-coding.md

@@ -1,8 +1,28 @@
 import XCTest
+import Observation
 
 @testable import SuperQode
 
 final class WorkspaceCommandTests: XCTestCase {
+  @MainActor func testFixedMenusIgnoreHistoryContentChangesUntilAvailabilityChanges() {
+    let app = Workspace(recoveryStore: WorkspaceRecoveryStore(directory: nil))
+    app.showWelcome = false
+    app.connected = true
+    app.project = ["id": "project"]
+    let first = WorkspaceDestination(projectID: "project", projectPath: "/tmp/project")
+    app.navigationHistory = [first]
+    var changes = 0
+    withObservationTracking { _ = app.workspaceCommand(.newTask) } onChange: {
+      MainActor.assumeIsolated { changes += 1 }
+    }
+    app.navigationHistory.append(WorkspaceDestination(projectID: "project", projectPath: "/tmp/project", section: "Files"))
+    XCTAssertEqual(changes, 0, "Fixed menus must not rebuild on every page change")
+    app.navigationHistory = []
+    XCTAssertEqual(changes, 1, "Back availability still needs to update when history empties")
+    XCTAssertFalse(app.workspaceCommand(.back)?.isEnabled ?? true)
+    app.forwardHistory = [first]
+    XCTAssertTrue(app.workspaceCommand(.forward)?.isEnabled ?? false)
+  }
   private let terminal = WorkspaceCommand(action: .section("Terminal"), title: "Terminal",
     detail: "Project shell", symbol: "terminal", keywords: "console commands")
   private let refresh = WorkspaceCommand(action: .refreshChanges, title: "Refresh Changes",

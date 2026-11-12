@@ -114,3 +114,40 @@ def test_airplane_cli_models_json():
     assert result.exit_code == 0, result.output
     payload = json.loads(result.output)
     assert isinstance(payload, list)
+
+
+def test_smoke_checks_saved_policy_instead_of_claiming_network_isolation(tmp_path, monkeypatch):
+    from superqode.local import airplane
+    from dataclasses import replace
+    from superqode.harness.loader import save_harness_spec
+
+    repo = _repo(tmp_path)
+    monkeypatch.setattr(airplane, "_semantic_available", lambda: (True, "ok"))
+    prepared = airplane.prepare_airplane(repo_path=repo, model="ollama/qwen3:8b", build_index=False)
+    report = airplane.smoke_airplane(repo_path=repo)
+    assert next(c for c in report.checks if c.name == "network_policy").ok
+    assert any("not an egress-isolation test" in warning for warning in report.warnings)
+    target = Path(prepared.harness_path)
+    spec = load_harness_spec(target)
+    save_harness_spec(
+        replace(spec, execution_policy=replace(spec.execution_policy, allow_network=True)), target
+    )
+    report = airplane.smoke_airplane(repo_path=repo)
+    assert not next(c for c in report.checks if c.name == "network_policy").ok
+    assert report.status != "ready"
+    save_harness_spec(
+        replace(spec, model_policy=replace(spec.model_policy, fallbacks=("openai/gpt-5",))), target
+    )
+    assert not next(
+        c for c in airplane.smoke_airplane(repo_path=repo).checks if c.name == "network_policy"
+    ).ok
+
+
+def test_smoke_without_a_prepared_harness_does_not_pass_network_check(tmp_path, monkeypatch):
+    from superqode.local import airplane
+
+    repo = _repo(tmp_path)
+    monkeypatch.setattr(airplane, "_semantic_available", lambda: (True, "ok"))
+    report = airplane.smoke_airplane(repo_path=repo)
+    assert not next(c for c in report.checks if c.name == "network_policy").ok
+    assert report.status != "ready"

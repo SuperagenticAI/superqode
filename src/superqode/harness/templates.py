@@ -53,6 +53,46 @@ def core_template(*, name: str = "core", backend: str = "builtin") -> HarnessSpe
     )
 
 
+def apple_local_template() -> HarnessSpec:
+    """Apple-sized configuration of the existing native execution engine."""
+    return HarnessSpec(
+        name="apple-local",
+        description="Focused on-device development with three file tools and no shell or network.",
+        flavor=HarnessFlavor.CODING,
+        runtime=RuntimeSpec(backend="builtin"),
+        model_policy=ModelPolicySpec(
+            primary="apple-foundation/system-on-device",
+            profile="apple-local",
+            context_window=4096,
+            config={
+                "system_level": "minimal",
+                "tool_profile": "apple-local",
+                "max_iterations": 8,
+                "session_history_limit": 8,
+                "parallel_tools": False,
+            },
+        ),
+        execution_policy=ExecutionPolicySpec(
+            sandbox="local",
+            approval_profile="balanced",
+            allow_read=True,
+            allow_write=True,
+            allow_shell=False,
+            allow_network=False,
+        ),
+        agents=(
+            AgentSpec(
+                id="coder",
+                role="focused development",
+                tools=("read", "write", "edit"),
+                system_prompt="Complete one small task. Read relevant files in short line ranges. Use read, write or edit when needed. Keep tool output and answers brief. Report what changed and what remains unverified. Never claim tests passed without their results.",
+            ),
+        ),
+        checks=ChecksSpec(enabled=False),
+        metadata={"template": "apple-local", "builtin_harness": True},
+    )
+
+
 def coding_template(*, name: str = "superqode-coding", backend: str = "builtin") -> HarnessSpec:
     """Default tool-rich coding harness."""
     return HarnessSpec(

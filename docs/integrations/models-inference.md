@@ -43,7 +43,7 @@ the complete model-provider catalog.
 | Hugging Face TGI | Start a TGI endpoint | `:connect local tgi <model>` | `superqode local doctor` | [Local Providers](../providers/local.md) |
 | MLX and MLX-VLM | `uv tool install "superqode[mlx]"` on supported Apple Silicon | `:connect local mlx <model>` | `superqode local doctor` | [Local Providers](../providers/local.md) |
 | DwarfStar | Install and start a compatible DwarfStar server | Select the discovered local route | `superqode local doctor` | [Local Providers](../providers/local.md#dwarfstar-ds4) |
-| Apple Foundation Models | Install `apple-fm-sdk` on supported Apple Silicon with Apple Intelligence | Set `SUPERQODE_UTILITY_PROVIDER=apple-fm` | `superqode local doctor` | [Local Stack Doctor](../advanced/local-stack.md) |
+| Apple Foundation Models | Bundled native bridge on an eligible Mac with macOS 26+ and Apple Intelligence ready; optional Python SDK remains available for standalone CLI | Local AI → Runtimes & performance → Apple on-device model | Check availability; use Direct Chat or explicitly enable utility hooks | [Native setup and limits](../advanced/local-runtime-workspace.md#apple-foundation-models) |
 | Transformers | Install `transformers`, `accelerate`, and the required compute framework | Select the local Transformers route | `superqode local doctor` | [Local Stack Doctor](../advanced/local-stack.md) |
 | EmbeddingGemma 2 for CodeGem | `uv tool install "superqode[semantic-local]"`; weights download from Google/Hugging Face on first use | Set CodeGem `embedding.provider` to `sentence-transformers` | Use `superqode-codegem-index . --provider sentence-transformers --query "your code question"` | [CodeGem](../advanced/codegem.md#add-local-embeddinggemma-search) |
 

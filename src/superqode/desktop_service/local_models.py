@@ -56,9 +56,9 @@ def servers(service):
     from superqode.local.install import install_plan, NAMES
 
     registry = service.root / "model-servers"
-    manager = ServerManager(registry_dir=registry)
-    engines = []
-    for engine in workbench.ENGINES:
+
+    def inspect(engine):
+        manager = ServerManager(registry_dir=registry)
         if engine == "ds4":
             from pathlib import Path
 
@@ -84,26 +84,28 @@ def servers(service):
             and time.time() - handle.started_at < 180
         ):
             ready["state"] = "starting"
-        engines.append(
-            {
-                **ready,
-                "id": engine,
-                "name": "DS4 · DeepSeek V4" if engine == "ds4" else NAMES[engine],
-                "can_stop": owned
-                or bool(
-                    engine == "lmstudio" and ready["running"] and handle and not handle.adopted
-                ),
-                "install": {
-                    "automatic": False,
-                    "docs_url": "https://github.com/antirez/ds4",
-                    "guidance": "Build ds4-server separately, then choose the executable and your downloaded GGUF. No installation or download is automatic.",
-                }
-                if engine == "ds4"
-                else install_plan(engine).to_dict(),
-                "cache_control": engine in {"ollama", "llama.cpp"},
+        return {
+            **ready,
+            "id": engine,
+            "name": "DS4 · DeepSeek V4" if engine == "ds4" else NAMES[engine],
+            "can_stop": owned
+            or bool(engine == "lmstudio" and ready["running"] and handle and not handle.adopted),
+            "install": {
+                "automatic": False,
+                "docs_url": "https://github.com/antirez/ds4",
+                "guidance": "Build ds4-server separately, then choose the executable and your downloaded GGUF. No installation or download is automatic.",
             }
-        )
-    return engines
+            if engine == "ds4"
+            else install_plan(engine).to_dict(),
+            "cache_control": engine in {"ollama", "llama.cpp"},
+        }
+
+    # These checks are independent. A slow or unavailable engine must not add
+    # another serial timeout before the developer can see the engines in use.
+    from concurrent.futures import ThreadPoolExecutor
+
+    with ThreadPoolExecutor(max_workers=len(workbench.ENGINES)) as pool:
+        return list(pool.map(inspect, workbench.ENGINES))
 
 
 def prepare(service, params):

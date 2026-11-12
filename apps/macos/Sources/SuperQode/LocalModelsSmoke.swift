@@ -21,7 +21,33 @@ import Foundation
     catch { rejected = error.localizedDescription.contains("changed") }
     let after = try await engine.call("local.models.jobs") as? [[String: Any]] ?? []
     guard rejected, before.count == after.count else { throw EngineError(message: "Reviewing a model download started an operation or accepted a stale plan.") }
-    return "passed; shared catalog, storage/Hub setup, 28-runtime matrix and digest-bound download/Core-check review without transferring weights or making model calls"
+    let runtimeID = "native-smoke-" + UUID().uuidString.lowercased()
+    let saved = try await engine.call("local.runtimes.save", ["id": runtimeID, "template": "custom", "name": "Native fixture", "endpoint": "http://127.0.0.1:9/v1", "context": 4096, "include_usage": false]) as? [String: Any] ?? [:]
+    let runtimes = try await engine.call("local.runtimes.catalog") as? [String: Any] ?? [:]
+    let execution = try await engine.call("local.execution.status") as? [String: Any] ?? [:]
+    let apple = try await engine.call("local.apple.status") as? [String: Any] ?? [:]
+    let recipe = try await engine.call("local.runtimes.setup.plan", ["id": runtimeID]) as? [String: Any] ?? [:]
+    _ = try await engine.call("local.runtimes.delete", ["id": runtimeID])
+    guard saved["context"] as? Int == 4096, saved["include_usage"] as? Bool == false,
+      (runtimes["profiles"] as? [[String: Any]])?.contains(where: { string($0, "id") == runtimeID }) == true,
+      (execution["concurrency"] as? Int ?? 0) > 0,
+      apple["available"] is Bool, !string(apple, "guidance").isEmpty,
+      recipe["automatic"] as? Bool == false
+    else { throw EngineError(message: "Native runtime profiles, execution status, Apple availability or manual setup guidance failed.") }
+    let setup = try await engine.call("local.models.quickstart.catalog", ["project": projectID]) as? [String: Any] ?? [:]
+    guard (setup["setup_presets"] as? [[String: Any]])?.count == 3 else { throw EngineError(message: "Hardware setup intentions were missing.") }
+    let compareID = "native-compare-" + UUID().uuidString.lowercased()
+    let fixtureEndpoint = ProcessInfo.processInfo.environment["OPENAI_API_BASE"] ?? ""
+    _ = try await engine.call("local.runtimes.save", ["id": compareID, "template": "custom", "endpoint": fixtureEndpoint, "context": 4096, "tools": true])
+    let comparison = try await engine.call("local.comparisons.catalog", ["project": projectID]) as? [String: Any] ?? [:]
+    let localRoutes = comparison["routes"] as? [[String: Any]] ?? []
+    guard let route = localRoutes.first(where: { string($0, "runtime") == compareID }) else { throw EngineError(message: "The native comparison did not discover the loopback fixture model.") }
+    guard let candidate = localRoutes.first(where: { string($0, "runtime") == compareID && string($0, "id") != string(route, "id") }) else { throw EngineError(message: "The comparison fixture needs two distinct model identities.") }
+    let reviewed = try await engine.call("local.comparisons.prepare", ["project": projectID, "context": 4096, "warmup": false, "selections": [["route": string(route, "id"), "harness": "core"], ["route": string(candidate, "id"), "harness": "core"]]]) as? [String: Any] ?? [:]
+    _ = try await engine.call("local.runtimes.delete", ["id": compareID])
+    guard !string(reviewed, "digest").isEmpty, (reviewed["inspection"] as? [String: Any])?["task_count"] as? Int == 2,
+      reviewed["suite_content"] == nil else { throw EngineError(message: "The native comparison review was not pinned to its fixed tasks.") }
+    return "passed; hardware presets, independent-grader comparison review, shared catalog, 28-runtime matrix, profile round-trip and Apple availability without transferring weights or making generation requests"
   }
 
   func smokeBackgroundEngine() async throws -> String {

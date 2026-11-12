@@ -9,6 +9,7 @@ struct LocalQuickStartView: View {
   var showInstalled = true
   @State private var hardware: [String: Any] = [:]
   @State private var engines: [[String: Any]] = []
+  @State private var otherEngines: [[String: Any]] = []
   @State private var warnings: [String] = []
   @State private var learnMore = false
   @State private var advanced = false
@@ -17,6 +18,7 @@ struct LocalQuickStartView: View {
   @State private var operationStatus = ""
   @State private var showOperationLog = false
   @State private var choices: [[String: Any]] = []
+  @State private var presets: [[String: Any]] = []
   @State private var selection = ""
   @State private var step: [String: Any] = [:]
   @State private var failure = ""
@@ -53,6 +55,7 @@ struct LocalQuickStartView: View {
         LocalAINotice(learnMore: $learnMore)
         setupGuide
       }
+      if !otherEngines.isEmpty { otherRuntimePanel }
     }
     }.padding(24).frame(width: embedded ? nil : 780, height: embedded ? nil : 760)
       .centeredDialog(isPresented: $learnMore, title: "About Local AI") {
@@ -90,11 +93,12 @@ struct LocalQuickStartView: View {
   private var setupGuide: some View {
     VStack(alignment: .leading, spacing: 16) {
       devicePanel
+      presetPanel
       if !showInstalled { enginePanel }
       Text("Download a starter model only when it is not already installed. Review each install, download and load before it runs.").foregroundStyle(.secondary)
       Picker("Model", selection: $selection) {
-        Text("Choose a model to download").tag("")
-        ForEach(downloads, id: \.projectRowID) { row in Text(string(row, "name") + " · " + string(row["fit"] as? [String: Any] ?? [:], "rating", "Unknown")).tag(string(row, "id")) }
+        Text("Choose a model or preset").tag("")
+        ForEach(setupChoices, id: \.projectRowID) { row in Text(string(row, "name") + " · " + string(row["fit"] as? [String: Any] ?? [:], "rating", "Unknown")).tag(string(row, "id")) }
       }.disabled(busy || state == "working")
       if let row = choices.first(where: { string($0, "id") == selection }) {
         Text(string(row, "detail")).font(.callout).foregroundStyle(.secondary)
@@ -162,9 +166,59 @@ struct LocalQuickStartView: View {
     }
   }
 
+  private var presetPanel: some View {
+    VStack(alignment: .leading, spacing: 10) {
+      Text("Choose a starting point").font(.headline)
+      HStack(alignment: .top, spacing: 10) {
+        ForEach(presets, id: \.projectRowID) { preset in
+          let choice = preset["choice"] as? [String: Any] ?? [:]
+          Button {
+            selection = string(choice, "id")
+          } label: {
+            VStack(alignment: .leading, spacing: 6) {
+              Label(string(preset, "name"), systemImage: string(preset, "id") == "fast" ? "bolt.fill" : string(preset, "id") == "balanced" ? "scale.3d" : "cpu")
+                .font(.headline).foregroundStyle(Color.qAccent)
+              Text(string(choice, "model", "No fitting suggestion")).font(.caption).lineLimit(2)
+              Text(string(preset, "detail")).font(.caption2).foregroundStyle(.secondary)
+              if let context = choice["suggested_context"] as? Int {
+                Text("\(context.formatted()) context · " + (choice["installed"] as? Bool == true ? "Reuse installed" : "Review download"))
+                  .font(.caption2).foregroundStyle(.secondary)
+              }
+            }.frame(maxWidth: .infinity, minHeight: 118, alignment: .topLeading).padding(12)
+              .background(selection == string(choice, "id") ? Color.qAccent.opacity(0.12) : Color.secondary.opacity(0.05), in: RoundedRectangle(cornerRadius: 10))
+          }.buttonStyle(.plain).disabled(choice.isEmpty || busy || state == "working")
+        }
+      }
+      Text("These are memory-based starting points. Speed and coding quality need measurement. Selecting a card prepares setup; each download, load and check is reviewed separately.")
+        .font(.caption).foregroundStyle(.secondary)
+    }
+  }
+
   private var memoryLabel: String {
     if let memory = hardware["unified_memory_gb"] as? Int { return "\(memory) GB" }
     return "Memory not reported"
+  }
+  private var otherRuntimePanel: some View {
+    VStack(alignment: .leading, spacing: 12) {
+      Text("More runtimes for your Mac").font(.headline)
+      Text("Use MLX for Apple Silicon, llama.cpp for GGUF models, or DS4 for its specialized DeepSeek workflow. Choose weights and context that fit your Mac before loading.")
+        .font(.callout).foregroundStyle(.secondary)
+      ForEach(otherEngines, id: \.projectRowID) { row in
+        let running = row["running"] as? Bool == true
+        let installed = row["installed"] as? Bool == true
+        HStack {
+          Label(string(row, "name"), systemImage: running ? "checkmark.circle.fill" : "cpu")
+          Text(running ? "Server running" : installed ? "Installed · server stopped" : "Not installed")
+            .foregroundStyle(.secondary)
+          Spacer()
+          let setup = row["install"] as? [String: Any] ?? [:]
+          if let url = URL(string: string(setup, "docs_url")), url.scheme == "https" {
+            Link("Setup guide", destination: url)
+          }
+        }.font(.caption)
+      }
+      Button("Manage runtimes and models…") { advanced = true }
+    }.padding(16).brandSurface()
   }
   private var devicePanel: some View {
     VStack(alignment: .leading, spacing: 4) {
@@ -243,7 +297,10 @@ struct LocalQuickStartView: View {
     } catch { failure = error.localizedDescription }
   }
 
-  private var downloads: [[String: Any]] { choices.filter { $0["installed"] as? Bool != true } }
+  private var downloads: [[String: Any]] { choices.filter { $0["installed"] as? Bool != true && $0["setup_preset"] == nil } }
+  private var setupChoices: [[String: Any]] {
+    choices.filter { ($0["installed"] as? Bool != true && $0["setup_preset"] == nil) || string($0, "id") == selection }
+  }
   private var stepTitle: String {
     switch state {
     case "install": return "Install runtime (consent)"
@@ -262,12 +319,19 @@ struct LocalQuickStartView: View {
       guard validProject, !Task.isCancelled else { return }
       hardware = result["hardware"] as? [String: Any] ?? [:]
       engines = result["engines"] as? [[String: Any]] ?? []
+      otherEngines = result["other_engines"] as? [[String: Any]] ?? []
       warnings = (result["guardrails"] as? [String: Any])?["warnings"] as? [String] ?? []
       choices = result["choices"] as? [[String: Any]] ?? []
+      presets = result["setup_presets"] as? [[String: Any]] ?? []
+      for preset in presets {
+        if let choice = preset["choice"] as? [String: Any], !choices.contains(where: { string($0, "id") == string(choice, "id") }) {
+          choices.append(choice)
+        }
+      }
       let saved = selection.isEmpty ? string(result, "selected") : selection
       let savedRow = choices.first { string($0, "id") == saved }
       // Installed models are chosen from the list above. Do not open them as a download.
-      if savedRow?["installed"] as? Bool == true || !choices.contains(where: { string($0, "id") == saved }) {
+      if (savedRow?["installed"] as? Bool == true && savedRow?["setup_preset"] == nil) || !choices.contains(where: { string($0, "id") == saved }) {
         selection = ""
       } else {
         selection = saved

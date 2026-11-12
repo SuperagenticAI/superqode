@@ -208,7 +208,7 @@ async def test_golden_ollama_gemma4_body():
     }
     assert body["think"] is False
     assert [t["function"]["name"] for t in body["tools"]] == ["read"]
-    assert body["stream"] is False
+    assert body["stream"] is True
 
 
 @pytest.mark.asyncio

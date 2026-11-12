@@ -755,3 +755,17 @@ enabling shell or write access in important repositories.
 - [Local Providers](../providers/local.md)
 - [Runtime Backends](../runtimes.md)
 - [Harness System](../advanced/harness-system.md)
+
+### Native local runtime profiles
+
+On macOS, **Local AI → Runtimes & performance** saves explicit loopback profiles
+for vLLM Metal, oMLX, Jan and other compatible inference servers. The provider ID
+is `local-openai`; each project binding selects its own endpoint and optional
+session/Keychain key. Run the generated-data tool check before selecting a
+coding harness. Server discovery sends no prompts or project files.
+
+`apple-foundation` selects Apple's system on-device model through the bundled
+native bridge. It requires an eligible Mac, macOS 26+ and Apple Intelligence
+ready. Choose it for Direct Chat or explicitly enabled utility hooks. It does
+not load arbitrary downloaded models, expose coding tools, or fall back to a
+cloud model. The older optional Python `apple-fm` utility route remains separate.

@@ -414,10 +414,12 @@ def _sse(*events: dict) -> _FakeStream:
 
 def test_run_bench_parses_stream(monkeypatch):
     chunks = [{"choices": [{"delta": {"content": "tok"}}]} for _ in range(20)]
+    chunks.append({"choices": [], "usage": {"completion_tokens": 60}})
     monkeypatch.setattr("superqode.local.bench.urlopen", lambda req, timeout=None: _sse(*chunks))
     result = run_bench("http://localhost:9999/v1", "test-model", max_tokens=32)
     assert result.ok
-    assert result.completion_tokens == 20
+    assert result.completion_tokens == 60
+    assert result.output_chunks == 20
     assert result.ttft_s is not None and result.total_s is not None
 
 
@@ -514,7 +516,10 @@ def test_run_bench_accepts_reasoning_only_stream(monkeypatch, field):
     result = run_bench("http://localhost:9999/v1", "qwen3:8b", max_tokens=64)
     assert result.ok
     assert result.ttft_s is not None
-    assert result.completion_tokens == 8
+    assert result.completion_tokens is None
+    assert result.output_chunks == 8
+    assert result.decode_tps is None
+    assert result.first_text_s is None
     assert result.error == ""
 
 

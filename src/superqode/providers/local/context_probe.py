@@ -153,20 +153,48 @@ _PROBE_SEQUENCE = (
 
 
 async def probe_base_url(
-    base_url: str, model_id: Optional[str] = None, timeout: float = PROBE_TIMEOUT
+    base_url: str,
+    model_id: Optional[str] = None,
+    timeout: float = PROBE_TIMEOUT,
+    *,
+    provider: Optional[str] = None,
 ) -> Optional[Tuple[int, str]]:
     """Return (loaded_window, endpoint) for one base URL, or None."""
-    for path, parser in _PROBE_SEQUENCE:
-        data = await asyncio.to_thread(_http_get_json, base_url + path, timeout)
-        if not data:
-            continue
-        try:
-            win = parser(data, model_id)
-        except Exception:
-            win = None
-        if win:
-            return win, path
-    return None
+    known = {
+        "ollama": {"/api/ps"},
+        "lmstudio": {"/api/v1/models", "/v1/models"},
+        "llamacpp": {"/props"},
+        "mlx": {"/v1/models"},
+        "vllm": {"/v1/models"},
+        "sglang": {"/v1/models"},
+        "ds4": {"/v1/models"},
+    }
+    selected = known.get(provider or "")
+    sequence = tuple(
+        (path, parser) for path, parser in _PROBE_SEQUENCE if selected is None or path in selected
+    )
+    tasks = [
+        asyncio.create_task(asyncio.to_thread(_http_get_json, base_url + path, timeout))
+        for path, _ in sequence
+    ]
+    try:
+        # Probe independent endpoints concurrently, while retaining loaded-window
+        # precedence. A stalled endpoint costs one timeout, not four per request.
+        for (path, parser), task in zip(sequence, tasks):
+            data = await task
+            if not data:
+                continue
+            try:
+                win = parser(data, model_id)
+            except Exception:
+                win = None
+            if win:
+                return win, path
+        return None
+    finally:
+        for task in tasks:
+            task.cancel()
+        await asyncio.gather(*tasks, return_exceptions=True)
 
 
 async def resolve_local_context_window(
@@ -177,7 +205,7 @@ async def resolve_local_context_window(
     Returns ``(window, endpoint)`` or ``None`` if nothing answered.
     """
     for base in candidate_base_urls(provider):
-        result = await probe_base_url(base, model, timeout)
+        result = await probe_base_url(base, model, timeout, provider=provider)
         if result:
             return result
     return None

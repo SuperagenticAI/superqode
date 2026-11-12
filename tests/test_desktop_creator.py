@@ -205,6 +205,8 @@ def test_monty_check_runs_the_saved_plugin_and_never_installs_it(desktop, monkey
     assert pure_python(draft["plugin"])
     assert not pure_python("import os\nprint(1)\n")
     service.dispatch("superagent.save", _save_payload(project["id"], draft, "Reviewed check"))
+    # Exercise missing-dependency behavior even when the optional SDK is present.
+    monkeypatch.setattr("superqode.tools.monty_tool._load_monty", lambda: None)
     with pytest.raises(ValueError, match="not installed"):
         service.dispatch(
             "superagent.monty",

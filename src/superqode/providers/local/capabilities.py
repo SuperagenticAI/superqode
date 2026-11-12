@@ -68,6 +68,15 @@ def declared_tool_support(provider: str, model_id: str) -> Optional[bool]:
     Results are cached per process: this runs on the turn path and the answer
     does not change while a model is loaded.
     """
+    if provider == "apple-foundation":
+        return model_id == "system-on-device"
+    if provider == "local-openai":
+        try:
+            from superqode.local.runtimes import selected_runtime
+
+            return selected_runtime().tools
+        except ValueError:
+            return None
     key = (provider, model_id)
     if key in _CACHE:
         return _CACHE[key]

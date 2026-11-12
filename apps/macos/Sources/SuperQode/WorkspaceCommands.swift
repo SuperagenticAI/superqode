@@ -9,8 +9,8 @@ import AppKit
     // Menus contain many individually observed items. Reuse their catalog when
     // unrelated navigation, transcript or draft changes publish the workspace.
     let state = [connected, project.isEmpty, openingProject, restoringNavigation,
-      switchingBackgroundEngine, busy, isManaged, navigationHistory.isEmpty,
-      forwardHistory.isEmpty, showWelcome, selectedJob.isEmpty, active, loadingConversationDraft,
+      switchingBackgroundEngine, busy, isManaged, !navigation.hasBackHistory,
+      !navigation.hasForwardHistory, showWelcome, selectedJob.isEmpty, active, loadingConversationDraft,
       string(detail, "kind") == "task"]
     if let cache = baseCommandCache, cache.state == state { return cache.commands }
     let commands = makeWorkspaceBaseCommands()
@@ -62,12 +62,12 @@ import AppKit
         disabledReason: projectReason ?? idleReason ?? (isManaged ? nil : "Choose an agent-managed connection first.")),
       .init(action: .back, title: "Back", detail: "Restore the previous session and page",
         symbol: "chevron.left", key: "[",
-        disabledReason: openingProject || restoringNavigation || busy ? idleReason : navigationHistory.isEmpty && !(showWelcome && !project.isEmpty)
+        disabledReason: openingProject || restoringNavigation || busy ? idleReason : !navigation.hasBackHistory && !(showWelcome && !project.isEmpty)
           ? "No previous page to return to." : nil),
       .init(action: .forward, title: "Forward", detail: "Restore the next session and page",
         symbol: "chevron.right", key: "]",
         disabledReason: openingProject || restoringNavigation || busy ? idleReason
-          : forwardHistory.isEmpty ? "No next page to return to." : nil),
+          : !navigation.hasForwardHistory ? "No next page to return to." : nil),
       .init(action: .refreshChanges, title: "Refresh Changes", detail: "Refresh project Git status",
         symbol: "arrow.clockwise", keywords: "git diff review", key: "r",
         disabledReason: projectReason ?? idleReason),

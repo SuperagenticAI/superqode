@@ -174,11 +174,14 @@ EXPECTED_COMMAND_COUNT = 331
 # plus the governed ACP harness options and registry-derived choices.
 # Local evaluation adds only `local eval` and `local promote` (329 -> 331).
 # Removing those two registrations reproduces both prior renderer digests.
-EXPECTED_HELP_TREE_SHA256 = "a1c14672065eb1d16100550758085a07422da8d9e3f0ac57cf1c5ac683439dc2"
+# Apple's native bridge adds Python/Swift to the two Hub --language filters.
+# Both Click renders were diffed against 448e4153: only those two choice lists
+# changed. Command count stays 331; both old digests were reproduced first.
+EXPECTED_HELP_TREE_SHA256 = "28b4e59342ce290b3ea314650f489ec033c054d4bd16f39549b908e050f7a6d3"
 # Click 8.5 renders optional group commands as [COMMAND] and case-insensitive
 # choices in lower case. Both verified renders expose the same command tree.
 EXPECTED_MODERN_CLICK_HELP_TREE_SHA256 = (
-    "0d6da438fd1eacd23716f12ba9cb97d17136aa589004680a1664f7cfcd4fa55e"
+    "837dd90e077dacee4eef5451f19283c980b581b6c2e38f780dc7832a2f724bd4"
 )
 
 

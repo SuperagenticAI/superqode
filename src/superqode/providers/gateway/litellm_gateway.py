@@ -797,7 +797,8 @@ class LiteLLMGateway(GatewayInterface):
         if provider == "ollama":
             # Keep the caller's level. LiteLLM turns "off" into think=false and
             # low/medium/high into think=true for the Ollama chat API.
-            return {"reasoning_effort": level}
+            # Passing "max" unchanged would also become think=false.
+            return {"reasoning_effort": "high" if level == "max" else level}
 
         if provider == "moonshot" and (model or "").lower().split("/")[-1] == "kimi-k3":
             # K3's pay-as-you-go API currently exposes only max effort and
@@ -956,13 +957,18 @@ class LiteLLMGateway(GatewayInterface):
 
         base = kwargs.get("api_base") or kwargs.get("base_url")
         if base:
-            loaded = await probe_base_url(base.rstrip("/").removesuffix("/v1"), model)
+            loaded = await probe_base_url(
+                base.rstrip("/").removesuffix("/v1"), model, provider=provider
+            )
         else:
             loaded = await resolve_local_context_window(provider, model)
         window = effective_context(provider, model, loaded[0] if loaded else None)
         explicit = kwargs.get("num_ctx") or (kwargs.get("options") or {}).get("num_ctx")
         if type(explicit) is int and explicit >= 512:
             window = min(window, explicit)
+        from superqode.local.execution import annotate
+
+        annotate(context=window, context_source=loaded[1] if loaded else "configured/fallback")
         kept, output = guard_request(
             self._convert_messages(messages),
             self._convert_tools(tools) if tools else None,
@@ -2276,7 +2282,7 @@ class LiteLLMGateway(GatewayInterface):
         """Handle MLX streaming completion directly."""
         from ..local.mlx import MLXClient
 
-        client = MLXClient()
+        client = MLXClient(host=kwargs.get("api_base") or kwargs.get("base_url"))
 
         # Convert messages to OpenAI format
         openai_messages = []
@@ -2290,13 +2296,7 @@ class LiteLLMGateway(GatewayInterface):
                 openai_msg["tool_call_id"] = msg.tool_call_id
             openai_messages.append(openai_msg)
 
-        # Build request - MLX server may not support streaming properly, so use non-streaming
-        request_data = {
-            "model": model,
-            "messages": openai_messages,
-            # Note: Not setting stream=True as MLX server streaming may cause KV cache issues
-        }
-
+        request_data = {"model": model, "messages": openai_messages, "stream": True}
         if temperature is not None:
             request_data["temperature"] = temperature
         if max_tokens is not None:
@@ -2305,65 +2305,25 @@ class LiteLLMGateway(GatewayInterface):
             request_data["tools"] = self._convert_tools(tools)
         if tool_choice:
             request_data["tool_choice"] = tool_choice
-
-        # Same local-model shaping (temp clamp) as the non-streaming path.
         self._apply_local_request_shaping("mlx", model, request_data, bool(tools))
+        from ..local.mlx_stream import MLXStream
 
+        from contextlib import aclosing
+
+        stream = MLXStream(self, model)
         try:
-            # Make non-streaming request to MLX server (streaming causes KV cache issues)
-            response_data = await client._async_request(
-                "POST", "/v1/chat/completions", request_data, timeout=300.0
-            )
-
-            # Extract response and yield as single chunk
-            choice = response_data["choices"][0]
-            message = choice["message"]
-
-            # Get content and clean it up
-            content = message.get("content", "")
-
-            # Clean up MLX response content - remove special tokens that might confuse users
-            if content:
-                # Some MLX models return content with special tokens like <|channel|>, <|message|>, etc.
-                # Clean these up for better user experience
-                content = (
-                    content.replace("<|channel|>", "")
-                    .replace("<|message|>", "")
-                    .replace("<|end|>", "")
-                    .replace("<|start|>", "")
+            async with aclosing(
+                client._async_stream_request(
+                    "/v1/chat/completions", request_data, timeout=self.timeout
                 )
-                content = content.replace(
-                    "assistant", ""
-                ).strip()  # Remove duplicate assistant markers
+            ) as packets:
+                async for packet in packets:
+                    for chunk in stream.feed(packet):
+                        yield chunk
+            yield stream.final()
 
-            # Same tool-call rescue as the non-streaming MLX path: normalize
-            # native tool_calls, else scan for inline tool calls (Gemma/Llama
-            # variants under MLX often emit <tool_call> tags instead).
-            tool_calls = self._normalize_tool_calls(message.get("tool_calls"))
-            if not tool_calls and isinstance(content, str) and content:
-                stripped, extracted = self._extract_inline_tool_calls(content)
-                if extracted:
-                    tool_calls = extracted
-                    content = stripped
-
-            yield StreamChunk(
-                content=content,
-                role=message.get("role"),
-                finish_reason="tool_calls" if tool_calls else choice.get("finish_reason"),
-                tool_calls=tool_calls,
-                usage=(
-                    Usage(
-                        prompt_tokens=int(response_data.get("usage", {}).get("prompt_tokens") or 0),
-                        completion_tokens=int(
-                            response_data.get("usage", {}).get("completion_tokens") or 0
-                        ),
-                        total_tokens=int(response_data.get("usage", {}).get("total_tokens") or 0),
-                    )
-                    if response_data.get("usage")
-                    else None
-                ),
-            )
-
+        except GatewayError:
+            raise
         except Exception as e:
             # Provide more specific MLX error messages
             error_msg = str(e)
@@ -2392,7 +2352,11 @@ class LiteLLMGateway(GatewayInterface):
                     provider="mlx",
                     model=model,
                 ) from e
-            elif "Connection timed out" in error_msg or "timeout" in error_msg.lower():
+            elif (
+                isinstance(e, TimeoutError)
+                or "Connection timed out" in error_msg
+                or "timeout" in error_msg.lower()
+            ):
                 raise GatewayError(
                     f"MLX server timed out. Large MLX models (like {model}) can take 1-2 minutes for first response.\n\n"
                     f"Please wait and try again. If this persists:\n"
@@ -2403,10 +2367,166 @@ class LiteLLMGateway(GatewayInterface):
                     model=model,
                 ) from e
             else:
-                # Convert to gateway error
-                self._handle_litellm_error(e, "mlx", model)
+                raise GatewayError(
+                    f"MLX request failed: {error_msg}", provider="mlx", model=model
+                ) from e
 
     async def chat_completion(
+        self,
+        messages,
+        model,
+        provider=None,
+        temperature=None,
+        max_tokens=None,
+        tools=None,
+        tool_choice=None,
+        **kwargs,
+    ):
+        from superqode.local.execution import LocalTurn, is_local
+
+        route = provider or split_provider_model_ref(model).provider
+        if not is_local(route):
+            return await self._chat_completion(
+                messages, model, provider, temperature, max_tokens, tools, tool_choice, **kwargs
+            )
+        async with LocalTurn(route, model) as turn:
+            result = await turn.run(
+                self._chat_completion(
+                    messages, model, provider, temperature, max_tokens, tools, tool_choice, **kwargs
+                )
+            )
+            turn.observe(
+                text=bool(result.content),
+                thinking=bool(result.thinking_content),
+                tools=bool(result.tool_calls),
+                terminal=bool(result.finish_reason),
+                usage=result.usage,
+            )
+            return result
+
+    async def stream_completion(
+        self,
+        messages,
+        model,
+        provider=None,
+        temperature=None,
+        max_tokens=None,
+        tools=None,
+        tool_choice=None,
+        **kwargs,
+    ):
+        from contextlib import aclosing
+        from superqode.local.execution import LocalTurn, is_local
+
+        route = provider or split_provider_model_ref(model).provider
+        async with aclosing(
+            self._stream_completion(
+                messages, model, provider, temperature, max_tokens, tools, tool_choice, **kwargs
+            )
+        ) as chunks:
+            if not is_local(route):
+                async for chunk in chunks:
+                    yield chunk
+                return
+            async with LocalTurn(route, model) as turn:
+                while True:
+                    try:
+                        chunk = await turn.next(chunks)
+                    except StopAsyncIteration:
+                        break
+                    turn.observe(
+                        text=bool(chunk.content),
+                        thinking=bool(chunk.thinking_content),
+                        tools=bool(chunk.tool_calls),
+                        terminal=bool(chunk.finish_reason),
+                        usage=chunk.usage,
+                    )
+                    yield chunk
+
+    async def _native_local_stream(
+        self, messages, model, provider, temperature, max_tokens, tools, tool_choice, **kwargs
+    ):
+        from contextlib import aclosing
+
+        budget = kwargs.get("task_budget")
+        credited = 0
+
+        if tool_choice == "none":
+            tools = None
+        elif tool_choice not in (None, "auto"):
+            raise InvalidRequestError(
+                "This local runtime accepts automatic tools or no tools; forced tool selection is unavailable",
+                provider=provider,
+            )
+        try:
+            if provider == "apple-foundation":
+                if kwargs.get("reasoning_effort") not in (None, "off", "none"):
+                    raise InvalidRequestError(
+                        "Apple's on-device model has no configurable reasoning effort; use a short, explicit task",
+                        provider=provider,
+                    )
+                from superqode.local.apple import stream as source
+
+                from uuid import uuid4
+
+                session_id = self.__dict__.setdefault("_apple_session_id", uuid4().hex)
+                chunks = source(
+                    messages,
+                    model,
+                    tools=tools,
+                    max_tokens=max_tokens,
+                    temperature=temperature,
+                    response_format=kwargs.get("response_format"),
+                    session_id=session_id,
+                )
+            else:
+                from superqode.local.runtimes import selected_runtime, stream as source
+
+                spec = selected_runtime()
+                from superqode.local.runtimes import loopback_url
+
+                override = kwargs.get("api_base") or kwargs.get("base_url")
+                if override and loopback_url(override) != spec.endpoint:
+                    raise InvalidRequestError(
+                        "Reconnect the saved runtime to change its endpoint; per-request endpoint overrides are refused",
+                        provider=provider,
+                    )
+                chunks = source(
+                    spec,
+                    messages,
+                    model,
+                    key=kwargs.get("api_key") or os.environ.get("LOCAL_RUNTIME_API_KEY"),
+                    tools=tools,
+                    max_tokens=max_tokens,
+                    temperature=temperature,
+                    response_format=kwargs.get("response_format"),
+                    reasoning_effort=kwargs.get("reasoning_effort"),
+                    timeout=kwargs.get("timeout") or kwargs.get("timeout_seconds") or 180,
+                )
+            async with aclosing(chunks):
+                async for chunk in chunks:
+                    if budget is not None and chunk.usage is not None:
+                        # Usage can be repeated on a terminal chunk. Credit
+                        # cumulative totals once for both completion modes.
+                        total = chunk.usage.total_tokens
+                        budget.credit(max(0, total - credited))
+                        credited = max(credited, total)
+                    yield chunk
+        except GatewayError:
+            raise
+        except Exception as exc:
+            # Do not include vendor bodies/headers that could echo a credential.
+            if isinstance(exc, ValueError):
+                message = str(exc)
+                for secret in (kwargs.get("api_key"), os.environ.get("LOCAL_RUNTIME_API_KEY")):
+                    if isinstance(secret, str) and secret:
+                        message = message.replace(secret, "[redacted]")
+                message = message[:1000]
+            else:
+                message = "Local model request failed. Check the server, model, API key and loaded context in Local AI."
+            raise GatewayError(message, provider=provider, model=model) from None
+
+    async def _chat_completion(
         self,
         messages: List[Message],
         model: str,
@@ -2439,6 +2559,28 @@ class LiteLLMGateway(GatewayInterface):
         task_budget: Optional[TaskTokenBudget] = kwargs.get("task_budget")
         if task_budget is not None:
             task_budget.check()
+
+        if provider in {"local-openai", "apple-foundation"}:
+            content, thinking, calls, usage, finish = [], [], None, None, None
+            async for chunk in self._native_local_stream(
+                messages, model, provider, temperature, max_tokens, tools, tool_choice, **kwargs
+            ):
+                content.append(chunk.content)
+                thinking.append(chunk.thinking_content or "")
+                calls, usage, finish = (
+                    chunk.tool_calls or calls,
+                    chunk.usage or usage,
+                    chunk.finish_reason or finish,
+                )
+            return GatewayResponse(
+                content="".join(content),
+                thinking_content="".join(thinking) or None,
+                tool_calls=calls,
+                usage=usage,
+                finish_reason=finish,
+                model=model,
+                provider=provider,
+            )
 
         # Special handling for MLX - use direct client instead of LiteLLM
         if provider == "mlx":
@@ -2694,7 +2836,7 @@ class LiteLLMGateway(GatewayInterface):
         except Exception as e:
             self._handle_litellm_error(e, provider, model)
 
-    async def stream_completion(
+    async def _stream_completion(
         self,
         messages: List[Message],
         model: str,
@@ -2725,12 +2867,24 @@ class LiteLLMGateway(GatewayInterface):
         if task_budget is not None:
             task_budget.check()
 
-        # Special handling for MLX - use direct client instead of LiteLLM
-        if provider == "mlx":
-            async for chunk in self._mlx_stream_completion(
-                messages, model, temperature, max_tokens, tools, tool_choice, **kwargs
+        if provider in {"local-openai", "apple-foundation"}:
+            async for chunk in self._native_local_stream(
+                messages, model, provider, temperature, max_tokens, tools, tool_choice, **kwargs
             ):
                 yield chunk
+            return
+
+        # Special handling for MLX - use direct client instead of LiteLLM
+        if provider == "mlx":
+            from contextlib import aclosing
+
+            async with aclosing(
+                self._mlx_stream_completion(
+                    messages, model, temperature, max_tokens, tools, tool_choice, **kwargs
+                )
+            ) as stream:
+                async for chunk in stream:
+                    yield chunk
             return
 
         # DS4 - use /v1/messages streaming for better tool calling and KV cache support

@@ -310,3 +310,16 @@ def test_curated_tested_list_preserves_installed_models_and_previous_selection(s
     assert rows[0]["model"] == "custom-local-model" and rows[0]["installed"]
     assert result["selected"] == previous["id"]
     assert next(r for r in rows if r["id"] == previous["id"])["preset"] == "previous"
+
+
+def test_setup_preset_is_reviewable_without_changing_the_existing_model_catalog(setup):
+    service, params, _, _, _ = setup
+    catalog = service.dispatch("local.models.quickstart.catalog", {"project": params["project"]})
+    assert all(row.get("setup_preset") is None for row in catalog["choices"])
+    preset = catalog["setup_presets"][0]["choice"]
+    reviewed = service.dispatch(
+        "local.models.quickstart.prepare", {**params, "choice": preset["id"]}
+    )
+    assert reviewed["step"] == "install"
+    assert reviewed["plan"]["context"] == 4096
+    assert not service._all("SELECT id FROM jobs")

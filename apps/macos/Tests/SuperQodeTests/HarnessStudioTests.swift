@@ -2,6 +2,22 @@ import XCTest
 @testable import SuperQode
 
 final class HarnessStudioTests: XCTestCase {
+  @MainActor func testCancelledRefreshDoesNotPublishFailureOrRequestHiddenEvidence() async {
+    let pipe = Pipe()
+    let engine = Engine(input: pipe.fileHandleForWriting)
+    defer { engine.stop() }
+    let studio = HarnessStudioLibrary()
+    studio.enter("project")
+    let refreshing = Task { await studio.refresh(engine: engine) }
+    while engine.pendingRequestCount < 1 { await Task.yield() }
+    refreshing.cancel()
+    engine.receive(["id": 1, "result": []])
+    await refreshing.value
+    XCTAssertTrue(studio.failure.isEmpty)
+    XCTAssertEqual(engine.pendingRequestCount, 0)
+    XCTAssertTrue(studio.evidence.isEmpty)
+  }
+
   @MainActor func testEditingDuringValidationRejectsLateReviewAndReleasesBusyState() async {
     let pipe = Pipe()
     let engine = Engine(input: pipe.fileHandleForWriting)

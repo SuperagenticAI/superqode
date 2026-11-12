@@ -66,7 +66,10 @@ Gemini replies stream by default through `streamGenerateContent` with
 server-sent events, so text appears as it is generated. Set `stream: false` in
 `runtime.config` to use one `generateContent` request per turn. The finished
 model turn keeps every part and thought signature exactly as received, and tool
-calls run only after the turn completes. Retries apply only before the first
+calls run only after the turn completes. An explicit Gemini finish reason
+completes the model request immediately, even if the HTTP stream stays open.
+The app remains active while subsequent tools or model turns are running.
+Retries apply only before the first
 streamed chunk. Following Google's long decode guide, a stream that drops
 after a checkpoint resumes from the last checkpoint token and discards the
 chunks received since; a stream that drops after output began but before any
@@ -290,7 +293,7 @@ superqode harness validate codegem.yaml
 
 Useful `runtime.config` settings include `tool_mode` (`auto`, `native`, or
 `json` for Gemma), `max_turns`, `context_window`, `max_output_tokens`,
-`temperature`, `thinking`, `stream` (Gemini), and `embedding`. Use `base_url`
+`temperature`, `thinking`, `stream`, and `embedding`. Use `base_url`
 for LM Studio, llama.cpp or vLLM, `ollama_base_url` for Ollama, and native `thinking_config` for Gemini
 thinking controls. Start with defaults and tune against your own coding tasks.
 New model generations do not inherit guessed thinking controls or context limits.
@@ -299,6 +302,10 @@ Gemini requests leave Google's per-model default thinking level in place. Set
 `model_policy.reasoning` to `low`, `medium` or `high` (or `minimal` where the
 model documents it) to choose a level; unsupported levels are rejected with the
 supported list. Gemini 4 Argon requests send its documented `medium` default.
+For shorter waits before the answer starts, try `low` on models that support it;
+model-side thinking can delay the first visible text even with streaming on.
+The Python stream API also honours an explicit `StreamOptions.reasoning` when
+the harness has no thinking override. Harness settings keep precedence.
 Argon requests omit `temperature`, `top_p`, `top_k` and `candidate_count`,
 which Google says are ignored for Gemini 4; configured values are dropped with
 a one-time warning. `thinkingBudget` is never sent to Gemini 4 or alongside
@@ -319,11 +326,22 @@ tokens. A reply
 that reaches `max_output_tokens` with a continuation token resumes with a
 doubled limit up to `max_output_tokens_ceiling` (default 131,072 for Argon).
 Raise or lower the ceiling to control spend.
+An explicit per-request `StreamOptions.max_tokens` (including the desktop
+task's `max_tokens`) bounds the output of each model turn. With that bound,
+CodeGem reports a truncated response instead of automatically opening more
+long-decode requests or increasing the limit. Tool turns still run normally
+after a complete response; the bound applies to each model turn, not the
+entire task's cumulative usage.
 
 Conversations live in `.superqode/codegem/sessions/`. Reuse `--session <id>` to
 continue a headless run. Start a fresh session when changing models, especially
-with Gemini signed history. Gemini text streams live by default; local Gemma
-text is emitted after a complete response.
+with Gemini signed history. Gemini and local Gemma text stream live by default.
+Local Gemma uses Ollama NDJSON or OpenAI-compatible SSE. Native tool arguments
+stay private until the complete turn validates; JSON tool envelopes are buffered
+until they can be parsed safely. `stream: false` retains buffered operation.
+Legacy servers returning a single JSON response are accepted from that same
+request; an interrupted stream fails instead of replaying generation. Explicit
+per-request output limits also apply to local Gemma.
 
 Cost estimates use Google's published Standard prices: cached prompt tokens are
 charged at the published context-cache rate, Gemini 3.1 Pro prompts over 200k

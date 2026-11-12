@@ -65,6 +65,7 @@ struct SourceEditor: NSViewRepresentable {
     var lastSource: String?
     var lastLanguage = ""
     var lastContrast = false
+    var stylingGeneration = 0
     init(_ parent: SourceEditor) { self.parent = parent }
     func textDidChange(_ notification: Notification) {
       guard let editor = notification.object as? Editor else { return }
@@ -75,20 +76,31 @@ struct SourceEditor: NSViewRepresentable {
       (notification.object as? Editor)?.needsDisplay = true
     }
     func schedule(_ editor: Editor) {
+      guard editor.interactionEnabled else { suspend(); return }
       let source = editor.string
       let language = sourceLanguage(for: parent.path)
       let highContrast = parent.contrast == .increased
       guard source != lastSource || language != lastLanguage || highContrast != lastContrast else { return }
       lastSource = source; lastLanguage = language; lastContrast = highContrast
       styling?.cancel()
+      stylingGeneration += 1
+      let generation = stylingGeneration
       styling = Task { @MainActor [weak editor] in
         do { try await Task.sleep(for: .milliseconds(100)) } catch { return }
         let styled = await Task.detached(priority: .userInitiated) {
           highlightedSource(source, language: language, dark: true, highContrast: highContrast)
         }.value
-        guard !Task.isCancelled else { return }
+        guard !Task.isCancelled, generation == stylingGeneration else { return }
+        guard editor?.interactionEnabled == true else { suspend(); return }
         editor?.applyColours(styled, expectedSource: source)
+        styling = nil
       }
+    }
+    func suspend() {
+      guard styling != nil else { return }
+      stylingGeneration += 1
+      styling?.cancel(); styling = nil
+      lastSource = nil
     }
   }
   func makeCoordinator() -> Coordinator { Coordinator(self) }

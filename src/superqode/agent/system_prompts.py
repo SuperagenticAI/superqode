@@ -449,6 +449,7 @@ def get_provider_prompt(provider: Optional[str], model: Optional[str]) -> str:
         return DS4_PROMPT + _search_roots_note()
     if provider in {
         "ollama",
+        "local-openai",
         "mlx",
         "lmstudio",
         "vllm",

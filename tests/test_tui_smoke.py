@@ -2205,7 +2205,7 @@ def test_tui_harness_commands_open_complete_integration_switcher(tmp_path, monke
     picker_ids = [entry.id for entry in app._harness_selection_list]
     # RLM and PiPy sit with the other native coding harnesses, ahead of the
     # optional integrations.
-    assert picker_ids[:10] == [
+    assert picker_ids[:11] == [
         "core",
         "rlm",
         "pipy",
@@ -2213,6 +2213,7 @@ def test_tui_harness_commands_open_complete_integration_switcher(tmp_path, monke
         "codegem",
         "systemone",
         "no-tool",
+        "apple-local",
         "codex",
         "codex-sdk",
         "claude",

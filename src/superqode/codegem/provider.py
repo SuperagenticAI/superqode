@@ -10,6 +10,7 @@ from __future__ import annotations
 
 import asyncio
 import copy
+from contextlib import aclosing
 import dataclasses
 import email.utils
 import json
@@ -48,7 +49,7 @@ from superqode.pipy.provider_events import (
     ToolCallEndEvent,
 )
 from superqode.pipy.signals import is_aborted
-from .profiles import resolve_profile
+from .profiles import gemini_thinking_level, resolve_profile
 
 # Google's latest-model guide for Gemini 4: "Remove temperature, top_p, top_k,
 # and candidate_count ... sampling parameters are ignored".
@@ -746,6 +747,19 @@ class CodeGemStream:
         self._capabilities = {}
         self._json_tool_compat = set()
 
+    def _output_limit(self, options, default):
+        configured = self.config.get("max_output_tokens", default)
+        limit = int(configured) if configured is not None else None
+        requested = options.max_tokens
+        if requested is not None:
+            if isinstance(requested, bool) or not isinstance(requested, int) or requested <= 0:
+                raise ValueError("CodeGem max_tokens must be a positive integer")
+            limit = min(limit, requested) if limit is not None else requested
+        from superqode.local.execution import annotate
+
+        annotate(output_limit=limit)
+        return limit
+
     async def _sleep(self, seconds, signal):
         deadline = time.monotonic() + seconds
         while (remaining := deadline - time.monotonic()) > 0:
@@ -827,6 +841,36 @@ class CodeGemStream:
         )
 
     async def __call__(self, model, context, options):
+        from contextlib import aclosing
+        from superqode.local.execution import LocalTurn, is_local
+
+        async with aclosing(self._events(model, context, options)) as events:
+            if not is_local(model.provider):
+                async for event in events:
+                    yield event
+                return
+            async with LocalTurn(model.provider, model.id) as turn:
+                while True:
+                    try:
+                        event = await turn.next(events)
+                    except StopAsyncIteration:
+                        break
+                    turn.observe(
+                        text=isinstance(event, TextDeltaEvent),
+                        thinking=isinstance(event, ThinkingDeltaEvent),
+                        tools=isinstance(event, ToolCallStartEvent),
+                        terminal=isinstance(event, AssistantDoneEvent),
+                    )
+                    if isinstance(event, AssistantDoneEvent):
+                        from superqode.providers.gateway.base import Usage as GatewayUsage
+
+                        usage = event.message.usage
+                        turn.observe(
+                            usage=GatewayUsage(usage.input, usage.output, usage.total_tokens)
+                        )
+                    yield event
+
+    async def _events(self, model, context, options):
         message = AssistantMessage(model=model.id, provider=model.provider, api=model.api)
         yield AssistantStartEvent(message)
         try:
@@ -863,10 +907,15 @@ class CodeGemStream:
                         if isinstance(event, (TextEndEvent, ThinkingEndEvent)):
                             live.add(event.content_index)
                         yield event
-                elif model.provider == "ollama":
-                    await self._ollama(client, model, context, options, profile, message)
                 else:
-                    await self._compatible(client, model, context, options, profile, message)
+                    local = self._ollama if model.provider == "ollama" else self._compatible
+                    async with aclosing(
+                        local(client, model, context, options, profile, message)
+                    ) as events:
+                        async for event in events:
+                            if isinstance(event, (TextEndEvent, ThinkingEndEvent)):
+                                live.add(event.content_index)
+                            yield event
             if message.stop_reason == "stop" and not message.text:
                 raise ValueError("CodeGem model returned no answer or tool call")
             if len(message.tool_calls) > int(self.config.get("max_tool_calls_per_turn", 16)):
@@ -926,17 +975,12 @@ class CodeGemStream:
         gemini4 = profile.family == "gemini" and profile.generation == 4
         stream = bool(self.config.get("stream", True))
         generation = {}
-        if gemma:
-            # Google documents no Gemma output limit on the Gemini API, so
-            # only an explicit max_output_tokens is sent.
-            if "max_output_tokens" in self.config:
-                generation["maxOutputTokens"] = int(self.config["max_output_tokens"])
-        else:
-            # Gemini 4: "The default is 64K for streaming and SDK calls, and
-            # 32K for non-streaming REST calls" (long decode guide). Other
-            # models keep the 32,768 default.
-            cap = _STREAMING_CAP if stream and gemini4 else _NON_STREAMING_CAP
-            generation["maxOutputTokens"] = int(self.config.get("max_output_tokens", cap))
+        # Gemini 4 REST streaming permits 64K; non-streaming and older
+        # Gemini defaults stay at 32K. Gemma has no implicit API output cap.
+        cap = None if gemma else _STREAMING_CAP if stream and gemini4 else _NON_STREAMING_CAP
+        output_limit = self._output_limit(options, cap)
+        if output_limit is not None:
+            generation["maxOutputTokens"] = output_limit
         if gemini4:
             ignored = [k for k in _SAMPLING_KEYS if k in self.config]
             if ignored:
@@ -957,6 +1001,10 @@ class CodeGemStream:
         if gemma and not raw_thinking and "thinking" in self.config:
             # Gemma on the Gemini API: "high" for enabled, "minimal" for disabled.
             raw_thinking = {"thinkingLevel": "HIGH" if self.config["thinking"] else "MINIMAL"}
+        if not raw_thinking and options.reasoning is not None:
+            raw_thinking = {
+                "thinkingLevel": gemini_thinking_level(model.id, profile, options.reasoning)
+            }
         thinking = _thinking_config(raw_thinking, model.id, profile)
         if thinking:
             generation["thinkingConfig"] = thinking
@@ -999,7 +1047,14 @@ class CodeGemStream:
             done = None
             try:
                 async for item in self._gemini_hops(
-                    client, url, body, headers, options.signal, profile, stream
+                    client,
+                    url,
+                    body,
+                    headers,
+                    options.signal,
+                    profile,
+                    stream,
+                    output_limited=options.max_tokens is not None,
                 ):
                     if item[0] == "parts":
                         for part in item[1]:
@@ -1036,7 +1091,9 @@ class CodeGemStream:
             "length" if reason == "MAX_TOKENS" else "toolUse" if message.tool_calls else "stop"
         )
 
-    async def _gemini_hops(self, client, url, body, headers, signal, profile, stream=False):
+    async def _gemini_hops(
+        self, client, url, body, headers, signal, profile, stream=False, *, output_limited=False
+    ):
         """Run (stream)GenerateContent, following long-decode continuation tokens.
 
         Per Google's long decode guide, each hop resends the same request plus
@@ -1108,6 +1165,11 @@ class CodeGemStream:
             hop_parts = (candidate.get("content") or {}).get("parts") or []
             parts.extend(copy.deepcopy(hop_parts))
             token = candidate.get("continuationToken")
+            # An explicit per-turn budget must not silently start more decode
+            # requests (or raise the output cap). Report truncation to the caller.
+            if output_limited and reason in {"CONTINUATION", "MAX_TOKENS"}:
+                reason = "MAX_TOKENS"
+                token = None
             if reason == "CONTINUATION" and token:
                 hops += 1
                 continue
@@ -1199,6 +1261,8 @@ class CodeGemStream:
                             last_usage = chunk["usageMetadata"]
                         if chunk.get("promptFeedback"):
                             feedback = chunk["promptFeedback"]
+                            if feedback.get("blockReason"):
+                                break
                         candidates = chunk.get("candidates") or []
                         if not candidates:
                             continue
@@ -1209,6 +1273,10 @@ class CodeGemStream:
                             yield ("parts", new)
                         if candidate.get("finishReason"):
                             final = candidate
+                            # The terminal frame completes this hop, even if
+                            # the server/proxy keeps its HTTP connection open.
+                            # Close it before any tools or continuation hop run.
+                            break
                         if candidate.get("continuationToken") and not candidate.get("finishReason"):
                             committed.extend(pending)
                             pending = []
@@ -1286,7 +1354,7 @@ class CodeGemStream:
             raise ValueError("This local Gemma server does not advertise vision support")
         body = {
             "model": model.id,
-            "stream": False,
+            "stream": bool(self.config.get("stream", True)),
             "messages": ollama_messages(
                 context,
                 native=native,
@@ -1295,7 +1363,7 @@ class CodeGemStream:
             ),
             "options": {
                 **_gemma_sampling(self.config),
-                "num_predict": int(self.config.get("max_output_tokens", 8192)),
+                "num_predict": self._output_limit(options, 8192),
                 **({"num_ctx": model.context_window} if model.context_window else {}),
             },
         }
@@ -1319,13 +1387,51 @@ class CodeGemStream:
         elif context.tools:
             body["format"] = "json"
         response = await self._request(
-            client, "POST", f"{base}/api/chat", signal=options.signal, json=body
+            client,
+            "POST",
+            f"{base}/api/chat",
+            signal=options.signal,
+            json=body,
+            stream=body["stream"],
         )
-        data = response.json()
+        data, streamed = None, False
+        if body["stream"]:
+            from .local_stream import local_response
+
+            assembler = _PartAssembler(message, live=True)
+            async with aclosing(
+                local_response(
+                    response,
+                    protocol="ollama",
+                    live=native or not context.tools,
+                    signal=options.signal,
+                )
+            ) as events:
+                async for kind, value in events:
+                    if kind == "response":
+                        data, streamed = value
+                    else:
+                        for event in assembler.add({"text": value, "thought": kind == "thinking"}):
+                            yield event
+            for event in assembler.close():
+                yield event
+        else:
+            data = response.json()
         if data.get("error"):
             raise ValueError(data["error"])
         if not data.get("done"):
             raise ValueError("Ollama response is incomplete; tool calls will not execute")
+        from superqode.local.execution import annotate
+
+        annotate(
+            context=model.context_window or None,
+            context_source="CodeGem harness/server contract",
+            server_load_s=data.get("load_duration", 0) / 1e9 if "load_duration" in data else None,
+            server_prefill_s=data.get("prompt_eval_duration", 0) / 1e9
+            if "prompt_eval_duration" in data
+            else None,
+            server_decode_s=data.get("eval_duration", 0) / 1e9 if "eval_duration" in data else None,
+        )
         result = data.get("message", {})
         text = result.get("content") or ""
         calls = result.get("tool_calls") or []
@@ -1338,9 +1444,9 @@ class CodeGemStream:
             calls = [{"function": call} for call in result.get("tool_calls", [])]
         if not isinstance(text, str):
             raise ValueError("Gemma response content must be a string")
-        if text:
+        if text and not streamed:
             message.content.append(TextContent(text))
-        if native and result.get("thinking"):
+        if native and result.get("thinking") and not streamed:
             message.content.append(ThinkingContent(result["thinking"]))
         for raw in calls:
             call = raw["function"]
@@ -1376,10 +1482,12 @@ class CodeGemStream:
         body = {
             "model": model.id,
             "messages": wire,
-            "stream": False,
+            "stream": bool(self.config.get("stream", True)),
             **_gemma_sampling(self.config),
-            "max_tokens": int(self.config.get("max_output_tokens", 8192)),
+            "max_tokens": self._output_limit(options, 8192),
         }
+        if body["stream"]:
+            body["stream_options"] = {"include_usage": True}
         if native and context.tools:
             body["tools"] = [
                 {
@@ -1407,7 +1515,12 @@ class CodeGemStream:
             body["chat_template_kwargs"] = {"enable_thinking": think}
         try:
             response = await self._request(
-                client, "POST", f"{base}/chat/completions", json=body, signal=options.signal
+                client,
+                "POST",
+                f"{base}/chat/completions",
+                json=body,
+                signal=options.signal,
+                stream=body["stream"],
             )
         except httpx.HTTPStatusError as exc:
             # Some compatible servers can answer Gemma prompts but fail while
@@ -1420,10 +1533,35 @@ class CodeGemStream:
                 and "error rendering prompt with jinja template" in exc.response.text.lower()
             ):
                 self._json_tool_compat.add(fallback_key)
-                await self._compatible(client, model, context, options, profile, message)
+                async for event in self._compatible(
+                    client, model, context, options, profile, message
+                ):
+                    yield event
                 return
             raise
-        data = response.json()
+        data, streamed = None, False
+        if body["stream"]:
+            from .local_stream import local_response
+
+            assembler = _PartAssembler(message, live=True)
+            async with aclosing(
+                local_response(
+                    response,
+                    protocol="openai",
+                    live=native or not context.tools,
+                    signal=options.signal,
+                )
+            ) as events:
+                async for kind, value in events:
+                    if kind == "response":
+                        data, streamed = value
+                    else:
+                        for event in assembler.add({"text": value, "thought": kind == "thinking"}):
+                            yield event
+            for event in assembler.close():
+                yield event
+        else:
+            data = response.json()
         choice = (data.get("choices") or [{}])[0]
         finish = choice.get("finish_reason")
         if finish not in {"stop", "tool_calls", "length"}:
@@ -1439,10 +1577,10 @@ class CodeGemStream:
             tool_calls = [{"function": c} for c in parsed.get("tool_calls", [])]
         if not isinstance(text, str):
             raise ValueError("Gemma response content must be a string")
-        if text:
+        if text and not streamed:
             message.content.append(TextContent(text))
         thinking = raw.get("reasoning_content") or raw.get("reasoning")
-        if thinking:
+        if thinking and not streamed:
             message.content.append(ThinkingContent(thinking))
         for raw_call in tool_calls:
             call = raw_call["function"]

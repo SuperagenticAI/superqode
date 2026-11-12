@@ -123,9 +123,13 @@ def catalog(service, project):
         identity = hashlib.sha256((engine + "\n" + model).encode()).hexdigest()[:24]
         if identity in choices:
             choices[identity]["evaluation_status"] = row["status"]
+    from superqode.local.presets import setup_presets
+
+    presets = setup_presets(list(choices.values()), hardware)
+    preset_ids = {p["choice"]["id"] for p in presets if p["choice"]}
     saved = _read(service, project) if project else {}
     previous = saved.get("selection")
-    if previous and previous["id"] not in choices:
+    if previous and previous["id"] not in choices and previous["id"] not in preset_ids:
         choices[previous["id"]] = {
             **{key: value for key, value in previous.items() if key != "evaluation_status"},
             "installed": False,
@@ -134,10 +138,12 @@ def catalog(service, project):
         }
     return {
         "choices": sorted(choices.values(), key=lambda row: not row["installed"]),
+        "setup_presets": presets,
         "selected": saved.get("choice", ""),
         "memory_gb": memory,
         "hardware": asdict(hardware),
         "engines": [e for e in engines if e["id"] in {"ollama", "lmstudio"}],
+        "other_engines": [e for e in engines if e["id"] not in {"ollama", "lmstudio"}],
         "guardrails": build_guardrails(hardware).to_dict(),
         "note": "Starting suggestions, not measured coding-quality guarantees. Context and other apps also need memory.",
     }
@@ -188,14 +194,32 @@ def prepare(service, params):
             )
         return result
 
-    choice = next(
-        (row for row in catalog(service, project)["choices"] if row["id"] == choice_id), None
-    )
+    available = catalog(service, project)
+    options = available["choices"] + [
+        p["choice"] for p in available["setup_presets"] if p["choice"]
+    ]
+    choice = next((row for row in options if row["id"] == choice_id), None)
     if not choice:
         raise ValueError("Refresh model choices; this model is no longer available here")
+    if choice.get("setup_preset"):
+        from superqode.local.context_contract import choose_contract
+        from superqode.local.hardware import detect_hardware
+
+        current = choose_contract(
+            choice["model"],
+            detect_hardware(),
+            provider=choice["engine"],
+            context=choice["suggested_context"],
+            metadata=choice.get("metadata"),
+            weights_gb=(choice.get("fit") or {}).get("weights_gb"),
+        )
+        if current.fit["rating"] != "Fits" or current.context != choice["suggested_context"]:
+            raise ValueError(
+                "This preset no longer fits its reviewed context. Refresh and choose a fitting setup preset."
+            )
     engine, model = choice["engine"], choice["model"]
     status = next(row for row in local_models.servers(service) if row["id"] == engine)
-    options = {"engine": engine, "model": model}
+    options = {"engine": engine, "model": model, "context": choice.get("suggested_context") or 8192}
     # LM Studio's installed desktop app does not necessarily bootstrap lms.
     # Offer the consented official headless installer when the CLI is missing.
     if engine == "lmstudio" and not status["running"]:

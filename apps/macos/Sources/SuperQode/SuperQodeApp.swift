@@ -358,6 +358,7 @@ struct RootView: View {
             ZStack {
               if !app.projectID.isEmpty {
                 CodingView().id(app.projectID)
+                  .frame(width: geometry.size.width, height: geometry.size.height)
                   .opacity(WorkspaceNavigationGroup.usesCodingWorkspace(app.section) ? 1 : 0)
                   .disabled(!WorkspaceNavigationGroup.usesCodingWorkspace(app.section))
                   .allowsHitTesting(WorkspaceNavigationGroup.usesCodingWorkspace(app.section))
@@ -366,6 +367,7 @@ struct RootView: View {
               if app.navigationState.studioMounted && !app.projectID.isEmpty {
                 HarnessStudioView(library: app.harnessStudio, active: app.section == "Harness Studio")
                   .id(app.projectID)
+                  .frame(width: geometry.size.width, height: geometry.size.height)
                   .opacity(app.section == "Harness Studio" ? 1 : 0)
                   .disabled(app.section != "Harness Studio")
                   .allowsHitTesting(app.section == "Harness Studio")
@@ -373,6 +375,7 @@ struct RootView: View {
               }
               if app.navigationState.modelsMounted {
                 ModelsView(active: app.section == "Models").id(app.projectID)
+                  .frame(width: geometry.size.width, height: geometry.size.height)
                   .opacity(app.section == "Models" ? 1 : 0)
                   .disabled(app.section != "Models")
                   .allowsHitTesting(app.section == "Models")
@@ -380,12 +383,13 @@ struct RootView: View {
               }
               if app.navigationState.toolsMounted && !app.projectID.isEmpty {
                 ToolsView(active: app.section == "Tools").id(app.projectID)
+                  .frame(width: geometry.size.width, height: geometry.size.height)
                   .opacity(app.section == "Tools" ? 1 : 0)
                   .disabled(app.section != "Tools")
                   .allowsHitTesting(app.section == "Tools")
                   .accessibilityHidden(app.section != "Tools")
               }
-              featureContent
+              featureContent.frame(width: geometry.size.width, height: geometry.size.height)
             }.disabled(app.openingProject || app.restoringNavigation).frame(
               width: geometry.size.width, height: geometry.size.height, alignment: .topLeading
             )
