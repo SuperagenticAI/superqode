@@ -16,7 +16,7 @@ import XCTest
     for enabled in [false, true, false, true] {
       coordinator.update(button, parent: view, enabled: enabled)
       XCTAssertEqual(button.itemArray.count, items.count)
-      XCTAssertTrue(zip(button.itemArray, items).allSatisfy { $0 === $1 })
+      XCTAssertTrue(zip(button.itemArray, items).allSatisfy { pair in pair.0 === pair.1 })
       XCTAssertEqual(button.selectedItem?.representedObject as? String, "provider-50")
     }
     XCTAssertEqual(button.item(at: 0)?.title, "Choose a provider")
