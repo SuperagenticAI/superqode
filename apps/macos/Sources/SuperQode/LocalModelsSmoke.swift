@@ -37,7 +37,8 @@ import Foundation
     let setup = try await engine.call("local.models.quickstart.catalog", ["project": projectID]) as? [String: Any] ?? [:]
     guard (setup["setup_presets"] as? [[String: Any]])?.count == 3 else { throw EngineError(message: "Hardware setup intentions were missing.") }
     let compareID = "native-compare-" + UUID().uuidString.lowercased()
-    _ = try await engine.call("local.runtimes.save", ["id": compareID, "template": "custom", "endpoint": "http://127.0.0.1:1234/v1", "context": 4096, "tools": true])
+    let fixtureEndpoint = ProcessInfo.processInfo.environment["OPENAI_API_BASE"] ?? ""
+    _ = try await engine.call("local.runtimes.save", ["id": compareID, "template": "custom", "endpoint": fixtureEndpoint, "context": 4096, "tools": true])
     let comparison = try await engine.call("local.comparisons.catalog", ["project": projectID]) as? [String: Any] ?? [:]
     let localRoutes = comparison["routes"] as? [[String: Any]] ?? []
     guard let route = localRoutes.first(where: { string($0, "runtime") == compareID }) else { throw EngineError(message: "The native comparison did not discover the loopback fixture model.") }
