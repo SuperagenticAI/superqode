@@ -230,6 +230,28 @@ def test_immutable_identity_distinguishes_artifact_changes_from_residency_metada
     assert local_comparisons.immutable_identity({"revision": "main"}) is None
 
 
+@pytest.mark.parametrize("nested", [False, True])
+def test_explicit_rlm_child_routes_cannot_escape_the_selected_model_comparison(
+    configured, monkeypatch, nested
+):
+    from dataclasses import replace
+    from types import SimpleNamespace
+    from superqode.harness.catalog import resolve_harness
+
+    service, _, _, params = configured
+    available = local_comparisons.catalog(service, params["project"])
+    base = resolve_harness("core").spec
+    child = {"sub_provider": "google", "sub_model": "cloud-model"}
+    runtime = replace(base.runtime, backend="rlm", config={"rlm_code": child} if nested else child)
+    monkeypatch.setattr(local_comparisons, "catalog", lambda *_: available)
+    monkeypatch.setattr(
+        "superqode.harness.catalog.resolve_harness",
+        lambda *a, **k: SimpleNamespace(spec=replace(base, runtime=runtime), digest="test"),
+    )
+    with pytest.raises(ValueError, match="child model routes"):
+        service.dispatch("local.comparisons.prepare", params)
+
+
 def test_error_candidate_is_recorded_without_losing_baseline_results(configured):
     service, project, _, params = configured
     route = next(

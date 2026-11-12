@@ -193,6 +193,14 @@ def prepare(service, params):
             )
         definition = resolve_harness(harness["id"], root=root)
         spec = harness_spec_to_dict(definition.spec)
+        runtime_config = (spec.get("runtime") or {}).get("config") or {}
+        child_config = runtime_config.get("rlm_code") or runtime_config
+        if (spec.get("recursion") or {}).get("child_model") or any(
+            child_config.get(k) for k in ("sub_provider", "sub_model")
+        ):
+            raise ValueError(
+                "Remove explicit child model routes before a controlled local comparison; evaluate multi-model configurations separately"
+            )
         # Pin an equal request/context budget; harness prompts, tools and
         # orchestration remain the intentional independent variable.
         spec.setdefault("model_policy", {})["context_window"] = context
