@@ -1,4 +1,4 @@
-# Local AI on macOS: architecture and readiness audit
+# Internal historical audit: Local AI on macOS
 
 Reviewed 11 November 2026 against main `0b2834c7` and the response-latency fixes
 in PR #52. Official upstream documentation and source were checked directly.
@@ -178,7 +178,7 @@ that the native responsiveness gate has passed.
 ## Implementation follow-up
 
 The runtime/Apple follow-up is documented in [Local runtimes and Apple on-device
-inference](local-runtime-workspace.md). It adds explicit profiles, reviewed
+inference](../docs/advanced/local-runtime-workspace.md). It adds explicit profiles, reviewed
 vLLM Metal/oMLX install plans, cancellable checks/warmup, shared generation slots,
 prompt-free measurements and the bundled native Apple text bridge. The native
 bridge also plugs into existing utility hooks, so the app does not require the

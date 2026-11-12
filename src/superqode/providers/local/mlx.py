@@ -13,7 +13,7 @@ import time
 from datetime import datetime
 from typing import Any, Dict, List, Optional
 from urllib.error import URLError
-from urllib.request import Request, urlopen
+from urllib.request import Request, ProxyHandler, build_opener
 
 from superqode.providers.local.base import (
     LocalProviderClient,
@@ -228,7 +228,7 @@ class MLXClient(LocalProviderClient):
 
         request = Request(url, data=body, headers=headers, method=method)
 
-        with urlopen(request, timeout=timeout) as response:
+        with build_opener(ProxyHandler({})).open(request, timeout=timeout) as response:
             response_data = response.read().decode("utf-8")
 
             # Try to parse as JSON
@@ -262,7 +262,7 @@ class MLXClient(LocalProviderClient):
         base = self.host.rstrip("/").removesuffix("/v1")
         limits = aiohttp.ClientTimeout(total=timeout, sock_connect=min(10, timeout))
         async with aiohttp.ClientSession(
-            timeout=limits, trust_env=True, read_bufsize=1024 * 1024
+            timeout=limits, trust_env=False, read_bufsize=1024 * 1024
         ) as session:
             async with session.post(
                 base + endpoint, json=data, headers={"Accept": "text/event-stream"}

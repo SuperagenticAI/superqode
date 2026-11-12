@@ -90,7 +90,9 @@ class MLXStream:
                     call["function"]["arguments"] += arguments
             content = delta.get("content") or ""
             visible = self.visible(content) if isinstance(content, str) else ""
-            thinking = delta.get("reasoning_content") or delta.get("thinking")
+            thinking = (
+                delta.get("reasoning_content") or delta.get("reasoning") or delta.get("thinking")
+            )
             if visible or thinking:
                 chunks.append(
                     StreamChunk(content=visible, role=delta.get("role"), thinking_content=thinking)

@@ -2296,7 +2296,12 @@ class LiteLLMGateway(GatewayInterface):
                 openai_msg["tool_call_id"] = msg.tool_call_id
             openai_messages.append(openai_msg)
 
-        request_data = {"model": model, "messages": openai_messages, "stream": True}
+        request_data = {
+            "model": model,
+            "messages": openai_messages,
+            "stream": True,
+            "stream_options": {"include_usage": True},
+        }
         if temperature is not None:
             request_data["temperature"] = temperature
         if max_tokens is not None:

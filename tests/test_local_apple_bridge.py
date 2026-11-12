@@ -106,6 +106,37 @@ def test_status_reports_unsupported_platform_without_loading_a_model(bridge, mon
 
 
 @pytest.mark.asyncio
+@pytest.mark.parametrize("temperature,expected", [(-0.5, 0.0), (0.6, 0.6), (1.9, 1.0)])
+async def test_temperature_is_clamped_before_native_ipc(bridge, temperature, expected):
+    _ = [chunk async for chunk in apple.stream([Message("user", "hello")], temperature=temperature)]
+    assert json.loads(bridge.read_text())["request"]["temperature"] == expected
+
+
+@pytest.mark.asyncio
+async def test_output_limit_is_preserved_without_delivering_partial_structured_results(
+    bridge, monkeypatch
+):
+    from pathlib import Path
+
+    helper = Path(os.environ["SUPERQODE_APPLE_HELPER"])
+    helper.write_text(
+        helper.read_text().replace("'finish_reason':'stop'", "'finish_reason':'length'")
+    )
+    chunks = [chunk async for chunk in apple.stream([Message("user", "hello")])]
+    assert chunks[-1].finish_reason == "length"
+    with pytest.raises(ValueError, match="output limit"):
+        await anext(
+            apple.stream(
+                [Message("user", "hello")],
+                response_format={
+                    "type": "json_schema",
+                    "json_schema": {"schema": {"type": "object", "properties": {}}},
+                },
+            )
+        )
+
+
+@pytest.mark.asyncio
 async def test_explicit_native_utility_route_never_falls_back_to_the_cloud(monkeypatch):
     from superqode.agent.utility_model import utility_completion
 

@@ -81,7 +81,7 @@ async def stream(
         raise ValueError(
             "Choose Apple's system-on-device model; downloaded checkpoints use other engines"
         )
-    from .apple_contract import request, tool_calls
+    from .apple_contract import request, tool_calls, normalized_temperature
     from . import apple_sessions
     from .context_contract import guard_request, _launch_contract_value
     from .execution import annotate
@@ -107,7 +107,7 @@ async def stream(
     payload = {
         "messages": [raw[i] for i in kept],
         "max_tokens": output,
-        "temperature": temperature,
+        "temperature": normalized_temperature(temperature),
         "tools": definitions,
         "schema": output_schema,
         "session_id": session_id or "",
@@ -169,9 +169,15 @@ async def stream(
                 )
             elif kind == "done":
                 reason = event.get("finish_reason")
-                if reason != ("tool_calls" if handoff else "stop"):
+                if (handoff and reason != "tool_calls") or (
+                    not handoff and reason not in {"stop", "length"}
+                ):
                     raise ValueError("Invalid Apple model completion")
                 if output_schema:
+                    if reason == "length":
+                        raise ValueError(
+                            "Apple's structured output reached its output limit; no partial result was delivered"
+                        )
                     text = "".join(structured)
                     try:
                         Draft202012Validator(output_schema).validate(json.loads(text))

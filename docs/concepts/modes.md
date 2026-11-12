@@ -758,7 +758,7 @@ enabling shell or write access in important repositories.
 
 ### Native local runtime profiles
 
-On macOS, **Local AI → Runtimes & performance** saves explicit loopback profiles
+On macOS, **Local AI → Advanced → Runtimes & performance** saves explicit loopback profiles
 for vLLM Metal, oMLX, Jan and other compatible inference servers. The provider ID
 is `local-openai`; each project binding selects its own endpoint and optional
 session/Keychain key. Run the generated-data tool check before selecting a
@@ -766,6 +766,8 @@ coding harness. Server discovery sends no prompts or project files.
 
 `apple-foundation` selects Apple's system on-device model through the bundled
 native bridge. It requires an eligible Mac, macOS 26+ and Apple Intelligence
-ready. Choose it for Direct Chat or explicitly enabled utility hooks. It does
-not load arbitrary downloaded models, expose coding tools, or fall back to a
-cloud model. The older optional Python `apple-fm` utility route remains separate.
+ready. Choose Direct Chat for text without tools, or **Apple on-device**
+(`apple-local`) for focused coding with permission-controlled `read`, `write`
+and `edit` tools. Shell and network tools remain disabled. It does not load
+arbitrary downloaded models or fall back to a cloud model. The older optional
+Python `apple-fm` utility route remains separate.

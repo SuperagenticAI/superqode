@@ -9,6 +9,7 @@ import json
 import os
 from pathlib import Path
 import queue
+import re
 import subprocess
 import threading
 import time
@@ -33,7 +34,23 @@ def check(helper, require_available=False):
     )
     assert type(status.get("available")) is bool and status.get("on_device") is True, status
     assert status.get("model") == "system-on-device" and status.get("guidance"), status
-    report = {"availability": status, "generation_tested": False, "checks": []}
+    loads = subprocess.check_output(["/usr/bin/otool", "-l", helper], text=True, timeout=20)
+    links = [
+        block
+        for block in re.split(r"Load command \d+", loads)
+        if "/FoundationModels.framework/" in block
+    ]
+    assert all("cmd LC_LOAD_WEAK_DYLIB" in block for block in links), (
+        "FoundationModels must be weak-linked so the helper can launch on older macOS"
+    )
+    if status.get("state") != "unsupported-system":
+        assert links, "This SDK build must link the bundled FoundationModels helper"
+    report = {
+        "availability": status,
+        "generation_tested": False,
+        "foundation_models_weak_link": bool(links),
+        "checks": [],
+    }
     if not status["available"]:
         report["passed"] = not require_available
         return report

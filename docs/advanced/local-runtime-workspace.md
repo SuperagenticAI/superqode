@@ -1,6 +1,6 @@
 # Local runtimes and Apple on-device inference on macOS
 
-Open **Local AI → Runtimes & performance**. Use the existing Quick Start tab for
+Open **Local AI → Advanced → Runtimes & performance**. Use the existing Quick Start tab for
 guided Ollama/LM Studio downloads, or keep the server and weights you already
 have. No server is installed, launched or queried merely by saving a profile.
 
@@ -135,7 +135,7 @@ have no native generation guide. Malformed results and invalid tool arguments
 are never delivered for execution. Use separate requests for tool calling and
 structured final output; unconstrained `json_object` is not a guided schema.
 
-**Local AI → Compare** includes Apple's model when it is available and this
+**Local AI → Advanced → Compare** includes Apple's model when it is available and this
 build supports tools. Select the Apple on-device configuration and a shared
 context no larger than 4,096. Trial isolation, independent repository graders,
 cancellation, request timings and saved results use the existing comparison
@@ -188,7 +188,9 @@ unload models already resident in separate servers.
 
 Each slot covers a model request, then releases before tool execution. Waiting
 can be cancelled. Kernel leases release if a worker exits unexpectedly, so a
-dead process cannot permanently block new requests. Crash records are marked
+dead process cannot permanently block new requests. A queued request times out
+after two minutes without starting model generation; you can cancel sooner.
+Crash records are marked
 interrupted by lease ownership, rather than trusting a possibly reused PID.
 
 **Warm model** sends a bounded short request and records its timing. Use it when

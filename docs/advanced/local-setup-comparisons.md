@@ -21,7 +21,7 @@ matter. Recheck fit when changing hardware or restoring older setup state.
 
 ## Compare models and harnesses
 
-Open **Local AI → Compare** after loading models in their runtimes.
+Open **Local AI → Advanced → Compare** after loading models in their runtimes.
 
 1. Select a baseline and one to three candidates. Compare different models,
    different harnesses, or both. Core, PiPy and compatible RLM configurations

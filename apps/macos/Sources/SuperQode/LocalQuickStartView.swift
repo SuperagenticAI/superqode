@@ -9,7 +9,6 @@ struct LocalQuickStartView: View {
   var showInstalled = true
   @State private var hardware: [String: Any] = [:]
   @State private var engines: [[String: Any]] = []
-  @State private var otherEngines: [[String: Any]] = []
   @State private var warnings: [String] = []
   @State private var learnMore = false
   @State private var advanced = false
@@ -55,7 +54,6 @@ struct LocalQuickStartView: View {
         LocalAINotice(learnMore: $learnMore)
         setupGuide
       }
-      if !otherEngines.isEmpty { otherRuntimePanel }
     }
     }.padding(24).frame(width: embedded ? nil : 780, height: embedded ? nil : 760)
       .centeredDialog(isPresented: $learnMore, title: "About Local AI") {
@@ -65,7 +63,7 @@ struct LocalQuickStartView: View {
         LocalModelOperationView(job: operationJob).environmentObject(app)
       }
       .centeredDialog(isPresented: $advanced, title: "Advanced Local AI") {
-        LocalModelWorkbenchView().environmentObject(app).frame(width: 1080, height: 780)
+        AdvancedLocalAIView().environmentObject(app).frame(width: 1080, height: 780)
       }
       .centeredDialog(isPresented: Binding(get: { operation != nil }, set: { if !$0 { operation = nil } }), title: "Review local operation", onDismiss: {
         Task { await load(); await observeOperations() }
@@ -198,28 +196,6 @@ struct LocalQuickStartView: View {
     if let memory = hardware["unified_memory_gb"] as? Int { return "\(memory) GB" }
     return "Memory not reported"
   }
-  private var otherRuntimePanel: some View {
-    VStack(alignment: .leading, spacing: 12) {
-      Text("More runtimes for your Mac").font(.headline)
-      Text("Use MLX for Apple Silicon, llama.cpp for GGUF models, or DS4 for its specialized DeepSeek workflow. Choose weights and context that fit your Mac before loading.")
-        .font(.callout).foregroundStyle(.secondary)
-      ForEach(otherEngines, id: \.projectRowID) { row in
-        let running = row["running"] as? Bool == true
-        let installed = row["installed"] as? Bool == true
-        HStack {
-          Label(string(row, "name"), systemImage: running ? "checkmark.circle.fill" : "cpu")
-          Text(running ? "Server running" : installed ? "Installed · server stopped" : "Not installed")
-            .foregroundStyle(.secondary)
-          Spacer()
-          let setup = row["install"] as? [String: Any] ?? [:]
-          if let url = URL(string: string(setup, "docs_url")), url.scheme == "https" {
-            Link("Setup guide", destination: url)
-          }
-        }.font(.caption)
-      }
-      Button("Manage runtimes and models…") { advanced = true }
-    }.padding(16).brandSurface()
-  }
   private var devicePanel: some View {
     VStack(alignment: .leading, spacing: 4) {
       Text("Your Mac").font(.headline)
@@ -319,7 +295,6 @@ struct LocalQuickStartView: View {
       guard validProject, !Task.isCancelled else { return }
       hardware = result["hardware"] as? [String: Any] ?? [:]
       engines = result["engines"] as? [[String: Any]] ?? []
-      otherEngines = result["other_engines"] as? [[String: Any]] ?? []
       warnings = (result["guardrails"] as? [String: Any])?["warnings"] as? [String] ?? []
       choices = result["choices"] as? [[String: Any]] ?? []
       presets = result["setup_presets"] as? [[String: Any]] ?? []

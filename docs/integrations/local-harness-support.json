@@ -1062,13 +1062,13 @@
       "verdict": "Supported (documented)",
       "mechanism": "Configuration of the existing builtin engine using the native Foundation Models stdio bridge; no HTTP server or cloud fallback.",
       "tool_calling": "Three file tools (read, write, edit). Native tool requests hand validated arguments to the existing host permissions and path checks; shell/network are disabled. Worker fixtures and native schema/transcript tests cover the boundary; real model quality remains unmeasured.",
-      "version_requirement": "Unreleased PR #52. Supported Apple Silicon Mac, macOS 26+, Apple Intelligence enabled and system model ready; bundled Foundation Models helper required.",
+      "version_requirement": "Supported Apple Silicon Mac, macOS 26+, Apple Intelligence enabled and system model ready; bundled Foundation Models helper required.",
       "source_urls": [
         "https://github.com/SuperagenticAI/superqode/pull/52",
         "https://developer.apple.com/documentation/foundationmodels"
       ],
       "advanced_adapter": "",
-      "notes": "Selected in Local AI → Runtimes & performance via Use for development and available in local comparisons at context 4096 or less. Native session reuse is bounded to a worker; desktop turns replay native transcripts. No inferred support for images or Private Cloud Compute."
+      "notes": "Selected in Local AI → Advanced → Runtimes & performance via Use for development and available in local comparisons at context 4096 or less. Native session reuse is bounded to a worker; desktop turns replay native transcripts. No inferred support for images or Private Cloud Compute."
     },
     {
       "id": "harness:rlm",

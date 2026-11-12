@@ -147,7 +147,7 @@ struct LocalRuntimeWorkspace: View {
       })).disabled(busy || (apple["available"] as? Bool != true && !appleUtility))
       Text("Utility hooks include summaries and rubric grading. Validate grading quality before using scores as a release gate. If this native model becomes unavailable, its utility input is not silently sent to a cloud model.")
         .font(.caption).foregroundStyle(.secondary)
-      Text("Use small, focused tasks. The Apple configuration offers three file tools through SuperQode permissions; shell and network tools are disabled. Compare outcomes in Local AI → Compare before relying on coding results. Conversations use a bounded context and may need a new thread. Images are not supported by this route.")
+      Text("Use small, focused tasks. The Apple configuration offers three file tools through SuperQode permissions; shell and network tools are disabled. Compare outcomes in Local AI → Advanced → Compare before relying on coding results. Conversations use a bounded context and may need a new thread. Images are not supported by this route.")
         .font(.caption).foregroundStyle(.secondary)
       HStack {
         Link("Apple setup guide", destination: URL(string: "https://support.apple.com/en-us/121115")!)

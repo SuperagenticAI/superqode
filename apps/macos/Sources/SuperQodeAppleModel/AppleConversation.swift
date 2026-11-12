@@ -1,4 +1,5 @@
 import Foundation
+import CoreFoundation
 #if canImport(FoundationModels)
 import FoundationModels
 
@@ -37,7 +38,27 @@ enum AppleSchema {
   }
 }
 
-enum BridgeInput: Error { case invalid, contextFull }
+enum BridgeInput: Error { case invalid, contextFull, emptyResponse, revisedSnapshot }
+
+enum AppleRequestContract {
+  static func temperature(_ value: Any?) throws -> Double? {
+    guard let value, !(value is NSNull) else { return nil }
+    guard let number = value as? NSNumber, CFGetTypeID(number) != CFBooleanGetTypeID(),
+      number.doubleValue.isFinite else { throw BridgeInput.invalid }
+    return min(1, max(0, number.doubleValue))
+  }
+
+  static func delta(previous: String, current: String) throws -> String {
+    let prefix = previous.unicodeScalars
+    let scalars = current.unicodeScalars
+    guard scalars.starts(with: prefix) else { throw BridgeInput.revisedSnapshot }
+    return String(String.UnicodeScalarView(scalars.dropFirst(prefix.count)))
+  }
+
+  static func finishReason(outputTokens: Int?, limit: Int) -> String {
+    outputTokens.map { $0 >= limit } == true ? "length" : "stop"
+  }
+}
 struct HostToolHandoff: Error {}
 
 /// Only records requests. It never opens files, executes commands or calls the
@@ -141,6 +162,51 @@ enum AppleConversation {
   static var cached: AppleCachedSession?
 
   static func error(_ error: Error) -> (String, String) {
+    if let input = error as? BridgeInput {
+      if case .emptyResponse = input {
+        return ("empty-response", "Apple returned no text. Try a more specific prompt or explicitly choose another model. Nothing was retried or sent to the cloud.")
+      }
+      if case .revisedSnapshot = input {
+        return ("stream-revised", "Apple revised text that was already streamed. The response was stopped without replaying the request.")
+      }
+    }
+    // Xcode 27 ships Swift 6.4. Keep both the SDK and runtime availability guards
+    // so older toolchains and macOS 26 retain their original typed error path.
+    #if compiler(>=6.4)
+    if #available(macOS 27.0, *) {
+      if let native = error as? LanguageModelError {
+        switch native {
+        case .contextSizeExceeded: return self.error(BridgeInput.contextFull)
+        case .rateLimited: return ("busy", "Apple's model is busy. Wait for the current request to finish, then try again.")
+        case .guardrailViolation, .refusal:
+          return ("refused", "Apple's on-device model declined this request. Rephrase it or explicitly choose another model. Nothing was sent to the cloud.")
+        case .unsupportedLanguageOrLocale:
+          return ("unsupported-language", "Apple's model does not support this language or locale. Check Apple's supported languages or choose another local model.")
+        case .unsupportedGenerationGuide:
+          return ("structured-output-failed", "Apple could not use this structured-output guide. Simplify the schema or choose another model; no tool was executed.")
+        case .unsupportedCapability, .unsupportedTranscriptContent:
+          return ("unsupported-request", "Apple's on-device model does not support part of this request. Use text and the supported Apple tools or choose another model.")
+        case .timeout:
+          return ("timed-out", "Apple's model timed out. Shorten the request or try again explicitly; nothing was replayed.")
+        @unknown default: break
+        }
+      }
+      if let native = error as? SystemLanguageModel.Error {
+        switch native {
+        case .assetsUnavailable:
+          return ("model-not-ready", "Apple's model is not ready. Check Apple Intelligence in System Settings and let the system model finish downloading.")
+        @unknown default: break
+        }
+      }
+      if let native = error as? LanguageModelSession.Error {
+        switch native {
+        case .concurrentRequests, .transcriptMutationWhileResponding:
+          return ("busy", "Apple's session is already responding. Wait for it to finish, then try again.")
+        @unknown default: break
+        }
+      }
+    }
+    #endif
     if let input = error as? BridgeInput, case .contextFull = input {
       return ("context-full", "Apple's conversation context is full. Start a new thread or shorten the prompt and tool output. Nothing was silently removed or sent to another model.")
     }
@@ -155,7 +221,7 @@ enum AppleConversation {
         return ("refused", "Apple's on-device model declined this request. Rephrase it or explicitly choose another model. Nothing was sent to the cloud.")
       case .unsupportedLanguageOrLocale:
         return ("unsupported-language", "Apple's model does not support this language or locale. Check Apple's supported languages or choose another local model.")
-      case .rateLimited:
+      case .rateLimited, .concurrentRequests:
         return ("busy", "Apple's model is busy. Wait for the current request to finish, then try again.")
       case .decodingFailure, .unsupportedGuide:
         return ("structured-output-failed", "Apple could not produce this structured output. Simplify the schema or try another model; no tool was executed.")
@@ -198,7 +264,7 @@ enum AppleConversation {
       // Never retain a failed or interrupted native session.
       cached = nil
       let limit = min(2048, max(1, request["max_tokens"] as? Int ?? 512))
-      let options = GenerationOptions(sampling: nil, temperature: request["temperature"] as? Double, maximumResponseTokens: limit)
+      let options = GenerationOptions(sampling: nil, temperature: try AppleRequestContract.temperature(request["temperature"]), maximumResponseTokens: limit)
       var metadata: [String: Any] = ["event": "metadata", "protocol": 2, "session_reused": reuse, "on_device": true]
       #if compiler(>=6.3)
       if #available(macOS 26.4, *) {
@@ -212,27 +278,34 @@ enum AppleConversation {
       #endif
       emit(metadata)
       var previous = ""
+      var outputTokens: Int?
       if let schema {
         let response = try await session.respond(to: Prompt { prompt }, schema: AppleSchema.make(schema), options: options)
         previous = response.content.jsonString
+        #if compiler(>=6.4)
+        if #available(macOS 27.0, *) { outputTokens = response.usage.output.totalTokenCount }
+        #endif
         emit(["event": "text", "text": previous])
       } else {
         for try await snapshot in session.streamResponse(to: Prompt { prompt }, options: options) {
           try Task.checkCancellation()
           let text = snapshot.content
-          guard text.hasPrefix(previous) else { throw BridgeInput.invalid }
-          let delta = String(text.dropFirst(previous.count))
+          let delta = try AppleRequestContract.delta(previous: previous, current: text)
           if !delta.isEmpty { emit(["event": "text", "text": delta]) }
           previous = text
+          #if compiler(>=6.4)
+          if #available(macOS 27.0, *) { outputTokens = snapshot.usage.output.totalTokenCount }
+          #endif
         }
       }
-      guard !previous.isEmpty else { throw BridgeInput.invalid }
-      if tools.isEmpty && schema == nil && !id.isEmpty {
+      guard !previous.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty else { throw BridgeInput.emptyResponse }
+      let reason = AppleRequestContract.finishReason(outputTokens: outputTokens, limit: limit)
+      if reason == "stop" && tools.isEmpty && schema == nil && !id.isEmpty {
         let history = messages + [["role": "assistant", "content": previous]]
         cached = AppleCachedSession(id: id,
           messages: try JSONSerialization.data(withJSONObject: history, options: [.sortedKeys]), session: session)
       }
-      emit(["event": "done", "finish_reason": "stop"])
+      emit(["event": "done", "finish_reason": reason])
     } catch {
       cached = nil
       if !requests.calls.isEmpty {

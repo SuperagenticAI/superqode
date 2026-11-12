@@ -103,11 +103,79 @@ async def test_mlx_delivers_text_before_generation_finishes(streaming_server):
         assert remaining[-1].usage.total_tokens == 6
         assert len(requests) == 1
         assert requests[0]["stream"] is True
+        assert requests[0]["stream_options"] == {"include_usage": True}
     finally:
         finish.set()
         if not pending.done():
             pending.cancel()
         await chunks.aclose()
+
+
+@pytest.mark.asyncio
+async def test_mlx_loopback_ignores_proxy_environment_for_streaming_and_sync(
+    streaming_server, monkeypatch
+):
+    from superqode.providers.local.mlx import MLXClient
+
+    _, finish, requests = streaming_server
+    for name in (
+        "HTTP_PROXY",
+        "HTTPS_PROXY",
+        "ALL_PROXY",
+        "http_proxy",
+        "https_proxy",
+        "all_proxy",
+    ):
+        monkeypatch.setenv(name, "http://127.0.0.1:1")
+    monkeypatch.setenv("NO_PROXY", "")
+    monkeypatch.setenv("no_proxy", "")
+    finish.set()
+    chunks = [
+        chunk
+        async for chunk in LiteLLMGateway().stream_completion(
+            messages=[Message(role="user", content="Hello")],
+            provider="mlx",
+            model="fixture",
+        )
+    ]
+    assert "".join(chunk.content for chunk in chunks) == "Hello assistant"
+    response = await MLXClient()._async_request(
+        "POST",
+        "/v1/chat/completions",
+        {
+            "model": "legacy",
+            "messages": [{"role": "user", "content": "Hello"}],
+        },
+    )
+    assert response["choices"][0]["message"]["content"] == "Hello assistant"
+    assert len(requests) == 2
+
+
+@pytest.mark.asyncio
+async def test_mlx_preserves_native_reasoning_and_requests_usage(monkeypatch):
+    from superqode.providers.local.mlx import MLXClient
+
+    async def packets(self, endpoint, data, timeout):
+        assert data["stream_options"] == {"include_usage": True}
+        yield {"choices": [{"delta": {"reasoning": "Think carefully"}}]}
+        yield {"choices": [{"delta": {"content": "Answer"}, "finish_reason": "stop"}]}
+        yield {
+            "choices": [],
+            "usage": {"prompt_tokens": 10, "completion_tokens": 4, "total_tokens": 14},
+        }
+
+    monkeypatch.setattr(MLXClient, "_async_stream_request", packets)
+    chunks = [
+        chunk
+        async for chunk in LiteLLMGateway().stream_completion(
+            messages=[Message(role="user", content="Hello")],
+            provider="mlx",
+            model="fixture",
+        )
+    ]
+    assert "".join(chunk.thinking_content or "" for chunk in chunks) == "Think carefully"
+    assert "".join(chunk.content for chunk in chunks) == "Answer"
+    assert chunks[-1].usage.total_tokens == 14
 
 
 @pytest.mark.asyncio

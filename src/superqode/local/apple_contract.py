@@ -66,15 +66,18 @@ def schema(value, depth=0):
     return value
 
 
+def normalized_temperature(value):
+    if value is None:
+        return None
+    if type(value) not in {int, float} or not math.isfinite(value):
+        raise ValueError("Apple temperature must be a finite number")
+    return min(1.0, max(0.0, value))
+
+
 def request(messages, tools, max_tokens, temperature, response_format):
     if max_tokens is not None and (type(max_tokens) is not int or max_tokens <= 0):
         raise ValueError("Apple output limit must be a positive integer")
-    if temperature is not None and (
-        type(temperature) not in {int, float}
-        or not math.isfinite(temperature)
-        or not 0 <= temperature <= 2
-    ):
-        raise ValueError("Apple temperature must be between zero and two")
+    normalized_temperature(temperature)
     definitions = [asdict(t) for t in tools or []]
     if len(definitions) > 5 or len({t["name"] for t in definitions}) != len(definitions):
         raise ValueError(

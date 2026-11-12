@@ -49,15 +49,30 @@ struct ModelsView: View {
     VStack(spacing: 0) {
       Picker("Model workspace", selection: $tab) {
         Text("Quick Start").tag("local")
-        Text("Runtimes & performance").tag("runtimes")
-        Text("Compare").tag("comparisons")
-        Text("Model routes").tag("routes")
+        Text("Advanced").tag("advanced")
       }.pickerStyle(.segmented).padding(.horizontal, 28).padding(.top, 20)
       if tab == "local" {
         if active { LocalQuickStartView(project: app.projectID, embedded: true).id(app.projectID) }
-      } else if tab == "runtimes" { LocalRuntimeWorkspace(active: active) }
+      } else { AdvancedLocalAIView(active: active) }
+    }
+  }
+}
+
+struct AdvancedLocalAIView: View {
+  var active = true
+  @State private var tab = "runtimes"
+  var body: some View {
+    VStack(spacing: 0) {
+      Picker("Advanced Local AI", selection: $tab) {
+        Text("Runtimes & performance").tag("runtimes")
+        Text("Compare").tag("comparisons")
+        Text("Model routes").tag("routes")
+        Text("Models & setup").tag("models")
+      }.pickerStyle(.segmented).padding(.horizontal, 28).padding(.top, 20)
+      if tab == "runtimes" { LocalRuntimeWorkspace(active: active) }
       else if tab == "comparisons" { LocalComparisonWorkspace(active: active) }
-      else { ModelRoutesView() }
+      else if tab == "routes" { ModelRoutesView() }
+      else { LocalModelWorkbenchView(active: active) }
     }
   }
 }

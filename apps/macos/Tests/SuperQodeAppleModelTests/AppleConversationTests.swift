@@ -4,6 +4,54 @@ import XCTest
 import FoundationModels
 
 final class AppleConversationTests: XCTestCase {
+  func testStreamingDeltasPreserveUnicodeScalarsAcrossGraphemeChanges() throws {
+    let snapshots = ["👩", "👩\u{200D}", "👩\u{200D}💻", "👩\u{200D}💻 葛", "👩\u{200D}💻 葛\u{E0100}", "👩\u{200D}💻 葛\u{E0100} e", "👩\u{200D}💻 葛\u{E0100} e\u{301}"]
+    var previous = ""
+    var delivered = ""
+    for snapshot in snapshots {
+      delivered += try AppleRequestContract.delta(previous: previous, current: snapshot)
+      XCTAssertEqual(Array(delivered.unicodeScalars), Array(snapshot.unicodeScalars))
+      previous = snapshot
+    }
+    XCTAssertThrowsError(try AppleRequestContract.delta(previous: "earlier", current: "revised"))
+  }
+
+  func testTemperatureIsFiniteAndBoundedForTheNativeSDK() throws {
+    XCTAssertNil(try AppleRequestContract.temperature(nil))
+    XCTAssertNil(try AppleRequestContract.temperature(NSNull()))
+    XCTAssertEqual(try AppleRequestContract.temperature(-1.0), 0)
+    XCTAssertEqual(try AppleRequestContract.temperature(2.0), 1)
+    XCTAssertEqual(try AppleRequestContract.temperature(0.6), 0.6)
+    for invalid in [true, "warm", Double.nan, Double.infinity] as [Any] {
+      XCTAssertThrowsError(try AppleRequestContract.temperature(invalid))
+    }
+    XCTAssertEqual(AppleRequestContract.finishReason(outputTokens: 128, limit: 128), "length")
+    XCTAssertEqual(AppleRequestContract.finishReason(outputTokens: 32, limit: 128), "stop")
+  }
+
+  func testLegacySDKErrorsAndEmptyResponsesHaveSpecificGuidance() throws {
+    guard #available(macOS 26.0, *) else { throw XCTSkip("Foundation Models needs macOS 26") }
+    let context = LanguageModelSession.GenerationError.Context(debugDescription: "private prompt")
+    let cases: [(Error, String)] = [
+      (LanguageModelSession.GenerationError.assetsUnavailable(context), "model-not-ready"),
+      (LanguageModelSession.GenerationError.exceededContextWindowSize(context), "context-full"),
+      (LanguageModelSession.GenerationError.guardrailViolation(context), "refused"),
+      (LanguageModelSession.GenerationError.rateLimited(context), "busy"),
+      (BridgeInput.emptyResponse, "empty-response"),
+      (BridgeInput.revisedSnapshot, "stream-revised"),
+    ]
+    for (error, expected) in cases {
+      let result = AppleConversation.error(error)
+      XCTAssertEqual(result.0, expected)
+      XCTAssertFalse(result.1.contains("private prompt"))
+    }
+    #if compiler(>=6.4)
+    if #available(macOS 27.0, *) {
+      XCTAssertEqual(AppleConversation.error(LanguageModelSession.Error.concurrentRequests).0, "busy")
+    }
+    #endif
+  }
+
   func testNativeSchemasAndTranscriptsWithoutLoadingTheModel() throws {
     guard #available(macOS 26.0, *) else { throw XCTSkip("Foundation Models needs macOS 26") }
     let schema: [String: Any] = ["type": "object", "properties": [

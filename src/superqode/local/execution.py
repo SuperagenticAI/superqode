@@ -202,7 +202,10 @@ def comparison_records(trace):
 
 
 class LocalTurn:
-    def __init__(self, provider, model):
+    def __init__(self, provider, model, *, queue_timeout=120.0):
+        if type(queue_timeout) not in {int, float} or not 0 < queue_timeout < float("inf"):
+            raise ValueError("Local inference queue timeout must be a positive finite number")
+        self.queue_timeout = queue_timeout
         self.provider, self.model = provider, model
         self.id = uuid4().hex
         self.fd = None
@@ -269,6 +272,7 @@ class LocalTurn:
         try:
             self.queued_lease()
             while not self.try_slot():
+                self.check_queue_deadline()
                 time.sleep(0.05)
         except BaseException:
             _current.reset(self.sync_token)
@@ -288,11 +292,18 @@ class LocalTurn:
         try:
             self.queued_lease()
             while not self.try_slot():
+                self.check_queue_deadline()
                 await asyncio.sleep(0.05)
         except BaseException:
             self.close("cancelled")
             raise
         return self
+
+    def check_queue_deadline(self):
+        if time.monotonic() - self.queued >= self.queue_timeout:
+            raise TimeoutError(
+                "Local inference is busy. This request timed out waiting for a generation slot; no model request was sent. Wait for the active session or stop it, then try again."
+            )
 
     async def run(self, awaitable):
         token = _current.set(self)

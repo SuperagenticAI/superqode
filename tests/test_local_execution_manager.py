@@ -62,6 +62,27 @@ async def test_cancelled_waiter_and_holder_release_slots():
 
 
 @pytest.mark.asyncio
+async def test_queue_wait_has_a_deadline_and_leaves_no_stale_lease():
+    async with LocalTurn("mlx", "holder") as holder:
+        with pytest.raises(TimeoutError, match="no model request was sent"):
+            async with LocalTurn("mlx", "timeout", queue_timeout=0.05):
+                pytest.fail("A waiting request must not enter generation")
+        holder.observe(terminal=True)
+    async with LocalTurn("mlx", "next", queue_timeout=0.2) as turn:
+        turn.observe(terminal=True)
+
+
+def test_sync_queue_wait_uses_the_same_deadline():
+    with LocalTurn("mlx", "holder") as holder:
+        with pytest.raises(TimeoutError, match="generation slot"):
+            with LocalTurn("mlx", "timeout", queue_timeout=0.05):
+                pytest.fail("A waiting request must not enter generation")
+        holder.observe(terminal=True)
+    with LocalTurn("mlx", "next", queue_timeout=0.2) as turn:
+        turn.observe(terminal=True)
+
+
+@pytest.mark.asyncio
 async def test_process_death_releases_kernel_slot_and_reports_interruption():
     code = """
 import asyncio
