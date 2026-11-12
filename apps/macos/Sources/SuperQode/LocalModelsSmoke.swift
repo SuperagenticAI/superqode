@@ -42,7 +42,8 @@ import Foundation
     let comparison = try await engine.call("local.comparisons.catalog", ["project": projectID]) as? [String: Any] ?? [:]
     let localRoutes = comparison["routes"] as? [[String: Any]] ?? []
     guard let route = localRoutes.first(where: { string($0, "runtime") == compareID }) else { throw EngineError(message: "The native comparison did not discover the loopback fixture model.") }
-    let reviewed = try await engine.call("local.comparisons.prepare", ["project": projectID, "context": 4096, "warmup": false, "selections": [["route": string(route, "id"), "harness": "core"], ["route": string(route, "id"), "harness": "no-tool"]]]) as? [String: Any] ?? [:]
+    guard let candidate = localRoutes.first(where: { string($0, "runtime") == compareID && string($0, "id") != string(route, "id") }) else { throw EngineError(message: "The comparison fixture needs two distinct model identities.") }
+    let reviewed = try await engine.call("local.comparisons.prepare", ["project": projectID, "context": 4096, "warmup": false, "selections": [["route": string(route, "id"), "harness": "core"], ["route": string(candidate, "id"), "harness": "core"]]]) as? [String: Any] ?? [:]
     _ = try await engine.call("local.runtimes.delete", ["id": compareID])
     guard !string(reviewed, "digest").isEmpty, (reviewed["inspection"] as? [String: Any])?["task_count"] as? Int == 2,
       reviewed["suite_content"] == nil else { throw EngineError(message: "The native comparison review was not pinned to its fixed tasks.") }

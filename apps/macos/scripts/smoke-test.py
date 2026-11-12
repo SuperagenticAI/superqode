@@ -29,7 +29,11 @@ class Fixture(BaseHTTPRequestHandler):
         self.send_response(200)
         self.send_header("Content-Type", "application/json")
         self.end_headers()
-        self.wfile.write(json.dumps({"data": [{"id": "gpt-4o-mini"}]}).encode())
+        self.wfile.write(
+            json.dumps(
+                {"data": [{"id": "gpt-4o-mini"}, {"id": "native-fixture-candidate"}]}
+            ).encode()
+        )
 
     def do_POST(self):
         body = json.loads(self.rfile.read(int(self.headers.get("Content-Length", "0"))))
