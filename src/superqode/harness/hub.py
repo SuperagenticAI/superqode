@@ -554,6 +554,11 @@ _LANGUAGE_BY_ID: dict[str, HubLanguage] = {
         "confirmed",
         "Runs in the SuperQode engine (SuperagenticAI/superqode, Python).",
     ),
+    "apple-local": HubLanguage(
+        "Python/Swift",
+        "confirmed",
+        "Configuration of SuperQode's Python native engine with a Swift Foundation Models bridge. The harness source is open; Apple's system model and framework are Apple-managed.",
+    ),
     "cursor": HubLanguage(
         "TypeScript",
         "inferred",
@@ -986,6 +991,7 @@ _POPULARITY_RANK = {
     "deepagents-code": 185,
     "fx": 188,
     "core": 220,
+    "apple-local": 225,
     "workbench": 230,
     "pipy": 240,
     "codegem": 245,

@@ -59,6 +59,7 @@ jobs:
           tests/test_local_airplane.py tests/test_local_stack.py
           tests/test_local_runtime_adapters.py tests/test_local_runtime_profiles.py
           tests/test_local_execution_manager.py tests/test_local_apple_bridge.py
+          tests/test_local_apple_development.py
           tests/test_local_runtime_setup.py
           tests/test_local_setup_presets.py tests/test_local_comparisons.py
           tests/test_context_probe.py tests/test_local_context_contract.py -q
@@ -150,23 +151,9 @@ jobs:
                       print("::error title=Broken bundle symlink::" + message)
           PY
       - name: Apple model bridge availability and private protocol
-        run: |
-          python3 - <<'PYTHON'
-          import json, subprocess
-          helper = "apps/macos/release/SuperQode.app/Contents/MacOS/SuperQodeAppleModel"
-          status = json.loads(subprocess.check_output([helper, "--status"], text=True, timeout=20))
-          assert type(status.get("available")) is bool and status.get("on_device") is True, status
-          assert status.get("model") == "system-on-device" and status.get("guidance"), status
-          print(json.dumps(status))
-          if status["available"]:
-              request = {"messages": [{"role":"user", "content":"Reply with exactly: ok"}], "max_tokens":8}
-              result = subprocess.run([helper, "--stdio"], input=json.dumps(request)+"\n", text=True, capture_output=True, timeout=90, check=True)
-              events = [json.loads(line) for line in result.stdout.splitlines()]
-              assert events and events[-1].get("event") == "done", events
-              assert any(e.get("event") == "text" for e in events), events
-          else:
-              print("Actual generation not tested: Apple on-device model unavailable on this runner.")
-          PYTHON
+        run: >-
+          python3 apps/macos/scripts/check-apple-model.py
+          --helper apps/macos/release/SuperQode.app/Contents/MacOS/SuperQodeAppleModel
       - name: Native app smoke with loopback model fixtures
         env:
           SUPERQODE_NAV_PROFILE: "1"

@@ -37,7 +37,7 @@ enum AppleSchema {
   }
 }
 
-enum BridgeInput: Error { case invalid }
+enum BridgeInput: Error { case invalid, contextFull }
 struct HostToolHandoff: Error {}
 
 /// Only records requests. It never opens files, executes commands or calls the
@@ -141,6 +141,9 @@ enum AppleConversation {
   static var cached: AppleCachedSession?
 
   static func error(_ error: Error) -> (String, String) {
+    if let input = error as? BridgeInput, case .contextFull = input {
+      return ("context-full", "Apple's conversation context is full. Start a new thread or shorten the prompt and tool output. Nothing was silently removed or sent to another model.")
+    }
     if error is BridgeInput { return ("invalid-request", "Apple could not read this text, tool or schema request. Use the Apple on-device configuration or a supported simple schema.") }
     if let native = error as? LanguageModelSession.GenerationError {
       switch native {
@@ -194,9 +197,20 @@ enum AppleConversation {
       }
       // Never retain a failed or interrupted native session.
       cached = nil
-      emit(["event": "metadata", "protocol": 2, "session_reused": reuse, "on_device": true])
       let limit = min(2048, max(1, request["max_tokens"] as? Int ?? 512))
       let options = GenerationOptions(sampling: nil, temperature: request["temperature"] as? Double, maximumResponseTokens: limit)
+      var metadata: [String: Any] = ["event": "metadata", "protocol": 2, "session_reused": reuse, "on_device": true]
+      #if compiler(>=6.3)
+      if #available(macOS 26.4, *) {
+        let current = Transcript.Entry.prompt(Transcript.Prompt(segments: AppleTranscript.text(prompt), options: options))
+        let model = SystemLanguageModel.default
+        var count = try await model.tokenCount(for: Array(session.transcript) + [current])
+        if let schema { count += try await model.tokenCount(for: AppleSchema.make(schema)) }
+        guard count + limit + 128 <= min(4096, model.contextSize) else { throw BridgeInput.contextFull }
+        metadata["sdk_prompt_tokens"] = count
+      }
+      #endif
+      emit(metadata)
       var previous = ""
       if let schema {
         let response = try await session.respond(to: Prompt { prompt }, schema: AppleSchema.make(schema), options: options)

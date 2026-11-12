@@ -116,7 +116,10 @@ Availability reports the current locale's support. Model-not-ready, refused,
 unsupported-language, context-full and invalid structured-output errors have
 distinct guidance, without silently retrying or sending input to another model.
 The request guard includes tool/schema overhead, conservatively caps context at
-4,096 tokens and trims complete older turns without orphaning tool results.
+4,096 tokens and refuses an oversized history with new-thread guidance instead
+of silently dropping conversation turns. Newer SDK builds on macOS 26.4+ also
+check native transcript/schema token counts before generation; those counts are
+recorded separately from unreported generation usage.
 Framework context errors advise a new thread; no hidden summary model is invoked.
 Token counts stay unknown when this bridge cannot report them.
 
@@ -150,6 +153,21 @@ bundled bridge can supply it; standalone Python installations can still use the
 optional SDK adapter. That legacy alias retains its existing session-fallback
 behavior. Use the explicit `apple-foundation/system-on-device` route when no
 fallback is required.
+
+On an eligible physical Mac, the source checkout provides an explicit SDK check:
+
+```bash
+python3 apps/macos/scripts/check-apple-model.py --require-available
+```
+
+It exercises real streaming, native session reuse, guided output, tool requests
+and tool-result transcript continuation. The tool test uses a synthetic result;
+it never executes a file operation. The same check runs in native CI, which
+explicitly reports `generation_tested: false` when its runner lacks the system
+model. Schema/transcript construction and tool handoff also have native tests
+that do not require model availability. Python fixtures separately exercise real
+SuperQode workers, Ask approval and project path boundaries. Fixture success is
+not evidence of real model quality or throughput.
 
 Source builds compile `SuperQodeAppleModel` alongside the app and package/sign it
 in `Contents/MacOS`. Builds without a Foundation Models SDK and unsupported Macs

@@ -28,6 +28,7 @@ def annotate(**values):
             "context",
             "context_source",
             "output_limit",
+            "sdk_prompt_tokens",
             "server_load_s",
             "server_prefill_s",
             "server_decode_s",

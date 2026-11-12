@@ -99,6 +99,10 @@ async def stream(
     if output_schema:
         framing.append({"response_schema": output_schema})
     kept, output = guard_request(raw, framing or None, context, output)
+    if len(kept) != len(raw):
+        raise ValueError(
+            "Apple's conversation context is full. Start a new thread or shorten the history explicitly; nothing was sent or silently removed"
+        )
     annotate(context=context, context_source="conservative on-device cap", output_limit=output)
     payload = {
         "messages": [raw[i] for i in kept],
@@ -138,6 +142,11 @@ async def stream(
             kind = event.get("event")
             if kind == "metadata":
                 reusable = event.get("protocol") == 2
+                if type(event.get("sdk_prompt_tokens")) is int:
+                    annotate(
+                        sdk_prompt_tokens=event["sdk_prompt_tokens"],
+                        context_source="Apple SDK transcript token count; bounded context",
+                    )
             elif kind == "text":
                 text = event.get("text")
                 if not isinstance(text, str) or handoff:

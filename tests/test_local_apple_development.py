@@ -16,6 +16,7 @@ from superqode.local import apple, apple_sessions
 from superqode.providers.gateway.base import Message, ToolDefinition
 from superqode.tools.base import ToolRegistry
 from test_desktop_service import desktop, wait_job  # noqa: F401
+from test_local_comparisons import configured, models  # noqa: F401
 
 pytestmark = pytest.mark.skipif(os.name != "posix", reason="Native helper process fixture is POSIX")
 
@@ -88,6 +89,18 @@ async def test_session_helpers_are_reused_only_within_the_selected_scope_and_clo
 
 
 @pytest.mark.asyncio
+async def test_context_rollover_requires_explicit_action_before_generation(native):
+    messages = [
+        Message("user", "old " * 3000),
+        Message("assistant", "answer " * 300),
+        Message("user", "new question"),
+    ]
+    with pytest.raises(ValueError, match="nothing was sent or silently removed"):
+        _ = [c async for c in apple.stream(messages)]
+    assert not native.exists()
+
+
+@pytest.mark.asyncio
 async def test_structured_output_is_guided_and_validated_before_delivery(native):
     output = {
         "type": "json_schema",
@@ -109,6 +122,44 @@ async def test_structured_output_is_guided_and_validated_before_delivery(native)
         async for c in apple.stream([Message("user", "bad-schema")], response_format=output):
             seen.append(c)
     assert seen == []
+
+
+@pytest.mark.asyncio
+async def test_gateway_propagates_native_schema_and_tool_handoffs(native):
+    from superqode.providers.gateway.litellm_gateway import LiteLLMGateway
+
+    gateway = LiteLLMGateway()
+    try:
+        result = await gateway.chat_completion(
+            [Message("user", "Create a small file")],
+            model=apple.MODEL,
+            provider="apple-foundation",
+            tools=tools(),
+            max_tokens=64,
+            reasoning_effort="off",
+        )
+        assert result.finish_reason == "tool_calls"
+        assert result.tool_calls[0]["function"]["name"] == "write"
+        result = await gateway.chat_completion(
+            [Message("user", "answer")],
+            model=apple.MODEL,
+            provider="apple-foundation",
+            max_tokens=32,
+            response_format={
+                "type": "json_schema",
+                "json_schema": {
+                    "schema": {
+                        "type": "object",
+                        "properties": {"answer": {"type": "string"}},
+                        "required": ["answer"],
+                    }
+                },
+            },
+        )
+        assert json.loads(result.content) == {"answer": "local"}
+        assert result.usage is None
+    finally:
+        await apple_sessions.close()
 
 
 @pytest.mark.asyncio
@@ -279,3 +330,72 @@ def test_apple_comparison_discovery_and_preparation_are_metadata_only(desktop, n
                 ],
             },
         )
+
+
+def test_apple_and_http_models_run_same_isolated_tasks_with_independent_grades(
+    configured, native, monkeypatch
+):
+    from superqode.desktop_service import local_comparisons
+
+    service, project, root, params = configured
+    monkeypatch.setattr(
+        apple,
+        "status",
+        lambda: {
+            "available": True,
+            "supports_tools": True,
+            "context": 4096,
+            "runtime_version": "fixture-system-runtime",
+        },
+    )
+    catalog = local_comparisons.catalog(service, project["id"])
+    route = next(r for r in catalog["routes"] if r["provider"] == "apple-foundation")
+    reviewed = local_comparisons.prepare(
+        service,
+        {
+            **params,
+            "selections": [
+                params["selections"][0],
+                {"route": route["id"], "harness": "apple-local"},
+            ],
+        },
+    )
+    plan = json.loads(
+        service._all(
+            "SELECT value FROM settings WHERE key=?", (local_comparisons.PREFIX + reviewed["id"],)
+        )[0]["value"]
+    )
+    environment, secrets = local_comparisons.environment(service, plan)
+    for name, value in environment.items():
+        monkeypatch.setenv(name, value)
+    output = service.root / "apple-comparison"
+    output.mkdir()
+    events = []
+
+    async def run():
+        try:
+            await local_comparisons.run(
+                {"comparison_plan": plan, "cwd": str(root), "job_id": "apple-comparison"},
+                output,
+                lambda kind, data: events.append((kind, data)),
+                secrets,
+            )
+        finally:
+            await apple_sessions.close()
+
+    asyncio.run(run())
+    result = next(data for kind, data in events if kind == "result")
+    assert [v["passed"] for v in result["variants"]] == [2, 2], result
+    native_result = result["variants"][1]
+    assert native_result["local_configuration"]["identity_verified"] is False
+    assert (
+        native_result["local_configuration"]["before"]["runtime_version"]
+        == "fixture-system-runtime"
+    )
+    assert native_result["model_requests"]
+    assert not (root / "sq_local_trial.py").exists()
+    assert all(
+        t["workspace"]["snapshot_sha256"] == result["workspace"]["snapshot_sha256"]
+        for v in result["variants"]
+        for t in v["tasks"]
+    )

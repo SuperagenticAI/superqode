@@ -45,6 +45,7 @@ final class AppleConversationTests: XCTestCase {
     let (code, message) = AppleConversation.error(BridgeInput.invalid)
     XCTAssertEqual(code, "invalid-request")
     XCTAssertTrue(message.contains("schema"))
+    XCTAssertEqual(AppleConversation.error(BridgeInput.contextFull).0, "context-full")
   }
 }
 #endif
