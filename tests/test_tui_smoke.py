@@ -2207,13 +2207,13 @@ def test_tui_harness_commands_open_complete_integration_switcher(tmp_path, monke
     # optional integrations.
     assert picker_ids[:11] == [
         "core",
-        "apple-local",
         "rlm",
         "pipy",
         "workbench",
         "codegem",
         "systemone",
         "no-tool",
+        "apple-local",
         "codex",
         "codex-sdk",
         "claude",

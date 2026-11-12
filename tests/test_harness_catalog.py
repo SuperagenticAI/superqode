@@ -15,6 +15,15 @@ def test_catalogue_has_core_default_and_preserved_workbench(tmp_path):
 
     assert DEFAULT_HARNESS_ID == "core"
     assert next(iter(entries)) == "core"
+    assert list(entries)[:7] == [
+        "core",
+        "rlm",
+        "pipy",
+        "workbench",
+        "codegem",
+        "systemone",
+        "no-tool",
+    ], "New configurations must preserve established native keyboard positions"
     assert entries["core"].default is True
     assert entries["core"].tools == ("read", "write", "edit", "bash")
     assert entries["workbench"].default is False

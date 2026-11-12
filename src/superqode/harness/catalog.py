@@ -192,15 +192,6 @@ def builtin_harnesses() -> tuple[HarnessDefinition, ...]:
             default=True,
         ),
         HarnessDefinition(
-            id="apple-local",
-            display_name="Apple on-device",
-            description=apple_local.description,
-            runtime="builtin",
-            source="built-in",
-            spec=apple_local,
-            loop_policy=core_loop_policy(),
-        ),
-        HarnessDefinition(
             id="rlm",
             display_name="RLM",
             description=rlm.description,
@@ -259,6 +250,15 @@ def builtin_harnesses() -> tuple[HarnessDefinition, ...]:
             spec=no_tool,
             loop_policy=core_loop_policy(),
             aliases=("no_tool",),
+        ),
+        HarnessDefinition(
+            id="apple-local",
+            display_name="Apple on-device",
+            description=apple_local.description,
+            runtime="builtin",
+            source="built-in",
+            spec=apple_local,
+            loop_policy=core_loop_policy(),
         ),
     )
     reserved = {entry.id for entry in workflows}
