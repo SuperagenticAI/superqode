@@ -884,16 +884,7 @@ struct CodingComposer: View {
       }
       if app.isManaged {
         if !app.agentModels.isEmpty {
-          Picker("Model", selection: Binding(get: { app.selectedAgentModel }, set: { app.selectedAgentModel = $0 })) {
-            Text("Agent default").tag("")
-            if !app.selectedAgentModel.isEmpty && !app.agentModels.contains(where: { $0.agentModelID == app.selectedAgentModel }) {
-              Text(app.selectedAgentModel).tag(app.selectedAgentModel)
-            }
-            ForEach(app.agentModels, id: \.agentModelID) { row in
-              Text(string(row, "name", row.agentModelID) + (row["free"] as? Bool == true ? " · Free" : ""))
-                .tag(row.agentModelID)
-            }
-          }.disabled(app.active || app.checkingConnection)
+          AgentModelPicker().frame(maxWidth: 320, alignment: .leading)
         } else if !app.checkingConnection {
           Button("Load agent models") { app.perform { await app.checkManagedConnection() } }
         }

@@ -13,6 +13,7 @@ struct CatalogPopup: NSViewRepresentable {
   let label: String
   let options: [CatalogPopupOption]
   @Binding var selection: String
+  var placeholder = "Choose a preset"
   @Environment(\.isEnabled) private var enabled
 
   final class Coordinator: NSObject {
@@ -30,7 +31,7 @@ struct CatalogPopup: NSViewRepresentable {
       self.parent = parent
       if rendered != parent.options {
         button.removeAllItems()
-        button.addItem(withTitle: "Choose a preset")
+        button.addItem(withTitle: parent.placeholder)
         button.lastItem?.isEnabled = false
         for option in parent.options {
           let item = NSMenuItem(title: option.title, action: nil, keyEquivalent: "")
@@ -41,7 +42,8 @@ struct CatalogPopup: NSViewRepresentable {
       }
       let index = parent.options.firstIndex(where: { $0.id == parent.selection }).map { $0 + 1 } ?? 0
       if button.indexOfSelectedItem != index { button.selectItem(at: index) }
-      button.isEnabled = enabled && !parent.options.isEmpty
+      let interactive = enabled && !parent.options.isEmpty
+      if button.isEnabled != interactive { button.isEnabled = interactive }
       button.setAccessibilityLabel(parent.label)
     }
   }

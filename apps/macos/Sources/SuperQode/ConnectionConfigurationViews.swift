@@ -359,19 +359,8 @@ struct AgentControlsView: View {
     DisclosureGroup("Agent settings") {
       VStack(alignment: .leading, spacing: 10) {
         let modes = app.agentSession["modes"] as? [String: Any] ?? [:]
-        let availableModels = app.agentModels
         let availableModes = modes["availableModes"] as? [[String: Any]] ?? []
-        if !availableModels.isEmpty {
-          Picker("Agent model", selection: Binding(get: { app.selectedAgentModel }, set: { app.selectedAgentModel = $0 })) {
-            Text("Keep agent selection").tag("")
-            if !app.selectedAgentModel.isEmpty && !availableModels.contains(where: { $0.agentModelID == app.selectedAgentModel }) {
-              Text(app.selectedAgentModel).tag(app.selectedAgentModel)
-            }
-            ForEach(availableModels, id: \.agentModelID) { row in
-              Text(string(row, "name", row.agentModelID)).tag(row.agentModelID)
-            }
-          }
-        }
+        if !app.agentModels.isEmpty { AgentModelPicker() }
         if app.allowsManualAgentModel {
           TextField("Model ID (blank uses the CLI default)", text: Binding(
             get: { app.selectedAgentModel }, set: { app.selectedAgentModel = $0 }))
@@ -417,6 +406,26 @@ struct AgentControlsView: View {
         ).font(.caption).foregroundStyle(.secondary)
       }.padding(.top, 10).disabled(app.active || app.checkingConnection)
     }.font(.caption)
+  }
+}
+
+/// A live account catalog can be large; keep AppKit menu items across workspace updates.
+struct AgentModelPicker: View {
+  @EnvironmentObject var app: Workspace
+  var body: some View {
+    let models = app.agentModels
+    let selected = app.selectedAgentModel
+    let missing = !selected.isEmpty && !models.contains { $0.agentModelID == selected }
+    let options = [CatalogPopupOption(id: "", title: "Agent default")]
+      + (missing ? [CatalogPopupOption(id: selected, title: selected)] : [])
+      + models.map {
+        CatalogPopupOption(id: $0.agentModelID,
+          title: string($0, "name", $0.agentModelID) + ($0["free"] as? Bool == true ? " · Free" : ""))
+      }
+    CatalogPopup(label: "Agent model", options: options,
+      selection: Binding(get: { app.selectedAgentModel }, set: { app.selectedAgentModel = $0 }),
+      placeholder: "Choose a model")
+      .disabled(app.active || app.checkingConnection)
   }
 }
 extension Dictionary where Key == String, Value == Any {

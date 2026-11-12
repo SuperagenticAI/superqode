@@ -180,9 +180,9 @@ struct HarnessStudioView: View {
             if !serverFailure.isEmpty { Text(serverFailure).font(.caption).foregroundStyle(.orange) }
             Button("Open Local AI") { app.section = "Models" }
           } else if library.source == "provider" {
-            Picker("Provider", selection: $library.provider) {
-              ForEach(app.providers, id: \.projectRowID) { row in Text(string(row, "name")).tag(string(row, "id")) }
-            }
+            CatalogPopup(label: "Provider", options: app.providers.map {
+              CatalogPopupOption(id: string($0, "id"), title: string($0, "name"))
+            }, selection: $library.provider, placeholder: "Choose a provider")
             TextField("Model ID", text: $library.model).textFieldStyle(.roundedBorder)
             Button("Provider credentials…") { app.openConnections("source:key") }
           } else if library.source == "agent" {
