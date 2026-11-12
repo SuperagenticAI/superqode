@@ -264,7 +264,13 @@ enum AppleConversation {
       // Never retain a failed or interrupted native session.
       cached = nil
       let limit = min(2048, max(1, request["max_tokens"] as? Int ?? 512))
-      let options = GenerationOptions(sampling: nil, temperature: try AppleRequestContract.temperature(request["temperature"]), maximumResponseTokens: limit)
+      let temperature = try AppleRequestContract.temperature(request["temperature"])
+      #if compiler(>=6.4)
+      // The renamed initializer is back-deployed to macOS 26 by the SDK.
+      let options = GenerationOptions(samplingMode: nil, temperature: temperature, maximumResponseTokens: limit)
+      #else
+      let options = GenerationOptions(sampling: nil, temperature: temperature, maximumResponseTokens: limit)
+      #endif
       var metadata: [String: Any] = ["event": "metadata", "protocol": 2, "session_reused": reuse, "on_device": true]
       #if compiler(>=6.3)
       if #available(macOS 26.4, *) {
