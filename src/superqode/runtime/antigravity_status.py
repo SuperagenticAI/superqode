@@ -1,4 +1,4 @@
-"""Cheap local readiness probe for the Google Antigravity CLI."""
+"""Readiness and model metadata for the Google Antigravity CLI."""
 
 from __future__ import annotations
 
@@ -19,6 +19,22 @@ def version_tuple(text: str) -> tuple[int, int, int] | None:
     """Extract a semantic version triple from ``agy --version`` output."""
     match = re.search(r"(?<!\d)(\d+)\.(\d+)\.(\d+)", text or "")
     return tuple(map(int, match.groups())) if match else None
+
+
+def parse_agy_models(output: str) -> list[dict[str, str]]:
+    """Read bare model IDs and tab-separated ID and display-name rows."""
+    models = []
+    seen = set()
+    for line in output.splitlines():
+        identity, _, name = line.strip().partition("\t")
+        if (
+            re.fullmatch(r"[A-Za-z0-9][A-Za-z0-9._:/-]*", identity)
+            and identity.lower() not in {"model", "models", "available"}
+            and identity not in seen
+        ):
+            seen.add(identity)
+            models.append({"id": identity, "name": name.strip() or identity})
+    return models
 
 
 @dataclass(frozen=True)
@@ -110,6 +126,7 @@ __all__ = [
     "AntigravityCLIStatus",
     "MINIMUM_ANTIGRAVITY_CLI_VERSION",
     "clear_antigravity_cli_cache",
+    "parse_agy_models",
     "probe_antigravity_cli",
     "version_tuple",
 ]

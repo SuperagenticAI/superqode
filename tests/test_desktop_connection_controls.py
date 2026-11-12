@@ -16,10 +16,10 @@ from superqode.desktop_service.connection_controls import (
     apply_runtime_controls,
     cli_output,
     cli_plan,
-    parse_agy_models,
     run_command,
 )
 from superqode.desktop_service.connection_probe import probe_route
+from superqode.runtime.antigravity_status import parse_agy_models
 
 
 @pytest.fixture
@@ -32,7 +32,7 @@ def agy(tmp_path, monkeypatch):
         f"with open({str(trace)!r}, 'a') as f: f.write(json.dumps(sys.argv[1:]) + '\\n')\n"
         "assert '--version' in sys.argv or 'GEMINI_API_KEY' not in os.environ\n"
         "if sys.argv[1:] == ['--version']: print('agy 1.1.5')\n"
-        "elif sys.argv[1:] == ['models']: print('Available models:\\ngemini-fast\\ngemini-capable\\ngemini-fast')\n"
+        "elif sys.argv[1:] == ['models']: print('Fetching available models...\\ngemini-fast\\tGemini Fast\\ngemini-capable\\tGemini Capable\\ngemini-fast')\n"
         "elif '--print' in sys.argv: print('model choice applied')\n"
         "else: print('CLI information')\n"
     )
@@ -72,9 +72,9 @@ def test_agy_discovery_and_selected_options_reach_real_worker(desktop, agy):
     )
     assert metadata["state"] == "completed", metadata
     session = metadata["result"]["session"]
-    assert [row["id"] for row in session["models"]["availableModels"]] == [
-        "gemini-fast",
-        "gemini-capable",
+    assert session["models"]["availableModels"] == [
+        {"id": "gemini-fast", "name": "Gemini Fast"},
+        {"id": "gemini-capable", "name": "Gemini Capable"},
     ]
     assert {row["id"] for row in session["config_options"]} == {"agent", "effort"}
     assert service.dispatch("jobs.list", {}) == []
@@ -327,4 +327,46 @@ async def test_codex_model_inventory_advances_to_the_next_page(tmp_path, monkeyp
     assert request.await_args_list == [
         call("model/list", {"includeHidden": False}),
         call("model/list", {"includeHidden": False, "cursor": "page-two"}),
+    ]
+
+
+@pytest.mark.asyncio
+async def test_codex_desktop_catalogs_bound_plugins_and_allow_slow_app_pages(tmp_path, monkeypatch):
+    from unittest.mock import AsyncMock, call
+
+    from superqode.agent.loop import AgentConfig
+    from superqode.runtime.codex_capabilities import CodexCapabilities
+    from superqode.runtime.codex_cli import CodexCLIRuntime
+
+    monkeypatch.delenv("SUPERQODE_CODEX_SERVER", raising=False)
+    runtime = CodexCLIRuntime(
+        config=AgentConfig(provider="agent", model="", working_directory=tmp_path),
+        codex_bin=sys.executable,
+    )
+    runtime.capabilities = CodexCapabilities(
+        methods={"plugin/list": {"properties": {"marketplaceKinds": {}}}}
+    )
+    monkeypatch.setattr(runtime, "verify_account", AsyncMock())
+    monkeypatch.setattr(runtime, "_ensure_started", AsyncMock())
+    monkeypatch.setattr(runtime, "aclose", AsyncMock())
+    request = AsyncMock(return_value={})
+    monkeypatch.setattr(runtime, "_timed_request", request)
+    constructor = Mock(return_value=runtime)
+    monkeypatch.setattr("superqode.runtime.codex_cli.CodexCLIRuntime", constructor)
+    route = {"available": True, "runtime": "codex-cli"}
+
+    plugins = await run_command(tmp_path, route, "plugins", lambda _: None)
+    await run_command(tmp_path, route, "apps", lambda _: None, cursor="app-page-two")
+    assert plugins["text"] == "Local plugin marketplaces loaded from Codex."
+
+    runtime.capabilities = CodexCapabilities()
+    await run_command(tmp_path, route, "plugins", lambda _: None)
+    assert [entry.kwargs["request_timeout"] for entry in constructor.call_args_list] == [20, 45, 20]
+    assert request.await_args_list == [
+        call(
+            "plugin/list",
+            {"cwds": [str(tmp_path)], "forceRefetch": False, "marketplaceKinds": ["local"]},
+        ),
+        call("app/list", {"limit": 50, "forceRefetch": False, "cursor": "app-page-two"}),
+        call("plugin/list", {"cwds": [str(tmp_path)], "forceRefetch": False}),
     ]

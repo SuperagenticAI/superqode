@@ -24,16 +24,21 @@ pytestmark = pytest.mark.skipif(os.name != "posix", reason="Native helper proces
 @pytest.fixture
 def native(tmp_path, monkeypatch):
     helper, record = tmp_path / "native-apple", tmp_path / "requests.jsonl"
+    shutdown = record.with_suffix(".shutdown.jsonl")
     helper.write_text(
         "#!/usr/bin/env python3\n"
         + f"""
-import json,os,sys,time
+import json,os,signal,sys,time
 def emit(**value): print(json.dumps(value),flush=True)
 if '--status' in sys.argv:
  print(json.dumps({{'available':True,'on_device':True,'state':'ready','guidance':'Ready','model':'system-on-device','context':4096,'supports_tools':True,'protocol':2}}));sys.exit(0)
+def terminate(*args):
+ with open({str(shutdown)!r},'a') as f:f.write(json.dumps({{'pid':os.getpid(),'parent':os.getppid()}})+'\\n')
+ sys.exit(0)
+signal.signal(signal.SIGTERM,terminate)
 for line in sys.stdin:
  request=json.loads(line)
- with open({str(record)!r},'a') as f:f.write(json.dumps({{'pid':os.getpid(),'request':request,'leaked':any(k in os.environ for k in ['GITHUB_TOKEN','OPENAI_API_KEY'])}})+'\\n')
+ with open({str(record)!r},'a') as f:f.write(json.dumps({{'pid':os.getpid(),'parent':os.getppid(),'request':request,'leaked':any(k in os.environ for k in ['GITHUB_TOKEN','OPENAI_API_KEY'])}})+'\\n')
  emit(event='metadata',protocol=2)
  messages=request['messages']; last=messages[-1]['content']; tools=request.get('tools',[])
  if last=='wait':
@@ -276,6 +281,12 @@ def test_real_desktop_worker_uses_normal_ask_and_file_boundaries(desktop, native
     )
     assert wait_job(service, escaped["id"])["status"] == "completed"
     assert outside.read_text() == "PRESERVE"
+    # The worker must reap cached native helpers before its own process exits.
+    started = {(call["pid"], call["parent"]) for call in rows(native)}
+    stopped = {
+        (call["pid"], call["parent"]) for call in rows(native.with_suffix(".shutdown.jsonl"))
+    }
+    assert stopped == started
 
 
 def test_apple_configuration_retains_closed_shell_and_network_under_full():

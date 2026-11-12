@@ -7,6 +7,14 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [2.31.8] - 2026-11-12
+
+### Fixed
+
+- macOS 0.4.2 (build 28) closes Apple Foundation Models helpers before the desktop worker exits and uses the current generation options initializer on newer Apple SDKs.
+- Antigravity model pickers on macOS and in the terminal accept model IDs with display names from current CLI releases.
+- macOS Codex controls load local plugin marketplaces and give slower Apps catalog pages time to return, including when advancing to the next page.
+
 ## [2.31.7] - 2026-11-12
 
 ### Added

@@ -1,4 +1,12 @@
-# SuperQode for macOS public beta 0.4.1
+# SuperQode for macOS public beta 0.4.2
+
+Version 0.4.2 (build 28) bundles Python engine 2.31.8.
+
+- Apple on-device workers close their native model helpers when a job finishes.
+- Antigravity model pickers display model names from current Antigravity CLI releases.
+- Codex Plugins loads local marketplaces, and the Apps catalog allows more time for each page.
+
+## 0.4.1 (build 27)
 
 Version 0.4.1 (build 27) bundles Python engine 2.31.7.
 

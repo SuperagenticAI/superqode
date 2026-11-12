@@ -711,7 +711,7 @@ class CodexCLIRuntime(CodexFeatures, CodexHostTools, CodexInteractions):
         self.login_status = {"pending": False}
         return result
 
-    async def inspect(self, topic, *, reload=False, cursor=None):
+    async def inspect(self, topic, *, reload=False, cursor=None, local_marketplaces=False):
         """A bounded, explicit set of Codex-owned inventories, never host inventories."""
         cwd = str(self.config.working_directory)
         methods = {
@@ -727,6 +727,12 @@ class CodexCLIRuntime(CodexFeatures, CodexHostTools, CodexInteractions):
             raise ValueError(f"Unsupported Codex inventory: {topic}")
         await self._ensure_started()
         method, params = methods[topic]
+        if (
+            topic == "plugins"
+            and local_marketplaces
+            and self.capabilities.supports(method, "marketplaceKinds")
+        ):
+            params["marketplaceKinds"] = ["local"]
         if cursor:
             if topic not in {"apps", "features", "permissions", "mcp"}:
                 raise ValueError(f"{topic} does not accept a pagination cursor")

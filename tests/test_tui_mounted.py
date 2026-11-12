@@ -2433,7 +2433,12 @@ async def test_agy_models_opens_a_picker_instead_of_printing_a_list(monkeypatch)
     import shutil as _shutil
     import subprocess as _subprocess
 
-    listing = "gemini-3.6-flash-high\ngemini-3.1-pro-low\nclaude-sonnet-4-6\n"
+    listing = (
+        "Fetching available models...\n"
+        "gemini-3.6-flash-high\tGemini 3.6 Flash (High)\n"
+        "gemini-3.1-pro-low\tGemini 3.1 Pro (Low)\n"
+        "claude-sonnet-4-6\n"
+    )
 
     monkeypatch.setattr(_shutil, "which", lambda name: "/usr/bin/agy" if name == "agy" else None)
     monkeypatch.setattr(
@@ -2454,6 +2459,8 @@ async def test_agy_models_opens_a_picker_instead_of_printing_a_list(monkeypatch)
         assert app._prompts.is_active("vendor_model")
         rendered = "\n".join(line.text for line in log.lines)
         assert "Select Antigravity Model" in rendered
+        assert "Gemini 3.6 Flash (High)" in rendered
+        assert "Fetching available models" not in rendered
         assert "gemini-3.6-flash-high" in rendered
 
         # Arrow to the second entry and confirm it, through real keypresses.

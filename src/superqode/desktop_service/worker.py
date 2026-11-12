@@ -38,6 +38,16 @@ def emit(kind: str, data: dict):
         WIRE.flush()
 
 
+async def run_async_job(operation):
+    from superqode.local import apple_sessions
+
+    try:
+        return await operation
+    finally:
+        # Cached helpers must be reaped while their owning event loop is open.
+        await apple_sessions.close()
+
+
 def snapshot_spec(request: dict, output: Path):
     import yaml
     from superqode.harness.catalog import resolve_harness
@@ -342,7 +352,7 @@ def main():
                 except (ValueError, OSError) as exc:
                     emit("checkpoint", {"available": False, "reason": str(exc)})
             try:
-                asyncio.run(task(request, directory))
+                asyncio.run(run_async_job(task(request, directory)))
             finally:
                 if capture:
                     try:
@@ -354,9 +364,9 @@ def main():
         elif request["kind"] == "compaction":
             from .compaction import compact
 
-            asyncio.run(compact(request, emit))
+            asyncio.run(run_async_job(compact(request, emit)))
         elif request["kind"] == "evaluation":
-            asyncio.run(evaluate(request, directory))
+            asyncio.run(run_async_job(evaluate(request, directory)))
         elif request["kind"] == "tuning":
             from .tuning import run
 
@@ -376,11 +386,11 @@ def main():
         elif request["kind"] == "local-runtime":
             from .local_runtimes import worker
 
-            asyncio.run(worker(request, emit))
+            asyncio.run(run_async_job(worker(request, emit)))
         elif request["kind"] == "local-comparison":
             from .local_comparisons import run
 
-            asyncio.run(run(request, directory, emit, SECRETS))
+            asyncio.run(run_async_job(run(request, directory, emit, SECRETS)))
         elif request["kind"] == "local":
             from superqode.local.workbench import run
 

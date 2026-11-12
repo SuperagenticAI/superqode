@@ -164,7 +164,8 @@ async def probe_route(root: Path, route: dict, status, method_id=None, terminal_
             await runtime.aclose()
     if route.get("runtime") == "antigravity-cli":
         import shutil
-        from .connection_controls import cli_output, parse_agy_models, runtime_settings
+        from superqode.runtime.antigravity_status import parse_agy_models
+        from .connection_controls import cli_output, runtime_settings
 
         binary = shutil.which("agy")
         if not binary:
@@ -174,7 +175,9 @@ async def probe_route(root: Path, route: dict, status, method_id=None, terminal_
         return {
             "connected": False,
             "configured": True,
-            "message": "Antigravity models loaded. Google Sign-In and model access are verified by agy when a task starts.",
+            "message": "Antigravity models loaded. Google Sign-In and model access are verified by agy when a task starts."
+            if models
+            else "Antigravity returned no models. Check Google Sign-In in agy and refresh.",
             "session": {
                 "models": {"availableModels": models},
                 "config_options": runtime_settings("antigravity-cli"),

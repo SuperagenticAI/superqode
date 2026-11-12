@@ -3647,12 +3647,9 @@ class CommandImplMixin:
         )
 
     async def _show_agy_models(self, log) -> None:
-        """List Antigravity models in a picker rather than as plain output.
+        """List selectable Antigravity models, with raw output as a fallback."""
+        from superqode.runtime.antigravity_status import parse_agy_models
 
-        ``agy models`` prints one model per line. Falling back to that raw
-        output keeps the command useful when the format changes or the list
-        cannot be read.
-        """
         agy = shutil.which("agy")
         if not agy:
             log.add_error(
@@ -3689,12 +3686,7 @@ class CommandImplMixin:
                 log.write(Text(output + "\n", style=THEME["text"], overflow="fold"))
             return
 
-        models = [
-            line.strip()
-            for line in (completed.stdout or "").splitlines()
-            # Skip headings and decoration so only real model ids are offered.
-            if line.strip() and not line.strip().startswith(("#", "-", "="))
-        ]
+        models = parse_agy_models(completed.stdout or "")
         if not self._show_antigravity_model_picker(models, log):
             log.add_info("No Antigravity models were listed.")
             if completed.stdout:

@@ -854,7 +854,7 @@ class PickerNavigationMixin:
 
     def _show_antigravity_model_picker(
         self,
-        models: list[str],
+        models: list[dict[str, str]],
         log: ConversationLog,
         *,
         reset_highlight: bool = True,
@@ -864,7 +864,7 @@ class PickerNavigationMixin:
         return self._show_vendor_model_picker(
             log,
             title="Select Antigravity Model",
-            entries=[(model, model) for model in models if model],
+            entries=[(model["id"], model["name"]) for model in models],
             on_choose=lambda model: self._antigravity_model_cmd(model, log),
             current=str(getattr(getattr(runtime, "config", None), "model", "") or ""),
             retry_hint="Run :agy models to choose again.",

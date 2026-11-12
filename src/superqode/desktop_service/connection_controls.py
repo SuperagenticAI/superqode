@@ -4,7 +4,6 @@ from __future__ import annotations
 
 import asyncio
 import os
-import re
 import shutil
 
 from .redaction import redact
@@ -118,22 +117,6 @@ async def cli_output(root, argv, vendor=None, timeout=20):
         elif process.returncode is None:
             process.kill()
         await process.wait()
-
-
-def parse_agy_models(output):
-    """Use the same one-ID-per-line contract as :agy models; skip decorations."""
-    result = []
-    seen = set()
-    for line in output.splitlines():
-        identity = line.strip()
-        if (
-            re.fullmatch(r"[A-Za-z0-9][A-Za-z0-9._:/-]*", identity)
-            and identity.lower() not in {"model", "models", "available"}
-            and identity not in seen
-        ):
-            seen.add(identity)
-            result.append({"id": identity, "name": identity})
-    return result
 
 
 def cli_plan(route):
@@ -252,10 +235,11 @@ async def run_command(root, route, command, status, cursor=None):
     runtime = CodexCLIRuntime(
         config=AgentConfig(provider="agent", model="", working_directory=root),
         billing_requested="subscription" if route.get("subscription_vendor") else "agent-managed",
-        request_timeout=20,
+        request_timeout=45 if command == "apps" else 20,
     )
     try:
         await runtime.verify_account()
+        label = command.capitalize()
         if command == "models":
             result = await runtime.models(cursor=cursor)
         elif command == "sessions":
@@ -264,12 +248,16 @@ async def run_command(root, route, command, status, cursor=None):
             result = await runtime.read_config()
         elif command in {"account", "usage", "doctor"}:
             result = await getattr(runtime, command)()
+        elif command == "plugins":
+            result = await runtime.inspect(command, cursor=cursor, local_marketplaces=True)
+            if runtime.capabilities.supports("plugin/list", "marketplaceKinds"):
+                label = "Local plugin marketplaces"
         else:
             result = await runtime.inspect(command, cursor=cursor)
         safe = redact_codex_data(result)
         return {
             "data": safe,
-            "text": command.capitalize() + " loaded from Codex.",
+            "text": label + " loaded from Codex.",
             "next_cursor": result.get("nextCursor", "") if isinstance(result, dict) else "",
         }
     finally:
