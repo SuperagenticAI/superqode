@@ -31,6 +31,7 @@ struct CatalogPopup: NSViewRepresentable {
       if rendered != parent.options {
         button.removeAllItems()
         button.addItem(withTitle: "Choose a preset")
+        button.lastItem?.isEnabled = false
         for option in parent.options {
           let item = NSMenuItem(title: option.title, action: nil, keyEquivalent: "")
           item.representedObject = option.id

@@ -31,6 +31,7 @@ import XCTest
     let button = NSPopUpButton(frame: .zero, pullsDown: false)
     coordinator.update(button, parent: view, enabled: true)
     XCTAssertEqual(button.indexOfSelectedItem, 0)
+    XCTAssertEqual(button.item(at: 0)?.isEnabled, false)
     XCTAssertEqual(selection, "removed-preset")
     coordinator.changed(button)
     XCTAssertEqual(selection, "removed-preset")
