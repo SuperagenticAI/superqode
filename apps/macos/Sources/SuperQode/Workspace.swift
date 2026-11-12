@@ -1947,6 +1947,17 @@ private func jobStamp(_ row: [String: Any]) -> Double {
       await self.refreshDetail()
     }
   }
+  @discardableResult
+  func stageAgentCommand(_ name: String) -> Bool {
+    guard draft.isEmpty || confirm(
+      "Replace the current draft?",
+      "The draft text will be replaced with /\(name).",
+      button: "Replace draft"
+    ) else { return false }
+    draft = "/" + name + " "
+    return true
+  }
+
   func confirm(_ title: String, _ message: String, button: String = "Continue") -> Bool {
     let alert = NSAlert()
     alert.messageText = title

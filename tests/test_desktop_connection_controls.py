@@ -292,3 +292,37 @@ async def test_codex_inventory_is_bounded_redacted_and_closed(tmp_path, monkeypa
     runtime.verify_account.assert_awaited_once()
     runtime.inspect.assert_awaited_once_with("skills", cursor=None)
     runtime.aclose.assert_awaited_once()
+
+
+@pytest.mark.asyncio
+async def test_codex_model_inventory_advances_to_the_next_page(tmp_path, monkeypatch):
+    from unittest.mock import AsyncMock, call
+
+    from superqode.agent.loop import AgentConfig
+    from superqode.runtime.codex_cli import CodexCLIRuntime
+
+    runtime = CodexCLIRuntime(
+        config=AgentConfig(provider="agent", model="", working_directory=tmp_path)
+    )
+    monkeypatch.setattr(runtime, "verify_account", AsyncMock())
+    monkeypatch.setattr(runtime, "_ensure_started", AsyncMock())
+    monkeypatch.setattr(runtime, "aclose", AsyncMock())
+    request = AsyncMock(
+        side_effect=[
+            {"data": [{"id": "model-one"}], "nextCursor": "page-two"},
+            {"data": [{"id": "model-two"}], "nextCursor": None},
+        ]
+    )
+    monkeypatch.setattr(runtime, "_timed_request", request)
+    monkeypatch.setattr("superqode.runtime.codex_cli.CodexCLIRuntime", lambda **kwargs: runtime)
+    route = {"available": True, "runtime": "codex-cli"}
+
+    first = await run_command(tmp_path, route, "models", lambda _: None)
+    second = await run_command(tmp_path, route, "models", lambda _: None, first["next_cursor"])
+
+    assert second["data"]["data"] == [{"id": "model-two"}]
+    assert not second["next_cursor"]
+    assert request.await_args_list == [
+        call("model/list", {"includeHidden": False}),
+        call("model/list", {"includeHidden": False, "cursor": "page-two"}),
+    ]

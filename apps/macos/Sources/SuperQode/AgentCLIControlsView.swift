@@ -51,8 +51,7 @@ struct AgentCLIControlsView: View {
               Text("Agent slash commands").font(.headline)
               ForEach(app.agentCommands, id: \.projectRowID) { command in
                 Button {
-                  app.draft = "/" + string(command, "name") + " "
-                  dismiss()
+                  if app.stageAgentCommand(string(command, "name")) { dismiss() }
                 } label: {
                   HStack {
                     Text("/" + string(command, "name")).font(.system(.body, design: .monospaced))

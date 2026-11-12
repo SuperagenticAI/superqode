@@ -7,14 +7,20 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [2.31.7] - 2026-11-12
+
 ### Added
 
+- macOS 0.4.1 (build 27): Apple Foundation Models provide on-device chat, structured output and permission-controlled file tools on supported Macs with Apple Intelligence enabled.
+- macOS agent controls show installed Codex and Antigravity models and settings, run supported read-only CLI commands and open the vendor CLI in a project terminal.
+- Local runtime profiles, hardware-aware setup presets and isolated model and harness comparisons share the desktop engine's execution and context limits.
 - macOS 0.4.0 (build 26): Local AI connects in three steps. Choose a harness, choose an installed Ollama or LM Studio model, then Start coding. Download stays separate. Optional harnesses, including DeepSeek, install into Application Support and are checked on the coding job's Python path. The home screen does not ask for Python, uv, or a terminal command. The selected local model is warmed before the first prompt. Replies stay visible, including a DeepSeek reply that arrives as one message. Ollama thinking stays off unless a reasoning effort is set. Context and server settings stay on Context and server…, not on the required connect steps. Send stays available after Start coding, including while a local server job is running. Sidebar threads can be deleted.
 - macOS: Recursive agents is a main left-rail tab, not an item inside Advanced. Command-K finds it as Recursive agents. It stays off the new-thread grid, Local AI, and Getting started. Three cards explain host Python, Docker, and read-only Monty. Choosing one opens the existing model step. Docker is disabled when the daemon is down. Install Monty uses the app installer and does not add a Local AI row. Allow other agents… opens the existing routing form and leaves agent-to-agent off until a peer is saved. An Agents inspector on an RLM or DeepSeek thread shows the boundary, the current limits, and recorded child agents. Follow-up, steer, cancel, goal, and autonomous gates queue only while a host or Docker worker is already running. Monty refuses them. The page does not start a worker, serve A2A, or import the DeepSeek plugin market.
 
-### Notes
+### Fixed
 
-- Included in macOS 0.4.0 (build 26) with engine 2.31.6. The 0.3.9 preparation is already released in 2.31.6. No installer, signing, or notarization was produced here. Announce it after the signed build has been run.
+- macOS asks before a slash command replaces an unsent draft, and Codex model inventories advance to the next page.
+- CodeGem, Gemini and MLX handle streaming completion and output limits more consistently. Local context probes avoid serial delays.
 
 ## [2.31.6] - 2026-11-10
 

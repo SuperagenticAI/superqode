@@ -257,7 +257,7 @@ async def run_command(root, route, command, status, cursor=None):
     try:
         await runtime.verify_account()
         if command == "models":
-            result = await runtime.models()
+            result = await runtime.models(cursor=cursor)
         elif command == "sessions":
             result = await runtime.list_threads(cursor=cursor)
         elif command == "config":

@@ -1,4 +1,13 @@
-# SuperQode for macOS public beta 0.4.0
+# SuperQode for macOS public beta 0.4.1
+
+Version 0.4.1 (build 27) bundles Python engine 2.31.7.
+
+- **Apple on-device** provides local chat, structured output and lightweight file tasks on supported Macs with macOS 26 or later and Apple Intelligence enabled.
+- **Local AI → Advanced** adds runtime profiles, hardware-aware setup presets and isolated model and harness comparisons.
+- **Agent controls** exposes models, settings and supported read-only commands for installed Codex and Antigravity CLIs, with an interactive vendor terminal for the full command tree.
+- Slash commands ask before replacing a draft. Codex model lists can advance to the next page.
+
+## 0.4.0 (build 26)
 
 Native coding workspace for Apple Silicon Macs running macOS 14 or later. Intel Macs are not supported by this build. This is beta software, with manual updates and incomplete terminal feature parity.
 

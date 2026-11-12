@@ -965,7 +965,7 @@ struct CodingComposer: View {
         if app.isManaged && !app.agentCommands.isEmpty {
           Menu("Agent commands") {
             ForEach(app.agentCommands, id: \.projectRowID) { command in
-              Button("/" + string(command, "name")) { app.draft = "/" + string(command, "name") + " " }
+              Button("/" + string(command, "name")) { app.stageAgentCommand(string(command, "name")) }
             }
           }.font(.caption).disabled(app.active)
         }

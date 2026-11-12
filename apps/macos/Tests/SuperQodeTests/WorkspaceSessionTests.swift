@@ -42,6 +42,8 @@ final class WorkspaceSessionTests: XCTestCase {
     ]]
     XCTAssertEqual(Set(app.agentModels.map(\.agentModelID)), Set(["grok-fast", "grok-capable"]))
     XCTAssertEqual(app.agentCommands.first?["name"] as? String, "review")
+    XCTAssertTrue(app.stageAgentCommand("review"))
+    XCTAssertEqual(app.draft, "/review ")
     app.selectedAgentModel = "grok-capable"
     XCTAssertEqual(app.agentModel, "grok-capable")
     XCTAssertFalse(app.allowsManualAgentModel)

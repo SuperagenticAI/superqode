@@ -572,9 +572,12 @@ class CodexCLIRuntime(CodexFeatures, CodexHostTools, CodexInteractions):
                 return True
             return False
 
-    async def models(self, *, include_hidden=False):
+    async def models(self, *, include_hidden=False, cursor=None):
         await self._ensure_started()
-        return await self._timed_request("model/list", {"includeHidden": include_hidden})
+        params = {"includeHidden": include_hidden}
+        if cursor:
+            params["cursor"] = cursor
+        return await self._timed_request("model/list", params)
 
     async def list_threads(
         self, *, limit=20, archived=False, cursor=None, all_cwds=False, descendants=False
