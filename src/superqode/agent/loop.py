@@ -107,7 +107,13 @@ def _cached_system_prompt(
     if custom_prompt:
         prompt += f"\n\n{custom_prompt}"
     if job_description:
-        prompt += get_job_description_prompt(job_description)
+        # Apple's small context must not advertise the generic workbench's
+        # search/shell tools or require a long summary for every focused task.
+        prompt += (
+            "\n\n" + job_description
+            if provider == "apple-foundation"
+            else get_job_description_prompt(job_description)
+        )
     profile = resolve_model_profile(provider, model)
     if profile.system_prompt_suffix:
         prompt += "\n\n" + profile.system_prompt_suffix

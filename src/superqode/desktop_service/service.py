@@ -637,9 +637,14 @@ class DesktopService:
                 and params.get("provider") == "apple-foundation"
                 and params.get("interaction_mode") != "chat"
             ):
-                raise ValueError(
-                    "Apple's on-device integration supports Direct Chat and lightweight text tasks. Select Chat, or choose a tool-capable coding model."
-                )
+                from superqode.local.apple import status
+
+                available = status()
+                if available.get("available") is not True:
+                    raise ValueError(
+                        available.get("guidance")
+                        or "Check Apple Intelligence availability in Local AI"
+                    )
             if kind == "task":
                 reference = str(params.get("harness") or "core")
                 if reference.startswith("local-harness:"):

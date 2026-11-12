@@ -123,7 +123,7 @@ struct LocalRuntimeWorkspace: View {
         Image(systemName: "apple.logo").font(.title).foregroundStyle(Color.qAccent)
         VStack(alignment: .leading, spacing: 3) {
           Text("Apple on-device model").font(.headline)
-          Text("Chat, summaries and lightweight tasks. No subscription or API key.").font(.caption).foregroundStyle(.secondary)
+          Text("Private chat, structured tasks and focused development. No API key.").font(.caption).foregroundStyle(.secondary)
         }
         Spacer()
         Button("Check availability") {
@@ -135,6 +135,10 @@ struct LocalRuntimeWorkspace: View {
       }
       Text(string(apple, "guidance", "Requires a supported Mac, macOS 26+ and Apple Intelligence enabled. Apple's system model is separate from downloaded Qwen, GLM or Gemma weights."))
         .font(.callout).foregroundStyle(.secondary)
+      if apple["current_locale_supported"] as? Bool == false {
+        Text("Apple reports that your current locale is unsupported. Use a language supported by Apple Intelligence or select another local model.")
+          .font(.caption).foregroundStyle(.orange)
+      }
       Toggle("Use for optional summaries and utility tasks", isOn: Binding(get: { appleUtility }, set: { enabled in
         action {
           let result = try await app.engine.call("local.apple.utility", ["enabled": enabled]) as? [String: Any] ?? [:]
@@ -143,14 +147,22 @@ struct LocalRuntimeWorkspace: View {
       })).disabled(busy || (apple["available"] as? Bool != true && !appleUtility))
       Text("Utility hooks include summaries and rubric grading. Validate grading quality before using scores as a release gate. If this native model becomes unavailable, its utility input is not silently sent to a cloud model.")
         .font(.caption).foregroundStyle(.secondary)
+      Text("Use small, focused tasks. The Apple configuration offers three file tools through SuperQode permissions; shell and network tools are disabled. Compare outcomes in Local AI → Compare before relying on coding results. Conversations use a bounded context and may need a new thread. Images are not supported by this route.")
+        .font(.caption).foregroundStyle(.secondary)
       HStack {
         Link("Apple setup guide", destination: URL(string: "https://support.apple.com/en-us/121115")!)
         Spacer()
+        Button("Use for development") {
+          app.chooseHarness("apple-local")
+          app.chooseModelRoute("apple-foundation", "system-on-device")
+          app.interactionMode = "code"; app.section = "Workspace"
+          app.notice = "Apple on-device selected with read, write and edit. File access uses your existing permissions. Shell and network tools are disabled."
+        }.disabled(apple["available"] as? Bool != true || !projectReady || app.anyActive)
         Button("Use for chat") {
           app.chooseHarness("no-tool")
           app.chooseModelRoute("apple-foundation", "system-on-device")
           app.interactionMode = "chat"; app.section = "Workspace"
-          app.notice = "Apple on-device chat selected. Coding harnesses need a tool-capable model."
+          app.notice = "Apple on-device chat selected. Your messages stay on this Mac."
         }.buttonStyle(BrandButtonStyle())
           .disabled(apple["available"] as? Bool != true || !projectReady || app.anyActive)
       }

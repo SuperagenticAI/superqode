@@ -796,7 +796,7 @@ PROVIDERS: Dict[str, ProviderDef] = {
         docs_url="https://developer.apple.com/documentation/foundationmodels",
         example_models=["system-on-device"],
         deployment_mode="local",
-        notes="Apple Intelligence system model for chat and lightweight tasks. No API key or cloud fallback.",
+        notes="Apple Intelligence on-device text, guided output and permission-controlled tools. No API key or cloud fallback.",
     ),
     "ollama": ProviderDef(
         id="ollama",

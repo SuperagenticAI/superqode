@@ -2460,18 +2460,24 @@ class LiteLLMGateway(GatewayInterface):
             )
         try:
             if provider == "apple-foundation":
-                if (
-                    kwargs.get("response_format") is not None
-                    or kwargs.get("reasoning_effort") is not None
-                ):
+                if kwargs.get("reasoning_effort") not in (None, "off", "none"):
                     raise InvalidRequestError(
-                        "Apple's current integration supports plain text; structured-output and reasoning controls are not available",
+                        "Apple's on-device model has no configurable reasoning effort; use a short, explicit task",
                         provider=provider,
                     )
                 from superqode.local.apple import stream as source
 
+                from uuid import uuid4
+
+                session_id = self.__dict__.setdefault("_apple_session_id", uuid4().hex)
                 chunks = source(
-                    messages, model, tools=tools, max_tokens=max_tokens, temperature=temperature
+                    messages,
+                    model,
+                    tools=tools,
+                    max_tokens=max_tokens,
+                    temperature=temperature,
+                    response_format=kwargs.get("response_format"),
+                    session_id=session_id,
                 )
             else:
                 from superqode.local.runtimes import selected_runtime, stream as source

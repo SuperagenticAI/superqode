@@ -67,74 +67,117 @@ def child_environment():
     return {name: value for name, value in os.environ.items() if name in allowed}
 
 
-async def stream(messages, model=MODEL, *, tools=None, max_tokens=None, temperature=None):
+async def stream(
+    messages,
+    model=MODEL,
+    *,
+    tools=None,
+    max_tokens=None,
+    temperature=None,
+    response_format=None,
+    session_id=None,
+):
     if model != MODEL:
         raise ValueError(
             "Choose Apple's system-on-device model; downloaded checkpoints use other engines"
         )
-    if tools:
-        raise ValueError(
-            "Apple's current integration supports Direct Chat and lightweight text tasks. Choose a tool-capable local coding model for coding harnesses."
-        )
-    if any(
-        not isinstance(message.content, str)
-        or message.role not in {"system", "developer", "user", "assistant"}
-        for message in messages
-    ):
-        raise ValueError(
-            "Apple on-device chat currently accepts text conversations without images or tool results"
-        )
-    from .context_contract import guard_request
-
-    raw = [{"role": message.role, "content": message.content} for message in messages]
-    kept, output = guard_request(raw, None, 4096, min(max_tokens or 512, 2048))
+    from .apple_contract import request, tool_calls
+    from . import apple_sessions
+    from .context_contract import guard_request, _launch_contract_value
     from .execution import annotate
+    from jsonschema import Draft202012Validator, ValidationError
 
-    annotate(context=4096, context_source="conservative on-device cap", output_limit=output)
-    payload = {"messages": [raw[i] for i in kept], "max_tokens": output, "temperature": temperature}
+    raw, definitions, output_schema = request(
+        messages, tools, max_tokens, temperature, response_format
+    )
+    context = _launch_contract_value("apple-foundation", model, "context", 512, 4096) or 4096
+    output = min(max_tokens or 512, 2048)
+    cap = _launch_contract_value("apple-foundation", model, "max_tokens", 1, 2048)
+    if cap:
+        output = min(output, cap)
+    framing = list(definitions)
+    if output_schema:
+        framing.append({"response_schema": output_schema})
+    kept, output = guard_request(raw, framing or None, context, output)
+    annotate(context=context, context_source="conservative on-device cap", output_limit=output)
+    payload = {
+        "messages": [raw[i] for i in kept],
+        "max_tokens": output,
+        "temperature": temperature,
+        "tools": definitions,
+        "schema": output_schema,
+        "session_id": session_id or "",
+    }
     encoded = (json.dumps(payload, ensure_ascii=False) + "\n").encode()
     if len(encoded) > 524288:
         raise ValueError("Apple model conversation is too large; start a new thread")
-    child = await asyncio.create_subprocess_exec(
-        helper_path(),
-        "--stdio",
-        stdin=asyncio.subprocess.PIPE,
-        stdout=asyncio.subprocess.PIPE,
-        stderr=asyncio.subprocess.DEVNULL,
-        env=child_environment(),
-        limit=524288,
-    )
-    complete = False
+    path = helper_path()
+    key = (path, session_id) if session_id else None
+
+    async def spawn():
+        return await asyncio.create_subprocess_exec(
+            path,
+            "--stdio",
+            stdin=asyncio.subprocess.PIPE,
+            stdout=asyncio.subprocess.PIPE,
+            stderr=asyncio.subprocess.DEVNULL,
+            env=child_environment(),
+            limit=524288,
+        )
+
+    child = await apple_sessions.acquire(key, spawn)
+    complete, reusable, handoff = False, False, None
+    structured = []
     try:
         child.stdin.write(encoded)
         await child.stdin.drain()
-        child.stdin.close()
         while line := await asyncio.wait_for(child.stdout.readline(), timeout=180):
             event = json.loads(line)
-            if event.get("event") == "text":
+            if not isinstance(event, dict):
+                raise ValueError("Invalid Apple model bridge event")
+            kind = event.get("event")
+            if kind == "metadata":
+                reusable = event.get("protocol") == 2
+            elif kind == "text":
                 text = event.get("text")
-                if not isinstance(text, str):
+                if not isinstance(text, str) or handoff:
                     raise ValueError("Invalid text from Apple model bridge")
-                yield StreamChunk(content=text)
-            elif event.get("event") == "error":
-                raise ValueError(str(event.get("message") or "Apple model failed")[:1000])
-            elif event.get("event") == "done":
+                if output_schema:
+                    structured.append(text)
+                else:
+                    yield StreamChunk(content=text)
+            elif kind == "tool_calls":
+                if handoff or output_schema:
+                    raise ValueError("Invalid Apple tool handoff")
+                handoff = tool_calls(event.get("calls"), definitions)
+            elif kind == "error":
+                code = str(event.get("code") or "generation-failed")
+                raise ValueError(
+                    str(event.get("message") or "Apple model failed")[:1000]
+                    + " ["
+                    + code[:64]
+                    + "]"
+                )
+            elif kind == "done":
+                reason = event.get("finish_reason")
+                if reason != ("tool_calls" if handoff else "stop"):
+                    raise ValueError("Invalid Apple model completion")
+                if output_schema:
+                    text = "".join(structured)
+                    try:
+                        Draft202012Validator(output_schema).validate(json.loads(text))
+                    except (ValueError, ValidationError):
+                        raise ValueError(
+                            "Apple's structured output did not match the requested schema; no partial result was delivered"
+                        ) from None
+                    yield StreamChunk(content=text)
                 complete = True
-                yield StreamChunk(finish_reason="stop")
+                yield StreamChunk(finish_reason=reason, tool_calls=handoff)
                 break
         if not complete:
             raise ValueError("Apple's response ended without completion; it was not replayed")
     finally:
-        if child.returncode is None:
-            try:
-                child.terminate()
-            except ProcessLookupError:
-                pass
-        try:
-            await asyncio.wait_for(child.wait(), 2)
-        except asyncio.TimeoutError:
-            try:
-                child.kill()
-            except ProcessLookupError:
-                pass
-            await child.wait()
+        if complete and reusable:
+            await apple_sessions.release(key, child)
+        else:
+            await apple_sessions.stop(child)

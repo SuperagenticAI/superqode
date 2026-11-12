@@ -78,8 +78,8 @@ async def test_incomplete_apple_output_is_not_completed_or_replayed(bridge):
 
 
 @pytest.mark.asyncio
-async def test_apple_rejects_tools_and_images_before_starting_a_process(bridge):
-    with pytest.raises(ValueError, match="Direct Chat"):
+async def test_apple_rejects_unsupported_schemas_and_images_before_starting_a_process(bridge):
+    with pytest.raises(ValueError, match="schema"):
         _ = [
             c
             async for c in apple.stream(
@@ -132,7 +132,7 @@ def test_native_setup_blocks_coding_and_utility_enable_on_unavailable_device(des
     )
     with pytest.raises(ValueError, match="Enable Apple"):
         service.dispatch("local.apple.utility", {"enabled": True})
-    with pytest.raises(ValueError, match="Direct Chat"):
+    with pytest.raises(ValueError, match="Enable Apple"):
         service.dispatch(
             "tasks.start",
             {

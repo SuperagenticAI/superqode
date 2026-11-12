@@ -363,7 +363,7 @@ def _create_runtime_for_request(
     runtime_name = request.runtime or default_runtime_name
     from ...agent.loop_policy import core_loop_policy, workbench_loop_policy
 
-    is_core = model_policy.profile == "core"
+    is_core = model_policy.profile in {"core", "apple-local"}
     session_storage = Path(request.spec.context.session_storage).expanduser()
     if not session_storage.is_absolute():
         session_storage = request.working_directory / session_storage

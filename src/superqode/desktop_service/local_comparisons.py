@@ -151,6 +151,21 @@ def catalog(service, project):
     with ThreadPoolExecutor(max_workers=2) as pool:
         groups = list(pool.map(managed, ("ollama", "lmstudio")))
     routes = [row for group in groups for row in group] + asyncio.run(_catalog_profiles(service))
+    from superqode.local.apple import status
+
+    apple = status()
+    if apple.get("available") is True and apple.get("supports_tools") is True:
+        routes.append(
+            {
+                "provider": "apple-foundation",
+                "model": "system-on-device",
+                "runtime": "apple-foundation",
+                "name": "Apple · on-device system model",
+                "context": min(4096, apple.get("context") or 4096),
+                "endpoint": "native-stdio",
+                "allowed_harnesses": ["apple-local"],
+            }
+        )
     for row in routes:
         row["id"] = fingerprint([row["provider"], row["runtime"], row["model"]])[:24]
     harnesses = [
@@ -191,6 +206,10 @@ def prepare(service, params):
         if not route or not harness:
             raise ValueError(
                 "A selected model or compatible harness is unavailable; refresh choices"
+            )
+        if route.get("allowed_harnesses") and harness["id"] not in route["allowed_harnesses"]:
+            raise ValueError(
+                "Choose the Apple on-device configuration for this model; it keeps tools and instructions within the system model's context"
             )
         definition = resolve_harness(harness["id"], root=root)
         spec = deepcopy(harness_spec_to_dict(definition.spec))
@@ -306,6 +325,13 @@ def start(service, params):
     if time.time() - plan["created"] > 86400:
         raise ValueError("This comparison review expired; prepare it again")
     for route in plan["routes"]:
+        if route["provider"] == "apple-foundation":
+            from superqode.local.apple import status
+
+            if status().get("available") is not True:
+                raise ValueError(
+                    "Apple's model is no longer available. Check Apple Intelligence and review the comparison again"
+                )
         if route["provider"] == "local-openai":
             current = local_runtimes.read(service, route["runtime"])
             if (
@@ -360,7 +386,7 @@ def route_environment(route, context, keys):
             OLLAMA_API_BASE=route["endpoint"].removesuffix("/v1"),
             OLLAMA_HOST=route["endpoint"].removesuffix("/v1"),
         )
-    else:
+    elif route["provider"] == "lmstudio":
         updates["LMSTUDIO_HOST"] = route["endpoint"]
     previous = {k: os.environ.get(k) for k in updates}
     os.environ.update(updates)
@@ -377,6 +403,21 @@ def route_environment(route, context, keys):
 async def observe_identity(route, key):
     """Read reported identity/version/context. No invented revision or cache hit."""
     import httpx
+
+    if route["provider"] == "apple-foundation":
+        from superqode.local.apple import status
+
+        current = await asyncio.to_thread(status)
+        if current.get("available") is not True:
+            raise ValueError(current.get("guidance") or "Apple's on-device model is unavailable")
+        return {
+            "model": route["model"],
+            "artifact": None,
+            "runtime_version": current.get("runtime_version"),
+            "loaded_context": min(current.get("context") or 4096, 4096),
+            "residency": None,
+            "note": "System-managed model; no immutable weight revision, quantization or cache hit is exposed by this bridge.",
+        }
 
     root = route["endpoint"].removesuffix("/v1")
     paths = (

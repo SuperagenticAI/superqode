@@ -11,6 +11,7 @@ let package = Package(
     .executableTarget(name: "SuperQode", dependencies: [.product(name: "SwiftTerm", package: "SwiftTerm")]),
     .executableTarget(name: "SuperQodeAppleModel"),
     .testTarget(name: "SuperQodeTests", dependencies: ["SuperQode"]),
+    .testTarget(name: "SuperQodeAppleModelTests", dependencies: ["SuperQodeAppleModel"]),
   ],
   swiftLanguageModes: [.v5]
 )

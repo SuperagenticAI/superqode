@@ -80,13 +80,63 @@ enabled, and Apple's system model ready. Choose **Check availability** for the
 specific state and [Apple's setup guidance](https://support.apple.com/en-us/121115).
 
 **Use for chat** selects `apple-foundation/system-on-device` and Direct Chat.
-This initial integration is for text conversations and lightweight tasks. It
-rejects images and coding tools before starting generation. Qwen, GLM, DeepSeek
-and Gemma weights run in other inference engines, not in Apple's system model.
-The bridge streams text, terminates its child on cancellation and never falls
-back to a cloud model. SDK errors or long conversations produce actionable
-shorten/check-availability guidance. Token usage stays unknown when the SDK does
-not report it.
+Text streams incrementally; Stop terminates an active helper. No cloud fallback,
+subscription, API key, Python SDK or inference server is used. Images and reasoning
+controls are not supported by this route. Downloaded Qwen, GLM, DeepSeek and Gemma
+weights use their own runtimes rather than Apple's system model.
+
+**Use for development** selects **Apple on-device** (`apple-local`), a configuration
+of the existing native harness engine. Its three tools are `read`, `write` and
+`edit`. They use SuperQode's normal project path checks, Ask/Auto-edit/Full controls
+and file tracking. Shell and network tools remain disabled even in Full mode.
+Native Apple tools only request an action: they hand validated arguments back to
+the host executor before any file operation. The framework's tool loop ends at
+that boundary; the next request restores calls/results as native transcript
+entries. No write happens inside the Apple helper.
+
+Keep tasks small. Apple's on-device model has limited reasoning and context;
+this configuration does not establish frontier coding capability. Project
+instructions remain in effect; oversized instructions or tool output can require
+a shorter prompt or a new thread. The configuration bounds model iterations at
+eight. Verify changes with independent tests rather than relying on the model's
+claim of success.
+
+Conversations use native transcript entries instead of a JSON conversation
+prompt. An unchanged, continuing text chat can reuse its native session within
+the same gateway/worker. Helpers are exclusively checked out; at most two idle
+helpers remain for 30 seconds, with no listener or disk transcript cache.
+Cancellation, errors, tool handoffs or changed history invalidate native session
+reuse. The desktop still starts a new supervised worker per user turn, so native
+KV caches do **not** persist between desktop chat turns. Context is replayed as
+native transcript entries in that case. First-use prewarming occurs only after
+an explicit request. These changes are opportunities for lower overhead, not a
+measured Apple throughput guarantee.
+
+Availability reports the current locale's support. Model-not-ready, refused,
+unsupported-language, context-full and invalid structured-output errors have
+distinct guidance, without silently retrying or sending input to another model.
+The request guard includes tool/schema overhead, conservatively caps context at
+4,096 tokens and trims complete older turns without orphaning tool results.
+Framework context errors advise a new thread; no hidden summary model is invoked.
+Token counts stay unknown when this bridge cannot report them.
+
+The gateway supports native guided output with
+`response_format={"type": "json_schema", "json_schema": {"name": "Result", "schema": ...}}`.
+Supported schemas include explicitly named object properties, arrays, strings,
+string enums, numbers, integers and booleans. References, unions, open objects
+and unsupported keywords fail before generation. Size/range/pattern constraints
+are also checked against the original schema before delivery, even when they
+have no native generation guide. Malformed results and invalid tool arguments
+are never delivered for execution. Use separate requests for tool calling and
+structured final output; unconstrained `json_object` is not a guided schema.
+
+**Local AI → Compare** includes Apple's model when it is available and this
+build supports tools. Select the Apple on-device configuration and a shared
+context no larger than 4,096. Trial isolation, independent repository graders,
+cancellation, request timings and saved results use the existing comparison
+engine. The bridge records the OS runtime version but does not expose immutable
+weight revisions, quantization, residency or cache-hit counts; these stay
+unknown. Do not treat the two starter tasks as a coding certification.
 
 **Use for optional summaries and utility tasks** explicitly routes the existing
 utility hooks, including memory extraction and rubric grading, to this native

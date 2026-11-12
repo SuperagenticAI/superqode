@@ -85,6 +85,12 @@ struct LocalComparisonWorkspace: View {
     }
   }
 
+  private func compatibleHarnesses(_ index: Int) -> [[String: Any]] {
+    let route = routes.first { string($0, "id") == routeIDs[index] }
+    guard let allowed = route?["allowed_harnesses"] as? [String] else { return harnesses }
+    return harnesses.filter { allowed.contains(string($0, "id")) }
+  }
+
   private var configuration: some View {
     VStack(alignment: .leading, spacing: 14) {
       HStack {
@@ -92,7 +98,7 @@ struct LocalComparisonWorkspace: View {
         Spacer()
         Button("Refresh local models") { Task { await load() } }.disabled(!ready)
       }
-      Text("Load models in their runtime first. Core, PiPy and compatible RLM harnesses are available here. Each candidate receives its own trial copy; your project is preserved by the runner.")
+      Text("Load models in their runtime first. Apple on-device is available when Apple Intelligence is ready; use its Apple on-device configuration and a context of 4,096 or less. Each candidate receives its own trial copy; your project is preserved by the runner.")
         .font(.caption).foregroundStyle(.secondary)
       ForEach(routeIDs.indices, id: \.self) { index in
         HStack {
@@ -102,8 +108,17 @@ struct LocalComparisonWorkspace: View {
             ForEach(routes, id: \.projectRowID) { row in Text(string(row, "name")).tag(string(row, "id")) }
           }.labelsHidden()
           Picker("Harness \(index + 1)", selection: $harnessIDs[index]) {
-            ForEach(harnesses, id: \.projectRowID) { row in Text(string(row, "name")).tag(string(row, "id")) }
+            ForEach(compatibleHarnesses(index), id: \.projectRowID) { row in Text(string(row, "name")).tag(string(row, "id")) }
           }.labelsHidden().frame(width: 170)
+            .onChange(of: routeIDs[index]) { _, _ in
+              let choices = compatibleHarnesses(index)
+              if !choices.contains(where: { string($0, "id") == harnessIDs[index] }) {
+                harnessIDs[index] = choices.first.map { string($0, "id") } ?? ""
+              }
+              if routes.first(where: { string($0, "id") == routeIDs[index] })?["provider"] as? String == "apple-foundation" {
+                context = min(context, 4096)
+              }
+            }
         }
       }
       HStack {

@@ -69,7 +69,7 @@ def declared_tool_support(provider: str, model_id: str) -> Optional[bool]:
     does not change while a model is loaded.
     """
     if provider == "apple-foundation":
-        return False
+        return model_id == "system-on-device"
     if provider == "local-openai":
         try:
             from superqode.local.runtimes import selected_runtime
