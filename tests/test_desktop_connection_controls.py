@@ -301,8 +301,10 @@ async def test_codex_model_inventory_advances_to_the_next_page(tmp_path, monkeyp
     from superqode.agent.loop import AgentConfig
     from superqode.runtime.codex_cli import CodexCLIRuntime
 
+    monkeypatch.delenv("SUPERQODE_CODEX_SERVER", raising=False)
     runtime = CodexCLIRuntime(
-        config=AgentConfig(provider="agent", model="", working_directory=tmp_path)
+        config=AgentConfig(provider="agent", model="", working_directory=tmp_path),
+        codex_bin=sys.executable,
     )
     monkeypatch.setattr(runtime, "verify_account", AsyncMock())
     monkeypatch.setattr(runtime, "_ensure_started", AsyncMock())
