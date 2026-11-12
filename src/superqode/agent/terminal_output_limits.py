@@ -8,7 +8,8 @@ assistant turn.
 
 Floors and ceilings keep the cap reasonable for both tiny models (still get
 at least 8 KB so simple commands work) and huge-context models (capped at
-100 KB so a single bash call doesn't drown the conversation).
+100 KB so a single bash call doesn't drown the conversation). Apple's small
+on-device context uses a separate 2 KB cap.
 """
 
 from __future__ import annotations
@@ -62,6 +63,11 @@ def calculate_terminal_output_limit_for_model(provider: Optional[str], model: Op
     Unknown providers/models fall back to ``DEFAULT_TERMINAL_OUTPUT_BYTE_LIMIT``
     rather than raising - tools should still run; they just can't size up.
     """
+    # A 4K on-device session must retain room for instructions, three schemas,
+    # prior tool calls and the reply. The generic 8KB floor consumes most of
+    # that window before the model can act on a file read.
+    if provider == "apple-foundation":
+        return 2048
     if not provider or not model:
         return DEFAULT_TERMINAL_OUTPUT_BYTE_LIMIT
 

@@ -291,6 +291,24 @@ def test_apple_configuration_retains_closed_shell_and_network_under_full():
     assert profile.permissions.groups[ToolGroup.NETWORK] is Permission.DENY
 
 
+@pytest.mark.asyncio
+async def test_apple_file_reads_leave_room_for_tools_and_reply(tmp_path):
+    from superqode.agent.terminal_output_limits import calculate_terminal_output_limit_for_model
+    from superqode.tools.base import ToolContext
+
+    (tmp_path / "large.py").write_text("print('bounded file content')\n" * 500)
+    cap = calculate_terminal_output_limit_for_model("apple-foundation", apple.MODEL)
+    assert cap < 4096
+    read = ToolRegistry.for_profile("apple-local").get("read")
+    result = await read.execute(
+        {"path": "large.py"},
+        ToolContext(working_directory=tmp_path, session_id="apple-read-cap", max_output_bytes=cap),
+    )
+    assert result.success and result.metadata["truncated"]
+    assert len(result.output.encode()) < 3000
+    assert "Continue with" in result.output
+
+
 def test_apple_comparison_discovery_and_preparation_are_metadata_only(desktop, native, monkeypatch):
     from superqode.desktop_service import local_models, local_comparisons
 

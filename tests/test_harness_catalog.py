@@ -14,6 +14,7 @@ def test_catalogue_has_core_default_and_preserved_workbench(tmp_path):
     entries = {entry.id: entry for entry in list_harnesses(tmp_path)}
 
     assert DEFAULT_HARNESS_ID == "core"
+    assert next(iter(entries)) == "core"
     assert entries["core"].default is True
     assert entries["core"].tools == ("read", "write", "edit", "bash")
     assert entries["workbench"].default is False

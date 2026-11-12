@@ -95,7 +95,9 @@ that boundary; the next request restores calls/results as native transcript
 entries. No write happens inside the Apple helper.
 
 Keep tasks small. Apple's on-device model has limited reasoning and context;
-this configuration does not establish frontier coding capability. Project
+tool output uses a 2 KB budget so a file read leaves room for the instructions,
+tool schemas and reply. Truncated file reads retain continuation guidance.
+This configuration does not establish frontier coding capability. Project
 instructions remain in effect; oversized instructions or tool output can require
 a shorter prompt or a new thread. The configuration bounds model iterations at
 eight. Verify changes with independent tests rather than relying on the model's

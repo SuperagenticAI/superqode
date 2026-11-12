@@ -181,15 +181,6 @@ def builtin_harnesses() -> tuple[HarnessDefinition, ...]:
     rlm_code_available, rlm_code_issue = rlm_code_installation_status()
     workflows = (
         HarnessDefinition(
-            id="apple-local",
-            display_name="Apple on-device",
-            description=apple_local.description,
-            runtime="builtin",
-            source="built-in",
-            spec=apple_local,
-            loop_policy=core_loop_policy(),
-        ),
-        HarnessDefinition(
             id="core",
             display_name="Core",
             description=core.description,
@@ -199,6 +190,15 @@ def builtin_harnesses() -> tuple[HarnessDefinition, ...]:
             loop_policy=core_loop_policy(),
             aliases=("minimal",),
             default=True,
+        ),
+        HarnessDefinition(
+            id="apple-local",
+            display_name="Apple on-device",
+            description=apple_local.description,
+            runtime="builtin",
+            source="built-in",
+            spec=apple_local,
+            loop_policy=core_loop_policy(),
         ),
         HarnessDefinition(
             id="rlm",
