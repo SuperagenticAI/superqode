@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import asyncio
+from copy import deepcopy
 from contextlib import contextmanager
 from dataclasses import asdict
 import hashlib
@@ -192,7 +193,7 @@ def prepare(service, params):
                 "A selected model or compatible harness is unavailable; refresh choices"
             )
         definition = resolve_harness(harness["id"], root=root)
-        spec = harness_spec_to_dict(definition.spec)
+        spec = deepcopy(harness_spec_to_dict(definition.spec))
         runtime_config = (spec.get("runtime") or {}).get("config") or {}
         child_config = runtime_config.get("rlm_code") or runtime_config
         if (spec.get("recursion") or {}).get("child_model") or any(

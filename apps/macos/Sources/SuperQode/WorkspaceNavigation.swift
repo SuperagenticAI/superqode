@@ -37,8 +37,14 @@ struct WorkbenchNavigationState: Equatable {
 /// them on Workspace also rebuilt every thread row, menu and retained feature.
 @Observable @MainActor final class WorkbenchNavigationStore {
   var state = WorkbenchNavigationState()
-  var history: [WorkspaceDestination] = []
-  var forwardHistory: [WorkspaceDestination] = []
+  var history: [WorkspaceDestination] = [] {
+    didSet { if hasBackHistory != !history.isEmpty { hasBackHistory = !history.isEmpty } }
+  }
+  var forwardHistory: [WorkspaceDestination] = [] {
+    didSet { if hasForwardHistory != !forwardHistory.isEmpty { hasForwardHistory = !forwardHistory.isEmpty } }
+  }
+  private(set) var hasBackHistory = false
+  private(set) var hasForwardHistory = false
 }
 
 struct WorkspaceNavigationGroup: Identifiable {

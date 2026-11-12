@@ -230,6 +230,26 @@ def test_immutable_identity_distinguishes_artifact_changes_from_residency_metada
     assert local_comparisons.immutable_identity({"revision": "main"}) is None
 
 
+def test_review_budget_does_not_mutate_the_source_harness_definition(configured, monkeypatch):
+    from copy import deepcopy
+    from types import SimpleNamespace
+    from superqode.harness.catalog import resolve_harness
+
+    service, _, _, params = configured
+    available = local_comparisons.catalog(service, params["project"])
+    base = resolve_harness("core").spec
+    original = deepcopy(base.model_policy.config)
+    monkeypatch.setattr(local_comparisons, "catalog", lambda *_: available)
+    monkeypatch.setattr(
+        "superqode.harness.catalog.resolve_harness",
+        lambda *a, **k: SimpleNamespace(spec=base, digest="source-digest"),
+    )
+    service.dispatch("local.comparisons.prepare", params)
+    assert base.model_policy.config == original, (
+        "Review must not change a shared harness's iteration budget"
+    )
+
+
 @pytest.mark.parametrize("nested", [False, True])
 def test_explicit_rlm_child_routes_cannot_escape_the_selected_model_comparison(
     configured, monkeypatch, nested
