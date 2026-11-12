@@ -49,7 +49,7 @@ import SwiftUI
       source = string(selected, "source", "definition"); provider = string(selected, "provider", "openai")
       model = string(selected, "model"); localEngine = string(selected, "engine", "ollama")
       busy = false; review = [:]; message = revision.isEmpty ? "Preset loaded into the draft." : "Revision loaded. Validate and save to update the project definition."
-    } catch { if generation == token { failure = error.localizedDescription } }
+    } catch { if generation == token, !Task.isCancelled { failure = error.localizedDescription } }
   }
   func validate(engine: Engine) async {
     invalidate(); let token = generation; let identity = project
@@ -60,7 +60,7 @@ import SwiftUI
       guard generation == token, project == identity, !Task.isCancelled else { return }
       text = string(result, "yaml"); review = result; busy = false
       message = "Definition validated without model calls. Review routes and capabilities before saving or checking."
-    } catch { if generation == token { failure = error.localizedDescription } }
+    } catch { if generation == token, !Task.isCancelled { failure = error.localizedDescription } }
   }
   @discardableResult func save(engine: Engine, reason: String) async throws -> Bool {
     let identity = project; let token = generation
@@ -75,11 +75,12 @@ import SwiftUI
     let identity = project
     do {
       let rows = try await engine.call("studio.list", ["project": identity]) as? [[String: Any]] ?? []
+      try Task.checkCancellation()
       let checks = try await engine.call("studio.evidence", ["project": identity]) as? [[String: Any]] ?? []
       guard project == identity, !Task.isCancelled else { return }
       if !NSArray(array: catalog).isEqual(to: rows) { catalog = rows }
       if !NSArray(array: evidence).isEqual(to: checks) { evidence = checks }
-    } catch { if project == identity { failure = error.localizedDescription } }
+    } catch { if project == identity, !Task.isCancelled { failure = error.localizedDescription } }
   }
 }
 

@@ -8,6 +8,25 @@ import XCTest
 #endif
 
 final class WorkspaceSessionTests: XCTestCase {
+  @MainActor func testAppleDevelopmentAndChatKeepTheChosenNativeConfiguration() {
+    let app = workspace()
+    app.harnesses += [
+      ["id": "apple-local", "name": "Apple on-device", "runtime": "builtin", "enforces_session_controls": true],
+      ["id": "no-tool", "name": "No Tool", "runtime": "builtin", "enforces_session_controls": true],
+    ]
+    app.resetThreadConnection()
+    app.chooseAppleModel(development: true)
+    XCTAssertEqual(app.harness, "apple-local")
+    XCTAssertEqual(app.provider, "apple-foundation")
+    XCTAssertEqual(app.model, "system-on-device")
+    XCTAssertEqual(app.interactionMode, "code")
+    XCTAssertTrue(app.enforcesSessionControls)
+    app.chooseAppleModel(development: false)
+    XCTAssertEqual(app.harness, "no-tool")
+    XCTAssertEqual(app.interactionMode, "chat")
+    XCTAssertEqual(app.engine.pendingRequestCount, 0, "Selecting the route must not make a generation request")
+  }
+
   @MainActor func testNewThreadDropsConnectionWithoutStoppingOtherWork() {
     let app = workspace()
     app.selectJob("a")

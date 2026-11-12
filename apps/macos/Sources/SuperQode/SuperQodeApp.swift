@@ -932,10 +932,8 @@ struct CodingComposer: View {
       HStack(spacing: 12) {
         if !app.isManaged {
           Picker("Mode", selection: $app.interactionMode) {
-            if app.provider != "apple-foundation" {
-              Text("Code").tag("code")
-              if app.enforcesSessionControls { Text("Plan").tag("plan") }
-            }
+            Text("Code").tag("code")
+            if app.enforcesSessionControls { Text("Plan").tag("plan") }
             Text("Chat").tag("chat")
           }.pickerStyle(.menu).labelsHidden().fixedSize().disabled(app.active)
             .accessibilityLabel("Interaction mode")

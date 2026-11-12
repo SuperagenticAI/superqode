@@ -153,15 +153,11 @@ struct LocalRuntimeWorkspace: View {
         Link("Apple setup guide", destination: URL(string: "https://support.apple.com/en-us/121115")!)
         Spacer()
         Button("Use for development") {
-          app.chooseHarness("apple-local")
-          app.chooseModelRoute("apple-foundation", "system-on-device")
-          app.interactionMode = "code"; app.section = "Workspace"
+          app.chooseAppleModel(development: true)
           app.notice = "Apple on-device selected with read, write and edit. File access uses your existing permissions. Shell and network tools are disabled."
         }.disabled(apple["available"] as? Bool != true || !projectReady || app.anyActive)
         Button("Use for chat") {
-          app.chooseHarness("no-tool")
-          app.chooseModelRoute("apple-foundation", "system-on-device")
-          app.interactionMode = "chat"; app.section = "Workspace"
+          app.chooseAppleModel(development: false)
           app.notice = "Apple on-device chat selected. Your messages stay on this Mac."
         }.buttonStyle(BrandButtonStyle())
           .disabled(apple["available"] as? Bool != true || !projectReady || app.anyActive)
