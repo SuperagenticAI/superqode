@@ -4,6 +4,7 @@ import SwiftUI
 struct AgentCLIControlsView: View {
   @EnvironmentObject var app: Workspace
   @DialogDismiss private var dismiss
+  var onSetup: () -> Void = {}
   @State private var catalog: [String: Any] = [:]
   @State private var selectedCommand = ""
   @State private var operation = ""
@@ -43,7 +44,7 @@ struct AgentCLIControlsView: View {
               Button(app.checkingConnection ? "Loading models…" : "Refresh models and settings") {
                 app.perform { await app.checkManagedConnection() }
               }.disabled(app.checkingConnection || app.active || running)
-              Button("Sign in or set up…") { dismiss(); app.openConnect() }
+              Button("Sign in or set up…", action: onSetup)
                 .disabled(running)
             }
             if !app.agentCommands.isEmpty {
@@ -145,6 +146,7 @@ struct AgentCLIControlsView: View {
     let key = connectionKey
     let command = selectedCommand
     app.perform {
+      guard running, generation == commandGeneration, key == connectionKey else { return }
       var started = ""
       do {
         var params: [String: Any] = [

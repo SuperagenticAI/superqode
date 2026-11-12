@@ -719,6 +719,7 @@ struct CodingComposer: View {
   @State private var showContext = false
   @State private var showOptions = false
   @State private var showCLIControls = false
+  @State private var setupAfterCLI = false
   @State private var isolatePlan: [String: Any]?
   @State private var requestedFiles = false
   // Keyboard focus is driven through AppKit so the text view itself, not its
@@ -1017,7 +1018,12 @@ struct CodingComposer: View {
     // Same readable column as the conversation, centred in wide windows.
     .frame(maxWidth: 840).frame(maxWidth: .infinity)
     .padding(.horizontal, 20).padding(.bottom, 10).padding(.top, 4)
-    .sheet(isPresented: $showCLIControls) { AgentCLIControlsView().environmentObject(app) }
+    .sheet(isPresented: $showCLIControls, onDismiss: {
+      if setupAfterCLI { setupAfterCLI = false; app.openConnections() }
+    }) {
+      AgentCLIControlsView(onSetup: { setupAfterCLI = true; showCLIControls = false })
+        .environmentObject(app)
+    }
   }
   private var connectionOptions: some View {
     VStack(alignment: .leading, spacing: 16) {
