@@ -74,7 +74,7 @@ struct AgentCLIControlsView: View {
                   }
                 }.disabled(running)
                 Button("Run") { startCommand(cursor: nil) }
-                  .disabled(selectedCommand.isEmpty || running || app.anyActive || app.checkingConnection || catalog["available"] as? Bool != true)
+                  .disabled(selectedCommand.isEmpty || running || app.busy || app.anyActive || app.checkingConnection || catalog["available"] as? Bool != true)
                 if running {
                   ProgressView().controlSize(.small)
                   Button("Cancel") { cancelCommand() }
@@ -106,7 +106,7 @@ struct AgentCLIControlsView: View {
               Text("Open the installed CLI inside SuperQode for its full command tree, including interactive features that are not available through ACP or the app-server. Your vendor account continues to own authentication and billing.")
                 .font(.callout).foregroundStyle(.secondary)
               Button("Open full CLI…", action: openCLI)
-                .disabled(app.anyActive || running || app.checkingConnection || catalog["available"] as? Bool != true)
+                .disabled(app.busy || app.anyActive || running || app.checkingConnection || catalog["available"] as? Bool != true)
             } else if !catalog.isEmpty {
               Text("This connection exposes its supported models, modes and slash commands through ACP. It has no known interactive CLI launcher; use the agent’s setup documentation for terminal-only features.")
                 .font(.caption).foregroundStyle(.secondary)
@@ -119,6 +119,7 @@ struct AgentCLIControlsView: View {
     }.padding(24).frame(width: 760, height: 620).background { BrandBackdrop() }
       .task(id: connectionKey) {
         cancelCommand()
+        app.terminals.stop(identity); cliOpen = false
         catalog = [:]; output = [:]; failure = ""
         let key = connectionKey
         do {
@@ -132,11 +133,12 @@ struct AgentCLIControlsView: View {
           if !Task.isCancelled && key == connectionKey { failure = error.localizedDescription }
         }
       }
+      .onChange(of: selectedCommand) { _, _ in output = [:]; showDetails = false }
       .onDisappear { cancelCommand(); app.terminals.stop(identity) }
   }
 
   private func startCommand(cursor: String?) {
-    guard !running, !app.anyActive else { return }
+    guard !running, !app.busy, !app.anyActive, !app.checkingConnection else { return }
     running = true; failure = ""; output = [:]; showDetails = false
     commandGeneration = UUID()
     let generation = commandGeneration
@@ -193,7 +195,8 @@ struct AgentCLIControlsView: View {
   }
 
   private func openCLI() {
-    guard let arguments = cli["argv"] as? [String], !arguments.isEmpty,
+    guard !running, !app.busy, !app.anyActive, !app.checkingConnection,
+      let arguments = cli["argv"] as? [String], !arguments.isEmpty,
       app.confirm("Open the vendor CLI?", "This starts a separate interactive agent in the selected project. It can use the vendor’s own tools and permissions. This SuperQode conversation stays unchanged.", button: "Open CLI") else { return }
     app.terminals.start(identity, path: string(app.project, "path"), arguments: arguments,
       unset: cli["unset_env"] as? [String] ?? [])
