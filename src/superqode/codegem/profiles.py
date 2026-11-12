@@ -12,6 +12,7 @@ from dataclasses import dataclass
 _LEVELS_LMH = ("low", "medium", "high")
 _LEVELS_ALL = ("minimal", "low", "medium", "high")
 GEMINI_THINKING: dict[str, tuple[str, tuple[str, ...]]] = {
+    "gemini-4-hydrogen": ("high", (*_LEVELS_LMH, "xhigh")),
     "gemini-4-argon": ("medium", _LEVELS_LMH),
     "gemini-3.8-flash": ("medium", _LEVELS_LMH),
     "gemini-3.6-flash": ("medium", _LEVELS_ALL),

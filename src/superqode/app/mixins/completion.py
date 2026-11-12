@@ -4,6 +4,8 @@ from __future__ import annotations
 import asyncio
 from time import monotonic
 from pathlib import Path
+import re
+import shutil
 from textual import work
 from textual.css.query import NoMatches
 from textual.widgets import Static
@@ -19,6 +21,8 @@ from superqode.app.widgets import (
 # --- helpers extracted from app_main (A1) ---
 from superqode.app.inputs import SelectionAwareInput
 from superqode.app.recipes import PromptCompletionCandidate
+
+_VENDOR_NATIVE_PREFIX = re.compile(r"^:(agy|codex|grok) native +", re.IGNORECASE)
 
 
 class CompletionMixin:
@@ -150,10 +154,20 @@ class CompletionMixin:
                     ("low", "Use low reasoning effort"),
                     ("medium", "Use medium reasoning effort"),
                     ("high", "Use high reasoning effort"),
+                    ("xhigh", "Use extra-high reasoning effort on a supported agy build"),
+                    ("max", "Use maximum reasoning effort on a supported agy build"),
                 ),
             )
         if lowered.startswith(":agy "):
             return self._agy_subcommand_completion_candidates(value)
+        if lowered.startswith(":grok effort "):
+            from superqode.vendor_command_help import GROK_EFFORTS
+
+            return self._agy_value_completion_candidates(
+                value,
+                ":grok effort ",
+                tuple((level, "Grok reasoning effort") for level in GROK_EFFORTS),
+            )
         if lowered == ":tau":
             return [
                 PromptCompletionCandidate(
@@ -237,12 +251,23 @@ class CompletionMixin:
         ]
         for prefix, provider in context_specs:
             if lowered.startswith(prefix):
-                return self._merge_completion_candidates(
-                    self._candidate_after_prefix(
-                        value, prefix, self._cached_completion_source(provider)
-                    ),
+                source = self._cached_completion_source(provider)
+                candidates = self._merge_completion_candidates(
+                    self._candidate_after_prefix(value, prefix, source),
                     self._static_command_candidates(value),
                 )
+                if prefix == ":connect " and candidates:
+                    exact = next(
+                        (row for row in source if row.value.lower() == lowered[len(prefix) :]), None
+                    )
+                    if exact:
+                        candidates.insert(
+                            0,
+                            PromptCompletionCandidate(
+                                value, exact.label, exact.description, exact.kind
+                            ),
+                        )
+                return candidates
 
         if lowered.startswith(":attach "):
             return self._merge_completion_candidates(
@@ -478,8 +503,65 @@ class CompletionMixin:
         return "accept"
 
     def _completion_needs_io(self, value: str) -> bool:
-        return bool(self._MENTION_QUERY_RE.search(value)) or value.lower().startswith(
-            (":attach ", ":prompt ", ":skills ", ":recipe ", ":recipes ", ":mcp ")
+        return bool(
+            self._MENTION_QUERY_RE.search(value) or _VENDOR_NATIVE_PREFIX.match(value)
+        ) or value.lower().startswith(
+            (":attach ", ":prompt ", ":skills ", ":recipe ", ":recipes ", ":mcp ", ":grok connect ")
+        )
+
+    async def _vendor_native_completions(self, value: str, match: re.Match[str]):
+        from superqode.desktop_service.connection_controls import vendor_help
+        from superqode.vendor_command_help import command_path
+
+        family = match[1].lower()
+        if family == "agy":
+            family = "antigravity"
+        parent, _, partial = value[match.end() :].rpartition(" ")
+        if not re.fullmatch(r"[a-z0-9-]*", partial):
+            return []
+        try:
+            path = command_path(parent.split())
+            key = (Path.cwd(), family, tuple(path))
+            cache = getattr(self, "_vendor_help_completion_cache", {})
+            previous = cache.get(key)
+            if previous is not None and monotonic() - previous[0] < 15:
+                page = previous[1]
+            else:
+                route = {"runtime": family + "-cli", "subscription_vendor": family}
+                page = await vendor_help(Path.cwd(), route, path)
+                if len(cache) >= 32:
+                    cache.pop(next(iter(cache)))
+                cache[key] = (monotonic(), page)
+                self._vendor_help_completion_cache = cache
+        except (OSError, ValueError):
+            return []
+        prefix = value[: len(value) - len(partial)]
+        rows = [(row["id"], row["description"]) for row in page["subcommands"]]
+        if partial.startswith("-") or not rows:
+            rows.extend((flag, "Vendor CLI option") for flag in page.get("flags", []))
+        return [
+            PromptCompletionCandidate(prefix + name, name, description, kind="command")
+            for name, description in rows
+            if name.startswith(partial) and name != partial
+        ]
+
+    async def _grok_connect_completions(self, value: str):
+        from superqode.desktop_service.connection_controls import cli_output
+        from superqode.providers.grok_cli_auth import parse_cli_models_output
+
+        if not (binary := shutil.which("grok")):
+            return []
+        previous = getattr(self, "_grok_model_completions", None)
+        if previous is None or previous[0] != binary or monotonic() - previous[1] >= 30:
+            try:
+                output = await cli_output(Path.cwd(), [binary, "models"], "grok", timeout=6)
+            except (OSError, ValueError):
+                return []
+            previous = (binary, monotonic(), parse_cli_models_output(output)["models"])
+            self._grok_model_completions = previous
+        prefix = ":grok connect "
+        return self._agy_value_completion_candidates(
+            value, prefix, tuple((model, "Grok Build model") for model in previous[2])
         )
 
     def _cached_completion_source(self, provider):
@@ -515,7 +597,12 @@ class CompletionMixin:
     async def _load_prompt_completions(self, value: str, revision: int) -> None:
         # Debounce filesystem work, and reject results for an obsolete draft.
         await asyncio.sleep(0.05)
-        candidates = await asyncio.to_thread(self._prompt_completion_candidates_for, value)
+        if match := _VENDOR_NATIVE_PREFIX.match(value):
+            candidates = await self._vendor_native_completions(value, match)
+        elif value.lower().startswith(":grok connect "):
+            candidates = await self._grok_connect_completions(value)
+        else:
+            candidates = await asyncio.to_thread(self._prompt_completion_candidates_for, value)
         if revision != self._completion_revision or not self.is_running:
             return
         try:

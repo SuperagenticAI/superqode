@@ -25,6 +25,7 @@ from superqode.providers.models import (
     LATEST_GOOGLE_ARGON_MODEL,
     LATEST_GOOGLE_FLASH_3_6_MODEL,
     LATEST_GOOGLE_FLASH_MODEL,
+    LATEST_GOOGLE_HYDROGEN_MODEL,
     LATEST_GOOGLE_PRO_MODEL,
 )
 
@@ -139,6 +140,13 @@ class ModelCatalogMixin:
     def _get_gemini_models(self) -> List[Dict]:
         """Get Gemini models list - synced with providers/models.py."""
         return [
+            {
+                "id": LATEST_GOOGLE_HYDROGEN_MODEL,
+                "name": "Gemini 4 Hydrogen",
+                "context": 1_048_576,
+                "desc": "Fast Gemini 4 model for everyday coding and agentic workflows",
+                "recommended": True,
+            },
             {
                 "id": LATEST_GOOGLE_ARGON_MODEL,
                 "name": "Gemini 4 Argon",
@@ -1520,6 +1528,7 @@ class ModelCatalogMixin:
 
         from superqode.providers.registry import ProviderCategory
         from superqode.providers.dynamic import resolve_provider_def
+        from superqode.providers.model_studio import METERED_PROVIDERS
         from superqode.providers.models import (
             get_models_for_provider,
             get_data_source,
@@ -1600,14 +1609,20 @@ class ModelCatalogMixin:
             self.run_worker(self._show_local_provider_models(provider_id, log))
             return
 
-        t.append(f"  📊 Source: {get_data_source()}\n", style=THEME["dim"])
+        model_studio = provider_id in METERED_PROVIDERS
+        source = "Model Studio examples" if model_studio else get_data_source()
+        t.append(f"  📊 Source: {source}\n", style=THEME["dim"])
+        if model_studio:
+            t.append(
+                f"  Check your workspace: :models provider {provider_id} live\n", style=THEME["dim"]
+            )
         t.append(
             "  Labels: 🔧 tools  👁️ vision  🧠 reasoning  💻 coding  ctx=context  price=$/1M\n\n",
             style=THEME["dim"],
         )
 
         # Get models from database
-        db_models = get_models_for_provider(provider_id)
+        db_models = {} if model_studio else get_models_for_provider(provider_id)
         pure = getattr(self, "_pure_mode", None)
         spec = getattr(pure, "_harness_spec", None)
         if getattr(getattr(spec, "runtime", None), "backend", "") == "codegem":
@@ -2150,6 +2165,7 @@ class ModelCatalogMixin:
         """Show interactive model picker widget with keyboard navigation."""
         from superqode.providers.dynamic import resolve_provider_def
         from superqode.providers.models import get_models_for_provider
+        from superqode.providers.model_studio import METERED_PROVIDERS
         from superqode.widgets.model_picker import ModelPickerWidget, ModelOption
 
         provider_def = resolve_provider_def(provider_id)
@@ -2158,7 +2174,7 @@ class ModelCatalogMixin:
             return
 
         # Get models
-        db_models = get_models_for_provider(provider_id)
+        db_models = {} if provider_id in METERED_PROVIDERS else get_models_for_provider(provider_id)
 
         if not db_models:
             # Fall back to numbered list
@@ -3634,6 +3650,7 @@ class ModelCatalogMixin:
         note = {
             "live": f"live from {result.endpoint}",
             "models.dev": "models.dev catalog (live endpoint unavailable)",
+            "examples": f"unverified Model Studio examples. {result.error or ''}",
             "none": "no models found (set the API key / base URL, or check the endpoint)",
         }.get(result.source, result.source)
         header = f"# {provider}: {note}\n\n"

@@ -60,17 +60,15 @@ struct ModelsView: View {
 
 struct AdvancedLocalAIView: View {
   var active = true
-  @State private var tab = "runtimes"
+  @State private var tab = "comparisons"
   var body: some View {
     VStack(spacing: 0) {
       Picker("Advanced Local AI", selection: $tab) {
-        Text("Runtimes & performance").tag("runtimes")
         Text("Compare").tag("comparisons")
         Text("Model routes").tag("routes")
         Text("Models & setup").tag("models")
       }.pickerStyle(.segmented).padding(.horizontal, 28).padding(.top, 20)
-      if tab == "runtimes" { LocalRuntimeWorkspace(active: active) }
-      else if tab == "comparisons" { LocalComparisonWorkspace(active: active) }
+      if tab == "comparisons" { LocalComparisonWorkspace(active: active) }
       else if tab == "routes" { ModelRoutesView() }
       else { LocalModelWorkbenchView(active: active) }
     }
@@ -120,7 +118,9 @@ struct LocalModelWorkbenchView: View {
       ScrollView {
         VStack(alignment: .leading, spacing: 20) {
           LazyVGrid(columns: [GridItem(.adaptive(minimum: 240), spacing: 12)], spacing: 12) {
-            ForEach(library.overview["engines"] as? [[String: Any]] ?? [], id: \.projectRowID) { row in engineCard(row) }
+            ForEach(library.overview["engines"] as? [[String: Any]] ?? [], id: \.projectRowID) { row in
+              LocalServerCard(row: row, onOperation: { action = $0 }, onConnect: { connecting = $0 })
+            }
           }
           HStack {
             TextField("Search families or enter an Ollama tag", text: $query).textFieldStyle(.roundedBorder).onSubmit { search() }
@@ -225,41 +225,6 @@ struct LocalModelWorkbenchView: View {
       }
   }
   private func search() { Task { await library.search(engine: app.engine, query: query, source: source, format: format) } }
-  private func engineCard(_ row: [String: Any]) -> some View {
-    VStack(alignment: .leading, spacing: 10) {
-      HStack { Label(string(row, "name", string(row, "id")), systemImage: "server.rack").font(.headline); Spacer(); Pill(title: string(row, "state")) }
-      Text(string(row, "base_url")).font(.caption.monospaced()).foregroundStyle(.secondary)
-      HStack {
-        if string(row, "id") == "ds4" {
-          Button("Configure & start…") { action = ["action": "serve", "engine": "ds4"] }.disabled(app.anyActive || string(row, "state") == "starting")
-          if row["running"] as? Bool == true {
-            Button("Use model…") { connecting = "ds4" }.disabled(app.projectID.isEmpty || app.anyActive)
-            Button("Check…") { action = ["action": "verify", "engine": "ds4"] }.disabled(app.anyActive)
-          }
-        } else if row["installed"] as? Bool != true {
-          let install = row["install"] as? [String: Any] ?? [:]
-          if install["automatic"] as? Bool == true {
-            Button("Review installation…") { action = ["action": "install", "engine": string(row, "id")] }
-          }
-          if let url = URL(string: string(install, "docs_url")) { Link("Setup guide", destination: url) }
-        } else {
-          Button("Configure & start…") { action = ["action": "serve", "engine": string(row, "id")] }.disabled(app.anyActive || string(row, "state") == "starting")
-          if row["running"] as? Bool == true {
-            Button("Use model…") { connecting = string(row, "id") }.disabled(app.projectID.isEmpty || app.anyActive)
-            Button("Check…") { action = ["action": "verify", "engine": string(row, "id")] }.disabled(app.anyActive)
-          }
-        }
-      }.controlSize(.small)
-      if string(row, "id") == "ds4" {
-        Text("Use your own ds4-server and downloaded DeepSeek V4 GGUF. Configure context and disk-KV cache before starting.").font(.caption).foregroundStyle(.secondary)
-        Link("DS4 setup guide", destination: URL(string: "https://github.com/antirez/ds4")!).font(.caption)
-      }
-      if row["can_stop"] as? Bool == true {
-        Button("Review stop…") { action = ["action": "stop", "engine": string(row, "id")] }.font(.caption).disabled(app.anyActive)
-      }
-      if app.projectID.isEmpty { Text("Open a project when ready to code.").font(.caption2).foregroundStyle(.secondary) }
-    }.padding(16).frame(maxWidth: .infinity, alignment: .leading).brandSurface()
-  }
   private var operations: some View {
     VStack(alignment: .leading, spacing: 10) {
       Text("Downloads and setup history").font(.headline)
@@ -279,6 +244,52 @@ struct LocalModelWorkbenchView: View {
       }
     }
   }
+}
+
+struct LocalServerCard: View {
+  @EnvironmentObject var app: Workspace
+  let row: [String: Any]
+  let onOperation: ([String: Any]) -> Void
+  let onConnect: (String) -> Void
+
+  private var id: String { string(row, "id") }
+  private var isDS4: Bool { id == "ds4" }
+  private var running: Bool { row["running"] as? Bool == true }
+
+  var body: some View {
+    VStack(alignment: .leading, spacing: 9) {
+      HStack {
+        Label(string(row, "name", id), systemImage: "server.rack").font(.headline)
+        Spacer()
+        Pill(title: string(row, "state"))
+      }
+      Text(string(row, "base_url")).font(.caption.monospaced()).foregroundStyle(.secondary)
+      HStack {
+        if isDS4 || row["installed"] as? Bool == true {
+          Button("Configure & start…") { operation("serve") }
+            .disabled(app.anyActive || string(row, "state") == "starting")
+          if running {
+            Button("Use model…") { onConnect(id) }.disabled(app.projectID.isEmpty || app.anyActive)
+            Button("Check…") { operation("verify") }.disabled(app.anyActive)
+          }
+        } else {
+          let install = row["install"] as? [String: Any] ?? [:]
+          if install["automatic"] as? Bool == true {
+            Button("Review installation…") { operation("install") }
+          }
+          if let url = URL(string: string(install, "docs_url")) { Link("Setup guide", destination: url) }
+        }
+      }.controlSize(.small)
+      if isDS4 {
+        Link("DS4 setup guide", destination: URL(string: "https://github.com/antirez/ds4")!).font(.caption)
+      }
+      if row["can_stop"] as? Bool == true {
+        Button("Review stop…") { operation("stop") }.font(.caption).disabled(app.anyActive)
+      }
+    }.padding(16).frame(maxWidth: .infinity, alignment: .leading).brandSurface()
+  }
+
+  private func operation(_ action: String) { onOperation(["action": action, "engine": id]) }
 }
 
 struct LocalModelActionView: View {

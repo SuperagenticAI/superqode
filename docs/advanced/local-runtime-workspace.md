@@ -1,8 +1,9 @@
 # Local runtimes and Apple on-device inference on macOS
 
-Open **Local AI → Advanced → Runtimes & performance**. Use the existing Quick Start tab for
-guided Ollama/LM Studio downloads, or keep the server and weights you already
-have. No server is installed, launched or queried merely by saving a profile.
+Open **Local AI → Quick Start**. Apple on-device appears with the harness and model
+choices, and **Runtimes & performance** is on the same page. The download guide
+supports Ollama and LM Studio, and you can connect a server you already run.
+Saving a profile only stores its settings.
 
 ## Connect another local server
 

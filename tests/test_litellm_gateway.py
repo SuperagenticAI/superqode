@@ -1,5 +1,6 @@
 """Tests for LiteLLM gateway model compatibility fallbacks."""
 
+import json
 from types import SimpleNamespace
 
 import pytest
@@ -271,6 +272,117 @@ async def test_ollama_stream_preserves_terminal_usage_chunk(monkeypatch):
     assert "".join(chunk.content for chunk in chunks) == "answer"
     assert chunks[-1].usage is not None
     assert chunks[-1].usage.total_tokens == 1540
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize(
+    "stream,model,effort,expected",
+    [
+        (False, "qwen3.8-flash", "high", "xhigh"),
+        (True, "qwen3.8-flash", "high", "xhigh"),
+        (True, "deepseek-v4.1-flash", "medium", "high"),
+    ],
+)
+async def test_model_studio_request_keeps_reasoning_history_and_regional_auth(
+    monkeypatch, stream, model, effort, expected
+):
+    import httpx
+    from openai import AsyncOpenAI
+
+    workspace = "https://ws-demo.ap-southeast-1.maas.aliyuncs.com/compatible-mode/v1"
+    monkeypatch.setenv("QWEN_INTL_API_BASE", workspace)
+    monkeypatch.setenv("QWEN_INTL_API_KEY", "sk-intl-demo")
+    monkeypatch.setenv("QWEN_CN_API_KEY", "sk-cn-demo")
+    monkeypatch.setenv("OPENAI_API_KEY", "sk-openai-demo")
+    calls = []
+
+    def respond(request):
+        calls.append(
+            (str(request.url), request.headers["Authorization"], json.loads(request.content))
+        )
+        usage = {"prompt_tokens": 50, "completion_tokens": 15, "total_tokens": 65}
+        common = {"id": "chatcmpl-demo", "created": 1794400000, "model": model}
+        message = {"role": "assistant", "content": "done", "reasoning_content": "next step"}
+        if not stream:
+            return httpx.Response(
+                200,
+                json={
+                    **common,
+                    "object": "chat.completion",
+                    "usage": usage,
+                    "choices": [{"index": 0, "message": message, "finish_reason": "stop"}],
+                },
+            )
+        first = {
+            **common,
+            "object": "chat.completion.chunk",
+            "choices": [{"index": 0, "delta": message, "finish_reason": "stop"}],
+        }
+        final = {**common, "object": "chat.completion.chunk", "choices": [], "usage": usage}
+        return httpx.Response(
+            200,
+            headers={"content-type": "text/event-stream"},
+            text=f"data: {json.dumps(first)}\n\ndata: {json.dumps(final)}\n\ndata: [DONE]\n\n",
+        )
+
+    gateway = LiteLLMGateway()
+    async with httpx.AsyncClient(transport=httpx.MockTransport(respond)) as http:
+        client = AsyncOpenAI(api_key="sk-intl-demo", base_url=workspace, http_client=http)
+        kwargs = dict(
+            provider="qwen-intl",
+            model=model,
+            reasoning_effort=effort,
+            client=client,
+            messages=[
+                Message(
+                    role="assistant",
+                    content="previous answer",
+                    reasoning_content="previous reasoning",
+                ),
+                Message(role="user", content="continue"),
+            ],
+        )
+        # Check the actual routing sent to LiteLLM as well as the HTTP serialization.
+        completion = gateway._acompletion_with_retry
+
+        async def routed(params):
+            assert params["api_base"] == workspace and params["api_key"] == "sk-intl-demo"
+            return await completion(params)
+
+        monkeypatch.setattr(gateway, "_acompletion_with_retry", routed)
+        if stream:
+            chunks = [chunk async for chunk in gateway.stream_completion(**kwargs)]
+            assert "".join(chunk.content for chunk in chunks) == "done"
+            assert chunks[-1].usage.total_tokens == 65
+        else:
+            response = await gateway.chat_completion(**kwargs)
+            assert response.content == "done"
+            assert response.usage.total_tokens == 65
+
+    [(url, authorization, body)] = calls
+    assert url == f"{workspace}/chat/completions" and authorization == "Bearer sk-intl-demo"
+    assert body["model"] == model
+    assert body["reasoning_effort"] == expected and body["enable_thinking"] is True
+    assert "thinking" not in body
+    assert body["messages"][0]["reasoning_content"] == "previous reasoning"
+    if stream:
+        assert body["stream_options"]["include_usage"] is True
+
+
+@pytest.mark.asyncio
+async def test_model_studio_rejects_token_plan_inference_before_transport(monkeypatch):
+    monkeypatch.setenv("QWEN_INTL_API_KEY", "sk-sp-plan-test")
+    gateway = LiteLLMGateway()
+    monkeypatch.setattr(gateway, "_get_litellm", lambda: object())
+
+    async def unexpected(_):
+        pytest.fail("Token Plan key reached the metered gateway transport")
+
+    monkeypatch.setattr(gateway, "_acompletion_with_retry", unexpected)
+    with pytest.raises(ValueError, match="metered Model Studio"):
+        await gateway.chat_completion(
+            [Message(role="user", content="hello")], "qwen3.8-flash", provider="qwen-intl"
+        )
 
 
 def test_ds4_thinking_default_omits_field(monkeypatch):

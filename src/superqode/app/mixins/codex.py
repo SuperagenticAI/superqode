@@ -416,6 +416,9 @@ class CodexMixin(CodexControlsMixin):
         sub = parts[0].lower() if parts else "connect"
         sub = CODEX_ALIASES.get(sub, sub)
         rest = parts[1].strip() if len(parts) > 1 else ""
+        if sub == "native":
+            self._vendor_native_cli("codex", rest, log)
+            return
         if sub in {"", "connect", "start"}:
             self._requested_runtime_target = "codex-cli"
             self._requested_runtime_billing = "subscription"

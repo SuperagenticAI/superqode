@@ -265,9 +265,11 @@ struct VendorKeyConnectionView: View {
     ScrollView {
       VStack(alignment: .leading, spacing: 20) {
         PageTitle(
-          eyebrow: "Vendor-owned harness", title: "Connect your vendor key",
+          eyebrow: "Vendor-owned harness", title: entry == "antigravity-managed" ? "Antigravity Managed Agent" : "Connect your vendor key",
           subtitle:
-            "The vendor owns the model and coding loop. This is its API-key route, separate from subscription sign-in."
+            entry == "antigravity-managed"
+              ? "Runs in a Google-hosted sandbox. Connect a Gemini API key to use this route."
+              : "The vendor owns the model and coding loop. This is its API-key route, separate from subscription sign-in."
         )
         SecureField("Vendor API key", text: $key).textFieldStyle(.roundedBorder)
         Toggle("Remember in this Mac’s Keychain", isOn: $remember)
@@ -355,12 +357,16 @@ struct SystemOneConnectionView: View {
 
 struct AgentControlsView: View {
   @EnvironmentObject var app: Workspace
+  var showModelAndEffort = true
   var body: some View {
     DisclosureGroup("Agent settings") {
       VStack(alignment: .leading, spacing: 10) {
         let modes = app.agentSession["modes"] as? [String: Any] ?? [:]
         let availableModes = modes["availableModes"] as? [[String: Any]] ?? []
-        if !app.agentModels.isEmpty { AgentModelPicker() }
+        if showModelAndEffort {
+          if !app.agentModels.isEmpty { AgentModelPicker() }
+          AgentEffortPicker()
+        }
         if app.allowsManualAgentModel {
           TextField("Model ID (blank uses the CLI default)", text: Binding(
             get: { app.selectedAgentModel }, set: { app.selectedAgentModel = $0 }))
@@ -376,6 +382,7 @@ struct AgentControlsView: View {
         }
         ForEach((app.agentSession["config_options"] as? [[String: Any]] ?? []).filter {
           string($0, "id") != "model" && string($0, "category") != "model"
+            && string($0, "id") != string(app.agentEffortOption ?? [:], "id")
         }, id: \.projectRowID) {
           option in
           if string(option, "type") == "select" {
@@ -386,11 +393,7 @@ struct AgentControlsView: View {
                 set: { app.agentConfig[string(option, "id")] = $0 })
             ) {
               Text("Keep agent selection").tag("")
-              ForEach(
-                (option["options"] as? [[String: Any]] ?? []).flatMap {
-                  ($0["options"] as? [[String: Any]]) ?? [$0]
-                }, id: \.agentOptionID
-              ) { value in
+              ForEach(agentOptionValues(option), id: \.agentOptionID) { value in
                 Text(string(value, "name", string(value, "value"))).tag(string(value, "value"))
               }
             }
@@ -406,6 +409,32 @@ struct AgentControlsView: View {
         ).font(.caption).foregroundStyle(.secondary)
       }.padding(.top, 10).disabled(app.active || app.checkingConnection)
     }.font(.caption)
+  }
+}
+
+func agentOptionValues(_ option: [String: Any]) -> [[String: Any]] {
+  (option["options"] as? [[String: Any]] ?? []).flatMap {
+    ($0["options"] as? [[String: Any]]) ?? [$0]
+  }
+}
+
+struct AgentEffortPicker: View {
+  @EnvironmentObject var app: Workspace
+  var body: some View {
+    if let option = app.agentEffortOption, !agentOptionValues(option).isEmpty {
+      let id = string(option, "id")
+      let current = string(option, "currentValue")
+      let values = agentOptionValues(option)
+      let currentName = values.first { string($0, "value") == current }.map { string($0, "name", current) }
+      Picker("Reasoning effort", selection: Binding(
+        get: { app.selectedAgentEffort }, set: { app.agentConfig[id] = $0 }
+      )) {
+        Text(currentName.map { "Agent default (\($0))" } ?? "Agent default").tag("")
+        ForEach(values, id: \.agentOptionID) { value in
+          Text(string(value, "name", string(value, "value"))).tag(string(value, "value"))
+        }
+      }.fixedSize().disabled(app.active || app.checkingConnection)
+    }
   }
 }
 

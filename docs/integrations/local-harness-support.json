@@ -1068,7 +1068,7 @@
         "https://developer.apple.com/documentation/foundationmodels"
       ],
       "advanced_adapter": "",
-      "notes": "Selected in Local AI → Advanced → Runtimes & performance via Use for development and available in local comparisons at context 4096 or less. Native session reuse is bounded to a worker; desktop turns replay native transcripts. No inferred support for images or Private Cloud Compute."
+      "notes": "Selected in Local AI → Quick Start via Use for development and available in local comparisons at context 4096 or less. Native session reuse is bounded to a worker; desktop turns replay native transcripts. No inferred support for images or Private Cloud Compute."
     },
     {
       "id": "harness:rlm",

@@ -62,6 +62,7 @@ def models(
             note = {
                 "live": f"live from {result.endpoint}",
                 "models.dev": "models.dev catalog (live endpoint unavailable)",
+                "examples": f"unverified Model Studio examples. {result.error or ''}",
                 "none": "no models found",
             }.get(result.source, result.source)
             click.echo(f"# {provider}: {note}\n")
@@ -89,9 +90,9 @@ def models(
                         "id": m.id,
                         "provider": m.provider,
                         "name": m.name,
-                        "context_window": m.context_window,
-                        "input_price": m.input_price,
-                        "output_price": m.output_price,
+                        "context_window": m.context_window or None,
+                        "input_price": m.input_price if m.pricing_known else None,
+                        "output_price": m.output_price if m.pricing_known else None,
                         "capabilities": caps_str(m).split(",") if caps_str(m) else [],
                     }
                     for m in shown

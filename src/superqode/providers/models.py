@@ -20,6 +20,7 @@ from dataclasses import dataclass, field
 from enum import Enum, auto
 from typing import Any, Dict, List, Optional, Tuple
 
+LATEST_GOOGLE_HYDROGEN_MODEL = "gemini-4-hydrogen"
 LATEST_GOOGLE_ARGON_MODEL = "gemini-4-argon"
 LATEST_GOOGLE_FLASH_MODEL = "gemini-3.8-flash"
 LATEST_GOOGLE_FLASH_3_6_MODEL = "gemini-3.6-flash"
@@ -38,6 +39,7 @@ GOOGLE_GEMMA_MODELS = ("gemma-4-31b-it", "gemma-4-26b-a4b-it")
 # endpoint retains superseded and even shut-down entries, so this tuple is the
 # lifecycle-reviewed BYOK chat/coding catalog and its display order.
 LATEST_GOOGLE_MODEL_IDS = (
+    LATEST_GOOGLE_HYDROGEN_MODEL,
     LATEST_GOOGLE_ARGON_MODEL,
     LATEST_GOOGLE_FLASH_MODEL,
     LATEST_GOOGLE_FLASH_3_6_MODEL,
@@ -653,6 +655,28 @@ MODELS: Dict[str, Dict[str, ModelInfo]] = {
     # GOOGLE
     # =========================================================================
     "google": {
+        LATEST_GOOGLE_HYDROGEN_MODEL: ModelInfo(
+            id=LATEST_GOOGLE_HYDROGEN_MODEL,
+            name="Gemini 4 Hydrogen",
+            provider="google",
+            input_price=1.50,
+            output_price=7.50,
+            cached_input_price=0.075,
+            context_window=1_048_576,
+            max_output=65_536,
+            capabilities=[
+                ModelCapability.TOOLS,
+                ModelCapability.VISION,
+                ModelCapability.STREAMING,
+                ModelCapability.JSON_MODE,
+                ModelCapability.REASONING,
+                ModelCapability.CODE,
+                ModelCapability.LONG_CONTEXT,
+            ],
+            description="Fast Gemini 4 model for everyday coding and agentic workflows",
+            recommended_for=["coding", "agentic workflows"],
+            released="2026-11-12",
+        ),
         "gemini-4-argon": ModelInfo(
             id=LATEST_GOOGLE_ARGON_MODEL,
             name="Gemini 4 Argon",

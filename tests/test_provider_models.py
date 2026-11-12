@@ -17,6 +17,7 @@ def test_builtin_google_byok_models_are_current_and_newest_first(monkeypatch):
     models = get_models_for_provider("google")
 
     assert list(models) == [
+        "gemini-4-hydrogen",
         "gemini-4-argon",
         "gemini-3.8-flash",
         "gemini-3.6-flash",
@@ -29,21 +30,25 @@ def test_builtin_google_byok_models_are_current_and_newest_first(monkeypatch):
     ]
 
 
-def test_gemini4_argon_metadata_and_terminal_lists_match_observed_api(monkeypatch):
+def test_gemini4_metadata_and_terminal_lists_match_google_api(monkeypatch):
     monkeypatch.setattr(model_db, "_use_live_data", False)
     monkeypatch.setattr(model_db, "_live_models", None)
     monkeypatch.setattr(model_db, "_live_autoload_attempted", True)
     from superqode.app.mixins.model_catalog import ModelCatalogMixin
     from superqode.providers.registry import PROVIDERS
 
-    model = get_models_for_provider("google")["gemini-4-argon"]
-    assert model.context_window == 1_048_576
-    assert model.max_output == 32_768
-    assert model.supports_tools and model.supports_reasoning
-    assert PROVIDERS["google"].example_models[0] == model.id
+    models = get_models_for_provider("google")
+    hydrogen = models["gemini-4-hydrogen"]
+    argon = models["gemini-4-argon"]
+    assert hydrogen.context_window == argon.context_window == 1_048_576
+    assert hydrogen.max_output == 65_536
+    assert argon.max_output == 32_768
+    assert hydrogen.supports_tools and hydrogen.supports_reasoning
+    assert argon.supports_tools and argon.supports_reasoning
+    assert PROVIDERS["google"].example_models[:2] == [hydrogen.id, argon.id]
     rows = ModelCatalogMixin._get_gemini_models(object())
-    assert rows[0]["id"] == model.id
-    assert rows[0]["context"] == model.context_window
+    assert rows[0]["id"] == hydrogen.id
+    assert rows[0]["context"] == hydrogen.context_window
 
 
 def test_fresh_google_cache_preserves_argon_and_excludes_specialty_models():
@@ -65,7 +70,7 @@ def test_fresh_google_cache_preserves_argon_and_excludes_specialty_models():
     for include_all in (False, True):
         models = get_models_for_provider("google", include_all=include_all)
         assert list(models) == list(model_db.LATEST_GOOGLE_MODEL_IDS)
-        assert list(models)[0] == "gemini-4-argon"
+        assert list(models)[:2] == ["gemini-4-hydrogen", "gemini-4-argon"]
 
 
 def test_builtin_xai_grok_4_5_metadata(monkeypatch):
@@ -252,6 +257,7 @@ def test_live_google_models_drop_deprecated_aliases_and_specialty_endpoints():
     full_catalog = get_models_for_provider("google", include_all=True)
 
     expected = [
+        "gemini-4-hydrogen",
         "gemini-4-argon",
         "gemini-3.8-flash",
         "gemini-3.6-flash",

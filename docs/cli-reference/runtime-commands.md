@@ -128,10 +128,19 @@ Use `:agy` to browse the native Antigravity CLI command family:
 :agy resume <conversation-id>
 ```
 
-Native list and maintenance commands run in the background and return their
-output to the SuperQode conversation log. `:agy launch`, `continue`, and
-`resume` display an external-terminal command because agy's full-screen TUI
-cannot be nested inside SuperQode's TUI.
+Native list and maintenance commands return output to the conversation log.
+Use `:agy native --help` to read the installed CLI's command list, and
+`:agy native mcp add --help` for nested help. Run `:agy native` to hand the
+terminal to agy until it exits, or add CLI arguments to run a specific command.
+Codex and Grok have the same entry points at `:codex native` and `:grok native`.
+Type a space after `native` in the TUI to complete installed subcommands, or
+start a flag with `--` to browse options on that command.
+The `:agy launch`, `continue`, and `resume` shortcuts display launch commands.
+
+Use `:grok connect ` followed by a model ID from the live catalog to select
+a Grok Build model, and `:grok effort [low|medium|high|xhigh]` to inspect or
+set the reasoning effort for subsequent Grok Build turns. Codex uses
+`:codex models`, `:codex model`, and `:codex effort`.
 
 After connecting the CLI or SDK runtime, inspect or change its thinking effort:
 

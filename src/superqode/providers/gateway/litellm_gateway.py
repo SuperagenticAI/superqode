@@ -35,6 +35,12 @@ from .base import (
     Usage,
 )
 from ..credentials import provider_api_key, sync_provider_env
+from ..model_studio import (
+    METERED_PROVIDERS,
+    is_plan_model,
+    thinking_options,
+    validate_metered_route,
+)
 from ..model_specs import (
     normalize_model_for_provider,
     normalize_provider_id,
@@ -626,6 +632,33 @@ class LiteLLMGateway(GatewayInterface):
                     out = out.replace("{cli_version}", cli_version)
                 resolved[name] = out
             request_kwargs["extra_headers"] = resolved
+
+    def _apply_model_studio_options(
+        self, provider: str, model: str, level: Optional[str], request_kwargs: Dict[str, Any]
+    ) -> None:
+        if provider not in METERED_PROVIDERS:
+            return
+        if is_plan_model(model.removeprefix("openai/")):
+            raise ValueError(f"{model} is available through Token Plan, not metered Model Studio.")
+        key = request_kwargs.get("api_key")
+        base_url = request_kwargs.get("api_base")
+        if not key or not base_url:
+            raise AuthenticationError(
+                f"Set {PROVIDERS[provider].env_vars[0]} and use its Model Studio endpoint.",
+                provider=provider,
+                model=model,
+                error_type="authentication",
+            )
+        validate_metered_route(base_url, key)
+        options = thinking_options(model, level)
+        if options:
+            extra = dict(request_kwargs.get("extra_body") or {})
+            # Explicit provider-specific tuning overrides the generic effort setting.
+            if not {"reasoning_effort", "thinking_budget", "enable_thinking"}.intersection(extra):
+                extra.update(options)
+                request_kwargs["extra_body"] = extra
+        if request_kwargs.get("stream"):
+            request_kwargs.setdefault("stream_options", {"include_usage": True})
 
     def _convert_messages(self, messages: List[Message]) -> List[Dict[str, Any]]:
         """Convert Message objects to LiteLLM format."""
@@ -2652,7 +2685,7 @@ class LiteLLMGateway(GatewayInterface):
         reasoning_effort = kwargs.pop("reasoning_effort", None)
         structured_output_mode = kwargs.pop("structured_output_mode", None)
         response_schema = kwargs.get("response_schema")
-        if reasoning_effort:
+        if reasoning_effort and provider not in METERED_PROVIDERS:
             request_kwargs.update(self._resolve_reasoning_effort(provider, model, reasoning_effort))
         if structured_output_mode:
             request_kwargs.update(
@@ -2669,6 +2702,7 @@ class LiteLLMGateway(GatewayInterface):
 
         # Add any remaining extra kwargs
         request_kwargs.update(kwargs)
+        self._apply_model_studio_options(provider, model, reasoning_effort, request_kwargs)
 
         # Local-model tuning (Ollama num_ctx, keep_alive, tool-temp clamp).
         # Applied after kwargs merge so user overrides via extra kwargs win.
@@ -2951,7 +2985,7 @@ class LiteLLMGateway(GatewayInterface):
         reasoning_effort = kwargs.pop("reasoning_effort", None)
         structured_output_mode = kwargs.pop("structured_output_mode", None)
         response_schema = kwargs.get("response_schema")
-        if reasoning_effort:
+        if reasoning_effort and provider not in METERED_PROVIDERS:
             request_kwargs.update(self._resolve_reasoning_effort(provider, model, reasoning_effort))
         if structured_output_mode:
             request_kwargs.update(
@@ -2971,6 +3005,7 @@ class LiteLLMGateway(GatewayInterface):
         budget_for_credit: Optional[TaskTokenBudget] = kwargs.pop("task_budget", None)
 
         request_kwargs.update(kwargs)
+        self._apply_model_studio_options(provider, model, reasoning_effort, request_kwargs)
 
         # Local-model tuning. Same rationale as in chat_completion.
         self._apply_local_request_shaping(provider, model, request_kwargs, bool(tools))

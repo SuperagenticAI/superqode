@@ -7,6 +7,7 @@ from dataclasses import asdict
 from pathlib import Path
 import json
 import sys
+import time
 import uuid
 
 from superqode.acp.client import ACPClient
@@ -211,7 +212,9 @@ async def run_acp(request, directory, emit, secrets):
         on_tool_update=lambda tool: event("tool_update", tool),
         on_plan=lambda plan: event("plan", {"entries": plan}),
         on_usage_update=lambda usage: event("usage", usage),
-        on_available_commands=lambda commands: event("commands", {"commands": commands}),
+        on_available_commands=lambda commands: event(
+            "commands", {"commands": commands, "observed_at": time.time()}
+        ),
         on_session_info_update=lambda info: event("session_info", info),
     )
     try:
@@ -250,6 +253,7 @@ async def run_acp(request, directory, emit, secrets):
             {
                 "event": "acp_session",
                 "payload": {
+                    "observed_at": time.time(),
                     "capabilities": client.get_agent_capabilities(),
                     "models": client.get_session_models(),
                     "modes": client.get_session_modes(),

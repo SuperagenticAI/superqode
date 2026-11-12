@@ -37,11 +37,12 @@ struct LocalQuickStartView: View {
       HStack {
         Text("Local AI").font(.title2.weight(.semibold))
         Spacer()
-        Button("Advanced…") { advanced = true }
+        if !embedded { Button("Advanced…") { advanced = true } }
       }
       if showInstalled {
         InstalledLocalModelPicker(project: project, dismissOnUse: !embedded)
           .id(project)
+        if embedded { LocalRuntimeWorkspace() }
         DisclosureGroup(isExpanded: $showSetup) {
           VStack(alignment: .leading, spacing: 16) {
             LocalAINotice(learnMore: $learnMore)

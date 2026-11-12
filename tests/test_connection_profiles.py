@@ -160,6 +160,7 @@ _FLAT_PROFILE_IDS_V1 = [
     "cursor",
     "amp",
     "antigravity",
+    "antigravity-managed",
     "muse",
     "prime-agent",
     "copilot",

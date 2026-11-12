@@ -719,7 +719,7 @@ struct CodingComposer: View {
   @State private var showContext = false
   @State private var showOptions = false
   @State private var showCLIControls = false
-  @State private var setupAfterCLI = false
+  @State private var setupAfterCLI: String?
   @State private var isolatePlan: [String: Any]?
   @State private var requestedFiles = false
   // Keyboard focus is driven through AppKit so the text view itself, not its
@@ -883,10 +883,13 @@ struct CodingComposer: View {
         }
       }
       if app.isManaged {
-        if !app.agentModels.isEmpty {
-          AgentModelPicker().frame(maxWidth: 320, alignment: .leading)
-        } else if !app.checkingConnection {
-          Button("Load agent models") { app.perform { await app.checkManagedConnection() } }
+        HStack(spacing: 12) {
+          if !app.agentModels.isEmpty {
+            AgentModelPicker().frame(maxWidth: 320, alignment: .leading)
+          } else if !app.checkingConnection {
+            Button("Load agent models") { app.perform { await app.checkManagedConnection() } }
+          }
+          AgentEffortPicker()
         }
       }
       PendingCommentsTray(store: app.pendingComments)
@@ -1010,9 +1013,9 @@ struct CodingComposer: View {
     .frame(maxWidth: 840).frame(maxWidth: .infinity)
     .padding(.horizontal, 20).padding(.bottom, 10).padding(.top, 4)
     .sheet(isPresented: $showCLIControls, onDismiss: {
-      if setupAfterCLI { setupAfterCLI = false; app.openConnections() }
+      if let page = setupAfterCLI { setupAfterCLI = nil; app.openConnections(page) }
     }) {
-      AgentCLIControlsView(onSetup: { setupAfterCLI = true; showCLIControls = false })
+      AgentCLIControlsView(onSetup: { page in setupAfterCLI = page; showCLIControls = false })
         .environmentObject(app)
     }
   }

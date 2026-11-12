@@ -653,6 +653,7 @@ SuperQode's terminal, sessions, approvals, plans, and evidence surface.
 | GitHub Copilot | `:connect copilot` | GitHub Copilot account through the SDK or official CLI |
 | Claude Agent SDK | `:runtime claude-agent-sdk` | Anthropic API key |
 | Antigravity CLI | `:connect antigravity` | Google Sign-In through `agy` |
+| Antigravity Managed Agent | `:connect antigravity-managed` | Gemini API key for Google's hosted sandbox |
 | OpenAI Agents SDK | `:runtime openai-agents` | OpenAI provider credentials |
 | Google ADK | `:runtime adk` | Google provider credentials |
 | Pydantic AI | `:runtime pydanticai` | Credentials for the selected provider |
@@ -758,7 +759,7 @@ enabling shell or write access in important repositories.
 
 ### Native local runtime profiles
 
-On macOS, **Local AI → Advanced → Runtimes & performance** saves explicit loopback profiles
+On macOS, **Local AI → Quick Start → Runtimes & performance** saves explicit loopback profiles
 for vLLM Metal, oMLX, Jan and other compatible inference servers. The provider ID
 is `local-openai`; each project binding selects its own endpoint and optional
 session/Keychain key. Run the generated-data tool check before selecting a

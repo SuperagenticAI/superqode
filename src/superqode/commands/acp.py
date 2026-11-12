@@ -32,6 +32,11 @@ def check_agent_installed(agent: "Agent") -> bool:
     parts = run_command.split()
     cmd_name = parts[0]
 
+    if parts == ["agy", "acp"]:
+        from superqode.runtime.antigravity_status import antigravity_acp_issue
+
+        return not antigravity_acp_issue()
+
     # Registry launchers download on demand, so npx/uvx alone proves nothing.
     # The agent is often installed anyway (fast-agent ships `fast-agent` on
     # PATH while launching via uvx), so check the names it installs.

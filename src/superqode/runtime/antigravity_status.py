@@ -62,6 +62,15 @@ def clear_antigravity_cli_cache() -> None:
     _cached = None
 
 
+def antigravity_acp_issue() -> str:
+    status = probe_antigravity_cli()
+    if status.issue:
+        return status.issue
+    if status.version is None or status.version < (1, 5, 1):
+        return "Antigravity ACP requires agy 1.5.1 or newer. Run `agy update`."
+    return ""
+
+
 def probe_antigravity_cli(*, timeout: float = 3.0, refresh: bool = False) -> AntigravityCLIStatus:
     """Report installation and compatibility without accessing credentials/network.
 

@@ -25,7 +25,6 @@ import SwiftUI
 
 struct LocalRuntimeWorkspace: View {
   @EnvironmentObject var app: Workspace
-  var active = true
   @StateObject private var library = LocalRuntimeLibrary()
   @State private var restoringProfile = false
   @State private var template = "vllm-metal"
@@ -44,10 +43,11 @@ struct LocalRuntimeWorkspace: View {
   @State private var harnesses: [[String: Any]] = []
   @State private var busy = false
   @State private var message = ""
-  @State private var apple: [String: Any] = [:]
-  @State private var appleUtility = false
   @State private var setup: [String: Any] = [:]
   @State private var showSetup = false
+  @State private var servers: [[String: Any]] = []
+  @State private var serverAction: [String: Any]?
+  @State private var serverConnection: String?
   @State private var operation = ""
   @State private var operationDetail: [String: Any] = [:]
   @State private var operationAfter = 0
@@ -58,43 +58,28 @@ struct LocalRuntimeWorkspace: View {
   private var projectReady: Bool { !app.projectID.isEmpty && !app.openingProject }
 
   var body: some View {
-    ScrollView {
-      VStack(alignment: .leading, spacing: 20) {
-        PageTitle(eyebrow: "Local AI", title: "Runtimes & performance",
-          subtitle: "Connect a local server, check its tools and see where your Mac spends time.")
-        LocalExecutionPanel(value: library.performance) { limit in
-          app.perform {
-            _ = try await app.engine.call("local.execution.configure", ["concurrency": limit])
-            await library.refreshPerformance(app.engine)
-          }
-        }
-        applePanel
-        runtimePanel
-        if !operation.isEmpty { operationPanel }
-        if !message.isEmpty { Text(message).font(.callout).foregroundStyle(.secondary).textSelection(.enabled) }
-        if !library.failure.isEmpty { Text(library.failure).foregroundStyle(.orange).textSelection(.enabled) }
-        HStack {
-          Text("Compare real coding outcomes").font(.headline)
-          Spacer()
-          Button("Harness evaluations") { app.section = "Evaluations" }.disabled(!projectReady)
-          Button("Local benchmarks") { app.section = "Models"; benchmark = true }.disabled(!projectReady)
-        }
-        Text("A tool-shape check does not certify coding quality. Compare identical tasks, model artifacts, context and cold/warm cache state before choosing a default.")
-          .font(.caption).foregroundStyle(.secondary)
-      }.padding(24)
-    }
-    .task(id: active) {
-      guard active else { return }
+    content
+    .task(id: app.connected) {
+      guard app.connected else { return }
       await library.load(app.engine)
+      await refreshServers()
       if projectReady { await loadHarnesses() }
       await restoreOperation()
-      while !Task.isCancelled && active {
+      while !Task.isCancelled {
         await library.refreshPerformance(app.engine)
         await pollOperation()
         do { try await Task.sleep(for: .seconds(2)) } catch { return }
       }
     }
     .onChange(of: app.projectID) { _, _ in models = []; model = ""; Task { await loadHarnesses() } }
+    .centeredDialog(isPresented: Binding(get: { serverAction != nil }, set: { if !$0 { serverAction = nil } }),
+      title: "Review local operation", onDismiss: { Task { await refreshServers() } }) {
+      if let serverAction { LocalModelActionView(request: serverAction).environmentObject(app) }
+    }
+    .centeredDialog(isPresented: Binding(get: { serverConnection != nil }, set: { if !$0 { serverConnection = nil } }),
+      title: "Use a local model") {
+      if let serverConnection { LocalModelConnectionView(engine: serverConnection, project: app.projectID).environmentObject(app) }
+    }
     .centeredDialog(isPresented: $showSetup, title: "Review runtime installation") {
       VStack(alignment: .leading, spacing: 16) {
         Text("Install " + string(setup, "name")).font(.title2)
@@ -117,52 +102,40 @@ struct LocalRuntimeWorkspace: View {
   }
   @State private var benchmark = false
 
-  private var applePanel: some View {
-    VStack(alignment: .leading, spacing: 12) {
+  private var content: some View {
+    VStack(alignment: .leading, spacing: 16) {
       HStack {
-        Image(systemName: "apple.logo").font(.title).foregroundStyle(Color.qAccent)
-        VStack(alignment: .leading, spacing: 3) {
-          Text("Apple on-device model").font(.headline)
-          Text("Private chat, structured tasks and focused development. No API key.").font(.caption).foregroundStyle(.secondary)
-        }
+        Text("Runtimes & performance").font(.title2.weight(.semibold))
         Spacer()
-        Button("Check availability") {
-          action {
-            apple = try await app.engine.call("local.apple.status") as? [String: Any] ?? [:]
-            appleUtility = apple["utility_enabled"] as? Bool == true
-          }
-        }.disabled(busy)
+        Button("Refresh runtimes") { Task { await refreshServers() } }
       }
-      Text(string(apple, "guidance", "Requires a supported Mac, macOS 26+ and Apple Intelligence enabled. Apple's system model is separate from downloaded Qwen, GLM or Gemma weights."))
-        .font(.callout).foregroundStyle(.secondary)
-      if apple["current_locale_supported"] as? Bool == false {
-        Text("Apple reports that your current locale is unsupported. Use a language supported by Apple Intelligence or select another local model.")
-          .font(.caption).foregroundStyle(.orange)
-      }
-      Toggle("Use for optional summaries and utility tasks", isOn: Binding(get: { appleUtility }, set: { enabled in
-        action {
-          let result = try await app.engine.call("local.apple.utility", ["enabled": enabled]) as? [String: Any] ?? [:]
-          appleUtility = result["utility_enabled"] as? Bool == true
+      LocalExecutionPanel(value: library.performance) { limit in
+        app.perform {
+          _ = try await app.engine.call("local.execution.configure", ["concurrency": limit])
+          await library.refreshPerformance(app.engine)
         }
-      })).disabled(busy || (apple["available"] as? Bool != true && !appleUtility))
-      Text("Utility hooks include summaries and rubric grading. Validate grading quality before using scores as a release gate. If this native model becomes unavailable, its utility input is not silently sent to a cloud model.")
-        .font(.caption).foregroundStyle(.secondary)
-      Text("Use small, focused tasks. The Apple configuration offers three file tools through SuperQode permissions; shell and network tools are disabled. Compare outcomes in Local AI → Advanced → Compare before relying on coding results. Conversations use a bounded context and may need a new thread. Images are not supported by this route.")
-        .font(.caption).foregroundStyle(.secondary)
+      }
+      LazyVGrid(columns: [GridItem(.adaptive(minimum: 230), spacing: 10)], spacing: 10) {
+        ForEach(servers, id: \.projectRowID) { row in
+          LocalServerCard(row: row, onOperation: { serverAction = $0 }, onConnect: { serverConnection = $0 })
+        }
+      }
+      runtimePanel
+      if !operation.isEmpty { operationPanel }
+      if !message.isEmpty { Text(message).font(.callout).foregroundStyle(.secondary).textSelection(.enabled) }
+      if !library.failure.isEmpty { Text(library.failure).foregroundStyle(.orange).textSelection(.enabled) }
       HStack {
-        Link("Apple setup guide", destination: URL(string: "https://support.apple.com/en-us/121115")!)
-        Spacer()
-        Button("Use for development") {
-          app.chooseAppleModel(development: true)
-          app.notice = "Apple on-device selected with read, write and edit. File access uses your existing permissions. Shell and network tools are disabled."
-        }.disabled(apple["available"] as? Bool != true || !projectReady || app.anyActive)
-        Button("Use for chat") {
-          app.chooseAppleModel(development: false)
-          app.notice = "Apple on-device chat selected. Your messages stay on this Mac."
-        }.buttonStyle(BrandButtonStyle())
-          .disabled(apple["available"] as? Bool != true || !projectReady || app.anyActive)
+        Button("Harness evaluations") { app.section = "Evaluations" }.disabled(!projectReady)
+        Button("Local benchmarks") { benchmark = true }.disabled(!projectReady)
       }
-    }.padding(18).brandSurface()
+    }
+  }
+
+  private func refreshServers() async {
+    do {
+      let result = try await app.engine.call("local.models.servers") as? [[String: Any]] ?? []
+      if !Task.isCancelled { servers = result }
+    } catch { if !Task.isCancelled { library.failure = error.localizedDescription } }
   }
 
   private var runtimePanel: some View {
@@ -427,5 +400,72 @@ struct LocalRuntimeWorkspace: View {
       if !NSDictionary(dictionary: operationDetail).isEqual(to: next) { operationDetail = next }
       if finished { await library.load(app.engine) }
     } catch { if !Task.isCancelled { library.failure = error.localizedDescription } }
+  }
+}
+
+struct AppleLocalModelPanel: View {
+  @EnvironmentObject var app: Workspace
+  let project: String
+  let onUse: () -> Void
+  @State private var status: [String: Any] = [:]
+  @State private var checking = false
+  @State private var failure = ""
+
+  private var available: Bool { status["available"] as? Bool == true }
+  private var utility: Bool { status["utility_enabled"] as? Bool == true }
+  private var canUse: Bool {
+    available && !project.isEmpty && project == app.projectID && !app.openingProject && !app.anyActive
+  }
+
+  var body: some View {
+    VStack(alignment: .leading, spacing: 10) {
+      HStack {
+        Label("Apple on-device model", systemImage: "apple.logo").font(.headline)
+        Spacer()
+        Button(checking ? "Checking…" : "Check availability") { Task { await refresh() } }
+          .disabled(checking || !app.connected)
+      }
+      Text(string(status, "guidance", "Requires macOS 26 or later and Apple Intelligence on a supported Mac."))
+        .font(.callout).foregroundStyle(.secondary)
+      if !failure.isEmpty { Text(failure).font(.caption).foregroundStyle(.orange) }
+      HStack {
+        if let url = URL(string: string(status, "docs_url")), url.scheme == "https" {
+          Link("Apple setup guide", destination: url).font(.caption)
+        }
+        Spacer()
+        Button("Use for chat") { use(development: false) }.disabled(!canUse)
+        Button("Use for development") { use(development: true) }
+          .buttonStyle(BrandButtonStyle()).disabled(!canUse)
+      }
+      DisclosureGroup("Apple model settings") {
+        Text("Development uses the Apple on-device harness and your project’s file permissions. Use it for small read, write and edit tasks.")
+          .font(.caption).foregroundStyle(.secondary)
+        Toggle("Use for optional summaries and utility tasks", isOn: Binding(get: { utility }, set: { enabled in
+          app.perform {
+            let result = try await app.engine.call("local.apple.utility", ["enabled": enabled]) as? [String: Any] ?? [:]
+            status["utility_enabled"] = result["utility_enabled"] as? Bool == true
+          }
+        })).disabled(checking || (!available && !utility))
+      }
+    }.padding(16).brandSurface()
+      .accessibilityIdentifier("local.appleModel")
+      .task(id: app.connected) { if app.connected { await refresh() } }
+  }
+
+  private func use(development: Bool) {
+    guard canUse else { return }
+    app.chooseAppleModel(development: development)
+    onUse()
+  }
+
+  private func refresh() async {
+    guard !checking else { return }
+    checking = true
+    defer { checking = false }
+    do {
+      let result = try await app.engine.call("local.apple.status") as? [String: Any] ?? [:]
+      guard !Task.isCancelled else { return }
+      status = result; failure = ""
+    } catch { if !Task.isCancelled { failure = error.localizedDescription } }
   }
 }

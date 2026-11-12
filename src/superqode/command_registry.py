@@ -187,10 +187,15 @@ COMMANDS = [
     ":agy update",
     ":agy install",
     ":agy launch",
+    ":agy native",
+    ":agy sdk",
+    ":agy managed",
     ":grok",
     ":grok connect",
     ":grok models",
+    ":grok native",
     ":grok model",
+    ":grok effort",
     ":grok status",
     ":grok login",
     ":grok api",
@@ -1042,6 +1047,15 @@ DEFAULT_COMMANDS: list[SlashCommand] = [
     ),
     SlashCommand(":fx status", "Check local fx install and Vercel login", category="workflow"),
     SlashCommand(":agy", "Alias for Antigravity CLI commands", category="workflow"),
+    SlashCommand(
+        ":agy native",
+        "Open the installed Antigravity CLI or pass it arguments",
+        category="workflow",
+    ),
+    SlashCommand(
+        ":agy sdk", "Connect the Antigravity SDK with a Gemini API key", category="workflow"
+    ),
+    SlashCommand(":agy managed", "Connect Google's hosted Antigravity agent", category="workflow"),
     SlashCommand("/status", "Show runtime, model, harness, and session", category="workflow"),
     SlashCommand("/usage", "Show latest run usage and latency", category="workflow"),
     SlashCommand(
@@ -1179,6 +1193,10 @@ DEFAULT_COMMANDS: list[SlashCommand] = [
         ":grok models", "Pick a Grok subscription model from the live catalog", category="workflow"
     ),
     SlashCommand(":grok model", "Pick a Grok subscription model and connect", category="workflow"),
+    SlashCommand(":grok effort", "Show or set Grok Build reasoning effort", category="workflow"),
+    SlashCommand(
+        ":grok native", "Open the installed Grok CLI or pass it arguments", category="workflow"
+    ),
     SlashCommand(":grok status", "Check Grok CLI and login readiness", category="workflow"),
     SlashCommand(":grok login", "Show Grok browser and device login commands", category="workflow"),
     SlashCommand(

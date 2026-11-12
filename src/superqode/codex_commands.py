@@ -2,6 +2,7 @@
 
 CODEX_COMMANDS = (
     ("help", "Show Codex commands and integration limits"),
+    ("native", "Open the installed Codex CLI or pass it arguments"),
     ("status", "Show Codex CLI/app-server status"),
     ("doctor", "Run the installed CLI's redacted diagnostic report"),
     ("model", "Pick or set the Codex model for future turns"),

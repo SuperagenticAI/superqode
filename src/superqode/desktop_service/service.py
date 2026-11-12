@@ -1041,17 +1041,38 @@ class DesktopService:
                 raise
             return {"id": job_id}
 
+    def _model_studio_endpoints(self):
+        return {
+            row["key"].removeprefix("model_studio_endpoint:"): json.loads(row["value"])
+            for row in self._all(
+                "SELECT key, value FROM settings WHERE key IN (?, ?)",
+                (
+                    "model_studio_endpoint:qwen-intl",
+                    "model_studio_endpoint:qwen-cn",
+                ),
+            )
+        }
+
     def credential_environment(self, providers=None):
         from .connections import environment
+        from superqode.providers.registry import PROVIDERS
 
         with self.lock:
-            return environment(
+            values = environment(
                 {
                     key: value
                     for key, value in self.credentials.items()
                     if providers is None or key in providers
                 }
             )
+            values.update(
+                {
+                    PROVIDERS[provider].base_url_env: endpoint
+                    for provider, endpoint in self._model_studio_endpoints().items()
+                    if providers is None or provider in providers
+                }
+            )
+            return values
 
     def dispatch(self, method: str, params: dict):
         if method.startswith("remote."):
@@ -1243,13 +1264,45 @@ class DesktopService:
                     else "Local configuration changed. Return to Advanced."
                 ),
             }
-        if method in {"providers.list", "providers.credentials.set", "providers.check"}:
-            from .connections import install, inspect_route, list_connections
+        if method in {
+            "providers.list",
+            "providers.credentials.set",
+            "providers.check",
+            "providers.models",
+            "providers.endpoint.set",
+        }:
+            from .connections import install, inspect_route, list_connections, list_workspace_models
+            from superqode.providers.model_studio import (
+                METERED_PROVIDERS,
+                validate_workspace_endpoint,
+            )
 
             with self.lock:
+                provider = str(params.get("provider") or "")
+                endpoints = self._model_studio_endpoints()
+                if method == "providers.endpoint.set":
+                    value = params.get("endpoint")
+                    if provider not in METERED_PROVIDERS or not isinstance(value, str):
+                        raise ValueError(
+                            "Choose a Model Studio provider and enter its API endpoint."
+                        )
+                    setting = f"model_studio_endpoint:{provider}"
+                    value = validate_workspace_endpoint(value) if value.strip() else ""
+                    if "key" in params:
+                        install({}, params, base_url=value)
+                    if value:
+                        self._write(
+                            "INSERT OR REPLACE INTO settings VALUES(?,?)",
+                            (setting, json.dumps(value)),
+                        )
+                    else:
+                        self._write("DELETE FROM settings WHERE key=?", (setting,))
+                    return {"ok": True}
                 if method == "providers.credentials.set":
-                    return install(self.credentials, params)
+                    return install(self.credentials, params, base_url=endpoints.get(provider))
                 credentials = dict(self.credentials)
+            if method == "providers.models":
+                return list_workspace_models(credentials, params, base_url=endpoints.get(provider))
             if method == "providers.check":
                 if params.get("provider") == "apple-foundation":
                     from superqode.local.apple import status
@@ -1322,7 +1375,7 @@ class DesktopService:
                                 else "The selected local model/server changed. Refresh Local AI.",
                             }
                 return inspect_route(credentials, params)
-            return list_connections(credentials)
+            return list_connections(credentials, endpoints)
         if method == "hello":
             from superqode import __version__
 
@@ -1995,9 +2048,9 @@ class DesktopService:
                 ("recovery-ack:" + params["project"], json.dumps(time.time())),
             )
             return {"ok": True}
-        if method in {"connect.controls", "connect.command.start"}:
+        if method in {"connect.controls", "connect.command.start", "connect.cli.arguments"}:
             from .connect_workflow import profile_route
-            from .connection_controls import cli_plan, command_catalog, run_command
+            from .connection_controls import cli_plan, command_catalog, run_command, vendor_help
 
             root = self.project(params["project"])
             reference = str(params.get("reference") or "")
@@ -2013,6 +2066,7 @@ class DesktopService:
                     "digest": route["digest"],
                     "available": route["available"],
                     "issue": route.get("issue", ""),
+                    "runtime": route.get("runtime", ""),
                 }
             if params.get("expected_digest") != route["digest"]:
                 raise ValueError("The agent launch configuration changed. Reopen agent controls.")
@@ -2024,7 +2078,30 @@ class DesktopService:
                     "Finish or stop this project's active run before using CLI controls"
                 )
 
+            if method == "connect.cli.arguments":
+                from superqode.vendor_command_help import (
+                    cli_arguments,
+                    command_path,
+                    startup_arguments,
+                )
+
+                plan = cli_plan(route)
+                if not plan or not plan["family"]:
+                    raise ValueError("Install the vendor CLI before running commands.")
+                path = command_path(params.get("path", []))
+                arguments = cli_arguments(params.get("arguments", ""))
+                if not path and not arguments:
+                    arguments = startup_arguments(
+                        plan["family"], params.get("model", ""), params.get("effort", "")
+                    )
+                return {
+                    **plan,
+                    "argv": [*plan["argv"], *path, *arguments],
+                }
+
             async def command(status):
+                if params.get("command") == "vendor-help":
+                    return await vendor_help(root, route, params.get("path", []))
                 return await run_command(
                     root, route, str(params.get("command") or ""), status, params.get("cursor")
                 )

@@ -33,10 +33,35 @@ Qwen Code subscriptions and token plans:
 
 Use a key issued for the selected region. The two routes keep credentials
 separate. Saving a key does not send a model request or verify entitlement.
-Examples include `qwen3-coder-plus` and `qwen-plus`; check the provider's current
-catalog for your region. Coding Plan and Token Plan keys use their dedicated
-endpoints through Qwen Code's `/auth` menu, rather than these general API routes.
-See [Alibaba's API key setup](https://www.alibabacloud.com/help/en/model-studio/get-api-key).
+For an international workspace, start with `qwen3.8-flash` for speed and
+`qwen3.7-plus` for a balanced option. You can compare them with `glm-5.3`
+and `deepseek-v4.1-flash` if your workspace offers them. The Model Studio
+route translates SuperQode's thinking effort for those models. GLM-5.3
+always thinks, even if the selected effort is off.
+
+In the macOS app, choose **Provider API key → Qwen · International API**,
+enter the key and your workspace endpoint if Alibaba issued one, then click
+**Load workspace models**. This lists model IDs
+without saving the key or sending a prompt. Select an ID and use **Test model**
+to verify inference. In a shell or the TUI, use:
+
+```text
+superqode models --provider qwen-intl --live
+:models provider qwen-intl live
+:connect byok qwen-intl qwen3.8-flash
+```
+
+For a dedicated workspace in the shell, set the matching API base variable
+from the table. Use the workspace's OpenAI-compatible base URL
+ending in `/compatible-mode/v1`. SuperQode lists chat models from Alibaba's
+workspace catalog where available and labels offline examples as unverified.
+Listing a model does not guarantee inference access or a particular price.
+
+The metered routes reject Token Plan credentials. For a plan you already
+have, use Qwen Code's `/auth` menu. The `qwen4-max-preview` Token Plan model
+is excluded from metered discovery. See [Alibaba's API key setup](https://www.alibabacloud.com/help/en/model-studio/get-api-key),
+[workspace endpoints](https://www.alibabacloud.com/help/en/model-studio/base-url),
+and [models and pricing](https://www.alibabacloud.com/help/en/model-studio/models).
 
 ## Connect From The TUI
 

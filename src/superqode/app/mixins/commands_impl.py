@@ -3496,6 +3496,7 @@ class CommandImplMixin:
             ("update", "Run the agy updater"),
             ("install", "Configure agy PATH and shell integration"),
             ("launch", "Show an external agy TUI launch command"),
+            ("native", "Open agy or pass any arguments to the installed CLI"),
             ("continue", "Show the workspace-scoped quick-resume command"),
             ("resume", "Show the command to resume a conversation ID"),
             ("version", "Show the installed agy version"),
@@ -3570,6 +3571,8 @@ class CommandImplMixin:
             self._show_agy_help(log)
         elif sub in {"connect", "start", "cli"}:
             self._runtime_cmd("antigravity-cli", log)
+        elif sub == "native":
+            self._vendor_native_cli("antigravity", rest, log)
         elif sub in {"status", "doctor"}:
             self._show_antigravity_status(log)
         elif sub == "run":
@@ -3645,6 +3648,55 @@ class CommandImplMixin:
             self._agy_cli_cmd(command_parts, log, label, timeout=timeout),
             exclusive=False,
         )
+
+    def _vendor_native_cli(self, family: str, raw: str, log) -> None:
+        """Hand the terminal to the vendor without interpreting shell syntax."""
+        from superqode.desktop_service.connection_controls import cli_plan
+        from superqode.herdr import child_env
+        from superqode.vendor_command_help import FAMILIES, cli_arguments, command_path
+
+        binary = FAMILIES[family]
+        route = {"runtime": family + "-cli", "subscription_vendor": family}
+        try:
+            args = cli_arguments(raw)
+        except ValueError as exc:
+            log.add_error(str(exc))
+            return
+        if not (plan := cli_plan(route)):
+            log.add_error(f"Install the {binary} CLI first.")
+            return
+        path = None
+        if args and (args[0] == "help" or args[-1] == "--help"):
+            try:
+                path = command_path(args[1:] if args[0] == "help" else args[:-1])
+            except ValueError:
+                pass
+        if path is not None:
+
+            async def show_help():
+                from superqode.desktop_service.connection_controls import vendor_help
+
+                try:
+                    page = await vendor_help(Path.cwd(), route, path)
+                    log.write(Text(page["text"] + "\n", style=THEME["text"], overflow="fold"))
+                except (OSError, ValueError) as exc:
+                    log.add_error(f"Could not load {binary} help: {exc}")
+
+            self.run_worker(show_help(), exclusive=False)
+            return
+        if self.is_busy:
+            log.add_error("Finish the current run before opening the vendor CLI.")
+            return
+        env = child_env()
+        for key in plan["unset_env"]:
+            env.pop(key, None)
+        try:
+            with self.app.suspend():
+                result = subprocess.run([*plan["argv"], *args], env=env, check=False)
+            if result.returncode:
+                log.add_error(f"{binary} exited with status {result.returncode}.")
+        except Exception as exc:
+            log.add_error(f"Could not open {binary}: {exc}")
 
     async def _show_agy_models(self, log) -> None:
         """List selectable Antigravity models, with raw output as a fallback."""
@@ -3962,6 +4014,23 @@ class CommandImplMixin:
             self._connect_acp_cmd(("grok " + rest).strip(), log)
         elif sub == "api":
             self._grok_api_cmd(rest, log)
+        elif sub == "native":
+            self._vendor_native_cli("grok", rest, log)
+        elif sub == "effort":
+            from superqode.vendor_command_help import GROK_EFFORTS
+
+            if not rest:
+                current = getattr(self, "_grok_acp_effort", "") or "agent default"
+                log.add_info(
+                    f"Grok Build reasoning effort: {current}. Choose {' | '.join(GROK_EFFORTS)}."
+                )
+            elif rest.lower() in GROK_EFFORTS:
+                self._grok_acp_effort = rest.lower()
+                log.add_info(
+                    f"Grok Build reasoning effort for the next message: {self._grok_acp_effort}."
+                )
+            else:
+                log.add_error(f"Choose a Grok reasoning effort: {' | '.join(GROK_EFFORTS)}.")
         elif sub in ("models", "ls"):
             self._show_grok_models(log)
         elif sub == "model":
@@ -3979,7 +4048,7 @@ class CommandImplMixin:
             log.add_error(f"Unknown grok command: {sub}")
             log.add_info(
                 "Usage: :grok [connect [model]|model [name]|models|api [model|off]|"
-                "status|login|help] (ACP: :connect acp grok)"
+                "effort|native|status|login|help] (ACP: :connect acp grok)"
             )
 
     # ---- Prime Intellect Prime Agent :prime command surface ----------------

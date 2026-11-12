@@ -7,6 +7,14 @@ import os
 import shutil
 
 from .redaction import redact
+from superqode.vendor_command_help import (
+    ANTIGRAVITY_EFFORTS,
+    CODEX_EFFORTS,
+    command_flags,
+    command_path,
+    command_rows,
+    help_arguments,
+)
 
 
 def select_option(identity, name, values):
@@ -18,10 +26,14 @@ def select_option(identity, name, values):
     }
 
 
-def runtime_settings(runtime):
+def runtime_settings(runtime, *, antigravity_efforts=None):
     if runtime == "antigravity-cli":
         return [
-            select_option("effort", "Reasoning effort (agy 1.1.5+)", ["low", "medium", "high"]),
+            select_option(
+                "effort",
+                "Reasoning effort",
+                antigravity_efforts if antigravity_efforts is not None else ANTIGRAVITY_EFFORTS,
+            ),
             {"id": "agent", "name": "Antigravity agent", "type": "text"},
         ]
     if runtime == "codex-cli":
@@ -29,7 +41,7 @@ def runtime_settings(runtime):
             select_option(
                 "effort",
                 "Reasoning effort",
-                ["none", "minimal", "low", "medium", "high", "xhigh", "max", "ultra"],
+                CODEX_EFFORTS,
             ),
             select_option("plan", "Codex mode", ["on", "off"]),
             select_option("sandbox", "Codex sandbox", ["read-only", "workspace-write"]),
@@ -62,7 +74,7 @@ def apply_runtime_controls(runtime, route, controls):
     return config.get("plan")
 
 
-async def cli_output(root, argv, vendor=None, timeout=20):
+async def cli_output(root, argv, vendor=None, timeout=20, *, include_stderr=False):
     """Bound output and terminate/reap the entire CLI process group on timeout/cancel."""
     import signal
     from superqode.herdr import child_env
@@ -105,7 +117,12 @@ async def cli_output(root, argv, vendor=None, timeout=20):
                 redact((stderr or stdout).strip()[:4000], secrets)
                 or f"CLI exited {process.returncode}"
             )
-        return redact(stdout.strip(), secrets)
+        output = (
+            "\n".join(part.strip() for part in (stdout, stderr) if part.strip())
+            if include_stderr
+            else stdout.strip()
+        )
+        return redact(output, secrets)
     except TimeoutError:
         raise ValueError("The CLI did not respond in time. Check sign-in and try again.") from None
     finally:
@@ -141,6 +158,7 @@ def cli_plan(route):
         # Bundled ACP routes are selectable independently of subscription profiles.
         # Only explicitly known interactive binaries are launched without ACP flags.
         binaries = {
+            "antigravity": "agy",
             "codex": "codex",
             "grok": "grok",
             "copilot": "copilot",
@@ -171,7 +189,52 @@ def cli_plan(route):
         if route.get("subscription_vendor")
         else ({}, [])
     )
-    return {"argv": [str(binary)], "unset_env": unset}
+    family = next(
+        (
+            identity
+            for identity in (
+                (route.get("runtime") or "").removesuffix("-cli"),
+                route.get("subscription_vendor"),
+                route.get("agent_id"),
+            )
+            if identity in {"codex", "grok", "antigravity"}
+        ),
+        "",
+    )
+    return {"argv": [str(binary)], "unset_env": unset, "family": family}
+
+
+async def vendor_help(root, route, path):
+    plan = cli_plan(route)
+    if not plan or not (family := plan.get("family")):
+        raise ValueError("Install the vendor CLI to browse its commands.")
+    path = command_path(path)
+    text = ""
+    for index in range(len(path) + 1):
+        current = path[:index]
+        args = help_arguments(family, current)
+        if family == "antigravity" and current[-1:] == ["help"]:
+            return {"text": text, "subcommands": [], "path": path}
+        if family == "antigravity" and index > 1:
+            # Some agy commands (for example plugin list) don't accept --help.
+            # Read their group usage unless agy explicitly documents leaf help.
+            if f"agy {current[0]} <subcommand> --help" not in text:
+                return {"text": text, "subcommands": [], "path": path}
+            args = [*current, "--help"]
+        try:
+            text = await cli_output(
+                root, [*plan["argv"], *args], family, timeout=6, include_stderr=True
+            )
+        except ValueError as exc:
+            if family != "antigravity" or not current or not str(exc).startswith("Usage"):
+                raise
+            text = str(exc)
+        rows = command_rows(text)
+        if index < len(path) and not any(row["id"] == path[index] for row in rows):
+            raise ValueError(
+                "The installed CLI no longer advertises this command. Refresh its help."
+            )
+    return {"text": text, "subcommands": rows, "path": path, "flags": command_flags(text)}
 
 
 CODEX_QUERIES = (

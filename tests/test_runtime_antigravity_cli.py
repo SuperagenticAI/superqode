@@ -173,7 +173,7 @@ def test_command_supports_custom_agent_and_effort(monkeypatch, tmp_path):
     assert runtime.config.model == "gemini-next"
     assert runtime.reasoning_effort == "medium"
 
-    with pytest.raises(ValueError, match="low, medium, or high"):
+    with pytest.raises(ValueError, match="agy effort must be"):
         runtime.set_reasoning_effort("extra-high")
 
 

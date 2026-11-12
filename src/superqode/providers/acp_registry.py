@@ -136,7 +136,6 @@ REGISTRY_IDENTITIES: dict[str, str] = {
 # downloaded paths that are meaningful to registry clients, so SuperQode keeps
 # stable PATH-based equivalents for terminal users.
 REGISTRY_RUN_COMMANDS: dict[str, str] = {
-    "antigravity-acp": "agy_acp_server.par",
     "auggie": "auggie --acp",
     "claude-acp": "claude-agent-acp",
     "cline": "cline --acp",
@@ -520,6 +519,10 @@ def convert_registry_agent(registry_agent: dict[str, Any]) -> dict[str, Any]:
     launch_env = {k: v for k, v in default_env.items() if isinstance(k, str) and isinstance(v, str)}
     command = str(bundled.get("run_command") or command)
     install_command = str(bundled.get("installation_command") or install_command)
+    if registry_id == "antigravity-acp":
+        # The registry's standalone archive uses a different launcher and auth store.
+        command, install_command = "agy acp", ""
+        distribution, launch_env = {}, {}
     tier = registry_catalog_tier(registry_id, short_name)
     source = str(registry_agent.get("source") or "official-registry")
     authors = registry_agent.get("authors", [])
@@ -533,6 +536,12 @@ def convert_registry_agent(registry_agent: dict[str, Any]) -> dict[str, Any]:
     description = str(registry_agent.get("description") or "ACP-compatible coding agent.")
     repository = str(registry_agent.get("repository") or bundled.get("repository") or "")
     instructions = str(bundled.get("installation_instructions") or "")
+    if registry_id == "antigravity-acp":
+        url = "https://antigravity.google/docs/cli/acp/"
+        instructions = (
+            "Install Antigravity CLI 1.5.1 or newer and sign in with `agy`. "
+            "Run `agy update` if an older CLI is installed."
+        )
     if not instructions:
         instructions = (
             f"See {url} for authentication and installation details. "
@@ -584,7 +593,9 @@ def convert_registry_agent(registry_agent: dict[str, Any]) -> dict[str, Any]:
         "recommended": tier == "featured",
         "catalog_tier": tier,
         "registry_id": registry_id,
-        "registry_version": str(registry_agent.get("version") or ""),
+        "registry_version": ""
+        if registry_id == "antigravity-acp"
+        else str(registry_agent.get("version") or ""),
         "registry_source": source,
         "launch_env": launch_env,
         "distribution": distribution,

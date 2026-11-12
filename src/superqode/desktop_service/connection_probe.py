@@ -3,9 +3,45 @@
 from __future__ import annotations
 
 import asyncio
+import json
 from pathlib import Path
 import shlex
 import time
+
+
+async def _antigravity_model_efforts(root, binary, models, levels):
+    """Read model-specific effort tiers through agy's zero-turn /effort command."""
+    from .connection_controls import cli_output
+
+    slots = asyncio.Semaphore(4)
+
+    async def check(model):
+        async with slots:
+            try:
+                selection = [f"--model={model['id']}"] if model["id"] else []
+                output = await cli_output(
+                    root,
+                    [binary, *selection, "--print", "/effort", "--output-format", "json"],
+                    "antigravity",
+                    timeout=5,
+                )
+                data = json.loads(output)["command"]["data"]
+                if data.get("adjustable") is False:
+                    model["reasoning_efforts"] = []
+                elif isinstance(data.get("available"), list):
+                    model["reasoning_efforts"] = [
+                        level for level in levels if level in data["available"]
+                    ]
+                    if isinstance(data.get("current"), str):
+                        model["current_reasoning_effort"] = data["current"]
+            except (AttributeError, KeyError, OSError, TypeError, ValueError):
+                pass
+
+    try:
+        async with asyncio.timeout(9):
+            await asyncio.gather(*(check(model) for model in models))
+    except TimeoutError:
+        pass
 
 
 async def probe_route(root: Path, route: dict, status, method_id=None, terminal_method=None):
@@ -141,6 +177,9 @@ async def probe_route(root: Path, route: dict, status, method_id=None, terminal_
                 for m in models
                 if m.get("model") or m.get("id")
             ]
+            default_model = next(
+                (m.get("model") or m.get("id") for m in models if m.get("isDefault")), ""
+            )
             return {
                 "connected": bool(account),
                 "identity": account.get("email") or account.get("name") or "",
@@ -156,7 +195,7 @@ async def probe_route(root: Path, route: dict, status, method_id=None, terminal_
                     if m.get("model") or m.get("id")
                 ],
                 "session": {
-                    "models": {"availableModels": public_models},
+                    "models": {"availableModels": public_models, "currentModelId": default_model},
                     "config_options": runtime_settings("codex-cli"),
                 },
             }
@@ -164,7 +203,8 @@ async def probe_route(root: Path, route: dict, status, method_id=None, terminal_
             await runtime.aclose()
     if route.get("runtime") == "antigravity-cli":
         import shutil
-        from superqode.runtime.antigravity_status import parse_agy_models
+        from superqode.runtime.antigravity_status import parse_agy_models, probe_antigravity_cli
+        from superqode.vendor_command_help import antigravity_efforts
         from .connection_controls import cli_output, runtime_settings
 
         binary = shutil.which("agy")
@@ -172,6 +212,21 @@ async def probe_route(root: Path, route: dict, status, method_id=None, terminal_
             raise ValueError("Install Antigravity CLI: https://antigravity.google/docs/cli-install")
         output = await cli_output(root, [binary, "models"], route.get("subscription_vendor"))
         models = parse_agy_models(output)
+        try:
+            help_text = await cli_output(
+                root,
+                [binary, "--help"],
+                route.get("subscription_vendor"),
+                timeout=6,
+                include_stderr=True,
+            )
+            efforts = antigravity_efforts(help_text) or ["low", "medium", "high"]
+        except (OSError, ValueError):
+            efforts = ["low", "medium", "high"]
+        default = {"id": ""}
+        status_info = await asyncio.to_thread(probe_antigravity_cli)
+        if status_info.version and status_info.version >= (1, 5, 7):
+            await _antigravity_model_efforts(root, binary, [default, *models], efforts)
         return {
             "connected": False,
             "configured": True,
@@ -179,8 +234,8 @@ async def probe_route(root: Path, route: dict, status, method_id=None, terminal_
             if models
             else "Antigravity returned no models. Check Google Sign-In in agy and refresh.",
             "session": {
-                "models": {"availableModels": models},
-                "config_options": runtime_settings("antigravity-cli"),
+                "models": {"availableModels": models, "defaultModelSettings": default},
+                "config_options": runtime_settings("antigravity-cli", antigravity_efforts=efforts),
             },
         }
     if route.get("runtime") in {"grok-cli", "copilot-cli"}:

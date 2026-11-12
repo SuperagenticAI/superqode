@@ -22,7 +22,13 @@ from dataclasses import dataclass
 from typing import List, Optional
 
 from .dynamic import provider_api_key, resolve_base_url, resolve_provider_def
-from .models import ModelInfo
+from .model_studio import (
+    METERED_PROVIDERS,
+    is_plan_model,
+    validate_metered_route,
+    workspace_catalog_url,
+)
+from .models import ModelCapability, ModelInfo
 
 logger = logging.getLogger(__name__)
 
@@ -33,7 +39,7 @@ class LiveDiscoveryResult:
 
     provider: str
     models: List[ModelInfo]
-    source: str  # "live" | "models.dev" | "none"
+    source: str  # "live" | "models.dev" | "examples" | "none"
     endpoint: Optional[str] = None
     error: Optional[str] = None
 
@@ -113,9 +119,14 @@ async def _fetch_json(url: str, headers: dict, timeout: float) -> Optional[objec
     def _sync() -> Optional[object]:
         import urllib.request
 
+        class NoRedirect(urllib.request.HTTPRedirectHandler):
+            def redirect_request(self, req, fp, code, msg, headers, newurl):
+                return None
+
         req = urllib.request.Request(url, headers=headers)
         try:
-            with urllib.request.urlopen(req, timeout=timeout) as resp:  # noqa: S310
+            opener = urllib.request.build_opener(NoRedirect())
+            with opener.open(req, timeout=timeout) as resp:
                 if resp.status == 200:
                     return json.loads(resp.read().decode("utf-8"))
         except Exception as exc:  # noqa: BLE001
@@ -123,6 +134,106 @@ async def _fetch_json(url: str, headers: dict, timeout: float) -> Optional[objec
         return None
 
     return await asyncio.get_event_loop().run_in_executor(None, _sync)
+
+
+def _model_studio_info(provider: str, model_id: str, row: dict | None = None) -> ModelInfo:
+    row = row or {}
+    info = row.get("model_info")
+    info = info if isinstance(info, dict) else {}
+    features = row.get("features")
+    features = features if isinstance(features, list) else []
+
+    def token_limit(field: str) -> int:
+        value = info.get(field)
+        return value if type(value) is int and value > 0 else 0
+
+    context = token_limit("context_window")
+    capabilities = []
+    if "function-calling" in features:
+        capabilities.append(ModelCapability.TOOLS)
+    if "structured-outputs" in features:
+        capabilities.append(ModelCapability.JSON_MODE)
+    if token_limit("max_reasoning_tokens"):
+        capabilities.append(ModelCapability.REASONING)
+    if context > 100_000:
+        capabilities.append(ModelCapability.LONG_CONTEXT)
+    name = row.get("name")
+    return ModelInfo(
+        id=model_id,
+        name=name if isinstance(name, str) and name else model_id,
+        provider=provider,
+        context_window=context,
+        max_output=token_limit("max_output_tokens"),
+        capabilities=capabilities,
+        pricing_known=False,  # Pricing varies by workspace region and usage tier.
+    )
+
+
+async def _workspace_chat_models(url: str, key: str, timeout: float) -> dict[str, dict]:
+    headers = {"Authorization": f"Bearer {key}", "User-Agent": "SuperQode/1.0"}
+    models: dict[str, dict] = {}
+    for page in range(1, 51):
+        payload = await _fetch_json(
+            f"{url}?capabilities=TG&page_no={page}&page_size=20", headers, timeout
+        )
+        if not isinstance(payload, dict) or payload.get("success") is not True:
+            return {}
+        output = payload.get("output")
+        if not isinstance(output, dict) or not isinstance(output.get("models"), list):
+            return {}
+        rows = output["models"]
+        models.update(
+            (row["model"], row)
+            for row in rows
+            if isinstance(row, dict) and isinstance(row.get("model"), str) and row["model"]
+        )
+        total, size = output.get("total"), output.get("page_size")
+        if (
+            not rows
+            or not isinstance(total, int)
+            or not isinstance(size, int)
+            or size <= 0
+            or page * size >= total
+        ):
+            return models
+    return {}  # Fall back instead of presenting a truncated list as complete.
+
+
+async def _discover_model_studio(provider_id, base_url, key, examples, timeout):
+    error = "Set the API key issued for this Model Studio region."
+    if base_url and key:
+        try:
+            validate_metered_route(base_url, key)
+        except ValueError as exc:
+            error = str(exc)
+        else:
+            native_url = workspace_catalog_url(base_url)
+            rows = {}
+            if native_url:
+                try:
+                    rows = await asyncio.wait_for(
+                        _workspace_chat_models(native_url, key, timeout), timeout
+                    )
+                except TimeoutError:
+                    pass
+            if not rows:
+                ids = await discover_openai_compatible_models(base_url, key, timeout)
+                rows = dict.fromkeys(ids)
+            models = [
+                _model_studio_info(provider_id, model, rows[model])
+                for model in sorted(rows)
+                if not is_plan_model(model)
+            ]
+            if models:
+                return LiveDiscoveryResult(provider_id, models, "live", base_url)
+            error = "Could not list models. Check the region, workspace endpoint, and API key."
+    return LiveDiscoveryResult(
+        provider_id,
+        [_model_studio_info(provider_id, m) for m in examples],
+        "examples",
+        base_url,
+        error,
+    )
 
 
 def _enrich_from_catalog(provider_id: str, model_ids: List[str]) -> List[ModelInfo]:
@@ -160,6 +271,11 @@ async def discover_provider_models(
     pdef = resolve_provider_def(provider_id)
     effective_base = base_url or (resolve_base_url(pdef) if pdef else None)
     effective_key = api_key or (provider_api_key(pdef) if pdef else None)
+
+    if provider_id in METERED_PROVIDERS and pdef:
+        return await _discover_model_studio(
+            provider_id, effective_base, effective_key, pdef.example_models, timeout
+        )
 
     if effective_base:
         try:

@@ -2,6 +2,7 @@
 
 import asyncio
 import json
+import os
 
 from superqode.providers import acp_registry
 
@@ -58,6 +59,52 @@ def test_normal_registry_read_does_not_access_network(monkeypatch, tmp_path):
 
     assert result
     assert all(record.get("source") == "bundled" for record in result)
+
+
+def test_antigravity_uses_native_acp_even_with_a_cached_standalone_manifest(monkeypatch, tmp_path):
+    from superqode.commands.acp import check_agent_installed
+    from superqode.runtime import antigravity_status
+
+    _reset(monkeypatch, tmp_path)
+    monkeypatch.setattr(antigravity_status, "_cached", None)
+    monkeypatch.setenv("PATH", str(tmp_path) + os.pathsep + os.environ["PATH"])
+    acp_registry.CACHE_FILE.write_text(
+        json.dumps(
+            {
+                "cached_at": "2099-01-01T00:00:00+00:00",
+                "agents": [
+                    {
+                        "id": "antigravity-acp",
+                        "name": "Antigravity",
+                        "version": "1.4.5",
+                        "distribution": {
+                            "binary": {
+                                "darwin-aarch64": {
+                                    "cmd": "./agy_acp_server.par",
+                                    "env": {"AGY_ACP_FORCE_FILE_STORAGE": "1"},
+                                }
+                            }
+                        },
+                    }
+                ],
+            }
+        )
+    )
+    bundled, refreshed = (
+        next(row for row in catalog() if row["short_name"] == "antigravity")
+        for catalog in (acp_registry.get_bundled_acp_catalog, acp_registry.get_cached_acp_catalog)
+    )
+    assert bundled["run_command"] == refreshed["run_command"] == {"*": "agy acp"}
+    assert refreshed["launch_env"] == {}
+
+    binary = tmp_path / "agy"
+    binary.write_text("#!/bin/sh\nprintf '1.5.0\\n'\n")
+    binary.chmod(0o700)
+    assert not check_agent_installed(bundled)
+
+    binary.write_text("#!/bin/sh\nprintf '1.5.7\\n'\n")
+    antigravity_status.clear_antigravity_cli_cache()
+    assert check_agent_installed(refreshed)
 
 
 def test_synchronous_ui_catalog_merges_live_and_bundled_agents(monkeypatch, tmp_path):

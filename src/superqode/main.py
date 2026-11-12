@@ -956,7 +956,11 @@ def cli_main(
                     )
             # Runtime-connector profiles (Codex) map to a runtime backend; an
             # explicit --runtime still wins.
-            if _profile.connector == "runtime" and _profile.runtime and not runtime_name:
+            if (
+                (_profile.connector == "runtime" or _profile.id == "antigravity-managed")
+                and _profile.runtime
+                and not runtime_name
+            ):
                 effective_runtime = _profile.runtime
             # ACP sessions are interactive today; a one-shot Copilot command
             # therefore uses the SDK path explicitly. The TUI leaves this unset

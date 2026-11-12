@@ -3,6 +3,13 @@
 from __future__ import annotations
 
 from superqode.providers.credentials import provider_api_key
+from superqode.providers.dynamic import resolve_base_url
+from superqode.providers.model_studio import (
+    METERED_PROVIDERS,
+    is_plan_model,
+    validate_metered_route,
+    validate_workspace_endpoint,
+)
 from superqode.providers.registry import PROVIDERS, ProviderTier
 
 # These definitions use multiple, unrelated fields rather than one API key.
@@ -24,7 +31,7 @@ def key_provider(provider_id: str):
     return definition
 
 
-def install(credentials: dict[str, str], params: dict):
+def install(credentials: dict[str, str], params: dict, base_url: str | None = None):
     definition = key_provider(str(params.get("provider") or ""))
     value = params.get("key")
     if value is None:
@@ -43,8 +50,37 @@ def install(credentials: dict[str, str], params: dict):
     ):
         raise ValueError("The key does not match this provider's credential type")
     else:
+        if definition.id in METERED_PROVIDERS:
+            validate_metered_route(base_url or resolve_base_url(definition) or "", value)
         credentials[definition.id] = value.strip()
     return {"ok": True}
+
+
+def list_workspace_models(credentials: dict[str, str], params: dict, base_url: str | None = None):
+    import asyncio
+
+    from superqode.providers.live_models import discover_provider_models
+
+    provider = str(params.get("provider") or "")
+    if provider not in METERED_PROVIDERS:
+        raise ValueError("Workspace model discovery requires a Model Studio provider.")
+    if "endpoint" in params:
+        proposed = params["endpoint"]
+        if not isinstance(proposed, str):
+            raise ValueError("Enter a Model Studio API endpoint.")
+        base_url = validate_workspace_endpoint(proposed) if proposed.strip() else None
+    if "key" in params:
+        # Use a copy: loading models must not store or replace a key.
+        credentials = dict(credentials)
+        install(credentials, params, base_url=base_url)
+    result = asyncio.run(
+        discover_provider_models(provider, api_key=credentials.get(provider), base_url=base_url)
+    )
+    return {
+        "source": result.source,
+        "models": [model.id for model in result.models],
+        "error": result.error,
+    }
 
 
 def environment(credentials: dict[str, str]) -> dict[str, str]:
@@ -55,7 +91,7 @@ def environment(credentials: dict[str, str]) -> dict[str, str]:
     return output
 
 
-def list_connections(credentials: dict[str, str]):
+def list_connections(credentials: dict[str, str], endpoints: dict[str, str] | None = None):
     result = []
     for definition in PROVIDERS.values():
         if definition.harness_only:
@@ -67,6 +103,7 @@ def list_connections(credentials: dict[str, str]):
             accepts_key = False
         configured = definition.id in credentials or bool(provider_api_key(definition))
         local = definition.tier == ProviderTier.LOCAL and definition.deployment_mode != "cloud"
+        configured_endpoint = (endpoints or {}).get(definition.id)
         result.append(
             {
                 "id": definition.id,
@@ -85,6 +122,10 @@ def list_connections(credentials: dict[str, str]):
                 "notes": definition.notes,
                 "credential_variables": list(definition.env_vars),
                 "default_base_url": definition.default_base_url,
+                "workspace_base_url": configured_endpoint or resolve_base_url(definition)
+                if definition.id in METERED_PROVIDERS
+                else None,
+                "workspace_endpoint_override": configured_endpoint,
                 "base_url_env": definition.base_url_env or "",
                 "verified": False,
             }
@@ -97,6 +138,12 @@ def inspect_route(credentials: dict[str, str], params: dict):
     model = str(params.get("model") or "").strip()
     if not provider or not model:
         return {"ready": False, "state": "incomplete", "message": "Choose a provider and model."}
+    if provider in METERED_PROVIDERS and is_plan_model(model):
+        return {
+            "ready": False,
+            "state": "unsupported",
+            "message": "This model requires Token Plan.",
+        }
     if provider == "ollama":
         from superqode.local.inventory import list_ollama_models
 

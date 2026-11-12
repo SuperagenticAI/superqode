@@ -1,7 +1,7 @@
 identity = "antigravity.google"
 name = "Google Antigravity"
 short_name = "antigravity"
-url = "https://antigravity.google/docs/ide/extensions"
+url = "https://antigravity.google/docs/cli/acp/"
 protocol = "acp"
 author_name = "Google LLC"
 author_url = "https://antigravity.google"
@@ -11,15 +11,15 @@ type = "coding"
 description = "Google's AI coding agent, exposed through its official ACP server."
 tags = ["official-acp", "google", "proprietary"]
 catalog_tier = "featured"
-run_command."*" = "agy_acp_server.par"
+run_command."*" = "agy acp"
 
 help = '''
 # Google Antigravity
 
-Install the Antigravity ACP extension from Google's documentation. The
-official registry supplies platform-specific ACP server binaries.
+Install Antigravity CLI 1.5.1 or newer and sign in with `agy`.
+If an older CLI is installed, run `agy update`.
 '''
 
 [actions."*".install]
 command = ""
-description = "Install the Antigravity ACP extension from the official documentation"
+description = "Install or update Antigravity CLI from Google's documentation"

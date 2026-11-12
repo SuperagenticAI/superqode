@@ -159,9 +159,12 @@ the model. Refreshing these catalogs does not send a coding prompt.
 
 The panel also reads Codex inventories (sessions, usage, skills, plugins, apps,
 hooks, features, permissions, MCP and redacted configuration) and Antigravity
-agents, plugins, release notes and help. Detailed structured results are collapsed
-by default. For interactive or terminal-only subcommands, **Open full CLI** starts
-the installed vendor CLI in an embedded terminal after confirmation. This is a
+agents, plugins, release notes and help. **Vendor CLI** lists commands from the
+installed Codex, Grok or Antigravity binary. Browse into a command for its usage
+and flags, supply arguments, and choose **Run in terminal**. **Open interactive
+CLI** starts the vendor's terminal interface for slash commands and sessions.
+**Managed Agent** opens setup for Google's hosted Antigravity route with a Gemini
+API key. The interactive CLI is a
 separate vendor conversation with its own tools and permissions; it does not
 change the model override or transcript of the current SuperQode thread.
 Unknown/custom ACP launchers are never guessed into interactive commands.

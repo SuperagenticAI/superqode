@@ -269,6 +269,7 @@ def test_every_connection_profile_has_a_sidebar_page(monkeypatch):
         "fx-key": "providers/fx.md",
         "deepagents-code": "providers/deepagents.md",
         "antigravity": "providers/antigravity.md",
+        "antigravity-managed": "providers/antigravity.md",
         "muse": "concepts/modes.md",
         "prime-agent": "providers/prime-agent.md",
         "grok": "providers/grok.md",

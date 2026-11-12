@@ -1,4 +1,12 @@
-# SuperQode for macOS public beta 0.4.2
+# SuperQode for macOS public beta 0.4.3
+
+Version 0.4.3 (build 29) bundles Python engine 2.31.9.
+
+- Connect a metered Alibaba Cloud Model Studio workspace using its API key and endpoint. Load model IDs in the app before saving your key, then use Test model to verify inference.
+- Find Apple Foundation Models, runtimes, and performance information in Local AI Quick Start.
+- Browse commands from the installed Codex, Grok, and Antigravity CLIs. Set up Antigravity Managed Agent with a Gemini API key.
+
+## 0.4.2 (build 28)
 
 Version 0.4.2 (build 28) bundles Python engine 2.31.8.
 

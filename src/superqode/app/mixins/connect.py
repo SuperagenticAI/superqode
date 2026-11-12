@@ -2172,7 +2172,10 @@ class ConnectMixin:
         elif conn == "key-harness":
             self._begin_key_harness(profile, log)
         elif conn == "vendor-key":
-            self._begin_vendor_key(profile, log)
+            if profile.id == "antigravity-managed":
+                self._runtime_cmd("antigravity-managed", log)
+            else:
+                self._begin_vendor_key(profile, log)
         elif conn in {"agent-picker", "subscription-picker"}:
             from superqode.providers.connection_profiles import CONNECT_MENU_AGENTS
 
@@ -5270,6 +5273,11 @@ class ConnectMixin:
             agent = await get_agent_by_short_name_async(agent_id)
 
             if agent:
+                if (agent.get("run_command") or {}).get("*") == "agy acp":
+                    from superqode.runtime.antigravity_status import antigravity_acp_issue
+
+                    if issue := await asyncio.to_thread(antigravity_acp_issue):
+                        raise RuntimeError(issue)
                 self._connection_attempt_state = "Selected · account checked on first use"
                 session = get_session()
                 session.connect_to_agent(agent)

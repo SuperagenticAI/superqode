@@ -122,6 +122,8 @@ def _fmt_price(value: float) -> str:
 
 
 def _fmt_ctx(ctx: int) -> str:
+    if ctx <= 0:
+        return "?"
     if ctx >= 1_000_000:
         return f"{ctx // 1_000_000}M"
     if ctx >= 1000:

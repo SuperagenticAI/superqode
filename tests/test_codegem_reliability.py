@@ -142,6 +142,7 @@ async def test_local_servers_are_not_retried():
 @pytest.mark.parametrize(
     "model,default",
     [
+        ("gemini-4-hydrogen", "high"),
         ("gemini-4-argon", "medium"),
         ("gemini-3.8-flash", "medium"),
         ("gemini-3.6-flash", "medium"),
@@ -173,10 +174,18 @@ async def test_explicit_thinking_config_wins():
     assert seen[0]["generationConfig"]["thinkingConfig"] == {"thinkingLevel": "LOW"}
 
 
-@pytest.mark.parametrize("level", ["low", "medium", "high"])
-def test_argon_accepts_low_medium_high(level):
-    profile = resolve_profile("gemini-4-argon", "google")
-    assert gemini_thinking_level("gemini-4-argon", profile, level) == level.upper()
+@pytest.mark.parametrize(
+    "model,level",
+    [
+        ("gemini-4-argon", "low"),
+        ("gemini-4-argon", "medium"),
+        ("gemini-4-argon", "high"),
+        ("gemini-4-hydrogen", "xhigh"),
+    ],
+)
+def test_gemini_accepts_documented_thinking_level(model, level):
+    profile = resolve_profile(model, "google")
+    assert gemini_thinking_level(model, profile, level) == level.upper()
 
 
 @pytest.mark.parametrize("model", ["gemini-4-argon", "gemini-3.8-flash", "gemini-3.1-pro-preview"])

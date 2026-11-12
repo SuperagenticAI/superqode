@@ -74,6 +74,49 @@ def test_region_keys_do_not_overwrite_each_other_or_claim_verified_access():
         assert "test-key" not in json.dumps(rows[name])
 
 
+def test_model_studio_endpoint_applies_to_discovery_and_worker_without_saving_preview_key(
+    desktop, monkeypatch
+):
+    from superqode.providers import live_models
+
+    service, _, _ = desktop
+    endpoint = "https://ws-demo.ap-southeast-1.maas.aliyuncs.com/compatible-mode/v1"
+    preview = "https://ws-preview.ap-southeast-1.maas.aliyuncs.com/compatible-mode/v1"
+
+    async def discover(provider, *, api_key, base_url):
+        assert provider == "qwen-intl" and api_key == "sk-entered-for-discovery"
+        assert base_url == preview
+        return live_models.LiveDiscoveryResult(
+            provider, [SimpleNamespace(id="qwen3.8-flash")], "live"
+        )
+
+    monkeypatch.setattr(live_models, "discover_provider_models", discover)
+    monkeypatch.delenv("QWEN_INTL_API_BASE", raising=False)
+    service.dispatch("providers.credentials.set", {"provider": "qwen-intl", "key": "sk-saved"})
+    service.dispatch("providers.endpoint.set", {"provider": "qwen-intl", "endpoint": endpoint})
+    result = service.dispatch(
+        "providers.models",
+        {"provider": "qwen-intl", "key": "sk-entered-for-discovery", "endpoint": preview},
+    )
+    assert result == {"source": "live", "models": ["qwen3.8-flash"], "error": None}
+    assert service.credential_environment({"qwen-intl"}) == {
+        "QWEN_INTL_API_KEY": "sk-saved",
+        "QWEN_INTL_API_BASE": endpoint,
+    }
+    assert service.credential_environment({"qwen-cn"}) == {}
+    with pytest.raises(ValueError, match="OpenAI-compatible"):
+        service.dispatch(
+            "providers.endpoint.set",
+            {
+                "provider": "qwen-intl",
+                "endpoint": endpoint.replace("aliyuncs.com", "example.com"),
+            },
+        )
+    assert service.credential_environment({"qwen-intl"})["QWEN_INTL_API_BASE"] == endpoint
+    service.dispatch("providers.endpoint.set", {"provider": "qwen-intl", "endpoint": ""})
+    assert "QWEN_INTL_API_BASE" not in service.credential_environment({"qwen-intl"})
+
+
 def test_qwen_setup_launches_interactive_cli_not_acp_or_removed_auth(desktop, monkeypatch):
     service, project, _ = desktop
     monkeypatch.setattr("shutil.which", lambda name: "/vendor/qwen" if name == "qwen" else None)

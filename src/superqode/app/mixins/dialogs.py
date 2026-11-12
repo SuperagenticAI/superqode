@@ -572,6 +572,7 @@ class DialogsMixin:
             (
                 "Native CLI",
                 (
+                    (":agy native [args]", "open agy directly; add --help to browse its commands"),
                     (":agy agents", "run `agy agents`"),
                     (":agy models", "run `agy models`"),
                     (":agy changelog", "show CLI release notes"),
@@ -1068,12 +1069,16 @@ class DialogsMixin:
         t.append("pick a subscription model (arrows / Enter / numbers)\n", style=THEME["muted"])
         t.append("  :grok model [name]         ", style=THEME["cyan"])
         t.append("pick a subscription model for the SuperQode harness path\n", style=THEME["muted"])
+        t.append("  :grok effort [level]       ", style=THEME["cyan"])
+        t.append("show or set reasoning effort for Grok Build\n", style=THEME["muted"])
         t.append("  :grok api off              ", style=THEME["cyan"])
         t.append("remove the imported session token\n", style=THEME["muted"])
         t.append("  :grok status               ", style=THEME["cyan"])
         t.append("check CLI and local auth readiness\n", style=THEME["muted"])
         t.append("  :grok login                ", style=THEME["cyan"])
         t.append("show browser and device-login commands\n", style=THEME["muted"])
+        t.append("  :grok native [args]        ", style=THEME["cyan"])
+        t.append("open Grok directly; add --help to browse its commands\n", style=THEME["muted"])
         t.append(
             "\n  Subscription access and model eligibility are determined by xAI. "
             "For direct API billing, use BYOK with XAI_API_KEY and xai/grok-4.5.\n",

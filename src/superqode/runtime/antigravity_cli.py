@@ -19,6 +19,7 @@ from .antigravity_status import MINIMUM_ANTIGRAVITY_CLI_VERSION, version_tuple
 from .errors import RuntimeNotInstalledError
 
 from superqode.herdr import child_env
+from superqode.vendor_command_help import antigravity_model_for_effort
 
 _MINIMUM_VERSION = MINIMUM_ANTIGRAVITY_CLI_VERSION
 _version_tuple = version_tuple
@@ -119,7 +120,8 @@ class AntigravityCLIRuntime:
         else:
             command.append("--new-project")
         if self.config.model:
-            command.extend(["--model", self.config.model])
+            model = antigravity_model_for_effort(self.config.model, self._reasoning_effort)
+            command.extend(["--model", model])
         if self._agent_name:
             command.extend(["--agent", self._agent_name])
         if self._reasoning_effort:
@@ -282,9 +284,9 @@ def _coerce_cli_effort(effort: str | None) -> str | None:
     if normalized is None:
         return None
     normalized = normalized.lower().replace("_", "-")
-    allowed = {"low", "medium", "high"}
+    allowed = {"low", "medium", "high", "xhigh", "max"}
     if normalized not in allowed:
-        raise ValueError("agy effort must be auto, low, medium, or high")
+        raise ValueError("agy effort must be auto, low, medium, high, xhigh, or max")
     return normalized
 
 

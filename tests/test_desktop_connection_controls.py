@@ -31,8 +31,11 @@ def agy(tmp_path, monkeypatch):
         "import json, os, sys\n"
         f"with open({str(trace)!r}, 'a') as f: f.write(json.dumps(sys.argv[1:]) + '\\n')\n"
         "assert '--version' in sys.argv or 'GEMINI_API_KEY' not in os.environ\n"
-        "if sys.argv[1:] == ['--version']: print('agy 1.1.5')\n"
-        "elif sys.argv[1:] == ['models']: print('Fetching available models...\\ngemini-fast\\tGemini Fast\\ngemini-capable\\tGemini Capable\\ngemini-fast')\n"
+        "if sys.argv[1:] == ['--version']: print('agy 1.5.7')\n"
+        "elif sys.argv[1:] == ['--help']: print('  --effort    Reasoning effort (low|medium|high|xhigh|max)\\n\\nAvailable subcommands:\\n  plugin  Manage plugins', file=sys.stderr)\n"
+        "elif sys.argv[1:] == ['help', 'plugin']: print('Commands:\\n  validate [path] [--strict]\\n    Check a plugin\\n  list [--json]  List plugins')\n"
+        "elif sys.argv[1:] == ['models']: print('Fetching available models...\\ngemini-4-carbon-high\\tGemini 4 Carbon (High)\\ngemini-4-argon-medium\\tGemini 4 Argon (Medium)\\ngemini-4-carbon-high')\n"
+        "elif '/effort' in sys.argv: print(json.dumps({'command': {'data': {'adjustable': True, 'available': ['medium', 'high', 'max'], 'current': 'high' if 'carbon' in sys.argv[1] else 'medium'}}}))\n"
         "elif '--print' in sys.argv: print('model choice applied')\n"
         "else: print('CLI information')\n"
     )
@@ -73,20 +76,41 @@ def test_agy_discovery_and_selected_options_reach_real_worker(desktop, agy):
     assert metadata["state"] == "completed", metadata
     session = metadata["result"]["session"]
     assert session["models"]["availableModels"] == [
-        {"id": "gemini-fast", "name": "Gemini Fast"},
-        {"id": "gemini-capable", "name": "Gemini Capable"},
+        {
+            "id": "gemini-4-carbon-high",
+            "name": "Gemini 4 Carbon (High)",
+            "reasoning_efforts": ["medium", "high", "max"],
+            "current_reasoning_effort": "high",
+        },
+        {
+            "id": "gemini-4-argon-medium",
+            "name": "Gemini 4 Argon (Medium)",
+            "reasoning_efforts": ["medium", "high", "max"],
+            "current_reasoning_effort": "medium",
+        },
     ]
     assert {row["id"] for row in session["config_options"]} == {"agent", "effort"}
+    effort = next(row for row in session["config_options"] if row["id"] == "effort")
+    assert [option["value"] for option in effort["options"]] == [
+        "low",
+        "medium",
+        "high",
+        "xhigh",
+        "max",
+    ]
     assert service.dispatch("jobs.list", {}) == []
-    assert all("--print" not in json.loads(line) for line in trace.read_text().splitlines())
+    for line in trace.read_text().splitlines():
+        args = json.loads(line)
+        if "--print" in args:
+            assert args[args.index("--print") + 1] == "/effort"
     job = service.dispatch(
         "tasks.start",
         {
             "project": project["id"],
             "harness": "connection:antigravity",
             "prompt": "hello",
-            "model": "gemini-capable",
-            "acp_options": {"config": {"agent": "researcher", "effort": "high"}},
+            "model": "gemini-4-argon-medium",
+            "acp_options": {"config": {"agent": "researcher", "effort": "max"}},
         },
     )
     from test_desktop_service import wait_job
@@ -94,11 +118,11 @@ def test_agy_discovery_and_selected_options_reach_real_worker(desktop, agy):
     record = wait_job(service, job["id"])
     assert record["status"] == "completed", record
     commands = [json.loads(line) for line in trace.read_text().splitlines()]
-    turn = next(args for args in commands if "--print" in args)
+    turn = next(args for args in commands if "hello" in args)
     for flag, value in [
-        ("--model", "gemini-capable"),
+        ("--model", "gemini-4-argon"),
         ("--agent", "researcher"),
-        ("--effort", "high"),
+        ("--effort", "max"),
     ]:
         assert turn[turn.index(flag) + 1] == value
     assert "must-not-be-used" not in json.dumps(record)
@@ -126,7 +150,7 @@ def test_native_catalog_requires_matching_route_and_explicit_command(desktop, ag
         ),
     )
     assert result["state"] == "completed"
-    assert "gemini-fast" in result["result"]["text"]
+    assert "gemini-4-carbon-high" in result["result"]["text"]
     assert service.dispatch("jobs.list", {}) == []
     rejected = poll(
         service,
@@ -140,6 +164,96 @@ def test_native_catalog_requires_matching_route_and_explicit_command(desktop, ag
         ),
     )
     assert rejected["state"] == "failed"
+
+
+def test_vendor_help_browses_stderr_and_nested_usage_without_running_commands(desktop, agy):
+    service, project, _ = desktop
+    params = {"project": project["id"], "reference": "connection:antigravity"}
+    catalog = service.dispatch("connect.controls", params)
+    params["expected_digest"] = catalog["digest"]
+
+    def browse(path):
+        return poll(
+            service,
+            service.dispatch(
+                "connect.command.start",
+                {
+                    **params,
+                    "command": "vendor-help",
+                    "path": path,
+                },
+            ),
+        )
+
+    assert [row["id"] for row in browse([])["result"]["subcommands"]] == ["plugin"]
+    assert [row["id"] for row in browse(["plugin"])["result"]["subcommands"]] == [
+        "validate",
+        "list",
+    ]
+    leaf = browse(["plugin", "validate"])["result"]
+    assert leaf["subcommands"] == [] and "validate [path]" in leaf["text"]
+    assert browse(["update"])["state"] == "failed"
+    launch = service.dispatch(
+        "connect.cli.arguments",
+        {
+            **params,
+            "path": ["plugin", "validate"],
+            "arguments": "'a folder' --strict",
+        },
+    )
+    assert launch["argv"] == [str(agy[0]), "plugin", "validate", "a folder", "--strict"]
+    startup = service.dispatch(
+        "connect.cli.arguments",
+        {**params, "model": "gemini-4-carbon-high", "effort": "max"},
+    )
+    assert startup["argv"] == [str(agy[0]), "--model=gemini-4-carbon", "--effort", "max"]
+    invoked = [json.loads(line) for line in agy[1].read_text().splitlines()]
+    assert all(args in (["--version"], ["--help"], ["help", "plugin"]) for args in invoked)
+
+
+@pytest.mark.asyncio
+async def test_tui_native_completion_reads_installed_groups_and_flags(agy):
+    from superqode.app.mixins.completion import CompletionMixin, _VENDOR_NATIVE_PREFIX
+
+    completion = CompletionMixin()
+
+    async def candidates(value):
+        return [
+            row.value
+            for row in await completion._vendor_native_completions(
+                value, _VENDOR_NATIVE_PREFIX.match(value)
+            )
+        ]
+
+    assert await candidates(":agy native pl") == [":agy native plugin"]
+    assert await candidates(":agy native plugin ") == [
+        ":agy native plugin validate",
+        ":agy native plugin list",
+    ]
+    assert await candidates(":agy native --ef") == [":agy native --effort"]
+    assert await candidates(":agy native plugin --already-set ") == []
+    assert ["plugin", "validate"] not in [
+        json.loads(line) for line in agy[1].read_text().splitlines()
+    ]
+
+
+def test_managed_antigravity_is_a_separate_vendor_key_connection(desktop):
+    service, project, _ = desktop
+    params = {"project": project["id"]}
+    menu = service.dispatch("connect.menu", {**params, "menu": "vendors"})
+    managed = next(row for row in menu["rows"] if row["id"] == "antigravity-managed")
+    route = service.dispatch(
+        "connect.vendor.key",
+        {
+            **params,
+            "entry": managed["id"],
+            "key": "test-only-gemini-key",
+        },
+    )
+    assert route == managed["vendor_key"]
+    assert route["runtime"] == "antigravity-managed" and route["auth"] == "byok"
+    assert route["subscription_vendor"] is None
+    assert "test-only-gemini-key" not in json.dumps(route)
 
 
 @pytest.mark.asyncio

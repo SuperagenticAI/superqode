@@ -75,6 +75,22 @@ def configured_spec(root: Path, params):
 
 
 def vendor_key_route(root: Path, entry_id: str):
+    if entry_id == "antigravity-managed":
+        route = {
+            "id": "vendor-key:antigravity-managed",
+            "entry_id": entry_id,
+            "name": "Antigravity Managed Agent",
+            "description": "Run Google's agent in a hosted sandbox using a Gemini API key.",
+            "kind": "runtime",
+            "desktop_kind": "connection",
+            "runtime": entry_id,
+            "available": True,
+            "subscription_vendor": None,
+            "auth": "byok",
+            "env_vars": ["GEMINI_API_KEY", "GOOGLE_API_KEY"],
+        }
+        route["digest"] = hashlib.sha256(json.dumps(route, sort_keys=True).encode()).hexdigest()
+        return route
     from superqode.providers.harness_catalog import get_entry
     from .routes import acp_routes
 

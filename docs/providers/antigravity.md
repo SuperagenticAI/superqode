@@ -31,6 +31,7 @@ policies are applied.
 | Route | Authentication | Harness owner | Runtime |
 | --- | --- | --- | --- |
 | `:connect antigravity` | Google Sign-In through `agy` | Google Antigravity | `antigravity-cli` |
+| `:connect acp antigravity` | Antigravity CLI sign-in | Google Antigravity | `agy acp` |
 | `:antigravity sdk` | `GEMINI_API_KEY` or `GOOGLE_API_KEY` | Google Antigravity | `antigravity-sdk` |
 | `:antigravity managed` | `GEMINI_API_KEY` or `GOOGLE_API_KEY` | Google Antigravity, hosted by Google | `antigravity-managed` |
 | `:antigravity superqode` | Google API key through BYOK | SuperQode | `builtin` |
@@ -69,6 +70,11 @@ OAuth token.
 
 SuperQode requires Antigravity CLI 1.1.1 or newer. Version 1.1.1 corrected
 subprocess hangs and error exit behavior in print mode.
+
+For ACP in the TUI, use `:connect acp antigravity`. In the macOS app,
+choose **Google Antigravity (ACP)** from the ACP agent catalog. The ACP
+route requires Antigravity CLI 1.5.1 or newer and uses the models Google
+advertises to your signed-in account.
 
 Current CLI controls are available without leaving SuperQode:
 
@@ -186,6 +192,10 @@ be installed in the same environment; uv reports those combinations as
 explicit conflicts rather than producing a broken SDK import.
 
 ## Google-hosted managed agent route
+
+Choose **Antigravity Managed Agent** in the macOS Connections menu or run
+`:connect antigravity-managed` in the terminal UI. The managed route uses a
+Gemini API key and Google hosts the agent's workspace.
 
 Google now exposes the Antigravity harness through the Gemini Interactions API.
 This is separate from the local SDK: execution happens in a Google-hosted Linux

@@ -317,8 +317,14 @@ private func jobStamp(_ row: [String: Any]) -> Double {
       string($0, "type") == "harness_event"
         && string($0["data"] as? [String: Any] ?? [:], "event") == "acp_session"
     }
-    var session = (event?["data"] as? [String: Any])?["payload"] as? [String: Any]
-      ?? connectionMetadata[harness]?["session"] as? [String: Any] ?? [:]
+    let cached = connectionMetadata[harness] ?? [:]
+    let live = (event?["data"] as? [String: Any])?["payload"] as? [String: Any]
+    let checkedAt = cached["checked_at"] as? Double ?? 0
+    var session = live ?? [:]
+    if let refreshed = cached["session"] as? [String: Any],
+       live == nil || checkedAt > (live?["observed_at"] as? Double ?? 0) {
+      session = refreshed
+    }
     if harness.hasPrefix("local-harness:") {
       // This thread's reviewed model/config is fixed. Keep diagnostic capabilities,
       // but do not offer settings the engine deliberately refuses to override.
@@ -373,7 +379,43 @@ private func jobStamp(_ row: [String: Any]) -> Double {
   }
   var selectedAgentModel: String {
     get { isACP ? agentModel : model }
-    set { if isACP { agentModel = newValue } else { model = newValue } }
+    set {
+      if isACP { agentModel = newValue } else { model = newValue }
+      if let option = agentEffortOption, selectedAgentEffort.isEmpty {
+        agentConfig.removeValue(forKey: string(option, "id"))
+      }
+    }
+  }
+  var agentEffortOption: [String: Any]? {
+    guard var option = (agentSession["config_options"] as? [[String: Any]] ?? []).first(where: {
+      string($0, "type") == "select" &&
+        (string($0, "id") == "effort" || string($0, "category") == "thought_level")
+    }) else { return nil }
+    let models = agentSession["models"] as? [String: Any] ?? [:]
+    let selected = selectedAgentModel.isEmpty ? string(models, "currentModelId") : selectedAgentModel
+    let modelSettings = selected.isEmpty
+      ? models["defaultModelSettings"] as? [String: Any]
+      : agentModels.first(where: { $0.agentModelID == selected })
+    if let model = modelSettings,
+       let efforts = model["reasoning_efforts"] as? [String] {
+      option["options"] = agentOptionValues(option).filter { efforts.contains(string($0, "value")) }
+      if let current = model["current_reasoning_effort"] { option["currentValue"] = current }
+    }
+    return option
+  }
+  var agentConfigForTurn: [String: String] {
+    var config = agentConfig.filter { !$0.value.isEmpty }
+    if let option = agentEffortOption {
+      let id = string(option, "id")
+      if let value = config[id], !agentOptionValues(option).contains(where: { string($0, "value") == value }) {
+        config.removeValue(forKey: id)
+      }
+    }
+    return config
+  }
+  var selectedAgentEffort: String {
+    guard let option = agentEffortOption else { return "" }
+    return agentConfigForTurn[string(option, "id")] ?? ""
   }
   var allowsManualAgentModel: Bool {
     isManaged && !isACP && !harness.hasPrefix("local-harness:")
@@ -388,6 +430,11 @@ private func jobStamp(_ row: [String: Any]) -> Double {
         && string($0["data"] as? [String: Any] ?? [:], "event") == "commands"
     }
     let data = (event?["data"] as? [String: Any])?["payload"] as? [String: Any] ?? [:]
+    let cached = connectionMetadata[harness] ?? [:]
+    if let commands = (cached["session"] as? [String: Any])?["commands"] as? [[String: Any]],
+       (cached["checked_at"] as? Double ?? 0) > (data["observed_at"] as? Double ?? 0) {
+      return commands
+    }
     return data["commands"] as? [[String: Any]]
       ?? agentSession["commands"] as? [[String: Any]] ?? []
   }
@@ -1590,8 +1637,16 @@ private func jobStamp(_ row: [String: Any]) -> Double {
     }
   }
   func configureConnection(
-    provider selectedProvider: String, model selectedModel: String, key: String, remember: Bool
+    provider selectedProvider: String, model selectedModel: String, key: String, remember: Bool,
+    workspaceEndpoint: String? = nil
   ) async throws {
+    if let workspaceEndpoint {
+      var params = ["provider": selectedProvider, "endpoint": workspaceEndpoint]
+      if !key.isEmpty { params["key"] = key }
+      _ = try await engine.call("providers.endpoint.set", params)
+      verifiedRoute = ""
+      credentialGeneration += 1
+    }
     if !key.isEmpty {
       try await storeProviderCredential(selectedProvider, key: key, remember: remember)
     }
@@ -1725,7 +1780,7 @@ private func jobStamp(_ row: [String: Any]) -> Double {
     if enforcesSessionControls { extra["permission_mode"] = submittedPermission }
     if isManaged {
       extra["acp_options"] = [
-        "model": agentModel, "mode": agentMode, "config": agentConfig.filter { !$0.value.isEmpty },
+        "model": agentModel, "mode": agentMode, "config": agentConfigForTurn,
       ]
     }
     if continueSession {
@@ -2827,6 +2882,25 @@ private func jobStamp(_ row: [String: Any]) -> Double {
     preview.events = [["type": "harness_event", "data": ["event": "acp_session", "payload": ["models": ["availableModels": [["modelId": "wrong-agent"]]]]]]]
     guard preview.agentModels.first?.agentModelID == "free" else {
       throw EngineError(message: "Agent model picker lost free models or their ordering")
+    }
+    let codex = Workspace()
+    codex.harness = "connection:codex"
+    codex.connectionMetadata[codex.harness] = ["session": [
+      "models": ["currentModelId": "wide", "availableModels": [
+        ["id": "wide", "reasoning_efforts": ["low", "ultra"]],
+        ["id": "small", "reasoning_efforts": ["low"]],
+      ]],
+      "config_options": [["id": "effort", "type": "select",
+        "options": [["value": "low"], ["value": "ultra"]]]],
+    ]]
+    codex.agentConfig["effort"] = "ultra"
+    guard codex.selectedAgentEffort == "ultra" else {
+      throw EngineError(message: "The default Codex model lost its advertised reasoning effort")
+    }
+    codex.selectedAgentModel = "small"
+    guard codex.agentEffortOption.map(agentOptionValues)?.count == 1,
+      codex.agentConfigForTurn["effort"] == nil else {
+      throw EngineError(message: "Switching Codex models retained an unsupported reasoning effort")
     }
     preview.selectedJob = "local-conversation"
     preview.detail = ["kind": "task", "status": "completed", "request": ["harness": "acp:opencode"]]

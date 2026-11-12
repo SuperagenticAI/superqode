@@ -1004,6 +1004,16 @@ _AGENT_PROFILES: List[ConnectionProfile] = [
         ),
     ),
     ConnectionProfile(
+        id="antigravity-managed",
+        label="Antigravity Managed Agent",
+        description="Run Google's agent in a hosted sandbox with a Gemini API key",
+        connector="vendor-key",
+        runtime="antigravity-managed",
+        menu=CONNECT_MENU_VENDORS,
+        auth_mode="byok",
+        transport="Google API",
+    ),
+    ConnectionProfile(
         id="muse",
         harness_openness="closed",
         model_openness="Muse Spark models",

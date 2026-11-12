@@ -11,6 +11,10 @@ struct ConnectionSourcesView: View {
   @State private var remember = true
   @State private var saving = false
   @State private var message = ""
+  @State private var workspaceModels: [String] = []
+  @State private var workspaceMessage = ""
+  @State private var workspaceLookup: UUID?
+  @State private var workspaceEndpoint = ""
   init(mode: String) { _mode = State(initialValue: mode) }
   private var cloudProviders: [[String: Any]] {
     app.providers.filter { provider in
@@ -28,6 +32,7 @@ struct ConnectionSourcesView: View {
   private var cloud: [String: Any] {
     cloudProviders.first { string($0, "id") == selectedProvider } ?? [:]
   }
+  private var modelStudio: Bool { ["qwen-intl", "qwen-cn"].contains(selectedProvider) }
   var body: some View {
     VStack(alignment: .leading, spacing: 16) {
       Picker("Model source", selection: $mode) {
@@ -72,16 +77,22 @@ struct ConnectionSourcesView: View {
         {
           selectedProvider = string(first, "id")
         }
+        workspaceEndpoint = string(cloud, "workspace_endpoint_override")
       }
       .onChange(of: mode) { _, _ in
         key = ""
         message = ""
+        resetWorkspaceModels()
       }
       .onChange(of: selectedProvider) { _, _ in
         key = ""
         selectedModel = selectedProvider == app.provider ? app.model : ""
+        workspaceEndpoint = string(cloud, "workspace_endpoint_override")
         message = ""
+        resetWorkspaceModels()
       }
+      .onChange(of: key) { _, _ in resetWorkspaceModels() }
+      .onChange(of: workspaceEndpoint) { _, _ in resetWorkspaceModels() }
   }
 
   private var localContent: some View {
@@ -110,7 +121,14 @@ struct ConnectionSourcesView: View {
         }
       }
       if !string(cloud, "notes").isEmpty { Text(string(cloud, "notes")).font(.callout).foregroundStyle(.secondary) }
-      if !string(cloud, "default_base_url").isEmpty {
+      if modelStudio, !string(cloud, "workspace_base_url").isEmpty {
+        Text("Current endpoint: " + string(cloud, "workspace_base_url"))
+          .font(.caption.monospaced()).textSelection(.enabled)
+        TextField("Workspace endpoint (optional)", text: $workspaceEndpoint)
+          .textFieldStyle(.roundedBorder)
+        Text("Paste the OpenAI-compatible URL from Model Studio if your key belongs to a dedicated workspace.")
+          .font(.caption).foregroundStyle(.secondary)
+      } else if !string(cloud, "default_base_url").isEmpty {
         Text("Default endpoint: " + string(cloud, "default_base_url")).font(.caption.monospaced()).textSelection(.enabled)
       }
       Text("Key environment variable: " + (cloud["credential_variables"] as? [String] ?? []).joined(separator: " or "))
@@ -133,6 +151,26 @@ struct ConnectionSourcesView: View {
         cloud["credential_configured"] as? Bool == true
           ? "Credential configured · enter a key to replace it" : "API key", text: $key
       ).textFieldStyle(.roundedBorder)
+      if modelStudio {
+        HStack {
+          Button("Load workspace models") { loadWorkspaceModels() }
+            .disabled(saving || workspaceLookup != nil
+              || (key.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
+                && cloud["credential_configured"] as? Bool != true))
+          if workspaceLookup != nil { ProgressView().controlSize(.small) }
+          if !workspaceModels.isEmpty {
+            Picker("Workspace models", selection: $selectedModel) {
+              if !workspaceModels.contains(selectedModel) {
+                Text(selectedModel.isEmpty ? "Choose a model" : selectedModel).tag(selectedModel)
+              }
+              ForEach(workspaceModels, id: \.self) { Text($0).tag($0) }
+            }
+          }
+        }
+        if !workspaceMessage.isEmpty {
+          Text(workspaceMessage).font(.caption).foregroundStyle(.secondary)
+        }
+      }
       Toggle("Remember new key in macOS Keychain", isOn: $remember).disabled(key.isEmpty)
       Text(
         "Saved keys stay in this Mac’s Keychain. Session-only keys are discarded when the local engine exits. Saving a key does not verify it or send a model request."
@@ -154,6 +192,7 @@ struct ConnectionSourcesView: View {
             Task {
               do {
                 try await app.forgetCredential(selectedProvider)
+                resetWorkspaceModels()
                 message = "App-owned key removed."
               } catch { message = error.localizedDescription }
               saving = false
@@ -169,10 +208,45 @@ struct ConnectionSourcesView: View {
     }
   }
 
+  private func resetWorkspaceModels() {
+    workspaceLookup = nil
+    workspaceModels = []
+    workspaceMessage = ""
+  }
+
+  private func loadWorkspaceModels() {
+    let lookup = UUID()
+    workspaceLookup = lookup
+    workspaceMessage = ""
+    let supplied = key.trimmingCharacters(in: .whitespacesAndNewlines)
+    var params = ["provider": selectedProvider, "endpoint": workspaceEndpoint]
+    if !supplied.isEmpty { params["key"] = supplied }
+    Task {
+      defer { if workspaceLookup == lookup { workspaceLookup = nil } }
+      do {
+        let result = try await app.engine.call("providers.models", params) as? [String: Any] ?? [:]
+        guard workspaceLookup == lookup else { return }
+        workspaceModels = string(result, "source") == "live" ? result["models"] as? [String] ?? [] : []
+        workspaceMessage = workspaceModels.isEmpty
+          ? string(result, "error", "No workspace models returned.")
+          : "Loaded \(workspaceModels.count) model IDs. Use Test model to verify inference."
+      } catch {
+        guard workspaceLookup == lookup else { return }
+        workspaceModels = []
+        workspaceMessage = error.localizedDescription
+      }
+    }
+  }
+
   private func connect() {
     saving = true
     message = ""
     let supplied = key
+    let provider = selectedProvider
+    let model = selectedModel
+    let endpoint = workspaceEndpoint.trimmingCharacters(in: .whitespacesAndNewlines)
+    let editedEndpoint = modelStudio && endpoint != string(cloud, "workspace_endpoint_override")
+      ? endpoint : nil
     Task {
       defer {
         key = ""
@@ -180,7 +254,8 @@ struct ConnectionSourcesView: View {
       }
       do {
         try await app.configureConnection(
-          provider: selectedProvider, model: selectedModel, key: supplied, remember: remember)
+          provider: provider, model: model, key: supplied, remember: remember,
+          workspaceEndpoint: editedEndpoint)
         app.section = "Workspace"
         app.notice =
           "Provider selected. Credentials are configured; use Test model to verify execution."
@@ -214,6 +289,7 @@ struct InstalledLocalModelPicker: View {
   @State private var harnesses: [[String: Any]] = []
   @State private var harness = ""
   @State private var selected = ""
+  @State private var inferenceEngine = ""
   @State private var failure = ""
   @State private var busy = false
   @State private var progress = ""
@@ -236,6 +312,7 @@ struct InstalledLocalModelPicker: View {
     models.filter { row in
       let name = string(row, "model") + " " + string(row, "name")
       return !name.localizedCaseInsensitiveContains("mmproj")
+        && (inferenceEngine.isEmpty || string(row, "engine") == inferenceEngine)
     }
   }
   private var selectedRow: [String: Any]? {
@@ -278,13 +355,16 @@ struct InstalledLocalModelPicker: View {
         Text(step == "harness" ? "Choose a harness" : "Choose a model").font(.title2.weight(.semibold))
         Text(step == "harness"
           ? "Step 1 of 2. Pick who writes the code. The models on this Mac come next."
-          : "Step 2 of 2. Pick an Ollama or LM Studio model, then start coding.")
+          : "Step 2 of 2. Choose an inference engine and model.")
           .foregroundStyle(.secondary)
         if project.isEmpty {
           Text("Open a project first.").font(.callout).foregroundStyle(.secondary)
+          appleModel
         } else if step == "harness" {
           harnessStep
+          appleModel
         } else {
+          appleModel
           modelStep
         }
       }
@@ -326,6 +406,10 @@ struct InstalledLocalModelPicker: View {
     }
     .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
     .task(id: project) { await load() }
+    .onChange(of: inferenceEngine) { _, _ in
+      selected = string(visibleModels.first ?? [:], "id")
+      failure = ""
+    }
     .centeredDialog(isPresented: $showDownload, title: "Download a local model") {
       LocalQuickStartView(project: project, showInstalled: false).environmentObject(app)
     }
@@ -337,9 +421,14 @@ struct InstalledLocalModelPicker: View {
     }
   }
 
+  private var appleModel: some View {
+    AppleLocalModelPanel(project: project) { if dismissOnUse { dismiss() } }
+  }
+
   /// The selected model's server, or the first installed runtime.
   private var serverEngine: String {
     if let row = selectedRow, !string(row, "engine").isEmpty { return string(row, "engine") }
+    if !inferenceEngine.isEmpty { return inferenceEngine }
     if let row = engines.first(where: { $0["installed"] as? Bool == true || $0["running"] as? Bool == true }) {
       return string(row, "id")
     }
@@ -370,7 +459,14 @@ struct InstalledLocalModelPicker: View {
       if needsInstall {
         Text("SuperQode installs this harness in the app. You do not need to install SuperQode or uv yourself.")
           .foregroundStyle(.secondary)
-      } else if visibleModels.isEmpty && !busy {
+      } else {
+        Picker("Inference engine", selection: $inferenceEngine) {
+          Text("All installed models").tag("")
+          Text("Ollama").tag("ollama")
+          Text("LM Studio").tag("lmstudio")
+        }.disabled(busy)
+      }
+      if !needsInstall && visibleModels.isEmpty && !busy {
         Text("No installed Ollama or LM Studio chat models were found.")
           .foregroundStyle(.secondary)
       } else if !needsInstall {
@@ -420,10 +516,13 @@ struct InstalledLocalModelPicker: View {
           VStack(alignment: .leading, spacing: 4) {
             Text(string(row, "name")).font(.system(size: 13, weight: .semibold)).lineLimit(2)
               .foregroundStyle(Color.primary)
-            Text(string(row, "note")).font(.caption2).foregroundStyle(.secondary).lineLimit(3)
+            let note = string(row, "note")
+            if note != "Runs this model on your Mac." {
+              Text(note).font(.caption2).foregroundStyle(.secondary).lineLimit(2)
+            }
           }
           .padding(10)
-          .frame(maxWidth: .infinity, minHeight: 72, alignment: .topLeading)
+          .frame(maxWidth: .infinity, minHeight: 54, alignment: .topLeading)
           .background(.primary.opacity(active ? 0.08 : 0.04), in: RoundedRectangle(cornerRadius: 9))
           .overlay(
             RoundedRectangle(cornerRadius: 9).stroke(active ? Color.qAccent : Color.secondary.opacity(0.35), lineWidth: active ? 1.5 : 1)
@@ -476,7 +575,8 @@ struct InstalledLocalModelPicker: View {
       try await reloadModels()
       guard !Task.isCancelled else { return }
       if !project.isEmpty {
-        harnesses = try await app.engine.call("local.models.harnesses", ["project": project]) as? [[String: Any]] ?? []
+        let options = try await app.engine.call("local.models.harnesses", ["project": project]) as? [[String: Any]] ?? []
+        harnesses = options.filter { string($0, "id") != "apple-local" }
       }
       if !harness.isEmpty && !harnesses.contains(where: { string($0, "id") == harness }) {
         harness = ""

@@ -135,6 +135,84 @@ async def test_discover_unknown_provider_none(fake_catalog, monkeypatch):
     assert result.models == []
 
 
+@pytest.mark.asyncio
+async def test_model_studio_workspace_discovers_all_chat_pages(monkeypatch):
+    base = "https://ws-demo.ap-southeast-1.maas.aliyuncs.com"
+    calls = []
+
+    async def fetch(url, headers, timeout):
+        calls.append(url)
+        assert headers["Authorization"] == "Bearer sk-metered-test"
+        ids = ["qwen3.8-flash", "qwen4-max-preview"] if len(calls) == 1 else ["new-chat-model"]
+        return {
+            "success": True,
+            "output": {
+                "page_size": 2,
+                "total": 3,
+                "models": [
+                    {
+                        "model": m,
+                        "features": ["function-calling"],
+                        "model_info": {"context_window": 256000},
+                    }
+                    for m in ids
+                ],
+            },
+        }
+
+    monkeypatch.setattr(live_models, "_fetch_json", fetch)
+    result = await live_models.discover_provider_models(
+        "qwen-intl", base_url=f"{base}/compatible-mode/v1", api_key="sk-metered-test"
+    )
+    assert calls == [
+        f"{base}/api/v1/models?capabilities=TG&page_no={page}&page_size=20" for page in (1, 2)
+    ]
+    assert result.source == "live"
+    assert [m.id for m in result.models] == ["new-chat-model", "qwen3.8-flash"]
+    assert all(m.supports_tools and m.context_window == 256000 for m in result.models)
+    assert all(not m.pricing_known for m in result.models)
+
+
+@pytest.mark.asyncio
+async def test_model_studio_catalog_fallback_stays_on_workspace_host(monkeypatch):
+    host = "https://ws-demo.ap-southeast-1.maas.aliyuncs.com"
+    calls = []
+
+    async def fetch(url, headers, timeout):
+        calls.append(url)
+        return {"data": [{"id": "glm-5.3"}]} if "/compatible-mode/" in url else None
+
+    monkeypatch.setattr(live_models, "_fetch_json", fetch)
+    result = await live_models.discover_provider_models(
+        "qwen-intl", base_url=f"{host}/compatible-mode/v1", api_key="sk-metered-test"
+    )
+    assert len(calls) == 2 and all(url.startswith(f"{host}/") for url in calls)
+    assert [m.id for m in result.models] == ["glm-5.3"]
+    assert result.source == "live"
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize(
+    "base,key",
+    [
+        ("https://dashscope-intl.aliyuncs.com/compatible-mode/v1", "sk-sp-plan-test"),
+        (
+            "https://token-plan.ap-southeast-1.maas.aliyuncs.com/compatible-mode/v1",
+            "sk-metered-test",
+        ),
+    ],
+)
+async def test_model_studio_plan_route_never_sends_catalog_request(monkeypatch, base, key):
+    async def unexpected(*args):
+        pytest.fail("Token Plan credential or endpoint reached discovery")
+
+    monkeypatch.setattr(live_models, "_fetch_json", unexpected)
+    result = await live_models.discover_provider_models("qwen-intl", base_url=base, api_key=key)
+    assert result.source == "examples"
+    assert "metered" in result.error
+    assert "qwen4-max-preview" not in [model.id for model in result.models]
+
+
 # --- auto-freshness ----------------------------------------------------------
 
 

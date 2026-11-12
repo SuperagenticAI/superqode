@@ -4,7 +4,7 @@ import SwiftUI
 struct AgentCLIControlsView: View {
   @EnvironmentObject var app: Workspace
   @DialogDismiss private var dismiss
-  var onSetup: () -> Void = {}
+  var onSetup: (String) -> Void = { _ in }
   @State private var catalog: [String: Any] = [:]
   @State private var selectedCommand = ""
   @State private var operation = ""
@@ -14,10 +14,21 @@ struct AgentCLIControlsView: View {
   @State private var output: [String: Any] = [:]
   @State private var showDetails = false
   @State private var cliOpen = false
+  @State private var helpOutput: [String: Any] = [:]
+  @State private var showHelp = false
+  @State private var commandSearch = ""
+  @State private var extraArguments = ""
+  @State private var launching = false
+  @State private var visible = false
   @State private var identity = "agent-cli-" + UUID().uuidString
   private var connectionKey: String { app.projectID + "\n" + app.harness }
   private var commands: [[String: Any]] { catalog["commands"] as? [[String: Any]] ?? [] }
   private var cli: [String: Any] { catalog["cli"] as? [String: Any] ?? [:] }
+  private var helpPath: [String] { helpOutput["path"] as? [String] ?? [] }
+  private var vendorName: String { ((cli["argv"] as? [String])?.first as NSString?)?.lastPathComponent ?? "CLI" }
+  private var canRun: Bool {
+    !launching && !running && !app.busy && !app.anyActive && !app.checkingConnection
+  }
 
   var body: some View {
     VStack(alignment: .leading, spacing: 16) {
@@ -39,14 +50,31 @@ struct AgentCLIControlsView: View {
       } else {
         ScrollView {
           VStack(alignment: .leading, spacing: 16) {
-            AgentControlsView()
+            HStack(spacing: 12) {
+              if !app.agentModels.isEmpty {
+                AgentModelPicker().frame(maxWidth: 340, alignment: .leading)
+              }
+              AgentEffortPicker()
+            }
+            AgentControlsView(showModelAndEffort: false)
             HStack {
               Button(app.checkingConnection ? "Loading models…" : "Refresh models and settings") {
                 app.perform { await app.checkManagedConnection() }
               }.disabled(app.checkingConnection || app.active || running)
-              Button("Sign in or set up…", action: onSetup)
+              Button("Sign in or set up…") { onSetup("menu:root") }
                 .disabled(running)
+              if string(cli, "family") == "antigravity" {
+                Button("Managed Agent…") { onSetup("vendor-key:antigravity-managed") }
+                  .disabled(running || app.anyActive)
+              }
             }
+            if string(catalog, "runtime") == "antigravity-cli" {
+              Text("This list comes from agy models for your current account. Gemini 4 Carbon and Argon require eligible Google access.")
+                .font(.caption).foregroundStyle(.secondary)
+              Link("Google model availability", destination: URL(string: "https://antigravity.google/docs/models")!)
+                .font(.caption)
+            }
+            if !cli.isEmpty { vendorCommands }
             if !app.agentCommands.isEmpty {
               Text("Agent slash commands").font(.headline)
               ForEach(app.agentCommands, id: \.projectRowID) { command in
@@ -100,14 +128,7 @@ struct AgentCLIControlsView: View {
                 }
               }
             }
-            if !cli.isEmpty {
-              Divider()
-              Text("All vendor CLI commands").font(.headline)
-              Text("Open the installed CLI inside SuperQode for its full command tree, including interactive features that are not available through ACP or the app-server. Your vendor account continues to own authentication and billing.")
-                .font(.callout).foregroundStyle(.secondary)
-              Button("Open full CLI…", action: openCLI)
-                .disabled(app.busy || app.anyActive || running || app.checkingConnection || catalog["available"] as? Bool != true)
-            } else if !catalog.isEmpty {
+            if cli.isEmpty && !catalog.isEmpty {
               Text("This connection exposes its supported models, modes and slash commands through ACP. It has no known interactive CLI launcher; use the agent’s setup documentation for terminal-only features.")
                 .font(.caption).foregroundStyle(.secondary)
             }
@@ -116,11 +137,12 @@ struct AgentCLIControlsView: View {
           }.frame(maxWidth: .infinity, alignment: .leading)
         }
       }
-    }.padding(24).frame(width: 760, height: 620).background { BrandBackdrop() }
+    }.padding(24).frame(width: 820, height: 670).background { BrandBackdrop() }
       .task(id: connectionKey) {
         cancelCommand()
         app.terminals.stop(identity); cliOpen = false
-        catalog = [:]; output = [:]; failure = ""
+        catalog = [:]; output = [:]; failure = ""; helpOutput = [:]
+        showHelp = false; commandSearch = ""; extraArguments = ""
         let key = connectionKey
         do {
           let result = try await app.engine.call("connect.controls", [
@@ -129,21 +151,102 @@ struct AgentCLIControlsView: View {
           guard !Task.isCancelled, key == connectionKey else { return }
           catalog = result
           selectedCommand = string(commands.first ?? [:], "id")
+          if !string(cli, "family").isEmpty { startCommand(cursor: nil, vendorPath: []) }
         } catch {
           if !Task.isCancelled && key == connectionKey { failure = error.localizedDescription }
         }
       }
       .onChange(of: selectedCommand) { _, _ in output = [:]; showDetails = false }
-      .onDisappear { cancelCommand(); app.terminals.stop(identity) }
+      .onChange(of: app.checkingConnection) { _, checking in
+        if !checking && !cliOpen && helpOutput.isEmpty && !string(cli, "family").isEmpty {
+          startCommand(cursor: nil, vendorPath: [])
+        }
+      }
+      .onAppear { visible = true }
+      .onDisappear { visible = false; cancelCommand(); app.terminals.stop(identity) }
   }
 
-  private func startCommand(cursor: String?) {
-    guard !running, !app.busy, !app.anyActive, !app.checkingConnection else { return }
-    running = true; failure = ""; output = [:]; showDetails = false
+  private var vendorCommands: some View {
+    let rows = helpOutput["subcommands"] as? [[String: Any]] ?? []
+    let matches = rows.filter {
+      commandSearch.isEmpty || (string($0, "name") + " " + string($0, "description"))
+        .localizedCaseInsensitiveContains(commandSearch)
+    }
+    return VStack(alignment: .leading, spacing: 10) {
+      Divider()
+      HStack {
+        Text("Vendor CLI").font(.headline)
+        Spacer()
+        Button("Open interactive CLI…") {
+          openCLI(path: [], arguments: "", useAgentSelection: true)
+        }.disabled(!canRun)
+      }
+      if !string(cli, "family").isEmpty {
+        Text("Interactive startup uses the selected model and effort. Type /help in the CLI to see its session commands.")
+          .font(.caption).foregroundStyle(.secondary)
+        HStack {
+          if !helpPath.isEmpty {
+            Button("Back", systemImage: "chevron.left") {
+              startCommand(cursor: nil, vendorPath: Array(helpPath.dropLast()))
+            }.disabled(!canRun)
+          }
+          Text(([vendorName] + helpPath).joined(separator: " ")).font(.system(.callout, design: .monospaced))
+          Spacer()
+          if running { ProgressView().controlSize(.small) }
+          Button(helpOutput.isEmpty ? "Load commands" : "Refresh help") {
+            startCommand(cursor: nil, vendorPath: helpPath)
+          }.disabled(!canRun)
+        }
+        if !rows.isEmpty {
+          TextField("Search commands", text: $commandSearch).textFieldStyle(.roundedBorder)
+          LazyVStack(alignment: .leading, spacing: 3) {
+            ForEach(matches, id: \.projectRowID) { row in
+              Button {
+                startCommand(cursor: nil, vendorPath: helpPath + [string(row, "id")])
+              } label: {
+                HStack {
+                  Text(string(row, "name")).font(.system(.callout, design: .monospaced))
+                  Text(string(row, "description")).font(.caption).foregroundStyle(.secondary)
+                  Spacer()
+                  Image(systemName: "chevron.right").font(.caption).foregroundStyle(.secondary)
+                }.padding(5).contentShape(Rectangle())
+              }.buttonStyle(.plain).disabled(!canRun)
+            }
+          }
+        }
+        if !helpOutput.isEmpty {
+          DisclosureGroup("Usage and flags", isExpanded: $showHelp) {
+            Text(string(helpOutput, "text")).font(.caption.monospaced()).textSelection(.enabled)
+          }
+          HStack {
+            TextField(helpPath.isEmpty ? "Command or startup flags" : "Command arguments", text: $extraArguments)
+              .textFieldStyle(.roundedBorder)
+            if let flags = helpOutput["flags"] as? [String], !flags.isEmpty {
+              Menu("Add flag") {
+                ForEach(flags, id: \.self) { flag in
+                  Button(flag) {
+                    extraArguments = [extraArguments.trimmingCharacters(in: .whitespaces), flag]
+                      .filter { !$0.isEmpty }.joined(separator: " ") + " "
+                  }
+                }
+              }.fixedSize().disabled(!canRun)
+            }
+            Button("Run in terminal…") { openCLI(path: helpPath, arguments: extraArguments) }
+              .disabled(!canRun || (helpPath.isEmpty && extraArguments.trimmingCharacters(in: .whitespaces).isEmpty))
+          }
+        }
+      }
+    }
+  }
+
+  private func startCommand(cursor: String?, vendorPath: [String]? = nil) {
+    guard canRun, vendorPath != nil || catalog["available"] as? Bool == true else { return }
+    running = true; failure = ""
+    if vendorPath == nil { output = [:]; showDetails = false }
     commandGeneration = UUID()
     let generation = commandGeneration
     let key = connectionKey
-    let command = selectedCommand
+    let command = vendorPath == nil ? selectedCommand : "vendor-help"
     app.perform {
       guard running, generation == commandGeneration, key == connectionKey else { return }
       var started = ""
@@ -153,6 +256,7 @@ struct AgentCLIControlsView: View {
           "expected_digest": string(catalog, "digest"), "command": command,
         ]
         if let cursor { params["cursor"] = cursor }
+        if let vendorPath { params["path"] = vendorPath }
         let response = try await app.engine.call("connect.command.start", params) as? [String: Any] ?? [:]
         started = string(response, "id")
         guard !started.isEmpty else { throw EngineError(message: "The CLI command could not start.") }
@@ -165,7 +269,11 @@ struct AgentCLIControlsView: View {
           let result = try await app.engine.call("connect.auth.poll", ["id": started]) as? [String: Any] ?? [:]
           guard running, generation == commandGeneration, operation == started, key == connectionKey else { break }
           if string(result, "state") == "completed" {
-            output = result["result"] as? [String: Any] ?? [:]
+            let value = result["result"] as? [String: Any] ?? [:]
+            if vendorPath != nil {
+              helpOutput = value; commandSearch = ""; extraArguments = ""
+              showHelp = (value["subcommands"] as? [[String: Any]] ?? []).isEmpty
+            } else { output = value }
             running = false; operation = ""; return
           }
           if string(result, "state") != "running" {
@@ -195,13 +303,33 @@ struct AgentCLIControlsView: View {
     return String(decoding: data, as: UTF8.self)
   }
 
-  private func openCLI() {
-    guard !running, !app.busy, !app.anyActive, !app.checkingConnection,
-      let arguments = cli["argv"] as? [String], !arguments.isEmpty,
-      app.confirm("Open the vendor CLI?", "This starts a separate interactive agent in the selected project. It can use the vendor’s own tools and permissions. This SuperQode conversation stays unchanged.", button: "Open CLI") else { return }
-    app.terminals.start(identity, path: string(app.project, "path"), arguments: arguments,
-      unset: cli["unset_env"] as? [String] ?? [])
-    cliOpen = true
+  private func openCLI(path: [String], arguments: String, useAgentSelection: Bool = false) {
+    guard canRun else { return }
+    let key = connectionKey
+    let applySelection = useAgentSelection && !string(cli, "family").isEmpty
+    let model = applySelection ? app.selectedAgentModel : ""
+    let effort = applySelection ? app.selectedAgentEffort : ""
+    launching = true
+    app.perform {
+      defer { launching = false }
+      do {
+        var plan = cli
+        if !path.isEmpty || !arguments.isEmpty || !model.isEmpty || !effort.isEmpty {
+          plan = try await app.engine.call("connect.cli.arguments", [
+            "project": app.projectID, "reference": app.harness, "expected_digest": string(catalog, "digest"),
+            "path": path, "arguments": arguments, "model": model, "effort": effort,
+          ]) as? [String: Any] ?? [:]
+        }
+        guard visible, key == connectionKey, let argv = plan["argv"] as? [String], !argv.isEmpty else { return }
+        let preview = argv.dropFirst().map { $0.debugDescription }.joined(separator: " ")
+        guard app.confirm("Run \(vendorName) in the project terminal?",
+          preview.isEmpty ? "The vendor CLI opens an interactive session with its own tools and permissions."
+            : "\(vendorName) \(preview)", button: "Open terminal") else { return }
+        app.terminals.start(identity, path: string(app.project, "path"), arguments: argv,
+          unset: plan["unset_env"] as? [String] ?? [])
+        cliOpen = true
+      } catch { if key == connectionKey { failure = error.localizedDescription } }
+    }
   }
 }
 

@@ -2841,6 +2841,19 @@ class AgentRunMixin:
                 if getattr(self, "_pending_acp_fresh_target", None) == agent_type:
                     self._pending_acp_fresh_target = None
 
+                if agent_type == "grok" and (effort := getattr(self, "_grok_acp_effort", "")):
+                    options = client.get_session_config_options()
+                    option = next(
+                        (row for row in options if row.get("category") == "thought_level"), {}
+                    )
+                    if option.get("currentValue") != effort and (
+                        not option.get("id")
+                        or not await client.set_config_option(option["id"], effort)
+                    ):
+                        raise RuntimeError(
+                            f"Grok rejected reasoning effort {effort}. No prompt was sent."
+                        )
+
                 # Store for cancellation cleanup (deduped)
                 self._bind_acp_client(client, client_key)
                 if getattr(client, "_process", None) is not None:

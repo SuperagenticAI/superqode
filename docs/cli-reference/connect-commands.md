@@ -32,6 +32,7 @@ superqode -C PROFILE [COMMAND]
 | `cursor` | Cursor subscription through the signed-in Cursor Agent CLI and its native ACP mode. |
 | `amp` | Amp subscription through the signed-in Amp CLI and ACP adapter. |
 | `antigravity` | Self-contained `agy` runtime using Google Sign-In and the OS keyring. |
+| `antigravity-managed` | Google-hosted Antigravity agent using a Gemini API key. |
 | `gemini-cli` | Gemini CLI over ACP using Google sign-in for Google AI Pro / Ultra or Code Assist. Install `@google/gemini-cli`, run `gemini`, and choose **Sign in with Google**. |
 | `grok` | Grok Build (xAI's own agent) on your Grok subscription over ACP (`grok agent stdio`). Requires the `grok` binary and `grok login`. To run SuperQode's harness on the same subscription instead, use `:grok api`. |
 | `droid` | Factory Droid subscription through the authenticated Droid CLI ACP mode. |

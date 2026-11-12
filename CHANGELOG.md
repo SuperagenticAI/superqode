@@ -7,6 +7,23 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [2.31.9] - 2026-11-12
+
+### Added
+
+- Alibaba Cloud Model Studio workspace discovery in the CLI and terminal UI. SuperQode labels example models as unverified when it cannot load the workspace catalog.
+- macOS 0.4.3 (build 29) adds a Model Studio workspace URL field and a model picker that can load the catalog before you save a key.
+- Browse installed Codex, Grok, and Antigravity commands in the macOS app, or access their native commands and help from the terminal UI.
+- Configure Google's hosted Antigravity Managed Agent with a Gemini API key.
+
+### Changed
+
+- macOS Local AI Quick Start shows Apple Foundation Models, runtime choices, and performance information together.
+
+### Fixed
+
+- Metered Model Studio routes translate thinking settings for the supported Qwen, GLM, and DeepSeek models and capture token usage from streamed responses.
+
 ## [2.31.8] - 2026-11-12
 
 ### Fixed
