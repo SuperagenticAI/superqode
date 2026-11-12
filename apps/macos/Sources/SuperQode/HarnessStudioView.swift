@@ -137,9 +137,10 @@ struct HarnessStudioView: View {
       VStack(alignment: .leading, spacing: 12) {
         HStack {
           TextField("Harness name", text: $library.name).textFieldStyle(.roundedBorder)
-          Picker("Start from", selection: $preset) {
-            ForEach(app.harnesses.filter { string($0, "desktop_kind").isEmpty }, id: \.projectRowID) { row in Text(string(row, "name")).tag(string(row, "id")) }
-          }.frame(maxWidth: 210)
+          CatalogPopup(label: "Start from", options: app.harnesses.filter {
+            string($0, "desktop_kind").isEmpty
+          }.map { CatalogPopupOption(id: string($0, "id"), title: string($0, "name")) }, selection: $preset)
+            .frame(width: 210)
           Button("Load") { Task { await library.load(engine: app.engine, reference: preset) } }.disabled(library.busy)
           Button("Import…", action: importYAML).disabled(library.busy)
         }
