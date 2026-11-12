@@ -1537,11 +1537,24 @@ def test_subscription_identity_is_distinct_from_byok_in_tui_chrome():
     assert "BYOK" not in status_text
 
 
-def test_work_command_renders_last_run_trace():
+@pytest.mark.parametrize(
+    ("command", "expanded"),
+    [
+        (":work", False),
+        (":work verbose", True),
+        (":work FULL", True),
+        (":work details", True),
+        (":summary verbose", True),
+    ],
+)
+def test_work_command_renders_last_run_trace(command, expanded):
     app = make_app()
     log = FakeLog()
     app.current_provider = "ds4"
     app.current_model = "deepseek-v4-flash"
+    app._run_cli_group = lambda _group, args, target_log, label: target_log.add_error(
+        f"Unexpected {label} invocation: {args}"
+    )
     app._show_command_output = (
         lambda target_log, content, clear_log=True, **_kwargs: target_log.write(content)
     )
@@ -1550,7 +1563,7 @@ def test_work_command_renders_last_run_trace():
         "model": "deepseek-v4-flash",
         "duration": 1.25,
         "tool_count": 2,
-        "files_read": ["pyproject.toml"],
+        "files_read": ["pyproject.toml", "a.py", "b.py", "c.py", "d.py", "last_read.py"],
         "files_modified": ["src/example.py"],
         "commands_run": ["uv run pytest"],
         "tools": [
@@ -1564,7 +1577,7 @@ def test_work_command_renders_last_run_trace():
         ],
     }
 
-    app._work_cmd("verbose", log)
+    app._handle_command(command, log)
 
     text = render_plain(log.items[-1])
     assert "Last Work Summary" in text
@@ -1572,6 +1585,7 @@ def test_work_command_renders_last_run_trace():
     assert "pyproject.toml" in text
     assert "read_file" in text
     assert "success" in text
+    assert ("last_read.py" in text) is expanded
 
 
 def test_harness_panel_renders_workbench_for_local_spec(tmp_path, monkeypatch):
