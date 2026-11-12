@@ -6,6 +6,7 @@ import Observation
 final class WorkspaceCommandTests: XCTestCase {
   @MainActor func testFixedMenusIgnoreHistoryContentChangesUntilAvailabilityChanges() {
     let app = Workspace(recoveryStore: WorkspaceRecoveryStore(directory: nil))
+    app.showWelcome = false
     app.connected = true
     app.project = ["id": "project"]
     let first = WorkspaceDestination(projectID: "project", projectPath: "/tmp/project")
