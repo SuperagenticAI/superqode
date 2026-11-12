@@ -73,12 +73,17 @@ async def run_connection(request, directory, emit, secrets):
 
     inbox(emit).bind(runtime)
     try:
+        from .connection_controls import apply_runtime_controls
+
+        plan = apply_runtime_controls(runtime, route, request.get("acp_options") or {})
         if request.get("session_id"):
             import inspect
 
             resume = runtime.resume_thread(request["session_id"])
             if inspect.isawaitable(resume):
                 await resume
+        if plan:
+            await runtime.set_plan_mode(plan == "on")
         if hasattr(runtime, "run_harness_events"):
             terminal_result = False
             async for event in runtime.run_harness_events(request["prompt"]):

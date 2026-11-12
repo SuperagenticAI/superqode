@@ -148,6 +148,27 @@ unchanged; recorded external history does not imply live status or native resume
 
 Connection options depend on the runtime. Supported ACP agents expose model, mode, configuration and slash-command controls when advertised. Resume and remote cancellation also depend on the selected runtime. Existing terminal credentials remain supported, and optional app-managed provider keys can be saved in macOS Keychain.
 
+Choose **Agent controls** beside the composer for CLI settings and commands.
+Codex CLI exposes account models, reasoning effort, native Plan mode, sandbox
+and approval settings. Antigravity CLI loads `agy models` and supports model,
+agent and reasoning effort overrides (effort requires agy 1.1.5 or newer).
+Grok CLI loads its subscription model catalog; Grok Build and other ACP agents
+use the models, configuration choices and slash commands advertised by their
+session. Copilot uses its account catalog, including plans where Copilot chooses
+the model. Refreshing these catalogs does not send a coding prompt.
+
+The panel also reads Codex inventories (sessions, usage, skills, plugins, apps,
+hooks, features, permissions, MCP and redacted configuration) and Antigravity
+agents, plugins, release notes and help. Detailed structured results are collapsed
+by default. For interactive or terminal-only subcommands, **Open full CLI** starts
+the installed vendor CLI in an embedded terminal after confirmation. This is a
+separate vendor conversation with its own tools and permissions; it does not
+change the model override or transcript of the current SuperQode thread.
+Unknown/custom ACP launchers are never guessed into interactive commands.
+Install/sign-in guidance remains in Connect, and new threads still start without
+a connection. Nothing installs, authenticates or starts an interactive CLI just
+by opening Agent controls.
+
 Account sign-in shows agent progress and device-code instructions, with a manual
 browser link when the agent prints an HTTPS login address. Failed sign-in stays
 visible with recovery guidance and a retry action. Codex SDK uses the installed

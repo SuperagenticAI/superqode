@@ -102,6 +102,7 @@ async def probe_route(root: Path, route: dict, status, method_id=None, terminal_
                     "models": models,
                     "modes": client.get_session_modes(),
                     "config_options": client.get_session_config_options(),
+                    "commands": getattr(client, "get_available_commands_cached", lambda: [])(),
                 },
             }
         finally:
@@ -125,6 +126,21 @@ async def probe_route(root: Path, route: dict, status, method_id=None, terminal_
                 models = (await runtime.models()).get("data", [])
             except Exception:
                 models = []
+            from .connection_controls import runtime_settings
+
+            public_models = [
+                {
+                    "id": m.get("model") or m.get("id"),
+                    "name": m.get("displayName") or m.get("model") or m.get("id"),
+                    "reasoning_efforts": [
+                        e.get("reasoningEffort")
+                        for e in m.get("supportedReasoningEfforts", [])
+                        if isinstance(e, dict) and e.get("reasoningEffort")
+                    ],
+                }
+                for m in models
+                if m.get("model") or m.get("id")
+            ]
             return {
                 "connected": bool(account),
                 "identity": account.get("email") or account.get("name") or "",
@@ -139,6 +155,83 @@ async def probe_route(root: Path, route: dict, status, method_id=None, terminal_
                     for m in models
                     if m.get("model") or m.get("id")
                 ],
+                "session": {
+                    "models": {"availableModels": public_models},
+                    "config_options": runtime_settings("codex-cli"),
+                },
+            }
+        finally:
+            await runtime.aclose()
+    if route.get("runtime") == "antigravity-cli":
+        import shutil
+        from .connection_controls import cli_output, parse_agy_models, runtime_settings
+
+        binary = shutil.which("agy")
+        if not binary:
+            raise ValueError("Install Antigravity CLI: https://antigravity.google/docs/cli-install")
+        output = await cli_output(root, [binary, "models"], route.get("subscription_vendor"))
+        models = parse_agy_models(output)
+        return {
+            "connected": False,
+            "configured": True,
+            "message": "Antigravity models loaded. Google Sign-In and model access are verified by agy when a task starts.",
+            "session": {
+                "models": {"availableModels": models},
+                "config_options": runtime_settings("antigravity-cli"),
+            },
+        }
+    if route.get("runtime") in {"grok-cli", "copilot-cli"}:
+        import shutil
+        from .connection_controls import cli_output
+
+        binary_name = "grok" if route["runtime"] == "grok-cli" else "copilot"
+        binary = shutil.which(binary_name)
+        if not binary:
+            raise ValueError("Install and sign in to " + binary_name + " before loading models.")
+        if binary_name == "grok":
+            from superqode.providers.grok_cli_auth import parse_cli_models_output
+
+            data = parse_cli_models_output(await cli_output(root, [binary, "models"], "grok"))
+            models = [{"id": identity, "name": identity} for identity in data["models"]]
+        else:
+            # Copilot's account catalog and modes are exposed over its ACP session.
+            metadata = await probe_route(
+                root,
+                {
+                    **route,
+                    "desktop_kind": "acp",
+                    "command": str(binary) + " --acp",
+                    "command_argv": [str(binary), "--acp"],
+                },
+                status,
+            )
+            session = metadata.get("session") or {}
+            metadata["session"] = {"models": session.get("models", {})}
+            metadata["allow_manual_model"] = False
+            return metadata
+        return {
+            "connected": False,
+            "configured": bool(models),
+            "message": "Grok subscription models loaded. The CLI verifies access when a task starts."
+            if models
+            else "No models returned. Sign in with grok login and refresh.",
+            "session": {"models": {"availableModels": models}},
+        }
+    if route.get("runtime") == "copilot-sdk":
+        from superqode.agent.loop import AgentConfig
+        from superqode.runtime.copilot_sdk import CopilotSDKRuntime
+
+        runtime = CopilotSDKRuntime(
+            config=AgentConfig(provider="agent", model="", working_directory=root),
+            billing_requested="subscription",
+        )
+        try:
+            models = await asyncio.wait_for(runtime.models(), timeout=30)
+            return {
+                "connected": True,
+                "message": "Copilot account models loaded. An empty catalog means Copilot chooses the model for your plan.",
+                "session": {"models": {"availableModels": models}},
+                "allow_manual_model": False,
             }
         finally:
             await runtime.aclose()

@@ -347,9 +347,21 @@ private func jobStamp(_ row: [String: Any]) -> Double {
   var agentModels: [[String: Any]] {
     guard !harness.hasPrefix("local-harness:") else { return [] }
     let state = agentSession["models"] as? [String: Any] ?? [:]
-    let live = state["availableModels"] as? [[String: Any]] ?? []
+    var live = state["availableModels"] as? [[String: Any]] ?? []
+    if live.isEmpty {
+      let option = (agentSession["config_options"] as? [[String: Any]] ?? []).first {
+        string($0, "id") == "model" || string($0, "category") == "model"
+      }
+      live = (option?["options"] as? [[String: Any]] ?? []).flatMap {
+        ($0["options"] as? [[String: Any]]) ?? [$0]
+      }.compactMap { row in
+        let id = string(row, "value")
+        return id.isEmpty ? nil : ["id": id, "name": string(row, "name", id)]
+      }
+    }
     let cached = (connectionMetadata[harness]?["session"] as? [String: Any])?["models"] as? [String: Any] ?? [:]
-    let catalog = cached["availableModels"] as? [[String: Any]] ?? []
+    let catalog = cached["availableModels"] as? [[String: Any]]
+      ?? connectionMetadata[harness]?["models"] as? [[String: Any]] ?? []
     let byID = catalog.reduce(into: [String: [String: Any]]()) { $0[$1.agentModelID] = $1 }
     return (live.isEmpty ? catalog : live).map { row in
       guard let metadata = byID[row.agentModelID] else { return row }
@@ -359,6 +371,16 @@ private func jobStamp(_ row: [String: Any]) -> Double {
       return string($0, "name", $0.agentModelID) < string($1, "name", $1.agentModelID)
     }
   }
+  var selectedAgentModel: String {
+    get { isACP ? agentModel : model }
+    set { if isACP { agentModel = newValue } else { model = newValue } }
+  }
+  var allowsManualAgentModel: Bool {
+    isManaged && !isACP && !harness.hasPrefix("local-harness:")
+      && (connectionMetadata[harness]?["allow_manual_model"] as? Bool ??
+        ["codex-cli", "codex-sdk", "antigravity-cli", "grok-cli"].contains(
+          string(harnesses.first { string($0, "id") == harness } ?? [:], "runtime")))
+  }
   var agentCommands: [[String: Any]] {
     let currentEvents = string(detail["request"] as? [String: Any] ?? [:], "harness") == harness ? events : []
     let event = currentEvents.last {
@@ -366,7 +388,8 @@ private func jobStamp(_ row: [String: Any]) -> Double {
         && string($0["data"] as? [String: Any] ?? [:], "event") == "commands"
     }
     let data = (event?["data"] as? [String: Any])?["payload"] as? [String: Any] ?? [:]
-    return data["commands"] as? [[String: Any]] ?? []
+    return data["commands"] as? [[String: Any]]
+      ?? agentSession["commands"] as? [[String: Any]] ?? []
   }
   private var verifiedRoute = ""
   private var connectionTestJob = ""
@@ -594,6 +617,10 @@ private func jobStamp(_ row: [String: Any]) -> Double {
     isACP
       || harnesses.first(where: { string($0, "id") == harness })?["desktop_kind"] as? String
         == "connection"
+  }
+  var hasCLIControls: Bool {
+    isManaged && !isRemote && !harness.hasPrefix("local-harness:")
+      && !harness.hasPrefix("vendor-key:")
   }
   /// Ask, Plan, and Full are enforceable only when this backend pauses for them.
   var enforcesSessionControls: Bool {
@@ -1696,7 +1723,7 @@ private func jobStamp(_ row: [String: Any]) -> Double {
       "image_ids": submittedImages,
     ]
     if enforcesSessionControls { extra["permission_mode"] = submittedPermission }
-    if isACP {
+    if isManaged {
       extra["acp_options"] = [
         "model": agentModel, "mode": agentMode, "config": agentConfig.filter { !$0.value.isEmpty },
       ]

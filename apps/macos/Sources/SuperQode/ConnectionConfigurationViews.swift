@@ -358,17 +358,24 @@ struct AgentControlsView: View {
   var body: some View {
     DisclosureGroup("Agent settings") {
       VStack(alignment: .leading, spacing: 10) {
-        let models = app.agentSession["models"] as? [String: Any] ?? [:]
         let modes = app.agentSession["modes"] as? [String: Any] ?? [:]
-        let availableModels = models["availableModels"] as? [[String: Any]] ?? []
+        let availableModels = app.agentModels
         let availableModes = modes["availableModes"] as? [[String: Any]] ?? []
         if !availableModels.isEmpty {
-          Picker("Agent model", selection: $app.agentModel) {
+          Picker("Agent model", selection: Binding(get: { app.selectedAgentModel }, set: { app.selectedAgentModel = $0 })) {
             Text("Keep agent selection").tag("")
+            if !app.selectedAgentModel.isEmpty && !availableModels.contains(where: { $0.agentModelID == app.selectedAgentModel }) {
+              Text(app.selectedAgentModel).tag(app.selectedAgentModel)
+            }
             ForEach(availableModels, id: \.agentModelID) { row in
               Text(string(row, "name", row.agentModelID)).tag(row.agentModelID)
             }
           }
+        }
+        if app.allowsManualAgentModel {
+          TextField("Model ID (blank uses the CLI default)", text: Binding(
+            get: { app.selectedAgentModel }, set: { app.selectedAgentModel = $0 }))
+            .textFieldStyle(.roundedBorder)
         }
         if !availableModes.isEmpty {
           Picker("Agent mode", selection: $app.agentMode) {
@@ -398,12 +405,17 @@ struct AgentControlsView: View {
                 Text(string(value, "name", string(value, "value"))).tag(string(value, "value"))
               }
             }
+          } else if string(option, "type") == "text" {
+            TextField(string(option, "name"), text: Binding(
+              get: { app.agentConfig[string(option, "id")] ?? "" },
+              set: { app.agentConfig[string(option, "id")] = $0 }))
+              .textFieldStyle(.roundedBorder)
           }
         }
         Text(
           "Changes apply to the next message. Continue session keeps the same agent conversation."
         ).font(.caption).foregroundStyle(.secondary)
-      }.padding(.top, 10).disabled(app.active)
+      }.padding(.top, 10).disabled(app.active || app.checkingConnection)
     }.font(.caption)
   }
 }

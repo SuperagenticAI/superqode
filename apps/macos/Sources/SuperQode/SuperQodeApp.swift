@@ -718,6 +718,7 @@ struct CodingComposer: View {
   @State private var showQueue = false
   @State private var showContext = false
   @State private var showOptions = false
+  @State private var showCLIControls = false
   @State private var isolatePlan: [String: Any]?
   @State private var requestedFiles = false
   // Keyboard focus is driven through AppKit so the text view itself, not its
@@ -880,10 +881,13 @@ struct CodingComposer: View {
           }
         }
       }
-      if app.isACP {
+      if app.isManaged {
         if !app.agentModels.isEmpty {
-          Picker("Model", selection: $app.agentModel) {
+          Picker("Model", selection: Binding(get: { app.selectedAgentModel }, set: { app.selectedAgentModel = $0 })) {
             Text("Agent default").tag("")
+            if !app.selectedAgentModel.isEmpty && !app.agentModels.contains(where: { $0.agentModelID == app.selectedAgentModel }) {
+              Text(app.selectedAgentModel).tag(app.selectedAgentModel)
+            }
             ForEach(app.agentModels, id: \.agentModelID) { row in
               Text(string(row, "name", row.agentModelID) + (row["free"] as? Bool == true ? " · Free" : ""))
                 .tag(row.agentModelID)
@@ -966,12 +970,16 @@ struct CodingComposer: View {
           Button("Isolate draft in a worktree") { previewIsolation() }
             .disabled(app.busy)
         }.menuStyle(.borderlessButton).fixedSize().font(.caption).disabled(app.projectID.isEmpty)
-        if app.isACP && !app.agentCommands.isEmpty {
+        if app.isManaged && !app.agentCommands.isEmpty {
           Menu("Agent commands") {
             ForEach(app.agentCommands, id: \.projectRowID) { command in
               Button("/" + string(command, "name")) { app.draft = "/" + string(command, "name") + " " }
             }
           }.font(.caption).disabled(app.active)
+        }
+        if app.hasCLIControls {
+          Button("Agent controls…") { showCLIControls = true }
+            .font(.caption).disabled(app.active || app.checkingConnection)
         }
         Spacer()
         if app.canSteer {
@@ -1009,6 +1017,7 @@ struct CodingComposer: View {
     // Same readable column as the conversation, centred in wide windows.
     .frame(maxWidth: 840).frame(maxWidth: .infinity)
     .padding(.horizontal, 20).padding(.bottom, 10).padding(.top, 4)
+    .sheet(isPresented: $showCLIControls) { AgentCLIControlsView().environmentObject(app) }
   }
   private var connectionOptions: some View {
     VStack(alignment: .leading, spacing: 16) {
@@ -1020,8 +1029,8 @@ struct CodingComposer: View {
       RouteReadiness()
       let identity = string(app.connectionMetadata[app.harness] ?? [:], "identity")
       if !identity.isEmpty { PrivateAccountDetails(identity: identity).id(app.harness) }
-      if app.isACP {
-        if !app.agentSession.isEmpty { AgentControlsView() }
+      if app.isManaged {
+        AgentControlsView()
         Text("The selected agent owns sign-in, models and tools. Its supported settings appear after the first connection.")
           .font(.caption).foregroundStyle(.secondary)
       } else if !app.isManaged {
@@ -1031,18 +1040,12 @@ struct CodingComposer: View {
           if app.enforcesSessionControls { Text("Plan").tag("plan") }
           Text("Chat").tag("chat")
         }.pickerStyle(.segmented).disabled(app.active)
-      } else {
-        let models = app.connectionMetadata[app.harness]?["models"] as? [[String: Any]] ?? []
-        if !models.isEmpty {
-          Picker("Agent model", selection: $app.model) {
-            Text("Agent default").tag("")
-            ForEach(models, id: \.projectRowID) { model in
-              Text(string(model, "name", string(model, "id"))).tag(string(model, "id"))
-            }
-          }.disabled(app.active)
-        }
       }
       if app.isManaged {
+        if app.hasCLIControls {
+          Button("CLI commands and tools…") { showOptions = false; showCLIControls = true }
+            .disabled(app.active || app.checkingConnection)
+        }
         Button(app.checkingConnection ? "Checking…" : "Check connection") {
           app.perform { await app.checkManagedConnection() }
         }.disabled(app.checkingConnection || app.active)

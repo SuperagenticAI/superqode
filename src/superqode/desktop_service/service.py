@@ -1995,6 +1995,41 @@ class DesktopService:
                 ("recovery-ack:" + params["project"], json.dumps(time.time())),
             )
             return {"ok": True}
+        if method in {"connect.controls", "connect.command.start"}:
+            from .connect_workflow import profile_route
+            from .connection_controls import cli_plan, command_catalog, run_command
+
+            root = self.project(params["project"])
+            reference = str(params.get("reference") or "")
+            route = (
+                self.resolve_desktop_acp(params["project"], root, reference)
+                if reference.startswith("acp:")
+                else profile_route(root, reference.removeprefix("connection:"))
+            )
+            if method == "connect.controls":
+                return {
+                    "commands": command_catalog(route),
+                    "cli": cli_plan(route),
+                    "digest": route["digest"],
+                    "available": route["available"],
+                    "issue": route.get("issue", ""),
+                }
+            if params.get("expected_digest") != route["digest"]:
+                raise ValueError("The agent launch configuration changed. Reopen agent controls.")
+            if self._all(
+                "SELECT id FROM jobs WHERE project=? AND status IN ('running','queued','needs_approval','cancelling')",
+                (params["project"],),
+            ):
+                raise ValueError(
+                    "Finish or stop this project's active run before using CLI controls"
+                )
+
+            async def command(status):
+                return await run_command(
+                    root, route, str(params.get("command") or ""), status, params.get("cursor")
+                )
+
+            return self.authentication.start(command)
         if method == "connect.auth.start":
             action = str(params.get("action") or "oauth")
             if action == "registry-refresh":

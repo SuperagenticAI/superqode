@@ -8,6 +8,65 @@ import XCTest
 #endif
 
 final class WorkspaceSessionTests: XCTestCase {
+  @MainActor func testManagedCLIModelsUseTheNativeRuntimeModelField() {
+    let app = workspace()
+    app.harnesses.append(["id": "connection:antigravity", "runtime": "antigravity-cli", "desktop_kind": "connection"])
+    app.harness = "connection:antigravity"
+    app.connectionMetadata[app.harness] = ["session": [
+      "models": ["availableModels": [["id": "gemini-fast", "name": "Fast"]]],
+      "config_options": [["id": "effort", "type": "select"]],
+    ]]
+    XCTAssertTrue(app.isManaged)
+    XCTAssertFalse(app.isACP)
+    XCTAssertEqual(app.agentModels.map(\.agentModelID), ["gemini-fast"])
+    app.selectedAgentModel = "gemini-fast"
+    XCTAssertEqual(app.model, "gemini-fast")
+    XCTAssertTrue(app.agentModel.isEmpty)
+    XCTAssertTrue(app.allowsManualAgentModel)
+    app.agentConfig = ["effort": "high", "agent": "researcher"]
+    app.resetThreadConnection()
+    XCTAssertTrue(app.selectedAgentModel.isEmpty)
+    XCTAssertTrue(app.agentConfig.isEmpty)
+    XCTAssertTrue(app.agentModels.isEmpty)
+  }
+
+  @MainActor func testACPConfigurationModelCatalogAndCommandsAreAvailableBeforeFirstTurn() {
+    let app = workspace()
+    app.harnesses.append(["id": "acp:grok", "desktop_kind": "acp"])
+    app.harness = "acp:grok"
+    app.connectionMetadata[app.harness] = ["session": [
+      "config_options": [["id": "model_choice", "category": "model", "type": "select", "options": [
+        ["group": "grok", "options": [["value": "grok-fast", "name": "Fast"], ["value": "grok-capable", "name": "Capable"]]],
+      ]]],
+      "commands": [["name": "review", "description": "Review changes"]],
+    ]]
+    XCTAssertEqual(Set(app.agentModels.map(\.agentModelID)), Set(["grok-fast", "grok-capable"]))
+    XCTAssertEqual(app.agentCommands.first?["name"] as? String, "review")
+    app.selectedAgentModel = "grok-capable"
+    XCTAssertEqual(app.agentModel, "grok-capable")
+    XCTAssertFalse(app.allowsManualAgentModel)
+    app.model = ""
+    XCTAssertEqual(app.selectedAgentModel, "grok-capable")
+    XCTAssertEqual(app.engine.pendingRequestCount, 0)
+  }
+
+  @MainActor func testCodexLegacyCatalogAndCopilotAccountModelRestrictions() {
+    let app = workspace()
+    app.harnesses += [
+      ["id": "connection:codex", "runtime": "codex-cli", "desktop_kind": "connection"],
+      ["id": "connection:copilot", "runtime": "copilot-sdk", "desktop_kind": "connection"],
+    ]
+    app.harness = "connection:codex"
+    app.connectionMetadata[app.harness] = ["models": [["id": "coding-model", "name": "Coding"]]]
+    XCTAssertEqual(app.agentModels.first?.agentModelID, "coding-model")
+    app.selectedAgentModel = "coding-model"
+    XCTAssertEqual(app.model, "coding-model")
+    app.harness = "connection:copilot"
+    app.connectionMetadata[app.harness] = ["session": ["models": ["availableModels": []]], "allow_manual_model": false]
+    XCTAssertFalse(app.allowsManualAgentModel)
+    XCTAssertTrue(app.agentModels.isEmpty)
+  }
+
   @MainActor func testAppleDevelopmentAndChatKeepTheChosenNativeConfiguration() {
     let app = workspace()
     app.harnesses += [
