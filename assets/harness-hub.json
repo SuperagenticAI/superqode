@@ -1,7 +1,7 @@
 {
   "schema_version": "1.7",
-  "generated_at": "2026-11-12T06:16:31.843732+00:00",
-  "count": 106,
+  "generated_at": "2026-11-13T08:55:13.652970+00:00",
+  "count": 107,
   "categories": [
     "SuperQode harnesses",
     "Coding agents",
@@ -971,6 +971,71 @@
       "language": "Go",
       "language_confidence": "inferred",
       "language_evidence": "Closed source. Ships as one self-contained agy binary with no separate runtime; Google\u2019s CLI docs and launch coverage describe it as a Go build sharing the Antigravity IDE agent harness."
+    },
+    {
+      "id": "antigravity-managed",
+      "name": "Antigravity Managed Agent",
+      "description": "Run Google's agent in a Google-hosted sandbox with a Gemini API key.",
+      "category": "Coding agents",
+      "kind": "connection",
+      "runtime": "antigravity-managed",
+      "source": "connection:vendor-key",
+      "readiness": "setup-required",
+      "integration_level": "managed",
+      "continuity": "fresh-session",
+      "provider": "",
+      "model": "",
+      "setup": "",
+      "warning": "",
+      "project_path": "",
+      "homepage": "",
+      "repository": "",
+      "interface": "",
+      "support_note": "",
+      "last_verified": "",
+      "aliases": [],
+      "docs_url": "https://docs.superqode.dev/providers/antigravity/#google-hosted-managed-agent-route",
+      "install_command": "",
+      "tui_commands": [
+        ":connect antigravity-managed",
+        ":runtime antigravity-managed"
+      ],
+      "cli_commands": [
+        "superqode -p --connect antigravity-managed \"Describe your task\""
+      ],
+      "eval_commands": [],
+      "optimize_commands": [],
+      "tools": [],
+      "policies": [
+        "The connected coding agent owns its tool loop",
+        "Authentication remains with the vendor CLI or account",
+        "SuperQode provides discovery, launch, and session continuity",
+        "Evaluation and optimization apply to SuperQode HarnessSpecs, not to this agent's internal loop"
+      ],
+      "capabilities": [
+        "closed harness",
+        "via API",
+        "Managed connection from SuperQode"
+      ],
+      "based_on": "Antigravity Managed Agent",
+      "popularity_rank": 500,
+      "setup_steps": [
+        {
+          "title": "Configure a Gemini API key",
+          "command": "",
+          "description": "Use GEMINI_API_KEY or GOOGLE_API_KEY. API usage is billed by Google; this route does not use subscription sign-in."
+        },
+        {
+          "title": "Connect Google's hosted agent",
+          "command": ":connect antigravity-managed",
+          "description": "Execution runs in Google's hosted sandbox, not on this Mac."
+        }
+      ],
+      "openness": "closed",
+      "license": "",
+      "language": "Unknown",
+      "language_confidence": "inferred",
+      "language_evidence": "No public source or distribution signal yet."
     },
     {
       "id": "gemini-cli",
