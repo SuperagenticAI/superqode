@@ -119,7 +119,7 @@ struct ConnectionView: View {
     let rows = menu["rows"] as? [[String: Any]] ?? []
     guard page == "menu:root" else { return rows }
     let routes: [[String: Any]] = [
-      ["id": "subscriptions", "name": "Existing subscription", "description": "Connect an agent you already subscribe to."],
+      ["id": "subscriptions", "name": "Existing subscription", "description": "Use a vendor account or credentials configured in the agent’s CLI."],
       ["id": "acp", "name": "ACP agent", "description": "Connect an agent that runs on this Mac."],
       ["id": "models", "name": "Connect a model to a harness",
         "description": "Choose a harness, then use a local model or your API key.", "next": "harness"],
@@ -359,7 +359,7 @@ struct ConnectionView: View {
     case "menu:root": "Choose a connection"
     case "menu:harness", "harnesses": "Choose a harness"
     case "menu:models", "menu:key-models": "Choose a model source"
-    case "menu:vendors": "Choose a subscription"
+    case "menu:vendors": "Choose an agent"
     case "acp", "acp-clients": "Choose an ACP agent"
     default: title
     }
@@ -369,7 +369,7 @@ struct ConnectionView: View {
     switch page {
     case "menu:harness", "harnesses": "harnesses"
     case "menu:models", "menu:key-models": "model sources"
-    case "menu:vendors": "subscriptions"
+    case "menu:vendors": "agents"
     default: "connections"
     }
   }
@@ -589,7 +589,8 @@ struct ConnectionView: View {
         ACPSetupView(initialRoute: route, project: app.projectID, use: { verifiedRoute, metadata in
           app.chooseConnection(verifiedRoute, verified: metadata)
           dismiss()
-        }, edit: { customEditing = route; push("custom-acp") })
+        }, edit: { customEditing = route; push("custom-acp") },
+          setupGuidance: string(selected, "setup_guidance"))
       } else {
         if let requirements = selected["requirements"] as? [[String: Any]], !requirements.isEmpty {
           ConnectionRequirementsView(requirements: requirements)
@@ -597,7 +598,7 @@ struct ConnectionView: View {
             .disabled(loading || app.busy || app.anyActive)
         }
         if let login = selected["login"] as? [String: Any] {
-          Button("Sign in to " + string(login, "label")) {
+          Button(login["interactive"] as? Bool == true ? "Configure in Terminal…" : "Sign in to " + string(login, "label")) {
             terminalError = ""
             loginNotice = "Starting sign-in. Follow the instructions in the sign-in window."
             if login["interactive"] as? Bool == true {
@@ -616,13 +617,12 @@ struct ConnectionView: View {
         if let initialRoute = selected["route"] as? [String: Any] {
           let route =
             app.harnesses.first { string($0, "id") == string(initialRoute, "id") } ?? initialRoute
-          Pill(title: string(route, "auth", "Agent-managed authentication"), color: .qAccent)
-          Text(
-            "Use the vendor’s existing local sign-in. The agent owns its model and coding loop; no separate model or harness configuration is needed."
-          ).foregroundStyle(.secondary)
-          Text(
-            "Subscription access and billing remain unverified until the vendor connects. SuperQode removes known API-key overrides for explicit subscription routes."
-          ).font(.caption).foregroundStyle(.secondary)
+          Text(string(selected, "setup_guidance", "The agent uses its own credentials and model configuration."))
+            .foregroundStyle(.secondary)
+          if !string(route, "subscription_vendor").isEmpty {
+            Text("SuperQode ignores known API key overrides for this account route. The vendor determines model access and billing.")
+              .font(.caption).foregroundStyle(.secondary)
+          }
           if route["available"] as? Bool != true {
             Text(
               string(route, "issue", "Install and sign in to this agent in Terminal, then reconnect.")

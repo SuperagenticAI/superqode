@@ -2690,8 +2690,7 @@ class DialogsMixin:
             title = "Enterprise ACP Agents"
         t.append(f"{title}\n", style=f"bold {THEME['text']}")
         t.append(
-            f"  {len(agents)} in the registry. Each brings its own harness; "
-            "SuperQode supplies the session, policy and evidence.\n\n",
+            f"  {len(agents)} in the registry. Each agent uses its own sign-in or model credentials.\n\n",
             style=THEME["muted"],
         )
 

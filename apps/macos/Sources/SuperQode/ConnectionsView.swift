@@ -115,7 +115,7 @@ struct ProviderConnectionView: View {
 
   private var chooser: some View {
     let rows = providerRows
-    let curated = rows.filter { $0["curated"] as? Bool == true }
+    let curated = rows.filter { $0["curated"] as? Bool == true && string($0, "id") != "ollama-cloud" }
     let featured = choices(in: rows.filter { Self.alibabaRoutes.contains(string($0, "id")) },
       orderedBy: ["alibaba"]).first
     let query = providerQuery.trimmingCharacters(in: .whitespacesAndNewlines)
@@ -130,7 +130,7 @@ struct ProviderConnectionView: View {
         }
         if !rows.isEmpty {
           Picker("Provider catalog", selection: $showAllProviders) {
-            Text("Featured providers").tag(false)
+            Text("Selected providers").tag(false)
             Text("All providers").tag(true)
           }
           .pickerStyle(.segmented).labelsHidden()

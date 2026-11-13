@@ -18,7 +18,7 @@ def connect():
 @click.argument("agent", metavar="AGENT")
 @click.option("--project-dir", "-d", metavar="DIR", help="Project directory to work in")
 def connect_acp(agent, project_dir):
-    """Connect to an ACP coding agent."""
+    """Launch a coding agent over ACP using its own sign-in or model credentials."""
     from superqode.commands.acp import connect_agent
 
     exit(connect_agent(agent, project_dir))
@@ -28,7 +28,7 @@ def connect_acp(agent, project_dir):
 @click.argument("provider", metavar="PROVIDER", required=False)
 @click.argument("model", metavar="MODEL", required=False)
 def connect_byok(provider, model):
-    """Connect to a BYOK provider/model."""
+    """Select a provider and model using your provider API key."""
     from superqode.commands.providers import connect_provider
 
     exit(connect_provider(provider, model))

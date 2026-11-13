@@ -1,7 +1,7 @@
 import SwiftUI
 
 enum ACPAgentFilter: String, CaseIterable, Identifiable {
-  case all = "All agents", installed = "On this Mac", verified = "Verified", custom = "Custom"
+  case all = "All agents", installed = "On this Mac", verified = "Session ready", custom = "Custom"
   var id: String { rawValue }
 }
 
@@ -79,7 +79,7 @@ struct ACPAgentCatalogView: View {
         }
         VStack(alignment: .leading, spacing: 6) {
           Label("SuperQode is the ACP client. These agents provide the server side of the connection.", systemImage: "link")
-          Text("Choose a card to install, sign in and verify. Browsing never starts an agent or sends a coding prompt.")
+          Text("Choose an agent to see its setup steps and check whether it can start an ACP session.")
           Text(string(registry, "source", "Bundled catalog") + ((registry["updated"] as? Double).map {
             " · Updated " + Date(timeIntervalSince1970: $0).formatted(date: .abbreviated, time: .shortened)
           } ?? " · Available offline"))
@@ -97,7 +97,7 @@ private struct ACPAgentCard: View {
   let open: () -> Void
   private var verified: Bool { verifiedACPConnection(route: route, metadata: metadata) }
   private var installed: Bool { route["available"] as? Bool == true }
-  private var status: String { verified ? "Verified" : installed ? "Launcher detected" : "Setup required" }
+  private var status: String { verified ? "Session ready" : installed ? "Launcher detected" : "Setup required" }
   var body: some View {
     nativeButton("connect.row." + string(route, "id"), action: open, padded: false,
       title: string(route, "name") + ", " + status + ". Open agent setup") {

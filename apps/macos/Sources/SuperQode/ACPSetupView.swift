@@ -13,6 +13,7 @@ struct ACPSetupView: View {
   let project: String
   let use: ([String: Any], [String: Any]) -> Void
   var edit: () -> Void = {}
+  var setupGuidance = ""
   @State private var metadata: [String: Any] = [:]
   @State private var install: [String: Any] = [:]
   @State private var knownLogin: [String: Any] = [:]
@@ -27,6 +28,19 @@ struct ACPSetupView: View {
   }
   private var identity: String { string(route, "id") }
   private var ready: Bool { verifiedACPConnection(route: route, metadata: metadata) }
+  private var credentialGuidance: String {
+    if !setupGuidance.isEmpty { return setupGuidance }
+    if string(route, "agent_id") == "amp" {
+      return "Uses your Amp CLI sign-in. Run amp login in Terminal if needed."
+    }
+    if !string(knownLogin, "instructions").isEmpty { return "Configure your provider or plan in the agent’s Terminal setup." }
+    return "The agent uses its own sign-in or model credentials."
+  }
+  private var vendorSetupTitle: String {
+    if string(knownLogin, "vendor") == "qwen-code" { return "Configure Qwen Code…" }
+    if knownLogin["interactive"] as? Bool == true { return "Configure in Terminal…" }
+    return "Sign in to " + string(knownLogin, "name")
+  }
 
   var body: some View {
     VStack(alignment: .leading, spacing: 18) {
@@ -34,14 +48,10 @@ struct ACPSetupView: View {
         HarnessIcon(identity: HarnessIdentity(route), size: 44)
         VStack(alignment: .leading, spacing: 3) {
           Text(string(route, "name")).font(.headline)
-          Text("ACP agent · local connection").font(.caption).foregroundStyle(.secondary)
+          Text("Runs over ACP").font(.caption).foregroundStyle(.secondary)
         }
       }
-      HStack {
-        step("1", "Install", done: route["available"] as? Bool == true)
-        step("2", "Sign in", done: ready)
-        step("3", "Verify", done: ready)
-      }
+      Text(credentialGuidance).font(.callout).foregroundStyle(.secondary)
       if !string(route, "registry_source").isEmpty {
         Text(string(route, "registry_source") + (string(route, "registry_version").isEmpty ? "" : " · " + string(route, "registry_version")))
           .font(.caption).foregroundStyle(.secondary)
@@ -72,11 +82,15 @@ struct ACPSetupView: View {
       }
       Button(ready ? "Check again" : "Check connection") { begin("probe") }
         .disabled(route["available"] as? Bool != true || app.hasActiveWork(project: project) || app.busy)
-      Text("Checks start the agent without sending a coding prompt or granting project tools.")
+      Text("Starts the agent and checks that it can open a session.")
         .font(.caption).foregroundStyle(.secondary)
-      if !string(metadata, "message").isEmpty {
-        Label(string(metadata, "message"), systemImage: ready ? "checkmark.circle" : "person.crop.circle.badge.questionmark")
-          .font(.callout).foregroundStyle(ready ? Color.primary : .secondary).textSelection(.enabled)
+      if ready {
+        Label(string(route, "agent_id") == "amp" ? "Adapter ready" : "ACP session ready",
+          systemImage: "checkmark.circle").font(.callout)
+        Text("Account and model access unverified").font(.caption).foregroundStyle(.secondary)
+      } else if !string(metadata, "message").isEmpty {
+        Label(string(metadata, "message"), systemImage: "person.crop.circle.badge.questionmark")
+          .font(.callout).foregroundStyle(.secondary).textSelection(.enabled)
       }
       ForEach(metadata["auth_methods"] as? [[String: Any]] ?? [], id: \.projectRowID) { method in
         if ["agent", "terminal"].contains(string(method, "type", "agent")) {
@@ -86,21 +100,16 @@ struct ACPSetupView: View {
           }.disabled(route["available"] as? Bool != true || app.anyActive || app.busy)
         }
       }
-      if !knownLogin.isEmpty && (!ready || string(knownLogin, "vendor") == "qwen-code") {
-        Button(string(knownLogin, "vendor") == "qwen-code"
-          ? "Configure Qwen Code authentication…" : "Vendor sign-in · " + string(knownLogin, "name")) {
+      if !knownLogin.isEmpty {
+        Button(vendorSetupTitle) {
           if knownLogin["interactive"] as? Bool == true { terminalPlan = knownLogin }
           else { begin("subscription", extra: ["vendor": string(knownLogin, "vendor")]) }
         }.disabled(route["available"] as? Bool != true || app.anyActive || app.busy)
       }
       if !failure.isEmpty { Text(failure).foregroundStyle(.orange).textSelection(.enabled) }
       nativeButton("connect.use", action: { use(route, metadata) }, title: "Use this connection") {
-        Text(ready ? "Use verified connection" : "Use this connection")
+        Text("Use this connection")
       }.disabled(route["available"] as? Bool != true || !ready || app.active || app.busy || app.projectID != project)
-      if ready {
-        Text("Startup and session creation succeeded. Model entitlement, billing and task execution remain owned by the agent.")
-          .font(.caption).foregroundStyle(.secondary)
-      }
     }
     .task(id: identity) { metadata = app.connectionMetadata[identity] ?? [:]; await loadInstall() }
     .centeredDialog(isPresented: Binding(get: { operation != nil }, set: { if !$0 { operation = nil } }), title: "Agent setup", onDismiss: {
@@ -150,10 +159,6 @@ struct ACPSetupView: View {
     }.padding(16).brandSurface()
   }
 
-  private func step(_ number: String, _ name: String, done: Bool) -> some View {
-    Label(name, systemImage: done ? "checkmark.circle.fill" : number + ".circle")
-      .font(.callout).padding(10).frame(maxWidth: .infinity).brandSurface()
-  }
   private func begin(_ action: String, extra: [String: Any] = [:]) {
     guard app.projectID == project else { failure = "Return to the original project before setting up this agent."; return }
     failure = ""

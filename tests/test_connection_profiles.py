@@ -580,7 +580,7 @@ def test_v2_category_copy_matches_the_design(monkeypatch):
 
     by_id = {p.id: p for p in list_connection_profiles(CONNECT_MENU_AGENTS)}
     assert by_id["agent-subscriptions"].description == (
-        "Vendor plans you sign in to. Uses the plan, never a leftover API key."
+        "Use a vendor account or configure credentials in the agent’s CLI."
     )
     assert by_id["agent-acp"].label == "ACP"
     assert by_id["agent-acp"].description == (

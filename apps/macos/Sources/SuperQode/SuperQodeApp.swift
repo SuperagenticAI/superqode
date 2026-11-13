@@ -547,26 +547,31 @@ struct CodingView: View {
     expanded ? max(200, height - 41) : max(150, min(220, height * 0.30))
   }
   private func workbenchContent(size: CGSize) -> some View {
-    return ZStack(alignment: .bottom) {
-      VStack(spacing: 0) {
-        let wide = size.width >= 900
-        let layout = wide ? AnyLayout(HStackLayout(spacing: 0)) : AnyLayout(ZStackLayout())
-        layout {
-          conversation.frame(minWidth: wide ? 400 : nil, maxWidth: .infinity, maxHeight: .infinity)
-            .opacity(!wide && app.inspectorVisible ? 0 : 1)
-            .allowsHitTesting(wide || !app.inspectorVisible)
-            .accessibilityHidden(!wide && app.inspectorVisible)
-          if app.inspectorVisible {
-            if wide { Divider() }
-            inspector.frame(width: wide ? 350 : nil).background(Color.qPanel)
-          }
-        }.frame(maxHeight: .infinity)
-        CodingComposer(draftStore: app.draftStore, availableHeight: size.height)
-      }
-      .padding(.bottom, !app.workbenchDrawer.isEmpty && !app.drawerExpanded ? drawerContentHeight(size.height, expanded: false) + 41 : 0)
-      .opacity(app.drawerExpanded ? 0 : 1)
-      .disabled(app.drawerExpanded).allowsHitTesting(!app.drawerExpanded)
-      .accessibilityHidden(app.drawerExpanded)
+    let drawerHeight = app.workbenchDrawer.isEmpty ? 0
+      : drawerContentHeight(size.height, expanded: app.drawerExpanded) + 41
+    let drawerInset = app.drawerExpanded ? 0 : drawerHeight
+    let conversationHeight = max(0, size.height - drawerInset)
+    return VStack(spacing: 0) {
+      let wide = size.width >= 900
+      let layout = wide ? AnyLayout(HStackLayout(alignment: .top, spacing: 0)) : AnyLayout(ZStackLayout(alignment: .top))
+      layout {
+        conversation.frame(minWidth: wide ? 400 : nil, maxWidth: .infinity, maxHeight: .infinity)
+          .opacity(!wide && app.inspectorVisible ? 0 : 1)
+          .allowsHitTesting(wide || !app.inspectorVisible)
+          .accessibilityHidden(!wide && app.inspectorVisible)
+        if app.inspectorVisible {
+          if wide { Divider() }
+          inspector.frame(width: wide ? 350 : nil).background(Color.qPanel)
+        }
+      }.frame(minHeight: 0, maxHeight: .infinity, alignment: .top).clipped()
+      CodingComposer(draftStore: app.draftStore, availableHeight: conversationHeight)
+    }
+    .frame(height: conversationHeight, alignment: .bottom)
+    .padding(.bottom, drawerInset)
+    .opacity(app.drawerExpanded ? 0 : 1)
+    .disabled(app.drawerExpanded).allowsHitTesting(!app.drawerExpanded)
+    .accessibilityHidden(app.drawerExpanded)
+    .overlay(alignment: .bottom) {
       ZStack(alignment: .bottom) {
         if app.navigationState.filesMounted {
           drawer(height: size.height, name: "Files")
@@ -578,7 +583,7 @@ struct CodingView: View {
           drawer(height: size.height, name: app.workbenchDrawer)
         }
       }.id(app.projectID)
-        .frame(height: app.workbenchDrawer.isEmpty ? 0 : drawerContentHeight(size.height, expanded: app.drawerExpanded) + 41)
+        .frame(height: drawerHeight, alignment: .bottom)
         .clipped()
         .accessibilityHidden(app.workbenchDrawer.isEmpty)
     }
@@ -730,18 +735,20 @@ struct CodingComposer: View {
   @State private var dragStartHeight: CGFloat?
   @State private var resizeCursorPushed = false
   private static let lineHeight: CGFloat = 20
-  private static let minEditorHeight: CGFloat = 3 * lineHeight + 12
-  /// Keep the message box to about six lines. The conversation above it
-  /// stays at least 460pt, including the activity line and composer controls.
+  private static let minEditorHeight: CGFloat = lineHeight + 12
+  /// Give the transcript most of the available height and cap the editor at six lines.
   private var maxEditorHeight: CGFloat {
-    max(Self.minEditorHeight, min(132, availableHeight * 0.22, availableHeight - 460 - 120))
+    let transcriptReserve = min(460, availableHeight * 0.60)
+    return max(Self.minEditorHeight, min(132, availableHeight * 0.22, availableHeight - transcriptReserve - 120))
   }
   private var composerHeight: CGFloat {
-    // Count at most a screenful of lines. Avoid allocating every line of a
-    // large pasted prompt on each subsequent keystroke.
-    let lines = 1 + draftStore.text.utf8.lazy.filter { $0 == 10 }.prefix(13).count
+    if savedEditorHeight > 0 {
+      return min(maxEditorHeight, max(Self.minEditorHeight, CGFloat(savedEditorHeight)))
+    }
+    // The editor scrolls once the draft exceeds the height cap.
+    let lines = 1 + draftStore.text.utf8.lazy.filter { $0 == 10 }.prefix(5).count
     let grown = CGFloat(lines) * Self.lineHeight + 12
-    return min(maxEditorHeight, max(Self.minEditorHeight, grown, CGFloat(savedEditorHeight)))
+    return min(maxEditorHeight, grown)
   }
   private var resizeHandle: some View {
     Capsule().fill(Color.secondary.opacity(0.35)).frame(width: 36, height: 4)
@@ -825,7 +832,7 @@ struct CodingComposer: View {
       && draftStore.text.isEmpty && app.imageAttachments.isEmpty && app.contextFiles.isEmpty
   }
   private var composer: some View {
-    VStack(alignment: .leading, spacing: awaitingConnection ? 0 : 10) {
+    VStack(alignment: .leading, spacing: awaitingConnection ? 0 : 8) {
       if !awaitingConnection { resizeHandle.padding(.top, -8).padding(.bottom, -4) }
       HStack(spacing: 8) {
         Menu {
@@ -1019,10 +1026,10 @@ struct CodingComposer: View {
     .onChange(of: app.enforcesSessionControls) { _, enforced in
       if !enforced && app.interactionMode == "plan" { app.interactionMode = "code" }
     }
-    .padding(12).brandSurface()
+    .padding(.horizontal, 12).padding(.vertical, awaitingConnection ? 12 : 10).brandSurface()
     // Same readable column as the conversation, centred in wide windows.
     .frame(maxWidth: 840).frame(maxWidth: .infinity)
-    .padding(.horizontal, 20).padding(.bottom, 10).padding(.top, 4)
+    .padding(.horizontal, 20).padding(.bottom, awaitingConnection ? 10 : 6).padding(.top, 4)
     .sheet(isPresented: $showCLIControls, onDismiss: {
       if let page = setupAfterCLI { setupAfterCLI = nil; app.openConnections(page) }
     }) {

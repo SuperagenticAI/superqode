@@ -142,7 +142,7 @@ async def probe_route(root: Path, route: dict, status, method_id=None, terminal_
                 }
             return {
                 "connected": True,
-                "message": "ACP connection checked. The agent owns model access and billing.",
+                "message": "ACP session ready. Account and model access unverified.",
                 "checked_at": time.time(),
                 "route_digest": route.get("digest", ""),
                 "initialization": getattr(client, "get_initialization_info", lambda: {})(),

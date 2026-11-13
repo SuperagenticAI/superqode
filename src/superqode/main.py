@@ -862,7 +862,9 @@ class SuperQodeGroup(click.Group):
     help=(
         "Connection source to start with: agents / models / build, a method "
         "such as local / acp / byok, or a product such as codex / grok / "
-        "copilot / antigravity."
+        "copilot / antigravity. Account routes can reuse a vendor CLI sign-in. "
+        "Use the TUI for interactive ACP profiles, or 'superqode connect byok' "
+        "to select a provider and model using your API key."
     ),
 )
 @click.pass_context
@@ -979,7 +981,8 @@ def cli_main(
             elif _profile.connector == "acp" and headless_intent and not runtime_name:
                 raise click.UsageError(
                     f"--connect {_profile.id} starts an interactive ACP session and "
-                    "cannot serve a one-shot run. Use the TUI for this agent, or pass "
+                    f"cannot serve a one-shot run. Open the TUI with "
+                    f"'superqode --connect {_profile.id}', or pass "
                     "an explicit --runtime/--provider for headless use."
                 )
             # Hint the TUI to auto-run the connection on startup.

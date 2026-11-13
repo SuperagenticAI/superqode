@@ -7,6 +7,20 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [2.31.15] - 2026-11-13
+
+### Changed
+
+- macOS 0.4.8 (build 34) bundles Python engine 2.31.15.
+- The Mac conversation leaves more room for messages with a compact composer and collapsible agent activity.
+- The Mac API-key picker labels its shortlist Selected providers and lists Ollama Cloud under All providers and in search.
+- Connection setup across the CLI, TUI and Mac explains which integrations reuse existing CLI credentials, require sign-in or terminal setup, or use an API key.
+- This Python release also ships the local model quick-start improvements listed under 2.31.14.
+
+### Fixed
+
+- Amp's ACP check distinguishes adapter readiness from verified account and model access. Headless CLI requests that need interactive ACP setup point to the corresponding TUI command.
+
 ## [2.31.14] - 2026-11-13
 
 ### Changed

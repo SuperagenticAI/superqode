@@ -206,6 +206,29 @@ class ConnectionProfile:
     verify_on_connect: bool = False
 
     @property
+    def setup_guidance(self) -> str:
+        """Describe the credential the user needs, independent of the transport."""
+        if self.connector in {"byok", "vendor-key"}:
+            return "Use a provider API key."
+        if self.menu != CONNECT_MENU_VENDORS:
+            return ""
+        if self.id in {"codex", "codex-sdk"}:
+            return "Use your Codex CLI’s ChatGPT login. Sign in with Codex if needed."
+        if self.id in {"copilot", "grok"}:
+            return "Use your existing CLI sign-in, or sign in if needed."
+        if self.id in {"muse", "prime-agent", "fx"}:
+            return "Use your existing CLI setup, or sign in through the vendor’s terminal."
+        if self.id == "qwen-code":
+            return "Configure your provider or plan in Qwen Code with /auth."
+        if self.id == "glm-cli":
+            return "Configure your Z.AI Coding Plan key in the agent."
+        if self.id == "deepagents-code":
+            return "Configure model credentials in Deep Agents Code with /auth."
+        if self.id == "amp":
+            return "Uses your Amp CLI sign-in. Run amp login in Terminal if needed."
+        return "Uses your CLI sign-in. Sign in in the vendor CLI if needed."
+
+    @property
     def available(self) -> bool:
         if self.detect is None:
             return True
@@ -1264,7 +1287,7 @@ _LEGACY_PLAN_PROFILES.extend(
 _AGENT_SUBSCRIPTIONS = ConnectionProfile(
     id="agent-subscriptions",
     label="Subscriptions",
-    description="Vendor plans you sign in to: Codex, Claude Code, Copilot, Grok and more",
+    description="Use a vendor account or configure credentials in the agent’s CLI.",
     connector="vendor-picker",
     menu=CONNECT_MENU_AGENTS,
     detect=lambda: True,
@@ -1322,7 +1345,7 @@ _AGENT_BY_LANGUAGE = ConnectionProfile(
 _AGENT_SUBSCRIPTIONS_V2 = ConnectionProfile(
     id="agent-subscriptions",
     label="Subscriptions",
-    description="Vendor plans you sign in to. Uses the plan, never a leftover API key.",
+    description="Use a vendor account or configure credentials in the agent’s CLI.",
     connector="vendor-picker",
     menu=CONNECT_MENU_AGENTS,
     detect=lambda: True,
@@ -1667,7 +1690,7 @@ _LEGACY_PROFILES: List[ConnectionProfile] = [
     ConnectionProfile(
         id="subscriptions",
         label="Subscriptions",
-        description="Vendor coding agents you sign in to with an existing plan",
+        description="Use a vendor account or configure credentials in the agent’s CLI.",
         connector="vendor-picker",
         detect=lambda: True,
     ),
@@ -1721,7 +1744,7 @@ CONNECT_MENU_TITLES = {
     ),
     CONNECT_MENU_VENDORS: (
         "Subscriptions",
-        "Vendor plans you sign in to with your own account.",
+        "Choose an agent to see which sign-in or key it uses.",
     ),
     CONNECT_MENU_ACP: (
         "ACP agents",

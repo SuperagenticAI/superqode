@@ -177,11 +177,13 @@ EXPECTED_COMMAND_COUNT = 331
 # Apple's native bridge adds Python/Swift to the two Hub --language filters.
 # Both Click renders were diffed against 448e4153: only those two choice lists
 # changed. Command count stays 331; both old digests were reproduced first.
-EXPECTED_HELP_TREE_SHA256 = "28b4e59342ce290b3ea314650f489ec033c054d4bd16f39549b908e050f7a6d3"
+# Connection setup clarifies existing credentials, ACP, and API keys in the
+# root and connect help pages. Both renderers still expose 331 routes.
+EXPECTED_HELP_TREE_SHA256 = "590565befe1f9c21b83bc05f77bb1adf47c156f82b996c594d26d7fea872f633"
 # Click 8.5 renders optional group commands as [COMMAND] and case-insensitive
 # choices in lower case. Both verified renders expose the same command tree.
 EXPECTED_MODERN_CLICK_HELP_TREE_SHA256 = (
-    "837dd90e077dacee4eef5451f19283c980b581b6c2e38f780dc7832a2f724bd4"
+    "d314495df95502f2f18bfc3b424d1a596b4574ce0a161b64fa30eb5202a7d603"
 )
 
 

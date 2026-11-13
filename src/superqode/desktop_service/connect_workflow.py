@@ -260,6 +260,8 @@ def connection_menu(root: Path, menu: str):
             "next": MENU_CONNECTORS.get(p.connector, ""),
             "menu": menu,
         }
+        if guidance := p.setup_guidance:
+            row["setup_guidance"] = guidance
         if p.connector == "language-harness-picker":
             row["next"] = "by-language:" + p.label
         if p.connector == "key-harness":

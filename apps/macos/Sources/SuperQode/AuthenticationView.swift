@@ -34,8 +34,9 @@ struct AuthenticationProgressView: View {
     VStack(alignment: .leading, spacing: 20) {
       PageTitle(
           eyebrow: "Agent setup", title: heading,
-        subtitle:
-          "Review progress below. Sign-in stays with the selected agent. You can cancel this operation."
+        subtitle: string(request, "action") == "probe"
+          ? "Checks agent startup and session creation without sending a coding prompt."
+          : "Review progress below. Sign-in stays with the selected agent. You can cancel this operation."
       )
       ScrollView {
         VStack(alignment: .leading, spacing: 14) {

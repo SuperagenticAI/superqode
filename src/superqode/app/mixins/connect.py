@@ -4374,10 +4374,8 @@ class ConnectMixin:
                 badges = profile.badges
                 if is_highlighted and badges:
                     append_wrapped(" · ".join(badges), THEME["dim"])
-                if is_highlighted and profile.available and profile.verify_on_connect:
-                    append_wrapped(
-                        "Installed · account sign-in is verified on first use", THEME["muted"]
-                    )
+                if is_highlighted and profile.setup_guidance:
+                    append_wrapped(profile.setup_guidance, THEME["muted"])
                 if is_highlighted and not profile.available and profile.unavailable_hint:
                     append_wrapped(profile.unavailable_hint, THEME["warning"])
 

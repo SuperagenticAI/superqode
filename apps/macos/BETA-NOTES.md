@@ -1,6 +1,14 @@
-# SuperQode for macOS public beta 0.4.7
+# SuperQode for macOS public beta 0.4.8
 
-Version 0.4.7 (build 33) bundles Python engine 2.31.14. These versions are prepared in source; native validation, signing, notarization and publication remain separate release steps.
+Version 0.4.8 (build 34) bundles Python engine 2.31.15.
+
+- The compact, resizable composer leaves more room for the conversation. Agent activity starts folded.
+- The API-key picker uses Selected providers for the shortlist. Ollama Cloud is available under All providers and in search.
+- Connection setup explains when to use existing CLI credentials, sign in, complete terminal setup, or provide an API key. Amp's ACP check reports adapter readiness separately from account and model access.
+
+## 0.4.7 (build 33)
+
+Version 0.4.7 (build 33) bundles Python engine 2.31.14.
 
 - Local AI opens on a simple Start tab: Apple's on-device model first, then Ollama and LM Studio, your Mac's chip and memory, and one model list rated Fits, Tight or Too large.
 - A compact harness menu (Core is recommended) sits next to Start coding, and returning users get a one-tap Continue.
