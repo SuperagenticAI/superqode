@@ -14,6 +14,7 @@ VENDOR_HARNESS_IDS = (
     "kimi-code",
     "qwen-code",
     "antigravity",
+    "antigravity-managed",
     "gemini-cli",
     "grok",
     "copilot",

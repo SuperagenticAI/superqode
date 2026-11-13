@@ -20,7 +20,7 @@ from superqode.providers.registry import PROVIDERS, ProviderCategory
 
 AuthMode = str  # "subscription" | "acp" | "byok" | "local"
 Openness = str  # "open" | "closed" | "unknown"
-AfterAuth = str  # switch-and-model | acp-attach | vendor-key-acp | vendor-key-cli | vendor-key-rpc | setup-card | inspect
+AfterAuth = str  # switch-and-model | acp-attach | vendor-key-acp | vendor-key-cli | vendor-key-rpc | vendor-key-runtime | setup-card | inspect
 
 CONNECT_MENU_DEFAULT = "v2"
 CONNECT_MENU_VALUES = frozenset({"v1", "v2"})
@@ -1214,6 +1214,28 @@ HARNESS_CATALOG: Tuple[HarnessCatalogEntry, ...] = (
         auth=_plan_auth("antigravity", connector="runtime"),
         vendor_owned=True,
         wired=True,
+    ),
+    HarnessCatalogEntry(
+        id="antigravity-managed",
+        label="Antigravity Managed Agent",
+        description="Run Google's agent in a Google-hosted sandbox with a Gemini API key.",
+        openness="closed",
+        homepage="https://antigravity.google/",
+        hub_id="antigravity-managed",
+        auth=(
+            HarnessAuthSpec(
+                mode="byok",
+                connector="vendor-key",
+                profile_id="antigravity-managed",
+                after_auth="vendor-key-runtime",
+                env_vars=("GEMINI_API_KEY", "GOOGLE_API_KEY"),
+                notes="API billing; Google hosts execution. Separate from Google subscription sign-in.",
+            ),
+        ),
+        vendor_owned=True,
+        wired=True,
+        show_in_closed=True,
+        list_visible=True,
     ),
     HarnessCatalogEntry(
         id="copilot",

@@ -22,8 +22,7 @@ import Foundation
       guard let content = NSApp.windows.first(where: { $0.title == "SuperQode" })?.contentView else { return nil }
       return find(in: content)
     }
-    /// The Models page keeps its workspace switcher mounted while hidden; the
-    /// Local AI content itself mounts only when the page is active.
+    /// Both the switcher and unsaved Local AI forms stay mounted while hidden.
     @MainActor func mountedModelsSwitcher() -> NSSegmentedControl? {
       @MainActor func find(in view: NSView) -> NSSegmentedControl? {
         if let control = view as? NSSegmentedControl,
@@ -34,6 +33,19 @@ import Foundation
       }
       guard let content = NSApp.windows.first(where: { $0.title == "SuperQode" })?.contentView else { return nil }
       return find(in: content)
+    }
+    @MainActor func mountedRuntimeEndpoint() -> NSTextField? {
+      @MainActor func find(in view: NSView) -> NSTextField? {
+        if let field = view as? NSTextField,
+          field.placeholderString == "Local base URL, e.g. http://127.0.0.1:8000/v1" { return field }
+        return view.subviews.lazy.compactMap { find(in: $0) }.first
+      }
+      guard let content = NSApp.windows.first(where: { $0.title == "SuperQode" })?.contentView else { return nil }
+      return find(in: content)
+    }
+    @MainActor func editEndpoint(_ field: NSTextField, value: String) {
+      field.stringValue = value
+      field.delegate?.controlTextDidChange?(Notification(name: NSControl.textDidChangeNotification, object: field))
     }
     @MainActor func measure(passes: Int) async throws -> [String: Any] {
       let sections = [
@@ -50,6 +62,10 @@ import Foundation
       var studioEditorPreserved = true
       var initialModelsSwitcher: NSSegmentedControl?
       var modelsSwitcherPreserved = true
+      var initialRuntimeEndpoint: NSTextField?
+      var originalEndpoint = ""
+      let unsavedEndpoint = "http://127.0.0.1:49321/v1"
+      var runtimeFormPreserved = true
       let (ready, signal) = AsyncStream<Bool>.makeStream()
       let heartbeat = Task {
         signal.yield(true)
@@ -77,6 +93,15 @@ import Foundation
             let control = mountedModelsSwitcher()
             if let initialModelsSwitcher { modelsSwitcherPreserved = modelsSwitcherPreserved && control === initialModelsSwitcher }
             else { initialModelsSwitcher = control; modelsSwitcherPreserved = control != nil }
+            let field = mountedRuntimeEndpoint()
+            if let initialRuntimeEndpoint {
+              runtimeFormPreserved = runtimeFormPreserved && field === initialRuntimeEndpoint
+                && field?.stringValue == unsavedEndpoint
+            } else if let field {
+              initialRuntimeEndpoint = field
+              originalEndpoint = field.stringValue
+              editEndpoint(field, value: unsavedEndpoint)
+            } else { runtimeFormPreserved = false }
           }
           if destination == "Harness Studio" {
             let editor = mountedStudioEditor()
@@ -87,7 +112,15 @@ import Foundation
       }
       heartbeat.cancel()
       await heartbeat.value
+      runtimeFormPreserved = runtimeFormPreserved && initialRuntimeEndpoint != nil
+        && mountedRuntimeEndpoint() === initialRuntimeEndpoint
+        && initialRuntimeEndpoint?.stringValue == unsavedEndpoint
+      if let initialRuntimeEndpoint { editEndpoint(initialRuntimeEndpoint, value: originalEndpoint) }
+      guard runtimeFormPreserved else {
+        throw EngineError(message: "Navigation discarded the unsaved Local AI runtime endpoint")
+      }
       return ["section_changes": sections.count * passes, "worst_ui_heartbeat_ms": worstTick * 1000,
+        "local_runtime_form_preserved": runtimeFormPreserved,
         "composer_editor_preserved": initialComposer != nil && initialComposer === mountedComposer(),
         "models_page_preserved": initialModelsSwitcher != nil && modelsSwitcherPreserved,
         "models_page_disabled_while_hidden": initialModelsSwitcher.map { !$0.isEnabled } ?? false,

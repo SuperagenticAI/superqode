@@ -52,7 +52,7 @@ struct ModelsView: View {
         Text("Advanced").tag("advanced")
       }.pickerStyle(.segmented).padding(.horizontal, 28).padding(.top, 20)
       if tab == "local" {
-        if active { LocalQuickStartView(project: app.projectID, embedded: true).id(app.projectID) }
+        LocalQuickStartView(project: app.projectID, embedded: true, active: active).id(app.projectID)
       } else { AdvancedLocalAIView(active: active) }
     }
   }

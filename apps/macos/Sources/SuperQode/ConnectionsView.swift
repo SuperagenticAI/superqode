@@ -282,6 +282,7 @@ struct InstalledLocalModelPicker: View {
   @DialogDismiss private var dismiss
   let project: String
   var dismissOnUse = false
+  var active = true
   /// Local AI keeps a prompt on this page. The connect sheet stays harness, model, then start.
   var showsPrompt = false
   @State private var models: [[String: Any]] = []
@@ -405,7 +406,10 @@ struct InstalledLocalModelPicker: View {
       }
     }
     .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
-    .task(id: project) { await load() }
+    .task(id: project + "\n" + String(active)) {
+      guard active else { return }
+      await load()
+    }
     .onChange(of: inferenceEngine) { _, _ in
       selected = string(visibleModels.first ?? [:], "id")
       failure = ""
@@ -422,7 +426,7 @@ struct InstalledLocalModelPicker: View {
   }
 
   private var appleModel: some View {
-    AppleLocalModelPanel(project: project) { if dismissOnUse { dismiss() } }
+    AppleLocalModelPanel(project: project, active: active) { if dismissOnUse { dismiss() } }
   }
 
   /// The selected model's server, or the first installed runtime.

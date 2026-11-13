@@ -6,6 +6,7 @@ struct LocalQuickStartView: View {
   @DialogDismiss private var dismiss
   let project: String
   var embedded = false
+  var active = true
   var showInstalled = true
   @State private var hardware: [String: Any] = [:]
   @State private var engines: [[String: Any]] = []
@@ -40,9 +41,9 @@ struct LocalQuickStartView: View {
         if !embedded { Button("Advanced…") { advanced = true } }
       }
       if showInstalled {
-        InstalledLocalModelPicker(project: project, dismissOnUse: !embedded)
+        InstalledLocalModelPicker(project: project, dismissOnUse: !embedded, active: active)
           .id(project)
-        if embedded { LocalRuntimeWorkspace() }
+        if embedded { LocalRuntimeWorkspace(active: active) }
         DisclosureGroup(isExpanded: $showSetup) {
           VStack(alignment: .leading, spacing: 16) {
             LocalAINotice(learnMore: $learnMore)
@@ -71,21 +72,31 @@ struct LocalQuickStartView: View {
       }) {
         if let operation { LocalModelActionView(request: operation).environmentObject(app) }
       }
-      .task { await load() }
-      .task(id: string(step, "job")) {
-        guard state == "working" else { return }
+      .task(id: active) {
+        guard active else { return }
+        if choices.isEmpty { await load() }
+      }
+      .task(id: String(active) + "\n" + string(step, "job")) {
+        guard active, state == "working" else { return }
         while !Task.isCancelled && validProject && state == "working" {
           do { try await Task.sleep(for: .seconds(1)) } catch { return }
           await refresh()
         }
       }
-      .task {
+      .task(id: active) {
+        guard active else { return }
         while !Task.isCancelled && !closed {
           do { try await Task.sleep(for: .seconds(2)) } catch { return }
           await observeOperations()
         }
       }
       .onChange(of: selection) { _, _ in step = [:]; output = ""; progress = [:]; Task { await refresh() } }
+      .onChange(of: active) { _, visible in
+        if !visible {
+          learnMore = false; advanced = false; operation = nil; showOperationLog = false
+        }
+      }
+      .onAppear { closed = false }
       .onDisappear { closed = true }
   }
 
@@ -95,10 +106,10 @@ struct LocalQuickStartView: View {
       presetPanel
       if !showInstalled { enginePanel }
       Text("Download a starter model only when it is not already installed. Review each install, download and load before it runs.").foregroundStyle(.secondary)
-      Picker("Model", selection: $selection) {
-        Text("Choose a model or preset").tag("")
-        ForEach(setupChoices, id: \.projectRowID) { row in Text(string(row, "name") + " · " + string(row["fit"] as? [String: Any] ?? [:], "rating", "Unknown")).tag(string(row, "id")) }
-      }.disabled(busy || state == "working")
+      CatalogPopup(label: "Model", options: setupChoices.map { row in
+        CatalogPopupOption(id: string(row, "id"), title: string(row, "name") + " · " + string(row["fit"] as? [String: Any] ?? [:], "rating", "Unknown"))
+      }, selection: $selection, placeholder: "Choose a model or preset")
+        .disabled(busy || state == "working")
       if let row = choices.first(where: { string($0, "id") == selection }) {
         Text(string(row, "detail")).font(.callout).foregroundStyle(.secondary)
         if let context = row["suggested_context"] as? Int {

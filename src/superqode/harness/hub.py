@@ -112,6 +112,7 @@ _DOCS_BY_ID = {
     "codex-sdk": f"{DOCS_BASE}providers/codex/",
     "claude": f"{DOCS_BASE}providers/anthropic-claude/",
     "antigravity": f"{DOCS_BASE}providers/antigravity/",
+    "antigravity-managed": f"{DOCS_BASE}providers/antigravity/#google-hosted-managed-agent-route",
     "muse": f"{DOCS_BASE}providers/muse-code/",
     "prime-agent": f"{DOCS_BASE}providers/prime-agent/",
     "grok": f"{DOCS_BASE}providers/grok/",
@@ -159,6 +160,7 @@ _HOMEPAGE_BY_ID = {
 }
 
 _COMMANDS_BY_ID = {
+    "antigravity-managed": (":connect antigravity-managed", ":runtime antigravity-managed"),
     "codex": (":connect codex", ":codex status", ":codex models", ":codex sessions"),
     "codex-sdk": (":connect codex-sdk", ":codex status", ":codex models", ":codex sessions"),
     "copilot": (
@@ -209,6 +211,7 @@ _PROJECT_OPENNESS = HubOpenness("open", "Apache-2.0", PROJECT_REPOSITORY)
 #
 _LANGCHAIN_DEEPAGENTS = HubOpenness("open", "MIT", "https://github.com/langchain-ai/deepagents")
 _OPENNESS_BY_ID: dict[str, HubOpenness] = {
+    "antigravity-managed": HubOpenness("closed"),
     "strands": HubOpenness("open", "Apache-2.0", "https://github.com/strands-agents/harness-sdk"),
     "gemini-cli": HubOpenness("open", "Apache-2.0", "https://github.com/google-gemini/gemini-cli"),
     "deepagents": _LANGCHAIN_DEEPAGENTS,
@@ -814,6 +817,17 @@ class HubSetupStep:
 
 
 _SETUP_STEPS_BY_ID = {
+    "antigravity-managed": (
+        HubSetupStep(
+            "Configure a Gemini API key",
+            description="Use GEMINI_API_KEY or GOOGLE_API_KEY. API usage is billed by Google; this route does not use subscription sign-in.",
+        ),
+        HubSetupStep(
+            "Connect Google's hosted agent",
+            command=":connect antigravity-managed",
+            description="Execution runs in Google's hosted sandbox, not on this Mac.",
+        ),
+    ),
     "gemini-cli": (
         HubSetupStep("Install Gemini CLI", "npm install -g @google/gemini-cli"),
         HubSetupStep(

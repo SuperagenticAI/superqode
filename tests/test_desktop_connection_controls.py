@@ -240,7 +240,9 @@ async def test_tui_native_completion_reads_installed_groups_and_flags(agy):
 def test_managed_antigravity_is_a_separate_vendor_key_connection(desktop):
     service, project, _ = desktop
     params = {"project": project["id"]}
-    menu = service.dispatch("connect.menu", {**params, "menu": "vendors"})
+    subscriptions = service.dispatch("connect.menu", {**params, "menu": "vendors"})
+    assert not any(row["id"] == "antigravity-managed" for row in subscriptions["rows"])
+    menu = service.dispatch("connect.menu", {**params, "menu": "closed-harnesses"})
     managed = next(row for row in menu["rows"] if row["id"] == "antigravity-managed")
     route = service.dispatch(
         "connect.vendor.key",

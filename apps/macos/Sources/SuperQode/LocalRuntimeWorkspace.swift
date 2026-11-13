@@ -25,6 +25,7 @@ import SwiftUI
 
 struct LocalRuntimeWorkspace: View {
   @EnvironmentObject var app: Workspace
+  var active = true
   @StateObject private var library = LocalRuntimeLibrary()
   @State private var restoringProfile = false
   @State private var template = "vllm-metal"
@@ -59,8 +60,8 @@ struct LocalRuntimeWorkspace: View {
 
   var body: some View {
     content
-    .task(id: app.connected) {
-      guard app.connected else { return }
+    .task(id: String(active) + "\n" + String(app.connected)) {
+      guard active, app.connected else { return }
       await library.load(app.engine)
       await refreshServers()
       if projectReady { await loadHarnesses() }
@@ -72,6 +73,9 @@ struct LocalRuntimeWorkspace: View {
       }
     }
     .onChange(of: app.projectID) { _, _ in models = []; model = ""; Task { await loadHarnesses() } }
+    .onChange(of: active) { _, visible in
+      if !visible { serverAction = nil; serverConnection = nil; showSetup = false; benchmark = false }
+    }
     .centeredDialog(isPresented: Binding(get: { serverAction != nil }, set: { if !$0 { serverAction = nil } }),
       title: "Review local operation", onDismiss: { Task { await refreshServers() } }) {
       if let serverAction { LocalModelActionView(request: serverAction).environmentObject(app) }
@@ -171,6 +175,7 @@ struct LocalRuntimeWorkspace: View {
         TextField("Profile name", text: $name).textFieldStyle(.roundedBorder)
       }
       TextField("Local base URL, e.g. http://127.0.0.1:8000/v1", text: $endpoint).textFieldStyle(.roundedBorder)
+        .accessibilityIdentifier("local.runtime.endpoint")
       HStack {
         SecureField("Local API key (optional)", text: $apiKey).textFieldStyle(.roundedBorder)
         Toggle("Save in Keychain", isOn: $rememberKey).toggleStyle(.checkbox)
@@ -202,10 +207,9 @@ struct LocalRuntimeWorkspace: View {
       }
       if !models.isEmpty {
         Divider()
-        Picker("Advertised model", selection: $model) {
-          Text("Choose a model").tag("")
-          ForEach(models, id: \.projectRowID) { row in Text(string(row, "id")).tag(string(row, "id")) }
-        }
+        CatalogPopup(label: "Advertised model", options: models.map {
+          CatalogPopupOption(id: string($0, "id"), title: string($0, "id"))
+        }, selection: $model, placeholder: "Choose a model")
         if let row = models.first(where: { string($0, "id") == model }) {
           Text("Context cap: \(row["context"] ?? context) · " + string(row, "context_source")).font(.caption).foregroundStyle(.secondary)
         }
@@ -406,6 +410,7 @@ struct LocalRuntimeWorkspace: View {
 struct AppleLocalModelPanel: View {
   @EnvironmentObject var app: Workspace
   let project: String
+  var active = true
   let onUse: () -> Void
   @State private var status: [String: Any] = [:]
   @State private var checking = false
@@ -449,7 +454,9 @@ struct AppleLocalModelPanel: View {
       }
     }.padding(16).brandSurface()
       .accessibilityIdentifier("local.appleModel")
-      .task(id: app.connected) { if app.connected { await refresh() } }
+      .task(id: String(active) + "\n" + String(app.connected)) {
+        if active && app.connected { await refresh() }
+      }
   }
 
   private func use(development: Bool) {

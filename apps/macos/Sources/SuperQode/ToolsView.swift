@@ -54,9 +54,9 @@ struct ToolsView: View {
       )
       HSplitView {
         VStack(alignment: .leading, spacing: 14) {
-          Picker("Area", selection: $category) {
-            ForEach(categories.keys.sorted(), id: \.self) { Text(categories[$0]!).tag($0) }
-          }.labelsHidden()
+          CatalogPopup(label: "Area", options: categories.keys.sorted().map {
+            CatalogPopupOption(id: $0, title: categories[$0]!)
+          }, selection: $category)
           if category == "work" {
             Button("Live WorkOrder board…") { showWorkBoard = true }.buttonStyle(BrandButtonStyle())
           }
@@ -164,10 +164,9 @@ struct ToolsView: View {
         if field["secret"] as? Bool == true {
           SecureField(title, text: binding).textFieldStyle(.roundedBorder)
         } else if !(field["choices"] as? [String] ?? []).isEmpty {
-          Picker(title, selection: binding) {
-            Text("Use command default").tag("")
-            ForEach(field["choices"] as? [String] ?? [], id: \.self) { Text($0).tag($0) }
-          }.labelsHidden()
+          CatalogPopup(label: title, options: [CatalogPopupOption(id: "", title: "Use command default")]
+            + (field["choices"] as? [String] ?? []).map { CatalogPopupOption(id: $0, title: $0) },
+            selection: binding)
         } else if field["multiple"] as? Bool == true {
           TextEditor(text: binding).font(.system(size: 12, design: .monospaced)).frame(height: 65)
             .padding(6).brandSurface(radius: 8)

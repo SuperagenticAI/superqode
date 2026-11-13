@@ -1004,16 +1004,6 @@ _AGENT_PROFILES: List[ConnectionProfile] = [
         ),
     ),
     ConnectionProfile(
-        id="antigravity-managed",
-        label="Antigravity Managed Agent",
-        description="Run Google's agent in a hosted sandbox with a Gemini API key",
-        connector="vendor-key",
-        runtime="antigravity-managed",
-        menu=CONNECT_MENU_VENDORS,
-        auth_mode="byok",
-        transport="Google API",
-    ),
-    ConnectionProfile(
         id="muse",
         harness_openness="closed",
         model_openness="Muse Spark models",
@@ -1501,7 +1491,12 @@ def _catalog_harness_profiles(menu: str) -> List[ConnectionProfile]:
                 acp_agent=entry.acp_agent,
                 harness_openness=entry.openness if entry.openness in {"open", "closed"} else "",
                 license=entry.license,
-                transport="ACP" if entry.acp_agent else "",
+                transport="ACP"
+                if entry.acp_agent
+                else "API"
+                if key_spec and key_spec.after_auth == "vendor-key-runtime"
+                else "",
+                auth_mode=key_spec.mode if key_spec is not None else "",
                 detect=detect,
                 unavailable_hint=hint,
             )
