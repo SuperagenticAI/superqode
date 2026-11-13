@@ -47,6 +47,51 @@ import Foundation
       field.stringValue = value
       field.delegate?.controlTextDidChange?(Notification(name: NSControl.textDidChangeNotification, object: field))
     }
+    @MainActor func checkRuntimeDraft() async throws -> Bool {
+      @MainActor func runtimeButton(in view: NSView) -> NSButton? {
+        if let button = view as? NSButton, button.identifier?.rawValue == "local.runtimes.show" { return button }
+        return view.subviews.lazy.compactMap { runtimeButton(in: $0) }.first
+      }
+      let previous = section
+      section = "Models"
+      defer { section = previous }
+      var opened = false
+      for _ in 0..<100 {
+        try await Task.sleep(for: .milliseconds(30))
+        if let content = NSApp.windows.first(where: { $0.title == "SuperQode" })?.contentView,
+          let button = runtimeButton(in: content), button.isEnabled {
+          button.performClick(nil); opened = true; break
+        }
+      }
+      guard opened else { throw EngineError(message: "Local runtime navigation button did not become available") }
+      var endpoint: NSTextField?
+      for _ in 0..<100 {
+        try await Task.sleep(for: .milliseconds(30))
+        if let field = mountedRuntimeEndpoint(), field.isEnabled { endpoint = field; break }
+      }
+      guard let endpoint else { throw EngineError(message: "Local runtime endpoint did not appear after opening its form") }
+      let original = endpoint.stringValue
+      let unsaved = "http://127.0.0.1:49321/v1"
+      editEndpoint(endpoint, value: unsaved)
+      try await Task.sleep(for: .milliseconds(30))
+      section = "Workspace"
+      try await Task.sleep(for: .milliseconds(30))
+      section = "Models"
+      var restored: NSTextField?
+      for _ in 0..<100 {
+        try await Task.sleep(for: .milliseconds(30))
+        if let field = mountedRuntimeEndpoint(), field.isEnabled { restored = field; break }
+      }
+      let preserved = restored?.stringValue == unsaved
+      if let restored {
+        editEndpoint(restored, value: original)
+        if let scroll = restored.enclosingScrollView {
+          scroll.contentView.scroll(to: .zero)
+          scroll.reflectScrolledClipView(scroll.contentView)
+        }
+      }
+      return preserved
+    }
     @MainActor func measure(passes: Int) async throws -> [String: Any] {
       let sections = [
         "Workspace", "Files", "Review", "Terminal", "Checkpoints", "Workspace",
@@ -62,10 +107,6 @@ import Foundation
       var studioEditorPreserved = true
       var initialModelsSwitcher: NSSegmentedControl?
       var modelsSwitcherPreserved = true
-      var initialRuntimeEndpoint: NSTextField?
-      var originalEndpoint = ""
-      let unsavedEndpoint = "http://127.0.0.1:49321/v1"
-      var runtimeFormPreserved = true
       let (ready, signal) = AsyncStream<Bool>.makeStream()
       let heartbeat = Task {
         signal.yield(true)
@@ -93,15 +134,6 @@ import Foundation
             let control = mountedModelsSwitcher()
             if let initialModelsSwitcher { modelsSwitcherPreserved = modelsSwitcherPreserved && control === initialModelsSwitcher }
             else { initialModelsSwitcher = control; modelsSwitcherPreserved = control != nil }
-            let field = mountedRuntimeEndpoint()
-            if let initialRuntimeEndpoint {
-              runtimeFormPreserved = runtimeFormPreserved && field === initialRuntimeEndpoint
-                && field?.stringValue == unsavedEndpoint
-            } else if let field {
-              initialRuntimeEndpoint = field
-              originalEndpoint = field.stringValue
-              editEndpoint(field, value: unsavedEndpoint)
-            } else { runtimeFormPreserved = false }
           }
           if destination == "Harness Studio" {
             let editor = mountedStudioEditor()
@@ -112,15 +144,7 @@ import Foundation
       }
       heartbeat.cancel()
       await heartbeat.value
-      runtimeFormPreserved = runtimeFormPreserved && initialRuntimeEndpoint != nil
-        && mountedRuntimeEndpoint() === initialRuntimeEndpoint
-        && initialRuntimeEndpoint?.stringValue == unsavedEndpoint
-      if let initialRuntimeEndpoint { editEndpoint(initialRuntimeEndpoint, value: originalEndpoint) }
-      guard runtimeFormPreserved else {
-        throw EngineError(message: "Navigation discarded the unsaved Local AI runtime endpoint (found: \(initialRuntimeEndpoint != nil), retained: \(mountedRuntimeEndpoint() === initialRuntimeEndpoint), draft checks passed: \(runtimeFormPreserved))")
-      }
       return ["section_changes": sections.count * passes, "worst_ui_heartbeat_ms": worstTick * 1000,
-        "local_runtime_form_preserved": runtimeFormPreserved,
         "composer_editor_preserved": initialComposer != nil && initialComposer === mountedComposer(),
         "models_page_preserved": initialModelsSwitcher != nil && modelsSwitcherPreserved,
         "models_page_disabled_while_hidden": initialModelsSwitcher.map { !$0.isEnabled } ?? false,
@@ -136,6 +160,7 @@ import Foundation
     let firstOpen = try await measure(passes: 1)
     var result = try await measure(passes: 3)
     result["first_open"] = firstOpen
+    result["local_runtime_form_preserved"] = try await checkRuntimeDraft()
     guard (result["worst_ui_heartbeat_ms"] as? Double ?? 0) >= 250,
       ProcessInfo.processInfo.environment["SUPERQODE_NAV_PROFILE"] == "1" else { return result }
     let arguments = ProcessInfo.processInfo.arguments
@@ -160,6 +185,9 @@ import Foundation
 @MainActor func requireResponsiveNavigation(_ result: [String: Any]) throws {
   if let firstOpen = result["first_open"] as? [String: Any] {
     try requireResponsiveNavigation(firstOpen)
+  }
+  if result["local_runtime_form_preserved"] as? Bool == false {
+    throw EngineError(message: "Navigation discarded the unsaved Local AI runtime endpoint")
   }
   guard result["models_page_preserved"] as? Bool == true,
     result["models_page_disabled_while_hidden"] as? Bool == true else {

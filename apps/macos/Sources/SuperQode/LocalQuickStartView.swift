@@ -33,17 +33,23 @@ struct LocalQuickStartView: View {
   private var validProject: Bool { app.projectID == project && !closed && !app.openingProject }
 
   var body: some View {
+    ScrollViewReader { scroll in
     ScrollView {
     VStack(alignment: .leading, spacing: 16) {
       HStack {
         Text("Local AI").font(.title2.weight(.semibold))
         Spacer()
+        if embedded {
+          nativeButton("local.runtimes.show", action: { scroll.scrollTo("local.runtimes", anchor: .top) }, title: "Runtimes and performance") {
+            Text("Runtimes & performance")
+          }
+        }
         if !embedded { Button("Advanced…") { advanced = true } }
       }
       if showInstalled {
         InstalledLocalModelPicker(project: project, dismissOnUse: !embedded, active: active)
           .id(project)
-        if embedded { LocalRuntimeWorkspace(active: active) }
+        if embedded { LocalRuntimeWorkspace(active: active).id("local.runtimes") }
         DisclosureGroup(isExpanded: $showSetup) {
           VStack(alignment: .leading, spacing: 16) {
             LocalAINotice(learnMore: $learnMore)
@@ -98,6 +104,7 @@ struct LocalQuickStartView: View {
       }
       .onAppear { closed = false }
       .onDisappear { closed = true }
+    }
   }
 
   private var setupGuide: some View {
