@@ -48,4 +48,6 @@ import Observation
   var model: String = ""
   var coding: Bool = false
   var harness: String = "core"
+  /// Survives a recreated view so an in-flight save cannot switch profiles.
+  var saving: Bool = false
 }

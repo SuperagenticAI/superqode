@@ -235,7 +235,7 @@ struct LocalRuntimeWorkspace: View {
       HStack {
         Text("Other local inference servers").font(.title3.weight(.semibold))
         Spacer()
-        Button("New profile") { reset() }.disabled(busy)
+        Button("New profile") { reset() }.disabled(busy || form.saving)
       }
       Text("Keep your existing server. Profiles connect only to this Mac's loopback addresses; redirects and remote hosts are refused.")
         .font(.caption).foregroundStyle(.secondary)
@@ -245,6 +245,7 @@ struct LocalRuntimeWorkspace: View {
             ForEach(library.profiles, id: \.projectRowID) { row in
               Button(string(row, "name")) { select(row) }.buttonStyle(.bordered)
                 .tint(identity == string(row, "id") ? Color.qAccent : .secondary)
+                .disabled(form.saving)
             }
           }
         }
@@ -325,7 +326,7 @@ struct LocalRuntimeWorkspace: View {
         if !projectReady { Text("Open a project to run a check or start a conversation.").font(.caption).foregroundStyle(.secondary) }
       }
       if busy { ProgressView("Working with local runtime…").controlSize(.small) }
-    }.padding(18).brandSurface().disabled(busy)
+    }.padding(18).brandSurface().disabled(busy || form.saving)
   }
 
   private var guideURL: URL? {
@@ -364,12 +365,14 @@ struct LocalRuntimeWorkspace: View {
     Task { defer { busy = false }; do { try await work() } catch { library.failure = error.localizedDescription } }
   }
   private func reset() {
+    guard !form.saving else { return }
     identity = UUID().uuidString.lowercased(); name = "Local server"; template = "custom"
     endpoint = "http://127.0.0.1:8000/v1"; context = 8192; capability = "unknown"
     apiKey = ""; rememberKey = false; includeUsage = true; models = []; model = ""; coding = false; setup = [:]
     setOperation("")
   }
   private func select(_ row: [String: Any]) {
+    guard !form.saving else { return }
     let next = string(row, "template", "custom")
     restoringProfile = template != next; template = next
     identity = string(row, "id"); name = string(row, "name"); endpoint = string(row, "endpoint")
@@ -385,36 +388,54 @@ struct LocalRuntimeWorkspace: View {
       && capability == savedCapability && includeUsage == (selected["include_usage"] as? Bool ?? true) && apiKey.isEmpty && rememberKey == (selected["remember_key"] as? Bool == true)
   }
   private func saveProfile() {
+    guard !form.saving else { return }
+    let profileID = identity
+    let profileName = name
+    let profileTemplate = template
+    let profileEndpoint = endpoint
+    let profileContext = context
+    let profileCapability = capability
+    let profileRemember = rememberKey
+    let profileUsage = includeUsage
+    let keyValue = apiKey
+    let savedRow = selected
+    form.saving = true
     action {
-      let keyValue = apiKey
-      var params: [String: Any] = ["id": identity, "name": name, "template": template, "endpoint": endpoint, "context": context, "remember_key": rememberKey, "include_usage": includeUsage]
-      if capability == "unknown" { params["tools"] = NSNull() }
-      else { params["tools"] = capability == "yes" }
-      if rememberKey && keyValue.isEmpty && selected["key_configured"] as? Bool == true && selected["remember_key"] as? Bool != true {
+      defer { form.saving = false }
+      var params: [String: Any] = ["id": profileID, "name": profileName, "template": profileTemplate, "endpoint": profileEndpoint, "context": profileContext, "remember_key": profileRemember, "include_usage": profileUsage]
+      if profileCapability == "unknown" { params["tools"] = NSNull() }
+      else { params["tools"] = profileCapability == "yes" }
+      if profileRemember && keyValue.isEmpty && savedRow["key_configured"] as? Bool == true && savedRow["remember_key"] as? Bool != true {
         throw EngineError(message: "Reenter the local key to save it in Keychain. It can stay in the current session without saving.")
       }
       let saved = try await app.engine.call("local.runtimes.save", params) as? [String: Any] ?? [:]
-      endpoint = string(saved, "endpoint", endpoint)
-      if !rememberKey && keyValue.isEmpty {
-        let store = app.credentialStore; let account = "local-runtime:" + identity
+      let savedEndpoint = string(saved, "endpoint", profileEndpoint)
+      if !profileRemember && keyValue.isEmpty {
+        let store = app.credentialStore; let account = "local-runtime:" + profileID
         try await Task.detached { try store.remove(account) }.value
       }
       if !keyValue.isEmpty {
-        let store = app.credentialStore; let account = "local-runtime:" + identity
-        if rememberKey { try await Task.detached { try store.save(account, key: keyValue) }.value }
+        let store = app.credentialStore; let account = "local-runtime:" + profileID
+        if profileRemember { try await Task.detached { try store.save(account, key: keyValue) }.value }
         else { try await Task.detached { try store.remove(account) }.value }
-        _ = try await app.engine.call("local.runtimes.key", ["id": identity, "key": keyValue])
-        apiKey = ""
+        _ = try await app.engine.call("local.runtimes.key", ["id": profileID, "key": keyValue])
       }
-      await library.load(app.engine); await loadHarnesses(); message = "Profile saved. Check the server to choose a model."
+      await library.load(app.engine)
+      guard identity == profileID else { return }
+      endpoint = savedEndpoint
+      if !keyValue.isEmpty { apiKey = "" }
+      await loadHarnesses(); message = "Profile saved. Check the server to choose a model."
     }
   }
   private func removeKey() {
     action {
-      let store = app.credentialStore; let account = "local-runtime:" + identity
+      let profileID = identity
+      let store = app.credentialStore; let account = "local-runtime:" + profileID
       try await Task.detached { try store.remove(account) }.value
-      _ = try await app.engine.call("local.runtimes.key", ["id": identity, "key": NSNull()])
-      apiKey = ""; await library.load(app.engine)
+      _ = try await app.engine.call("local.runtimes.key", ["id": profileID, "key": NSNull()])
+      await library.load(app.engine)
+      guard identity == profileID else { return }
+      apiKey = ""
     }
   }
   private func probe() {

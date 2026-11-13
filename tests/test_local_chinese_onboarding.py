@@ -167,14 +167,23 @@ def test_current_deepseek_workspace_aliases_can_disable_thinking(model):
     assert thinking_policy(model) == "configurable"
 
 
-def test_qwen_setup_launches_interactive_cli_not_acp_or_removed_auth(desktop, monkeypatch):
+@pytest.mark.parametrize("reference", ["qwen-code", "acp:qwen"])
+def test_qwen_setup_launches_interactive_cli_not_acp_or_removed_auth(
+    desktop, monkeypatch, reference
+):
     service, project, _ = desktop
     monkeypatch.setattr("shutil.which", lambda name: "/vendor/qwen" if name == "qwen" else None)
+    menu = service.dispatch("connect.menu", {"project": project["id"], "menu": "vendors"})
+    row = next(row for row in menu["rows"] if row["id"] == "qwen-code")
+    assert row["route"]["id"] == "qwen-code" and row["route"]["agent_id"] == "qwen"
+    assert row["route"]["command"] == "qwen --acp"
     plan = service.dispatch(
-        "connect.acp.login.plan", {"project": project["id"], "reference": "acp:qwen"}
+        "connect.acp.login.plan", {"project": project["id"], "reference": reference}
     )
     assert plan["interactive"] and plan["argv"] == ["/vendor/qwen"]
+    assert plan["env"] == {}
     assert "/auth" in plan["instructions"] and "region" in plan["instructions"]
+    assert "Token Plan" in plan["instructions"] and "Coding Plan" in plan["instructions"]
 
 
 def test_newcomer_shows_only_primary_engines_with_installed_models_first(desktop, monkeypatch):

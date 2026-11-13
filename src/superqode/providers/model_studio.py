@@ -27,7 +27,10 @@ def validate_metered_route(base_url: str, key: str) -> None:
     if key.strip().startswith("sk-sp-") or host.startswith(
         ("token-plan.", "coding-intl.dashscope.", "coding.dashscope.")
     ):
-        raise ValueError("Use a metered Model Studio API key and endpoint for this connection.")
+        raise ValueError(
+            "Use a metered Model Studio API key and endpoint for this connection. "
+            "For Token Plan or Coding Plan, connect Qwen Code and select your plan in /auth."
+        )
 
 
 def workspace_catalog_url(base_url: str) -> str | None:
@@ -106,10 +109,12 @@ def thinking_options(model: str, level: str | None) -> dict:
     }:
         if level == "off":
             return {"enable_thinking": False}
-        return {
-            "enable_thinking": True,
-            "reasoning_effort": {"medium": "high", "xhigh": "high"}.get(level, level),
-        }
+        aliases = (
+            {"low": "high", "medium": "high", "xhigh": "max"}
+            if model == "deepseek-v4-pro"
+            else {"medium": "high", "xhigh": "high"}
+        )
+        return {"enable_thinking": True, "reasoning_effort": aliases.get(level, level)}
     return {}
 
 

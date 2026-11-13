@@ -1001,7 +1001,7 @@
         ":runtime antigravity-managed"
       ],
       "cli_commands": [
-        "superqode harness run antigravity-managed \"Describe your task\""
+        "superqode -p --connect antigravity-managed \"Describe your task\""
       ],
       "eval_commands": [],
       "optimize_commands": [],

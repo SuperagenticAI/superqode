@@ -2,6 +2,7 @@ import json
 from pathlib import Path
 from types import SimpleNamespace
 
+import pytest
 from click.testing import CliRunner
 
 from superqode.app.harness_picker import HarnessPickerItem, harness_acp_item
@@ -530,6 +531,41 @@ def test_public_optional_setup_survives_an_installed_exporter():
     record = build_hub_index(items=[item], public=True)["items"][0]
     assert record["install_command"] == 'uv tool install "superqode[deepagents]"'
     assert record["setup_steps"]
+
+
+def test_managed_antigravity_uses_headless_connect_not_harness_run():
+    """The hosted agent is a runtime connection, not a resolvable HarnessSpec."""
+    from superqode.commands.harness.run_history import harness_run
+    from superqode.harness.catalog import resolve_harness
+    from superqode.providers.connection_profiles import get_connection_profile
+
+    profile = get_connection_profile("antigravity-managed")
+    assert profile is not None
+    assert profile.connector == "vendor-key"
+    assert profile.runtime == "antigravity-managed"
+    with pytest.raises(ValueError, match="Unknown harness 'antigravity-managed'"):
+        resolve_harness("antigravity-managed")
+
+    command = 'superqode -p --connect antigravity-managed "Describe your task"'
+    record = next(
+        item
+        for item in build_hub_index(public=True)["items"]
+        if item["id"] == "antigravity-managed"
+    )
+    assert list(record["cli_commands"]) == [command]
+    published = json.loads(
+        (Path(__file__).resolve().parents[1] / "docs" / "assets" / "harness-hub.json").read_text(
+            encoding="utf-8"
+        )
+    )
+    published_record = next(
+        item for item in published["items"] if item["id"] == "antigravity-managed"
+    )
+    assert published_record["cli_commands"] == [command]
+
+    result = CliRunner().invoke(harness_run, ["antigravity-managed", "Describe your task"])
+    assert result.exit_code != 0
+    assert "Unknown harness" in result.output + str(result.exception)
 
 
 def test_gemini_subscription_hub_has_install_and_google_login_steps():

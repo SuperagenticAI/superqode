@@ -16,7 +16,11 @@ struct ConnectionSourcesView: View {
   @State private var workspaceMessage = ""
   @State private var workspaceLookup: UUID?
   @State private var workspaceEndpoint = ""
-  init(mode: String) { _mode = State(initialValue: mode) }
+  let openModelStudioPlan: (() -> Void)?
+  init(mode: String, openModelStudioPlan: (() -> Void)? = nil) {
+    _mode = State(initialValue: mode)
+    self.openModelStudioPlan = openModelStudioPlan
+  }
   private var cloudProviders: [[String: Any]] {
     app.providers.filter { provider in
       guard provider["key_supported"] as? Bool == true else { return false }
@@ -51,6 +55,11 @@ struct ConnectionSourcesView: View {
               subtitle: "For "
                 + string(
                   app.harnesses.first { string($0, "id") == app.harness } ?? [:], "name", app.harness))
+            if let openModelStudioPlan {
+              Button("Set up Alibaba Model Studio plan…", action: openModelStudioPlan)
+                .disabled(saving)
+                .help("Connect Token Plan or Coding Plan through Qwen Code.")
+            }
             if cloudProviders.isEmpty {
               EmptyState(
                 icon: "info.circle", title: "This model source needs different setup",

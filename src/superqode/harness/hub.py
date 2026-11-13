@@ -1671,7 +1671,11 @@ def _connection_details(item: HarnessPickerItem) -> dict[str, Any]:
             else (),
         ),
         "tui_commands": commands,
-        "cli_commands": (f'superqode harness run {item.id} "Describe your task"',),
+        "cli_commands": (
+            ('superqode -p --connect antigravity-managed "Describe your task"',)
+            if item.id == "antigravity-managed"
+            else (f'superqode harness run {item.id} "Describe your task"',)
+        ),
         "policies": (
             "The connected coding agent owns its tool loop",
             "Authentication remains with the vendor CLI or account",

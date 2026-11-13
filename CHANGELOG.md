@@ -9,6 +9,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [2.31.10] - 2026-11-13
 
+### Added
+
+- macOS API-key setup can open Alibaba Model Studio Token Plan and Coding Plan configuration. Qwen Code `/auth` selects the plan, region, and key. Core and other SuperQode harnesses continue to use regional metered API keys.
+
 ### Changed
 
 - macOS 0.4.4 (build 30) bundles Python engine 2.31.10. Model Studio setup displays advertised context and output limits, tool support, unknown pricing, and models that require thinking.
@@ -18,7 +22,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 - Local AI keeps unsaved Quick Start, installed-model and runtime-profile settings in memory when navigating away, without keeping hidden forms in the layout or saving unsaved keys to disk.
 - macOS reuses catalog menus instead of rebuilding large menus during navigation. The native smoke check verifies unsaved runtime endpoints across navigation while retaining the existing responsiveness limits.
-- Model Studio thinking controls recognize DeepSeek V4 Pro and V4.1 Flash 1017 aliases. Workspace model discovery reports available capabilities and limits without inventing missing metadata.
+- Model Studio thinking controls recognize DeepSeek V4 Pro and V4.1 Flash 1017 aliases. DeepSeek V4 Pro sends high effort for low or medium and max for xhigh. Workspace model discovery reports available capabilities and limits without inventing missing metadata.
+- A Local AI profile save keeps the profile id and Keychain account it started with if navigation replaces the page before the save finishes.
+- Harness Hub lists `superqode -p --connect antigravity-managed` for Google's hosted agent. That route is a runtime connection, not a HarnessSpec.
 
 ## [2.31.9] - 2026-11-12
 

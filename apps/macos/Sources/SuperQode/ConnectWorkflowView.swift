@@ -97,6 +97,14 @@ struct ConnectionView: View {
       initialValue: initialPage == "menu:root" ? ["menu:root"] : ["menu:root", initialPage])
   }
   private var page: String { path.last ?? "menu:root" }
+  private var modelStudioPlanSetup: (() -> Void)? {
+    guard let route = app.harnesses.first(where: {
+      string($0, "id") == "qwen-code" && string($0, "agent_id") == "qwen"
+    }) else { return nil }
+    return {
+      showDetail(["name": "Qwen Code", "description": "Alibaba Model Studio plan setup", "route": route])
+    }
+  }
   var body: some View {
     VStack(spacing: 0) {
       HStack(spacing: 12) {
@@ -124,7 +132,8 @@ struct ConnectionView: View {
       Divider()
       Group {
         if page.hasPrefix("source:") {
-          ConnectionSourcesView(mode: page == "source:local" ? "Local model" : "Provider API key")
+          ConnectionSourcesView(mode: page == "source:local" ? "Local model" : "Provider API key",
+            openModelStudioPlan: modelStudioPlanSetup)
         } else if page.hasPrefix("configure:") {
           HarnessConfigurationView(mode: String(page.dropFirst(10))) { id in
             app.chooseHarness(id)

@@ -20,6 +20,29 @@ superqode agents show qwen
 superqode agents doctor qwen
 ```
 
+## Alibaba Model Studio subscriptions
+
+In the macOS connection picker, open **Provider API key** and choose
+**Set up Alibaba Model Studio plan…**. From Qwen Code's connection page,
+install the agent if needed, then choose **Configure Qwen Code authentication…**.
+In the Qwen Code terminal, open `/auth`, choose **Alibaba Model Studio**, and
+select the plan and region associated with your key. For Token Plan Personal,
+use the key from your subscription. For Token Plan Team, use the key from your
+assigned seat. Coding Plan uses its own plan key.
+
+Exit Qwen Code, check the connection in SuperQode and choose **Use verified
+connection**. The check starts the agent and opens a session. Send a small
+interactive coding task to verify model access and review usage in Alibaba's
+console. In the TUI, configure Qwen Code in the same way before connecting
+with `:connect qwen-code`.
+
+Qwen Code owns model selection and billing for this connection. Its
+subscription keys are for interactive AI coding. Core and other SuperQode
+BYOK harnesses use the regional Model Studio API keys below.
+
+[Alibaba's Qwen Code setup](https://www.alibabacloud.com/help/en/model-studio/qwen-code.md) ·
+[Alibaba's supported uses by plan](https://www.alibabacloud.com/help/en/model-studio/more-tools)
+
 ## Regional API keys
 
 For Core or another BYOK harness, the model-provider picker also offers
@@ -100,7 +123,7 @@ Qwen is available through several distinct paths:
 | Goal | Route |
 | --- | --- |
 | Use the complete first-party Qwen Code agent | `:connect qwen-code` |
-| Use an Alibaba-hosted Qwen model inside the SuperQode native harness | `:connect byok alibaba <model>` |
+| Use a metered Model Studio model inside a SuperQode harness | `:connect byok qwen-intl <model>` or `:connect byok qwen-cn <model>` |
 | Use a local Qwen model inside the SuperQode native harness | `:connect local ollama <qwen-model>` |
 | Start a repository-owned Qwen coding HarnessSpec | `superqode harness init qwen-coder --template qwen-coding --output harness.yaml` |
 

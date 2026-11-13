@@ -98,8 +98,9 @@ struct ACPSetupView: View {
           }.disabled(route["available"] as? Bool != true || app.anyActive || app.busy)
         }
       }
-      if !ready && !knownLogin.isEmpty {
-        Button("Vendor sign-in · " + string(knownLogin, "name")) {
+      if !knownLogin.isEmpty && (!ready || string(knownLogin, "vendor") == "qwen-code") {
+        Button(string(knownLogin, "vendor") == "qwen-code"
+          ? "Configure Qwen Code authentication…" : "Vendor sign-in · " + string(knownLogin, "name")) {
           if knownLogin["interactive"] as? Bool == true { terminalPlan = knownLogin }
           else { begin("subscription", extra: ["vendor": string(knownLogin, "vendor")]) }
         }.disabled(route["available"] as? Bool != true || app.anyActive || app.busy)

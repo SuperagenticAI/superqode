@@ -2005,7 +2005,7 @@ class DesktopService:
                 if params["reference"].startswith("acp:")
                 else profile_route(root, params["reference"].removeprefix("connection:"))
             )
-            if params["reference"] == "acp:qwen":
+            if route.get("id") in {"qwen-code", "acp:qwen"} and route.get("agent_id") == "qwen":
                 import shutil
 
                 binary = shutil.which("qwen")
@@ -2020,7 +2020,7 @@ class DesktopService:
                     "argv": [binary],
                     "env": {},
                     "unset_env": [],
-                    "instructions": "In Qwen Code, enter /auth and choose your provider, region and plan. Coding Plan, Token Plan and metered API keys use different endpoints. Exit Qwen when setup is complete, then check the connection here. Closing the CLI alone does not verify model access.",
+                    "instructions": "In Qwen Code, open /auth and choose Alibaba Model Studio, your region, and Token Plan, Coding Plan, or Standard API Key. Enter the key for that plan. Exit Qwen Code when setup is complete, then check the connection here. Run a small coding task to verify access to the selected model.",
                 }
             vendor = route.get("subscription_vendor") or resolve_vendor(
                 params["reference"].removeprefix("acp:")

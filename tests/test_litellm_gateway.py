@@ -5,7 +5,7 @@ from types import SimpleNamespace
 
 import pytest
 
-from superqode.providers.gateway.base import GatewayResponse, Message
+from superqode.providers.gateway.base import GatewayResponse, Message, ToolDefinition
 from superqode.providers.gateway.litellm_gateway import LiteLLMGateway
 
 
@@ -281,6 +281,8 @@ async def test_ollama_stream_preserves_terminal_usage_chunk(monkeypatch):
         (False, "qwen3.8-flash", "high", "xhigh"),
         (True, "qwen3.8-flash", "high", "xhigh"),
         (True, "deepseek-v4.1-flash", "medium", "high"),
+        (True, "deepseek-v4-pro", "low", "high"),
+        (False, "deepseek-v4-pro", "xhigh", "max"),
         (False, "deepseek-v4-pro", "max", "max"),
         (True, "deepseek-v4.1-flash-1017", "low", "low"),
     ],
@@ -330,18 +332,26 @@ async def test_model_studio_request_keeps_reasoning_history_and_regional_auth(
     gateway = LiteLLMGateway()
     async with httpx.AsyncClient(transport=httpx.MockTransport(respond)) as http:
         client = AsyncOpenAI(api_key="sk-intl-demo", base_url=workspace, http_client=http)
+        tool_call = {
+            "id": "call-1",
+            "type": "function",
+            "function": {"name": "fixture_value", "arguments": "{}"},
+        }
         kwargs = dict(
             provider="qwen-intl",
             model=model,
             reasoning_effort=effort,
             client=client,
+            tools=[ToolDefinition("fixture_value", "Return test data", {"type": "object"})],
             messages=[
+                Message(role="user", content="Read the fixture"),
                 Message(
                     role="assistant",
-                    content="previous answer",
+                    content="",
                     reasoning_content="previous reasoning",
+                    tool_calls=[tool_call],
                 ),
-                Message(role="user", content="continue"),
+                Message(role="tool", content="fixture result", tool_call_id="call-1"),
             ],
         )
         # Check the actual routing sent to LiteLLM as well as the HTTP serialization.
@@ -355,10 +365,12 @@ async def test_model_studio_request_keeps_reasoning_history_and_regional_auth(
         if stream:
             chunks = [chunk async for chunk in gateway.stream_completion(**kwargs)]
             assert "".join(chunk.content for chunk in chunks) == "done"
+            assert "".join(chunk.thinking_content or "" for chunk in chunks) == "next step"
             assert chunks[-1].usage.total_tokens == 65
         else:
             response = await gateway.chat_completion(**kwargs)
             assert response.content == "done"
+            assert response.thinking_content == "next step"
             assert response.usage.total_tokens == 65
 
     [(url, authorization, body)] = calls
@@ -366,7 +378,10 @@ async def test_model_studio_request_keeps_reasoning_history_and_regional_auth(
     assert body["model"] == model
     assert body["reasoning_effort"] == expected and body["enable_thinking"] is True
     assert "thinking" not in body
-    assert body["messages"][0]["reasoning_content"] == "previous reasoning"
+    assert body["tools"][0]["function"]["name"] == "fixture_value"
+    assert body["messages"][1]["reasoning_content"] == "previous reasoning"
+    assert body["messages"][1]["tool_calls"] == [tool_call]
+    assert body["messages"][2]["tool_call_id"] == "call-1"
     if stream:
         assert body["stream_options"]["include_usage"] is True
 
