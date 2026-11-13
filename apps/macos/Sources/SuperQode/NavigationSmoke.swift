@@ -26,7 +26,7 @@ import Foundation
     @MainActor func mountedModelsSwitcher() -> NSSegmentedControl? {
       @MainActor func find(in view: NSView) -> NSSegmentedControl? {
         if let control = view as? NSSegmentedControl,
-          (0..<control.segmentCount).contains(where: { control.label(forSegment: $0) == "Overview" }) {
+          (0..<control.segmentCount).contains(where: { control.label(forSegment: $0) == "Start" }) {
           return control
         }
         return view.subviews.lazy.compactMap { find(in: $0) }.first
@@ -53,6 +53,9 @@ import Foundation
         return view.subviews.lazy.compactMap { runtimeButton(in: $0) }.first
       }
       @MainActor func openForm() async throws -> NSTextField {
+        // The runtime form lives on Advanced. Start from the Start tab so its
+        // Advanced Local AI link (local.runtimes.show) is what opens it.
+        localAITab = "start"
         var opened = false
         for _ in 0..<100 {
           try await Task.sleep(for: .milliseconds(30))

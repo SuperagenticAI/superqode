@@ -323,3 +323,33 @@ def test_setup_preset_is_reviewable_without_changing_the_existing_model_catalog(
     assert reviewed["step"] == "install"
     assert reviewed["plan"]["context"] == 4096
     assert not service._all("SELECT id FROM jobs")
+
+
+def test_catalog_reports_capacity_and_one_starter_for_this_mac(setup):
+    service, params, _, _, _ = setup
+    catalog = service.dispatch("local.models.quickstart.catalog", {"project": params["project"]})
+    capacity = catalog["capacity"]
+    assert capacity["memory_gb"] == 16
+    # 16 GB x 0.70 budget, 10% spare, headroom and a modest context.
+    assert capacity["comfortable_gb"] == 7
+    assert capacity["summary"] == "Comfortable with models up to about 7 GB."
+    starter = catalog["starter"]
+    balanced = next(p for p in catalog["setup_presets"] if p["id"] == "balanced")
+    if balanced["choice"]:
+        assert starter["id"] == balanced["choice"]["id"]
+    else:
+        assert starter is None or starter["fit"]["rating"] == "Fits"
+
+
+def test_capacity_stays_honest_when_memory_is_unknown():
+    from superqode.local.hardware import HardwareProfile
+
+    unknown = local_quickstart._capacity(
+        SimpleNamespace(available_memory_gb=None, is_apple_silicon=True)
+    )
+    assert unknown["comfortable_gb"] is None
+    assert "not reported" in unknown["summary"]
+    small = local_quickstart._capacity(
+        HardwareProfile(platform="darwin", is_apple_silicon=True, unified_memory_gb=4)
+    )
+    assert "Small models" in small["summary"]

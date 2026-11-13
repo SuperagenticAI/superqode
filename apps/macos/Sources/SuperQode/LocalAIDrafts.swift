@@ -34,7 +34,25 @@ import Observation
   var preparedModel: (engine: String, model: String)?
   var refreshToken = 0
   var prompt: String = ""
+  /// Start tab data: quick start catalog (hardware, engines, capacity, starter, fit) and Apple status.
+  var catalog: [String: Any] = [:]
+  var apple: [String: Any] = [:]
+  var appleSelected = false
+  var preselected = false
+}
 
+/// The last local setup that connected, so returning users can continue in one tap.
+/// Only identifiers are stored here, never credentials.
+enum LocalAISetupMemory {
+  static let key = "localAI.lastSetup"
+  static func load() -> [String: String] {
+    UserDefaults.standard.dictionary(forKey: key) as? [String: String] ?? [:]
+  }
+  static func save(engine: String, model: String, name: String, harness: String) {
+    guard !engine.isEmpty else { return }
+    UserDefaults.standard.set(
+      ["engine": engine, "model": model, "name": name, "harness": harness], forKey: key)
+  }
 }
 
 @MainActor @Observable final class LocalRuntimeDraft {

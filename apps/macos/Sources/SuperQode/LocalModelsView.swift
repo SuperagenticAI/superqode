@@ -44,43 +44,73 @@ import UniformTypeIdentifiers
 struct ModelsView: View {
   @EnvironmentObject var app: Workspace
   var active = true
-  @State private var tab = "local"
   @State private var localDraft = LocalQuickStartDraft()
   var body: some View {
     VStack(spacing: 0) {
-      Picker("Local AI workspace", selection: $tab) {
-        Text("Overview").tag("local")
-        Text("Model library").tag("models")
-        Text("Compare").tag("compare")
-        Text("Model routes").tag("routes")
-      }.pickerStyle(.segmented).padding(.horizontal, 28).padding(.top, 20)
+      Picker("Local AI workspace", selection: $app.localAITab) {
+        Text("Start").tag("start")
+        Text("Advanced").tag("advanced")
+      }.pickerStyle(.segmented).frame(maxWidth: 320).padding(.horizontal, 28).padding(.top, 20)
       if active {
-        switch tab {
-        case "models": LocalModelWorkbenchView(active: active)
-        case "compare": LocalComparisonWorkspace(active: active)
-        case "routes": ModelRoutesView()
-        default:
-          LocalQuickStartView(project: app.projectID, embedded: true, active: active, form: localDraft,
-            showComparisons: { tab = "compare" }).id(app.projectID)
+        if app.localAITab == "advanced" {
+          AdvancedLocalAIView(active: active, runtime: localDraft.runtime)
+        } else {
+          LocalAIStartView(project: app.projectID, active: active, form: localDraft.installed,
+            openAdvanced: { app.openLocalAIAdvanced("runtimes") })
         }
       }
     }
   }
 }
 
+/// Tuning and custom setups. Nothing here appears on the Start tab.
 struct AdvancedLocalAIView: View {
+  @EnvironmentObject var app: Workspace
   var active = true
-  @State private var tab = "comparisons"
+  var runtime: LocalRuntimeDraft?
   var body: some View {
-    VStack(spacing: 0) {
-      Picker("Advanced Local AI", selection: $tab) {
+    VStack(alignment: .leading, spacing: 0) {
+      HStack(alignment: .center, spacing: 12) {
+        Image(systemName: "slider.horizontal.3").font(.title2).foregroundStyle(Color.qAccent)
+          .accessibilityHidden(true)
+        VStack(alignment: .leading, spacing: 3) {
+          Text("Advanced Local AI").font(.title2.weight(.semibold)).accessibilityAddTraits(.isHeader)
+          Text("For tuning and custom setups").font(.callout).foregroundStyle(.secondary)
+        }
+        Spacer()
+        Button {
+          app.section = "Harness Studio"
+        } label: {
+          Label("Harness Studio", systemImage: "hammer")
+        }.disabled(app.projectID.isEmpty)
+          .help("Build or edit a harness for your local models")
+        Button("Back to Start") { app.localAITab = "start" }
+      }.padding(.horizontal, 28).padding(.top, 16)
+      Picker("Advanced Local AI", selection: $app.localAIAdvancedTab) {
+        Text("Apple on-device").tag("apple")
+        Text("Engines & performance").tag("runtimes")
+        Text("Model library").tag("models")
         Text("Compare").tag("comparisons")
         Text("Model routes").tag("routes")
-        Text("Models & setup").tag("models")
-      }.pickerStyle(.segmented).padding(.horizontal, 28).padding(.top, 20)
-      if tab == "comparisons" { LocalComparisonWorkspace(active: active) }
-      else if tab == "routes" { ModelRoutesView() }
-      else { LocalModelWorkbenchView(active: active) }
+        Text("Harness compatibility").tag("compatibility")
+      }.pickerStyle(.segmented).labelsHidden().padding(.horizontal, 28).padding(.top, 12)
+      switch app.localAIAdvancedTab {
+      case "runtimes":
+        ScrollView { LocalRuntimeWorkspace(active: active, form: runtime).padding(28) }
+      case "models":
+        LocalModelWorkbenchView(active: active)
+      case "comparisons":
+        LocalComparisonWorkspace(active: active)
+      case "routes":
+        ModelRoutesView()
+      case "compatibility":
+        ScrollView([.vertical, .horizontal]) { LocalModelCompatibilityView(project: app.projectID) }
+      default:
+        ScrollView {
+          AppleLocalModelPanel(project: app.projectID, active: active) {}
+            .padding(28).frame(maxWidth: 760, alignment: .leading)
+        }
+      }
     }
   }
 }
@@ -99,21 +129,19 @@ struct LocalModelWorkbenchView: View {
   @State private var workflow = false
   @State private var setup = false
   @State private var compatibility = false
-  @State private var quickStart = false
   private var rows: [[String: Any]] { library.hits.filter { !fitsOnly || ($0["fit"] as? [String: Any])?["likely_fits"] as? Bool == true } }
   var body: some View {
     VStack(alignment: .leading, spacing: 16) {
-      PageTitle(eyebrow: "Your models. Your machine.", title: "Local AI",
+      PageTitle(eyebrow: "Advanced Local AI", title: "Model library",
         subtitle: "Find weights, review their size, start a server and choose a harness to code with.")
       HStack {
         VStack(alignment: .leading, spacing: 4) {
           Text("Start coding with a local model").font(.headline)
-          Text("Reuse a model or get guided through download, setup and a tool check.").font(.callout).foregroundStyle(.secondary)
+          Text("The Start tab lists installed models and connects one in a single step.").font(.callout).foregroundStyle(.secondary)
         }
         Spacer()
-        Button("Local Quick Start…") { quickStart = true }.buttonStyle(BrandButtonStyle()).disabled(app.projectID.isEmpty)
+        Button("Open Start") { app.localAITab = "start" }.buttonStyle(BrandButtonStyle())
       }.padding(16).brandSurface()
-      if app.projectID.isEmpty { Text("Open a project to use Local Quick Start.").font(.caption).foregroundStyle(.secondary) }
       HStack {
         let hardware = library.overview["hardware"] as? [String: Any] ?? [:]
         Label(string(hardware, "chip", "Detecting device…"), systemImage: "desktopcomputer")
@@ -194,7 +222,7 @@ struct LocalModelWorkbenchView: View {
       .onChange(of: active) { _, visible in
         if !visible {
           action = nil; connecting = nil; log = nil
-          workflow = false; setup = false; compatibility = false; quickStart = false
+          workflow = false; setup = false; compatibility = false
         }
       }
       .task(id: active) {
@@ -229,9 +257,6 @@ struct LocalModelWorkbenchView: View {
       }) { LocalModelSetupView().environmentObject(app) }
       .centeredDialog(isPresented: $compatibility, title: "Local harness compatibility") {
         LocalModelCompatibilityView(project: app.projectID).environmentObject(app)
-      }
-      .centeredDialog(isPresented: $quickStart, title: "Local Quick Start") {
-        LocalQuickStartView(project: app.projectID).environmentObject(app)
       }
   }
   private func search() { Task { await library.search(engine: app.engine, query: query, source: source, format: format) } }

@@ -129,6 +129,11 @@ def test_local_harness_list_keeps_native_runners_and_hides_acp_agents(desktop):
     rows = local_models.harnesses(service, project["id"])
     assert any(row["id"] == "core" and row["selectable"] for row in rows)
     assert rows
+    # Core is the recommended default and always listed first.
+    assert rows[0]["id"] == "core" and rows[0]["recommended"] is True
+    assert sum(1 for row in rows if row["recommended"]) == 1
+    ready = [row["selectable"] for row in rows[1:]]
+    assert ready == sorted(ready, reverse=True)
     assert all(row["group"] == "superqode" for row in rows)
     assert all(not row["id"].startswith("attach:") for row in rows)
     assert all("fast-agent" not in row["id"] and "opencode" not in row["id"] for row in rows)

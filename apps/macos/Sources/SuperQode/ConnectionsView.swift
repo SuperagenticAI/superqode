@@ -520,7 +520,10 @@ func modelName(_ identifier: String) -> String {
   return identifier
 }
 
+enum LocalPickerLayout { case classic, start }
+
 /// Pick one installed local model and one harness, then start coding.
+/// The `.start` layout is the shared Local AI Start view (see LocalAIStartView.swift).
 struct InstalledLocalModelPicker: View {
   @EnvironmentObject var app: Workspace
   @DialogDismiss private var dismiss
@@ -533,14 +536,24 @@ struct InstalledLocalModelPicker: View {
   var openProject: (() -> Void)?
   var browseModels: (() -> Void)?
   var modelFit: [[String: Any]] = []
+  var layout: LocalPickerLayout = .classic
+  /// The Connect sheet uses a shorter header.
+  var compact = false
+  var openAdvanced: (() -> Void)?
   @State private var form: InstalledLocalDraft
+  @State private var learnMore = false
+  @State private var confirmLarge = false
+  @State private var hideContinue = false
+  @State private var downloadDraft = LocalQuickStartDraft()
   init(project: String, dismissOnUse: Bool = false, active: Bool = true, preferredHarness: String = "",
     showsPrompt: Bool = false, form: InstalledLocalDraft? = nil,
     openProject: (() -> Void)? = nil, browseModels: (() -> Void)? = nil,
-    modelFit: [[String: Any]] = []) {
+    modelFit: [[String: Any]] = [], layout: LocalPickerLayout = .classic, compact: Bool = false,
+    openAdvanced: (() -> Void)? = nil) {
     self.project = project; self.dismissOnUse = dismissOnUse; self.active = active
     self.preferredHarness = preferredHarness; self.showsPrompt = showsPrompt
     self.openProject = openProject; self.browseModels = browseModels; self.modelFit = modelFit
+    self.layout = layout; self.compact = compact; self.openAdvanced = openAdvanced
     _form = State(initialValue: form ?? InstalledLocalDraft())
   }
   private var models: [[String: Any]] {
@@ -599,7 +612,7 @@ struct InstalledLocalModelPicker: View {
     models.filter { row in
       let name = string(row, "model") + " " + string(row, "name")
       return !name.localizedCaseInsensitiveContains("mmproj")
-        && (inferenceEngine.isEmpty || string(row, "engine") == inferenceEngine)
+        && (layout == .start || inferenceEngine.isEmpty || string(row, "engine") == inferenceEngine)
     }
   }
   private var filteredModels: [[String: Any]] {
@@ -641,6 +654,38 @@ struct InstalledLocalModelPicker: View {
   }
 
   var body: some View {
+    Group {
+      if layout == .start { startLayout } else { classicLayout }
+    }
+    .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
+    .task(id: project + "\n" + String(active) + "\n" + String(form.refreshToken)) {
+      guard active else { return }
+      await load()
+      if layout == .start { await loadStart() }
+    }
+    .onChange(of: inferenceEngine) { _, _ in
+      if selectedRow == nil { selected = "" }
+      failure = ""
+    }
+    .centeredDialog(isPresented: $showDownload, title: "Download a local model", onDismiss: {
+      Task { await load(); if layout == .start { await loadStart() } }
+    }) {
+      LocalQuickStartView(project: project, showInstalled: false, form: downloadDraft).environmentObject(app)
+    }
+    .centeredDialog(
+      isPresented: Binding(get: { serverRequest != nil }, set: { if !$0 { serverRequest = nil } }),
+      title: "Review local operation", onDismiss: {
+        Task { await load(); if layout == .start { await loadStart() } }
+      }
+    ) {
+      if let serverRequest { LocalModelActionView(request: serverRequest).environmentObject(app) }
+    }
+    .centeredDialog(isPresented: $learnMore, title: "About Local AI") {
+      LocalAILearnMoreView()
+    }
+  }
+
+  private var classicLayout: some View {
     VStack(alignment: .leading, spacing: 14) {
       if preparing {
         ModelWarmupCard(message: progress, subject: warmupSubject)
@@ -660,26 +705,6 @@ struct InstalledLocalModelPicker: View {
           .accessibilityIdentifier("local.prompt")
       }
       if !preparing { actions }
-    }
-    .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
-    .task(id: project + "\n" + String(active) + "\n" + String(form.refreshToken)) {
-      guard active else { return }
-      await load()
-    }
-    .onChange(of: inferenceEngine) { _, _ in
-      if selectedRow == nil { selected = "" }
-      failure = ""
-    }
-    .centeredDialog(isPresented: $showDownload, title: "Download a local model", onDismiss: {
-      Task { await load() }
-    }) {
-      LocalQuickStartView(project: project, showInstalled: false).environmentObject(app)
-    }
-    .centeredDialog(
-      isPresented: Binding(get: { serverRequest != nil }, set: { if !$0 { serverRequest = nil } }),
-      title: "Review local operation"
-    ) {
-      if let serverRequest { LocalModelActionView(request: serverRequest).environmentObject(app) }
     }
   }
 
@@ -841,7 +866,7 @@ struct InstalledLocalModelPicker: View {
     if let size = row["size_gb"] as? Double, size > 0 {
       summary.append(String(format: "%.1f GB", size))
     }
-    if let entry = modelFit.first(where: { $0.projectRowID == row.projectRowID }),
+    if let entry = fitRows.first(where: { $0.projectRowID == row.projectRowID }),
       let fit = entry["fit"] as? [String: Any], let rating = fit["rating"] as? String {
       summary.append(rating)
     }
@@ -1105,6 +1130,695 @@ struct InstalledLocalModelPicker: View {
       try await Task.sleep(for: .seconds(1))
     }
     return nil
+  }
+}
+
+// MARK: - Local AI Start layout
+// Apple first, then Ollama and LM Studio, this Mac, models and a compact harness menu.
+// Connecting reuses startCoding, installSelected and startServer above unchanged.
+
+extension InstalledLocalModelPicker {
+  private var fitRows: [[String: Any]] {
+    modelFit.isEmpty ? (form.catalog["choices"] as? [[String: Any]] ?? []) : modelFit
+  }
+  private var startHardware: [String: Any] { form.catalog["hardware"] as? [String: Any] ?? [:] }
+  private var startCapacity: [String: Any] { form.catalog["capacity"] as? [String: Any] ?? [:] }
+  private var startStarter: [String: Any] { form.catalog["starter"] as? [String: Any] ?? [:] }
+  private var otherEngines: [[String: Any]] {
+    let rows = form.catalog["other_engines"] as? [[String: Any]] ?? []
+    return rows.filter { $0["installed"] as? Bool == true || $0["running"] as? Bool == true }
+  }
+  /// Ollama and LM Studio, using the latest installed-model status first.
+  private var mainEngines: [[String: Any]] {
+    let catalogRows = form.catalog["engines"] as? [[String: Any]] ?? []
+    var rows: [[String: Any]] = []
+    for id in ["ollama", "lmstudio"] {
+      if let row = engines.first(where: { string($0, "id") == id }) ?? catalogRows.first(where: { string($0, "id") == id }) {
+        rows.append(row)
+      }
+    }
+    return rows
+  }
+  private var anyEngineInstalled: Bool {
+    mainEngines.contains { $0["installed"] as? Bool == true || $0["running"] as? Bool == true }
+  }
+  private var appleState: String { string(form.apple, "state") }
+  private var appleReady: Bool {
+    if let value = form.apple["available"] as? Bool { return value }
+    return (form.apple["available"] as? NSNumber)?.boolValue ?? false
+  }
+  private var sortedModels: [[String: Any]] {
+    filteredModels.enumerated().sorted { left, right in
+      let a = fitOrder(fitRating(left.element))
+      let b = fitOrder(fitRating(right.element))
+      return a == b ? left.offset < right.offset : a < b
+    }.map { $0.element }
+  }
+  private var continueSetup: [String: String]? {
+    let saved = LocalAISetupMemory.load()
+    guard !hideContinue, !saved.isEmpty, !project.isEmpty else { return nil }
+    if saved["engine"] == "apple" { return appleReady ? saved : nil }
+    let engine = saved["engine"] ?? ""
+    let model = saved["model"] ?? ""
+    let harnessID = saved["harness"] ?? ""
+    guard models.contains(where: { string($0, "engine") == engine && string($0, "model") == model }),
+      selectable.contains(where: { string($0, "id") == harnessID }) else { return nil }
+    return saved
+  }
+  private var startBlocker: String? {
+    if project.isEmpty { return "Open a project to start coding." }
+    if agentBusy { return "Finish the current run, then start coding." }
+    if form.appleSelected {
+      return appleReady ? nil : "Apple's on-device model is not available right now."
+    }
+    guard let row = selectedRow else {
+      return models.isEmpty ? "Add a model above to start coding." : "Choose a model above."
+    }
+    if harness.isEmpty { return "Choose a harness." }
+    if needsInstall { return nil }
+    if row["advertised"] as? Bool != true && !engineReady(string(row, "engine")) {
+      return "Install " + engineName(string(row, "engine")) + " to use this model."
+    }
+    return nil
+  }
+
+  private func engineName(_ id: String) -> String {
+    switch id {
+    case "lmstudio": return "LM Studio"
+    case "ollama": return "Ollama"
+    case "apple": return "Apple on-device"
+    default: return id
+    }
+  }
+  private func harnessName(_ id: String) -> String {
+    if id == "apple-local" { return "Apple on-device" }
+    return harnesses.first { string($0, "id") == id }.map { string($0, "name", id) } ?? id
+  }
+  private func harnessTitle(_ row: [String: Any]) -> String {
+    var title = string(row, "name", string(row, "id"))
+    if row["recommended"] as? Bool == true { title += " (Recommended)" }
+    if row["selectable"] as? Bool != true { title += " · needs install" }
+    return title
+  }
+  private func fitRating(_ row: [String: Any]) -> String {
+    guard let entry = fitRows.first(where: { $0.projectRowID == row.projectRowID }),
+      let fit = entry["fit"] as? [String: Any] else { return "Unknown" }
+    return string(fit, "rating", "Unknown")
+  }
+  private func fitOrder(_ rating: String) -> Int {
+    switch rating {
+    case "Fits": return 0
+    case "Tight": return 1
+    case "Too large": return 3
+    default: return 2
+    }
+  }
+
+  // MARK: Layout
+
+  @ViewBuilder var startLayout: some View {
+    if preparing {
+      ModelWarmupCard(message: progress, subject: warmupSubject).padding(24)
+    } else {
+      VStack(spacing: 0) {
+        ScrollView {
+          VStack(alignment: .leading, spacing: 22) {
+            startHeader
+            if let saved = continueSetup { continueCard(saved) }
+            appleCard
+            enginesSection
+            macSection
+            modelsSection
+          }.padding(24).frame(maxWidth: .infinity, alignment: .leading)
+        }
+        Divider()
+        startFooter.padding(.horizontal, 24).padding(.vertical, 12).background(Color.qPanel)
+      }
+      .alert("This model may be too large for your Mac", isPresented: $confirmLarge) {
+        Button("Start anyway") { beginCoding() }
+        Button("Cancel", role: .cancel) {}
+      } message: {
+        Text("It can run slowly or make your Mac unresponsive. A model marked Fits is a better choice.")
+      }
+    }
+  }
+
+  private var startHeader: some View {
+    VStack(alignment: .leading, spacing: 10) {
+      HStack(alignment: .center, spacing: 10) {
+        VStack(alignment: .leading, spacing: 4) {
+          if !compact {
+            Text("Local AI").font(.largeTitle.weight(.semibold)).accessibilityAddTraits(.isHeader)
+          }
+          Text("Pick a model on this Mac, then start coding.")
+            .font(compact ? .callout : .body).foregroundStyle(.secondary)
+        }
+        Spacer()
+        Button("Refresh") { Task { await load(); await loadStart() } }.disabled(busy)
+        nativeButton("local.runtimes.show", action: { openAdvanced?() }, title: "Advanced Local AI") {
+          Label("Advanced Local AI…", systemImage: "slider.horizontal.3")
+        }.disabled(openAdvanced == nil)
+      }
+      LocalAINotice(learnMore: $learnMore)
+      if !preferredHarness.isEmpty && !harnesses.isEmpty
+        && !harnesses.contains(where: { string($0, "id") == preferredHarness }) {
+        Text("The harness you chose can't use a local model here, so a compatible one is selected below.")
+          .font(.callout).foregroundStyle(.secondary)
+      }
+    }
+  }
+
+  private func continueCard(_ saved: [String: String]) -> some View {
+    let apple = saved["engine"] == "apple"
+    let model = saved["name"].flatMap { $0.isEmpty ? nil : $0 } ?? saved["model"] ?? ""
+    let parts = apple
+      ? ["Apple on-device model", "Built into your Mac"]
+      : [model, engineName(saved["engine"] ?? ""), harnessName(saved["harness"] ?? "")]
+    return HStack(spacing: 12) {
+      Image(systemName: "arrow.uturn.forward.circle.fill").font(.title2).foregroundStyle(Color.qAccent)
+        .accessibilityHidden(true)
+      VStack(alignment: .leading, spacing: 2) {
+        Text("Continue with " + parts.joined(separator: " · ")).font(.headline).lineLimit(2)
+        Text("Your last local setup is still available.").font(.caption).foregroundStyle(.secondary)
+      }
+      Spacer()
+      Button("Change") { hideContinue = true }.disabled(busy)
+      Button("Continue") { continueWith(saved) }.buttonStyle(BrandButtonStyle())
+        .disabled(busy || agentBusy)
+        .accessibilityIdentifier("local.continue")
+    }.padding(14).brandSurface()
+  }
+
+  // MARK: Built into your Mac
+
+  private var appleStatusLine: String {
+    switch appleState {
+    case "": return "Checking availability…"
+    case "ready": return "Ready on this Mac"
+    case "intelligence-disabled": return "Turn on Apple Intelligence in System Settings to use it."
+    case "model-not-ready": return "Apple Intelligence is still preparing the model. Keep your Mac on power and check again soon."
+    case "device-ineligible", "unsupported-system": return "Not available on this Mac. Ollama or LM Studio below can run models locally instead."
+    default: return string(form.apple, "guidance", "Not available right now.")
+    }
+  }
+
+  private var appleCard: some View {
+    VStack(alignment: .leading, spacing: 8) {
+      Text("Built into your Mac").font(.headline).accessibilityAddTraits(.isHeader)
+      HStack(alignment: .center, spacing: 14) {
+        Image(systemName: "apple.logo").font(.system(size: 26)).frame(width: 34).accessibilityHidden(true)
+        VStack(alignment: .leading, spacing: 3) {
+          Text("Apple on-device model").font(.headline)
+          Text("Built into every Mac with Apple Intelligence, no download needed")
+            .font(.callout).foregroundStyle(.secondary)
+          Text(appleStatusLine).font(.caption).foregroundStyle(appleReady ? Color.green : Color.secondary)
+            .accessibilityIdentifier("local.start.appleStatus")
+        }
+        Spacer(minLength: 8)
+        appleAction
+      }.padding(14).frame(maxWidth: .infinity, alignment: .leading).brandSurface()
+    }.accessibilityElement(children: .contain).accessibilityIdentifier("local.start.apple")
+  }
+
+  @ViewBuilder private var appleAction: some View {
+    switch appleState {
+    case "ready":
+      Button("Use Apple model") {
+        form.appleSelected = true
+        startSelected()
+      }.buttonStyle(BrandButtonStyle()).disabled(busy || agentBusy || project.isEmpty)
+        .accessibilityIdentifier("local.useApple")
+    case "intelligence-disabled":
+      Button("Open System Settings") { openAppleIntelligenceSettings() }
+    case "device-ineligible", "unsupported-system":
+      EmptyView()
+    default:
+      Button("Check again") { Task { await loadApple() } }.disabled(busy)
+    }
+  }
+
+  private func openAppleIntelligenceSettings() {
+    for value in ["x-apple.systempreferences:com.apple.Siri-Settings.extension", "x-apple.systempreferences:"] {
+      if let url = URL(string: value), NSWorkspace.shared.open(url) { return }
+    }
+  }
+
+  // MARK: Inference engines
+
+  private var enginesSection: some View {
+    VStack(alignment: .leading, spacing: 8) {
+      Text("Inference engines on this Mac").font(.headline).accessibilityAddTraits(.isHeader)
+      VStack(spacing: 0) {
+        if mainEngines.isEmpty {
+          HStack(spacing: 8) {
+            ProgressView().controlSize(.small)
+            Text("Looking for Ollama and LM Studio…").foregroundStyle(.secondary)
+            Spacer()
+          }.padding(14)
+        }
+        ForEach(Array(mainEngines.enumerated()), id: \.offset) { index, row in
+          if index > 0 { Divider() }
+          engineRow(row)
+        }
+      }.brandSurface()
+      if !mainEngines.isEmpty && !anyEngineInstalled {
+        Text("Install LM Studio to get started. It can run quietly in the background.")
+          .font(.callout).foregroundStyle(.secondary)
+      }
+      if !otherEngines.isEmpty {
+        HStack(spacing: 6) {
+          Text("Also found: " + otherEngines.map { string($0, "name", string($0, "id")) }.joined(separator: ", "))
+            .font(.caption).foregroundStyle(.secondary)
+          if openAdvanced != nil {
+            Button("Open in Advanced") { openAdvanced?() }.buttonStyle(.link).font(.caption)
+          }
+        }
+      }
+    }
+  }
+
+  private func engineStatus(_ row: [String: Any]) -> String {
+    let id = string(row, "id")
+    if row["running"] as? Bool == true {
+      let count = models.filter { string($0, "engine") == id }.count
+      return "Running · \(count) " + (count == 1 ? "model" : "models")
+    }
+    return row["installed"] as? Bool == true ? "Installed · not running" : "Not installed"
+  }
+
+  private func engineRow(_ row: [String: Any]) -> some View {
+    let id = string(row, "id")
+    let installed = row["installed"] as? Bool == true
+    let running = row["running"] as? Bool == true
+    let cli = row["cli_available"] as? Bool == true
+    let canServe = installed && (id != "lmstudio" || cli || running)
+    let dot: Color = running ? .green : installed ? .orange : Color.secondary.opacity(0.4)
+    return HStack(spacing: 10) {
+      Circle().fill(dot).frame(width: 8, height: 8).accessibilityHidden(true)
+      VStack(alignment: .leading, spacing: 2) {
+        HStack(spacing: 6) {
+          Text(string(row, "name", engineName(id))).font(.headline)
+          if id == "lmstudio" && !installed && !running {
+            Text("Recommended").font(.caption2).padding(.horizontal, 6).padding(.vertical, 2)
+              .background(Color.qAccent.opacity(0.15), in: Capsule())
+          }
+        }
+        Text(engineStatus(row)).font(.caption).foregroundStyle(.secondary)
+      }
+      Spacer()
+      if id == "lmstudio" && !cli && !running {
+        Button(installed ? "Set up LM Studio" : "Install LM Studio") {
+          serverRequest = ["action": "install", "engine": "lmstudio"]
+        }.disabled(busy)
+      } else if id == "ollama" && !installed && !running {
+        Link("Get Ollama", destination: URL(string: "https://ollama.com/download")!)
+      } else if canServe && !running {
+        Button("Start") { Task { await startEngine(id) } }.disabled(busy || agentBusy)
+          .accessibilityIdentifier("local.engine.start." + id)
+      }
+      if canServe || running {
+        engineMenu(id: id, canStop: row["can_stop"] as? Bool == true)
+      }
+    }.padding(.horizontal, 14).padding(.vertical, 10)
+      .accessibilityElement(children: .contain).accessibilityIdentifier("local.engine." + id)
+  }
+
+  private func engineMenu(id: String, canStop: Bool) -> some View {
+    Menu {
+      Button("Context and server…") { serverRequest = ["action": "serve", "engine": id] }
+      if let row = selectedRow, !form.appleSelected, string(row, "engine") == id, row["advertised"] as? Bool == true {
+        Button("Unload " + string(row, "name", string(row, "model")) + "…") {
+          serverRequest = ["action": "unload", "engine": id, "model": string(row, "model")]
+        }
+      }
+      if canStop {
+        Button("Stop server…") { serverRequest = ["action": "stop", "engine": id] }
+      }
+    } label: {
+      Image(systemName: "ellipsis.circle")
+    }
+    .menuStyle(.borderlessButton).menuIndicator(.hidden).fixedSize()
+    .disabled(busy || agentBusy)
+    .help("More actions for " + engineName(id))
+    .accessibilityLabel("More actions for " + engineName(id))
+  }
+
+  // MARK: Your Mac
+
+  private var macLine: String {
+    var line = string(startHardware, "chip", "This Mac")
+    if let memory = startHardware["unified_memory_gb"] as? Int { line += " · \(memory) GB memory" }
+    return line
+  }
+  private var starterLine: String {
+    let model = string(startStarter, "model")
+    guard !model.isEmpty else { return "" }
+    return startStarter["installed"] as? Bool == true
+      ? "A good starter is already installed: " + model
+      : "Suggested starter: " + model
+  }
+
+  private var macSection: some View {
+    VStack(alignment: .leading, spacing: 8) {
+      Text("Your Mac").font(.headline).accessibilityAddTraits(.isHeader)
+      VStack(alignment: .leading, spacing: 4) {
+        if startHardware.isEmpty {
+          Text("Checking chip and memory…").font(.callout).foregroundStyle(.secondary)
+        } else {
+          Label(macLine, systemImage: "laptopcomputer").font(.callout)
+          if !string(startCapacity, "summary").isEmpty {
+            Text(string(startCapacity, "summary")).font(.callout).foregroundStyle(.secondary)
+          }
+          if !starterLine.isEmpty {
+            Text(starterLine).font(.callout).foregroundStyle(.secondary)
+          }
+        }
+        if let warning = ((form.catalog["guardrails"] as? [String: Any])?["warnings"] as? [String])?.first {
+          Text(warning).font(.caption).foregroundStyle(.orange)
+        }
+      }
+      .padding(14).frame(maxWidth: .infinity, alignment: .leading).brandSurface()
+      .help("Estimates assume about 70% of memory is available to models, with headroom. They are guidance, not a guarantee.")
+    }
+  }
+
+  // MARK: Models
+
+  private var modelsSection: some View {
+    VStack(alignment: .leading, spacing: 10) {
+      HStack {
+        Text("Models").font(.title3.weight(.semibold)).accessibilityAddTraits(.isHeader)
+        Spacer()
+        Button("Download a model…") { openDownload(choice: "") }.disabled(busy)
+      }
+      if visibleModels.count > 8 {
+        ConnectionSearchField(title: "Search models", text: $modelSearch)
+      }
+      VStack(spacing: 5) {
+        appleModelRow
+        if busy && models.isEmpty {
+          HStack(spacing: 8) {
+            ProgressView().controlSize(.small)
+            Text("Finding local models…").foregroundStyle(.secondary)
+            Spacer()
+          }.padding(10)
+        } else if models.isEmpty {
+          emptyModels
+        } else {
+          ForEach(sortedModels, id: \.projectRowID) { row in modelRow(row) }
+          if filteredModels.isEmpty {
+            Text("No models match your search.").foregroundStyle(.secondary).padding(10)
+          }
+        }
+      }
+      if !form.appleSelected, let row = selectedRow {
+        Text(readiness(row)).font(.callout).foregroundStyle(.secondary)
+      }
+    }
+  }
+
+  @ViewBuilder private var emptyModels: some View {
+    if !anyEngineInstalled {
+      Text("Install an engine above to see your models.").foregroundStyle(.secondary)
+        .frame(maxWidth: .infinity, alignment: .leading).padding(10)
+    } else if !startStarter.isEmpty && startStarter["installed"] as? Bool != true {
+      starterCard
+    } else {
+      Text("No Ollama or LM Studio models yet. Download a model to get started.").foregroundStyle(.secondary)
+        .frame(maxWidth: .infinity, alignment: .leading).padding(10)
+    }
+  }
+
+  private var starterCard: some View {
+    let fit = startStarter["fit"] as? [String: Any] ?? [:]
+    return HStack(spacing: 12) {
+      Image(systemName: "arrow.down.circle.fill").font(.title2).foregroundStyle(Color.qAccent)
+        .accessibilityHidden(true)
+      VStack(alignment: .leading, spacing: 3) {
+        Text("Get a starter model").font(.headline)
+        Text(string(startStarter, "model") + " · " + engineName(string(startStarter, "engine"))).font(.callout)
+        Text(string(fit, "verdict", "Size estimate unavailable")).font(.caption).foregroundStyle(.secondary)
+      }
+      Spacer()
+      Button("Download") { openDownload(choice: string(startStarter, "id")) }
+        .buttonStyle(BrandButtonStyle()).disabled(busy)
+        .accessibilityIdentifier("local.starter.download")
+    }.padding(14).brandSurface()
+  }
+
+  private var appleModelRow: some View {
+    let chosen = form.appleSelected
+    return Button {
+      form.appleSelected = true
+      failure = ""
+    } label: {
+      HStack(spacing: 12) {
+        Image(systemName: chosen ? "checkmark.circle.fill" : "circle")
+          .foregroundStyle(chosen ? Color.qAccent : Color.secondary).accessibilityHidden(true)
+        Image(systemName: "apple.logo").frame(width: 16).accessibilityHidden(true)
+        VStack(alignment: .leading, spacing: 2) {
+          Text("Apple on-device model").font(.headline)
+          Text(appleReady ? "Built in · no download" : appleStatusLine)
+            .font(.caption).foregroundStyle(.secondary).lineLimit(2)
+        }
+        Spacer(minLength: 0)
+        if appleReady { fitPill("Built in") }
+      }
+      .padding(.horizontal, 10).padding(.vertical, 7).frame(minHeight: 36)
+      .contentShape(Rectangle())
+    }
+    .buttonStyle(ConnectionChoiceStyle(selected: chosen))
+    .disabled(busy || !appleReady)
+    .accessibilityIdentifier("local.model.apple")
+    .accessibilityAddTraits(chosen ? .isSelected : [])
+  }
+
+  private func modelRow(_ row: [String: Any]) -> some View {
+    let chosen = !form.appleSelected && selected == string(row, "id")
+    let rating = fitRating(row)
+    return Button {
+      form.appleSelected = false
+      selected = string(row, "id")
+      failure = ""
+    } label: {
+      HStack(spacing: 12) {
+        Image(systemName: chosen ? "checkmark.circle.fill" : "circle")
+          .foregroundStyle(chosen ? Color.qAccent : Color.secondary).accessibilityHidden(true)
+        VStack(alignment: .leading, spacing: 2) {
+          Text(string(row, "name", string(row, "model"))).font(.headline).lineLimit(2)
+          Text(modelDetail(row, rating: rating)).font(.caption).foregroundStyle(.secondary)
+        }
+        Spacer(minLength: 0)
+        if rating != "Unknown" { fitPill(rating) }
+      }
+      .padding(.horizontal, 10).padding(.vertical, 7).frame(minHeight: 36)
+      .contentShape(Rectangle())
+    }
+    .buttonStyle(ConnectionChoiceStyle(selected: chosen))
+    .disabled(busy)
+    .accessibilityIdentifier("local.model." + string(row, "id"))
+    .accessibilityAddTraits(chosen ? .isSelected : [])
+  }
+
+  private func modelDetail(_ row: [String: Any], rating: String) -> String {
+    var parts = [engineName(string(row, "engine"))]
+    if let size = row["size_gb"] as? Double, size > 0 { parts.append(String(format: "%.1f GB", size)) }
+    if rating == "Too large" { parts.append("May slow down your Mac") }
+    return parts.joined(separator: " · ")
+  }
+
+  private func fitPill(_ rating: String) -> some View {
+    let color: Color
+    switch rating {
+    case "Fits": color = .green
+    case "Tight": color = .orange
+    case "Too large": color = .red
+    default: color = .secondary
+    }
+    return Text(rating).font(.caption.weight(.semibold)).foregroundStyle(color)
+      .padding(.horizontal, 8).padding(.vertical, 3)
+      .background(color.opacity(0.14), in: Capsule())
+  }
+
+  // MARK: Footer
+
+  private var startFooter: some View {
+    HStack(spacing: 12) {
+      if form.appleSelected {
+        Label("Harness: Apple on-device", systemImage: "apple.logo").font(.callout).foregroundStyle(.secondary)
+      } else if !harnesses.isEmpty {
+        Picker("Harness:", selection: $form.harness) {
+          ForEach(harnesses, id: \.projectRowID) { row in
+            Text(harnessTitle(row)).tag(string(row, "id"))
+          }
+        }
+        .pickerStyle(.menu).fixedSize().disabled(busy)
+        .accessibilityIdentifier("local.harnessPicker")
+      }
+      if let reason = startBlocker {
+        Text(reason).font(.callout).foregroundStyle(.secondary).lineLimit(2)
+        if project.isEmpty {
+          Button("Open project…", action: openProject ?? app.chooseProject)
+            .disabled(app.openingProject || !app.connected)
+        }
+      } else if !failure.isEmpty {
+        Text(failure).font(.callout).foregroundStyle(.orange).lineLimit(3).textSelection(.enabled)
+      }
+      Spacer(minLength: 8)
+      if !form.appleSelected && needsInstall {
+        Button("Install harness…") { Task { await installSelected() } }
+          .buttonStyle(BrandButtonStyle()).disabled(busy || project.isEmpty)
+          .accessibilityIdentifier("local.install")
+      } else {
+        Button("Start coding") { startSelected() }
+          .buttonStyle(BrandButtonStyle()).disabled(startBlocker != nil || busy)
+          .accessibilityIdentifier("local.startCoding")
+      }
+    }
+  }
+
+  // MARK: Actions
+
+  private func continueWith(_ saved: [String: String]) {
+    if saved["engine"] == "apple" {
+      form.appleSelected = true
+      startSelected()
+      return
+    }
+    let engine = saved["engine"] ?? ""
+    let model = saved["model"] ?? ""
+    guard let row = models.first(where: { string($0, "engine") == engine && string($0, "model") == model }) else { return }
+    form.appleSelected = false
+    selected = string(row, "id")
+    if let remembered = saved["harness"], !remembered.isEmpty { harness = remembered }
+    startSelected()
+  }
+
+  private func startSelected() {
+    guard startBlocker == nil, !busy else { return }
+    if form.appleSelected {
+      startApple()
+      return
+    }
+    guard let row = selectedRow else { return }
+    if fitRating(row) == "Too large" {
+      confirmLarge = true
+      return
+    }
+    beginCoding()
+  }
+
+  /// Uses the same startCoding path, warm-up card and progress text as before.
+  private func beginCoding() {
+    guard let row = selectedRow else { return }
+    let engine = string(row, "engine")
+    let model = string(row, "model")
+    let name = string(row, "name", model)
+    let chosen = harness
+    let workspace = app
+    let draft = form
+    Task {
+      await startCoding()
+      if draft.failure.isEmpty && !workspace.connectionDisconnected && !workspace.model.isEmpty
+        && workspace.section == "Workspace" {
+        LocalAISetupMemory.save(engine: engine, model: model, name: name, harness: chosen)
+      }
+    }
+  }
+
+  /// Apple's system model needs no server or warm-up, so it connects at once.
+  private func startApple() {
+    let workspace = app
+    workspace.selectJob("", restoreConnection: false)
+    workspace.checkingConnection = false
+    workspace.chooseAppleModel(development: true)
+    workspace.showWelcome = false
+    workspace.notice = "Connected Apple's on-device model. Type your request, then press Send."
+    LocalAISetupMemory.save(engine: "apple", model: "system-on-device", name: "Apple on-device model", harness: "apple-local")
+    if dismissOnUse { dismiss() }
+  }
+
+  private func startEngine(_ id: String) async {
+    busy = true
+    progress = "Starting " + engineName(id) + "…"
+    do {
+      try await startServer(id, model: "")
+      failure = ""
+    } catch is CancellationError {
+      busy = false
+      progress = ""
+      return
+    } catch {
+      failure = error.localizedDescription
+    }
+    busy = false
+    progress = ""
+    await load()
+    await loadStart()
+  }
+
+  private func openDownload(choice: String) {
+    if !choice.isEmpty && string(downloadDraft.step, "step") != "working" {
+      downloadDraft.selection = choice
+    }
+    showDownload = true
+  }
+
+  // MARK: Loading
+
+  private func loadApple() async {
+    guard app.connected else { return }
+    do {
+      let result = try await app.engine.call("local.apple.status") as? [String: Any] ?? [:]
+      if !Task.isCancelled { form.apple = result }
+    } catch {
+      if !Task.isCancelled {
+        form.apple = ["available": false, "state": "unavailable", "guidance": error.localizedDescription]
+      }
+    }
+  }
+
+  func loadStart() async {
+    await loadApple()
+    do {
+      let result = try await app.engine.call("local.models.quickstart.catalog", ["project": project]) as? [String: Any] ?? [:]
+      guard !Task.isCancelled else { return }
+      form.catalog = result
+    } catch {
+      if !Task.isCancelled && failure.isEmpty { failure = error.localizedDescription }
+    }
+    preselect()
+  }
+
+  /// Harness: the one chosen first in Connect, then the remembered one, then Core.
+  /// Model: the remembered one, then the first that Fits, then Apple when nothing else is installed.
+  private func preselect() {
+    let saved = LocalAISetupMemory.load()
+    let ids = harnesses.map { string($0, "id") }
+    if harness.isEmpty || !ids.contains(harness) || (!form.preselected && ids.contains(preferredHarness)) {
+      if ids.contains(preferredHarness) {
+        harness = preferredHarness
+      } else if let remembered = saved["harness"], selectable.contains(where: { string($0, "id") == remembered }) {
+        harness = remembered
+      } else if let row = harnesses.first(where: { $0["recommended"] as? Bool == true }) ?? selectable.first {
+        harness = string(row, "id")
+      }
+    }
+    guard !form.preselected, !models.isEmpty || appleReady else { return }
+    form.preselected = true
+    guard selectedRow == nil, !form.appleSelected else { return }
+    let engine = saved["engine"] ?? ""
+    let model = saved["model"] ?? ""
+    if let row = models.first(where: { string($0, "engine") == engine && string($0, "model") == model }) {
+      selected = string(row, "id")
+    } else if engine == "apple" && appleReady {
+      form.appleSelected = true
+    } else if let row = sortedModels.first(where: { fitRating($0) == "Fits" })
+      ?? sortedModels.first(where: { fitRating($0) != "Too large" }) {
+      selected = string(row, "id")
+    } else if models.isEmpty && appleReady {
+      form.appleSelected = true
+    }
   }
 }
 

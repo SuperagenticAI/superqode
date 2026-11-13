@@ -7,6 +7,13 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Changed
+
+- The Mac Local AI screen has a simple Start tab: Apple's on-device model first, then Ollama and LM Studio with one-tap Install, Get Ollama or Start, your Mac's chip, memory and a comfortable model size, and one model list with Fits, Tight and Too large ratings. A compact harness menu (Core is recommended) sits next to Start coding, and returning users get a one-tap Continue.
+- Runtimes and performance, the model library, comparisons, model routes, harness compatibility and Apple model settings moved to a separate Advanced tab.
+- The welcome screen, the Local model tile, the Connect sheet and the harness-first path open the same Start view and keep the existing warm-up animation.
+- `local.models.quickstart.catalog` reports a `capacity` summary and one `starter` model; `local.models.harnesses` marks Core as `recommended` and lists it first.
+
 ## [2.31.13] - 2026-11-13
 
 ### Changed

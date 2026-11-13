@@ -229,6 +229,7 @@ def harnesses(service, project):
                 "backend": backend,
                 "group": "superqode",
                 "selectable": supported,
+                "recommended": definition.id == "core",
                 "install_extra": extra,
                 "note": (
                     "Runs this model on your Mac."
@@ -237,6 +238,10 @@ def harnesses(service, project):
                 ),
             }
         )
+    # Core first, then ready harnesses, then installable ones, each by name.
+    rows.sort(
+        key=lambda row: (not row["recommended"], not row["selectable"], (row["name"] or "").lower())
+    )
     return rows
 
 

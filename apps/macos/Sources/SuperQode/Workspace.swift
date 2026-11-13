@@ -314,6 +314,15 @@ private func jobStamp(_ row: [String: Any]) -> Double {
     connectionStartPage = page
     showConnection = true
   }
+  /// Local AI keeps a simple Start tab and a separate Advanced tab.
+  @Published var localAITab = "start"
+  @Published var localAIAdvancedTab = "apple"
+  /// Open an Advanced Local AI page from any entry point, including the Connect sheet.
+  func openLocalAIAdvanced(_ tab: String = "runtimes") {
+    localAIAdvancedTab = tab
+    localAITab = "advanced"
+    section = "Models"
+  }
   @Published var agentModel = ""
   @Published var agentMode = ""
   @Published var agentConfig: [String: String] = [:]
@@ -3089,7 +3098,8 @@ private func jobStamp(_ row: [String: Any]) -> Double {
     try await press("connect.row.local")
     guard let content = main.attachedSheet?.contentView,
       control("local.runtimes.show", in: content) != nil else {
-      throw EngineError(message: "Local model did not open the Local AI overview")
+      // The shared Local AI Start view carries the Advanced Local AI link in every entry point.
+      throw EngineError(message: "Local model did not open the Local AI Start view")
     }
     try await press("connect.back")
     try await press("connect.back")

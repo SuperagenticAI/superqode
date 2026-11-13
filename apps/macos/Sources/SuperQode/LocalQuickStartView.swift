@@ -1,6 +1,7 @@
 import SwiftUI
 
-/// Each action uses an engine-reviewed plan; reopening observes existing jobs.
+/// The guided download and setup sheet. Each action uses an engine-reviewed plan;
+/// reopening observes existing jobs. The Local AI Start view lives in LocalAIStartView.swift.
 struct LocalQuickStartView: View {
   @EnvironmentObject var app: Workspace
   @DialogDismiss private var dismiss
@@ -12,9 +13,6 @@ struct LocalQuickStartView: View {
   var preferredHarness = ""
   var openProject: (() -> Void)?
   var showComparisons: (() -> Void)?
-  @State private var comparison = false
-  @State private var compatibility = false
-  @State private var runtimes = false
   @State private var form: LocalQuickStartDraft
   init(project: String, embedded: Bool = false, active: Bool = true, showInstalled: Bool = true,
     dismissOnConnect: Bool = false, preferredHarness: String = "", form: LocalQuickStartDraft? = nil,
@@ -37,7 +35,6 @@ struct LocalQuickStartView: View {
     nonmutating set { form.warnings = newValue }
   }
   @State private var learnMore = false
-  @State private var advanced = false
   @State private var operation: [String: Any]?
   private var operationJob: String {
     get { form.operationJob }
@@ -91,61 +88,19 @@ struct LocalQuickStartView: View {
   private var validProject: Bool { app.projectID == project && !closed && !app.openingProject }
 
   var body: some View {
-    ScrollViewReader { scroll in
     ScrollView {
     VStack(alignment: .leading, spacing: 16) {
-      if showInstalled {
-        overview(scroll)
-        AppleLocalModelPanel(project: project, active: active) {
-          if dismissOnConnect || !embedded { dismiss() }
-        }
-        InstalledLocalModelPicker(project: project, dismissOnUse: dismissOnConnect || !embedded,
-          active: active, preferredHarness: preferredHarness, form: form.installed, openProject: openProject,
-          browseModels: {
-            showSetup = true
-            scroll.scrollTo("local.download", anchor: .top)
-          }, modelFit: choices)
-          .id(project).id("local.installed")
-        DisclosureGroup(isExpanded: $form.showSetup) {
-          VStack(alignment: .leading, spacing: 16) {
-            LocalAINotice(learnMore: $learnMore)
-            setupGuide(onReady: {
-              useInstalledSelection()
-              scroll.scrollTo("local.installed", anchor: .top)
-            })
-          }.padding(.top, 8)
-        } label: {
-          Text("Download or set up a model").font(.headline)
-        }.id("local.download")
-        if embedded {
-          LocalRuntimeWorkspace(active: active, form: form.runtime).id("local.runtimes")
-        }
-      } else {
-        Text("Download a local model").font(.title2.weight(.semibold))
-        devicePanel
-        LocalAINotice(learnMore: $learnMore)
-        setupGuide()
-      }
+      Text("Download a local model").font(.title2.weight(.semibold))
+      devicePanel
+      LocalAINotice(learnMore: $learnMore)
+      setupGuide()
     }
     }.padding(24).frame(width: embedded ? nil : 780, height: embedded ? nil : 760)
-      .centeredDialog(isPresented: $runtimes, title: "Runtimes & performance") {
-        ScrollView { LocalRuntimeWorkspace(form: form.runtime).padding(24) }
-          .environmentObject(app).frame(width: 820, height: 680)
-      }
-      .centeredDialog(isPresented: $comparison, title: "Compare local models & harnesses") {
-        LocalComparisonWorkspace().environmentObject(app).frame(width: 860, height: 680)
-      }
-      .centeredDialog(isPresented: $compatibility, title: "Local harness compatibility") {
-        LocalModelCompatibilityView(project: project).environmentObject(app)
-      }
       .centeredDialog(isPresented: $learnMore, title: "About Local AI") {
         LocalAILearnMoreView()
       }
       .centeredDialog(isPresented: $showOperationLog, title: "Local operation progress") {
         LocalModelOperationView(job: operationJob).environmentObject(app)
-      }
-      .centeredDialog(isPresented: $advanced, title: "Advanced Local AI") {
-        AdvancedLocalAIView().environmentObject(app).frame(width: 1080, height: 780)
       }
       .centeredDialog(isPresented: Binding(get: { operation != nil }, set: { if !$0 { operation = nil } }), title: "Review local operation", onDismiss: {
         Task { await load(); await observeOperations() }
@@ -155,6 +110,8 @@ struct LocalQuickStartView: View {
       .task(id: project + "\n" + String(active)) {
         guard active else { return }
         await load()
+        // A starter chosen on the Start tab opens here preselected; show its first reviewed step.
+        if step.isEmpty && !selection.isEmpty { await refresh() }
       }
       .task(id: String(active) + "\n" + string(step, "job")) {
         guard active, state == "working" else { return }
@@ -173,81 +130,16 @@ struct LocalQuickStartView: View {
       .onChange(of: selection) { _, _ in step = [:]; output = ""; progress = [:]; Task { await refresh() } }
       .onChange(of: active) { _, visible in
         if !visible {
-          learnMore = false; advanced = false; operation = nil; showOperationLog = false
-          comparison = false; compatibility = false; runtimes = false
+          learnMore = false; operation = nil; showOperationLog = false
         }
       }
       .onAppear { closed = false }
       .onDisappear { closed = true }
-    }
-  }
-
-  private func overview(_ scroll: ScrollViewProxy) -> some View {
-    VStack(alignment: .leading, spacing: 14) {
-      HStack {
-        VStack(alignment: .leading, spacing: 6) {
-          Text("Local AI").font(.largeTitle.weight(.semibold)).accessibilityAddTraits(.isHeader)
-          Text("Run models on this Mac. Check what fits, then choose how to work with it.")
-            .font(.body).foregroundStyle(.secondary)
-        }
-        Spacer()
-        Button("About Local AI") { learnMore = true }
-      }
-      devicePanel
-      if busy && engines.isEmpty {
-        ProgressView("Detecting local runtimes…").controlSize(.small)
-      } else if !engines.isEmpty {
-        Text("Inference engines").font(.headline).accessibilityAddTraits(.isHeader)
-        enginePanel
-      }
-      LazyVGrid(columns: [GridItem(.adaptive(minimum: 205), spacing: 10)], spacing: 10) {
-        capability("Download models", detail: "Find a model that fits your Mac.", icon: "arrow.down.circle") {
-          showSetup = true
-          scroll.scrollTo("local.download", anchor: .top)
-        }
-        capability("Compare models & harnesses", detail: "Measure speed and results on the same tasks.", icon: "arrow.left.arrow.right") {
-          if let showComparisons { showComparisons() }
-          else { comparison = true }
-        }
-        if embedded {
-          nativeButton("local.runtimes.show", action: {
-            scroll.scrollTo("local.runtimes", anchor: .top)
-          }, padded: false, title: "Runtimes and performance") {
-            capabilityLabel("Runtimes & performance", detail: "Connect a local server and inspect timings.", icon: "speedometer")
-              .modifier(ConnectionCardSurface())
-          }
-        } else {
-          capability("Runtimes & performance", detail: "Connect a local server and inspect timings.", icon: "speedometer") {
-            runtimes = true
-          }
-        }
-      }
-      HStack {
-        Button("Harness compatibility…") { compatibility = true }
-        Spacer()
-        if !embedded { Button("Model library & settings…") { advanced = true } }
-        Button("Refresh runtimes") { Task { await load() } }.disabled(busy)
-      }
-      if !failure.isEmpty && !showSetup {
-        Text(failure).font(.callout).foregroundStyle(.orange).textSelection(.enabled)
-      }
-    }.padding(18).brandSurface()
-  }
-
-  private func capability(_ title: String, detail: String, icon: String, action: @escaping () -> Void) -> some View {
-    Button(action: action) { capabilityLabel(title, detail: detail, icon: icon) }
-      .buttonStyle(ConnectionChoiceStyle())
-  }
-
-  private func capabilityLabel(_ title: String, detail: String, icon: String) -> some View {
-    ConnectionCardLabel(title: title, subtitle: detail) {
-      Image(systemName: icon).font(.title2).foregroundStyle(Color.qAccent).frame(width: 26)
-    }
   }
 
   private func setupGuide(onReady: (() -> Void)? = nil) -> some View {
     VStack(alignment: .leading, spacing: 16) {
-      if !showInstalled { enginePanel }
+      enginePanel
       presetPanel
       Text("Download a starter model only when it is not already installed. Review each install, download and load before it runs.").foregroundStyle(.secondary)
       CatalogPopup(label: "Model", options: setupChoices.map { row in
@@ -298,9 +190,7 @@ struct LocalQuickStartView: View {
         if !output.isEmpty { DisclosureGroup("Setup output") { Text(output).font(.caption.monospaced()).textSelection(.enabled) } }
         if !failure.isEmpty { Text(failure).foregroundStyle(.orange).textSelection(.enabled) }
         if downloads.isEmpty && !busy {
-          Text(showInstalled
-            ? "No starter download is suggested for this Mac. Use an installed model above, or open Advanced setup."
-            : "No starter download is suggested for this Mac.")
+          Text("No starter download is suggested for this Mac.")
         }
       }.frame(maxWidth: .infinity, alignment: .leading)
       HStack {

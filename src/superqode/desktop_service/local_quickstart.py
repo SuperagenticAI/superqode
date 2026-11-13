@@ -139,6 +139,8 @@ def catalog(service, project):
     return {
         "choices": sorted(choices.values(), key=lambda row: not row["installed"]),
         "setup_presets": presets,
+        "capacity": _capacity(hardware),
+        "starter": _starter(choices.values(), presets),
         "selected": saved.get("choice", ""),
         "memory_gb": memory,
         "hardware": asdict(hardware),
@@ -147,6 +149,44 @@ def catalog(service, project):
         "guardrails": build_guardrails(hardware).to_dict(),
         "note": "Starting suggestions, not measured coding-quality guarantees. Context and other apps also need memory.",
     }
+
+
+def _capacity(hardware):
+    """A plain estimate of the model size this Mac runs comfortably.
+
+    It mirrors the fit budget in ``context_contract``: about 70% of unified
+    memory on Apple silicon (85% elsewhere), keeping 10% spare plus headroom,
+    buffers and a modest context. It is guidance, not a measurement.
+    """
+    memory = hardware.available_memory_gb
+    if not memory:
+        return {
+            "memory_gb": None,
+            "comfortable_gb": None,
+            "summary": "Memory was not reported. Start with a small model marked Fits.",
+        }
+    budget = float(memory) * (0.70 if hardware.is_apple_silicon else 0.85)
+    headroom = max(1.0, float(memory) * 0.03)
+    comfortable = max(0, int(budget * 0.90 - headroom - 1.5))
+    summary = (
+        f"Comfortable with models up to about {comfortable} GB."
+        if comfortable >= 2
+        else "Memory is limited. Small models work best on this Mac."
+    )
+    return {"memory_gb": memory, "comfortable_gb": comfortable, "summary": summary}
+
+
+def _starter(choices, presets):
+    """One suggested starter for this memory tier, preferring the Balanced preset."""
+    balanced = next((p["choice"] for p in presets if p["id"] == "balanced" and p["choice"]), None)
+    if balanced:
+        return balanced
+    fitting = [
+        row
+        for row in choices
+        if row.get("preset") == "suggested" and (row.get("fit") or {}).get("rating") == "Fits"
+    ]
+    return fitting[0] if fitting else None
 
 
 def prepare(service, params):

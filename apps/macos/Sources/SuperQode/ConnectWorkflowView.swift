@@ -162,9 +162,12 @@ struct ConnectionView: View {
         if needsProject {
           projectPicker
         } else if page == "source:local" {
-          LocalQuickStartView(project: app.projectID, embedded: true, dismissOnConnect: true,
+          LocalAIStartView(project: app.projectID, compact: true, dismissOnConnect: true,
             preferredHarness: pendingHarness, openProject: {
               app.chooseProject { path in openThreadProject(path) }
+            }, openAdvanced: {
+              dismiss()
+              app.openLocalAIAdvanced("runtimes")
             })
         } else if page == "source:key" {
           ProviderConnectionView()
