@@ -234,9 +234,11 @@ struct LocalRuntimeWorkspace: View {
         }
       }
       HStack {
+        Text("Context cap").font(.caption)
         CatalogPopup(label: "Context cap", options: [2048, 4096, 8192, 16384, 32768, 65536].map {
           CatalogPopupOption(id: String($0), title: $0.formatted())
         }, selection: Binding(get: { String(context) }, set: { if let value = Int($0) { context = value } }), placeholder: "Choose a context cap")
+        Text("Tool support").font(.caption)
         CatalogPopup(label: "Tool capability", options: [
           CatalogPopupOption(id: "unknown", title: "Unknown · check first"),
           CatalogPopupOption(id: "yes", title: "Declared supported"),
