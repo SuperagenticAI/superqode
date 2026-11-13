@@ -1,6 +1,16 @@
-# SuperQode for macOS public beta 0.4.4
+# SuperQode for macOS public beta 0.4.5
 
-Version 0.4.4 (build 30) bundles Python engine 2.31.10. These versions are prepared in source; native validation, signing, notarization and publication remain separate release steps.
+Version 0.4.5 (build 31) bundles Python engine 2.31.11. These versions are prepared in source; native validation, signing, notarization and publication remain separate release steps.
+
+- Bring your own key lists Google, Anthropic, OpenAI, xAI (Grok), and Meta beside the Chinese providers.
+- Harness Hub opens ACP, A2A, and Unified Harness Protocol from Protocols.
+- Agent activity stays visible while an agent is working.
+- Apple on-device Check availability reports a result. Use for chat and Use for development stay available while a local model server is running.
+- fast-agent installs from the setup screen with the app's uv and Python.
+
+## 0.4.4 (build 30)
+
+Version 0.4.4 (build 30) bundles Python engine 2.31.10.
 
 - Local AI retains unsaved setup and runtime settings when navigating away, while removing hidden forms from layout. Unsaved keys stay in memory.
 - Catalog menus reuse their entries to reduce navigation work. The Mac validation checklist still requires checking responsiveness on the final build.

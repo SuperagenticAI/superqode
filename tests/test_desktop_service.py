@@ -661,14 +661,40 @@ def test_acp_catalog_package_launchers_cannot_enable_implicit_installation(monke
         ),
     ]
     monkeypatch.setattr("superqode.app.harness_picker.harness_picker_items", lambda *a, **kw: items)
-    monkeypatch.setattr(
-        "superqode.desktop_service.routes.shutil.which", lambda command: "/fixture/" + command
-    )
+
+    def which(command):
+        if command in {"npx", "uvx"}:
+            return "/fixture/" + command
+        return None
+
+    monkeypatch.setattr("superqode.desktop_service.routes.shutil.which", which)
     rows = acp_routes(tmp_path)
     assert "--no-install" in shlex.split(rows[0]["command"])
     assert "--yes" not in shlex.split(rows[0]["command"])
-    assert "--offline" in shlex.split(rows[1]["command"])
-    assert "--online" not in shlex.split(rows[1]["command"])
+    offline = shlex.split(rows[1]["command"])
+    assert offline[:4] == ["uvx", "--offline", "--python", "3.13"]
+    assert "--online" not in offline
+    assert rows[1]["available"] is False
+    assert "Install this agent" in rows[1]["issue"]
+
+    monkeypatch.setattr(
+        "superqode.desktop_service.routes.shutil.which",
+        lambda command: "/usr/local/bin/sample-agent" if command == "sample-agent" else None,
+    )
+    installed = acp_routes(tmp_path)
+    assert installed[1]["command"] == "/usr/local/bin/sample-agent"
+    assert installed[1]["available"] is True
+
+
+def test_dependency_resolver_failure_asks_for_the_install_button():
+    from superqode.desktop_service.connection_probe import dependency_install_message
+
+    message = dependency_install_message(
+        "No solution found when resolving tool dependencies: network was disabled"
+    )
+    assert "Install agent" in message
+    assert "fast-agent-mcp==0.2.48" not in message
+    assert dependency_install_message("ACP agent disconnected") == ""
 
 
 def test_large_permission_request_retains_actionable_approval_token(desktop):

@@ -218,29 +218,41 @@ struct AgentActivityView: View {
   @State private var expanded = false
   var body: some View {
     DisclosureGroup(isExpanded: $expanded) {
-      ScrollView {
-        LazyVStack(alignment: .leading, spacing: 10) {
-        ForEach(Array(events.enumerated()), id: \.offset) { _, event in
-          let data = event["data"] as? [String: Any] ?? [:]
-          let payload = data["payload"] as? [String: Any] ?? data
-          let name = string(data, "event", string(event, "type"))
-          DisclosureGroup {
-            if string(event, "type") == "output" {
-              ResponseCodeBlock(language: "", code: string(data, "text"))
-            } else {
-              Text(pretty(payload)).font(.system(size: 12, design: .monospaced))
-                .textSelection(.enabled).frame(maxWidth: .infinity, alignment: .leading)
-            }
-          } label: {
-            VStack(alignment: .leading, spacing: 3) {
-              Text(name.replacingOccurrences(of: "_", with: " ").capitalized).font(.caption.weight(.medium))
-              let title = agentToolAction(payload)
-              if !title.isEmpty { Text(title).font(.caption.monospaced()).lineLimit(3).help(title).textSelection(.enabled) }
-            }
+      if events.isEmpty {
+        Text("Activity appears here as the agent works.")
+          .font(.caption).foregroundStyle(.secondary)
+          .frame(maxWidth: .infinity, alignment: .leading)
+          .padding(.top, 8)
+      } else {
+        ScrollViewReader { proxy in
+          ScrollView {
+            LazyVStack(alignment: .leading, spacing: 10) {
+              ForEach(Array(events.enumerated()), id: \.offset) { index, event in
+                let data = event["data"] as? [String: Any] ?? [:]
+                let payload = data["payload"] as? [String: Any] ?? data
+                let name = string(data, "event", string(event, "type"))
+                DisclosureGroup {
+                  if string(event, "type") == "output" {
+                    ResponseCodeBlock(language: "", code: string(data, "text"))
+                  } else {
+                    Text(pretty(payload)).font(.system(size: 12, design: .monospaced))
+                      .textSelection(.enabled).frame(maxWidth: .infinity, alignment: .leading)
+                  }
+                } label: {
+                  VStack(alignment: .leading, spacing: 3) {
+                    Text(name.replacingOccurrences(of: "_", with: " ").capitalized).font(.caption.weight(.medium))
+                    let title = agentToolAction(payload)
+                    if !title.isEmpty { Text(title).font(.caption.monospaced()).lineLimit(3).help(title).textSelection(.enabled) }
+                  }
+                }.id(index)
+              }
+            }.padding(.top, 10).padding(.trailing, 6)
           }
+          .frame(height: min(180, CGFloat(events.count) * 54))
+          .onAppear { scrollToLatest(proxy) }
+          .onChange(of: events.count) { _, _ in scrollToLatest(proxy) }
         }
-        }.padding(.top, 10).padding(.trailing, 6)
-      }.frame(height: min(180, CGFloat(events.count) * 54))
+      }
     } label: {
       HStack(spacing: 8) {
         Image(systemName: "terminal").foregroundStyle(Color.qAccent)
@@ -248,5 +260,12 @@ struct AgentActivityView: View {
         Text("\(events.count) events").font(.caption).foregroundStyle(.secondary)
       }
     }.padding(12).outlinedSurface(radius: 9)
+      .onAppear { if active { expanded = true } }
+      .onChange(of: active) { _, working in if working { expanded = true } }
+  }
+
+  private func scrollToLatest(_ proxy: ScrollViewProxy) {
+    guard active, let last = events.indices.last else { return }
+    proxy.scrollTo(last, anchor: .bottom)
   }
 }

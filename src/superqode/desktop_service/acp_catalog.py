@@ -135,15 +135,18 @@ def extra_routes(service, project):
             argv = shlex.split(command)
         except ValueError:
             continue
-        if argv and Path(argv[0]).name == "npx":
-            argv = [argv[0], "--no-install", *[v for v in argv[1:] if v not in {"-y", "--yes"}]]
-        elif argv and Path(argv[0]).name == "uvx":
-            argv = [argv[0], "--offline", *[v for v in argv[1:] if v != "--online"]]
+        from .routes import prepare_tool_launch
+
+        argv, tool_ready = prepare_tool_launch(argv)
         row = _route(
             "acp:" + agent["short_name"],
             agent["name"],
             argv,
-            available=bool(argv and check_agent_installed(agent) and shutil.which(argv[0])),
+            available=(
+                tool_ready
+                if tool_ready is not None
+                else bool(argv and check_agent_installed(agent) and shutil.which(argv[0]))
+            ),
             description=agent.get("description", ""),
             website=agent.get("url", ""),
             registry_version=agent.get("registry_version", ""),
@@ -176,10 +179,16 @@ def extra_routes(service, project):
             row["digest"] = hashlib.sha256(
                 json.dumps({"argv": argv, "env": environment}, sort_keys=True).encode()
             ).hexdigest()
+            if tool_ready is False:
+                row["issue"] = (
+                    "Install this agent to download its released packages. A connection check does not download them."
+                )
         if (
             not row["available"]
+            and tool_ready is not False
             and not unsafe
             and argv
+            and Path(argv[0]).name not in {"uvx", "npx"}
             and shutil.which(argv[0])
             and service._all(
                 "SELECT reference FROM acp_install_receipts WHERE reference=? AND digest=?",
@@ -343,6 +352,10 @@ def install_plan(service, project, reference):
         ):
             raise ValueError("This agent needs the vendor's manual installation workflow") from None
         plan = {"reference": reference, "argv": argv, "command": shlex.join(argv)}
+    from .configuration import bind_app_install
+
+    plan["argv"] = bind_app_install(plan["argv"])
+    plan["command"] = shlex.join(plan["argv"])
     plan["reference"] = reference
     plan["requirements"] = installer_requirements(plan["argv"])
     plan["digest"] = hashlib.sha256(json.dumps(plan["argv"]).encode()).hexdigest()

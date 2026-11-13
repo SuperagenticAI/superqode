@@ -41,6 +41,8 @@ struct HubView: View {
         Button("Build a harness…", systemImage: "hammer") { app.openConnections("builder") }
         Button("Agent runtimes…", systemImage: "cpu") { app.openConnections("runtimes") }
         Button("ACP agents…", systemImage: "link") { app.openConnections("acp") }
+        Button("Protocols…", systemImage: "network") { app.openConnections("menu:protocols") }
+          .help("Connect over ACP, A2A, or Unified Harness Protocol")
       }.disabled(app.project.isEmpty || app.busy || app.active)
       Button("Advanced: Harnesses on local models", systemImage: "cpu.fill") {
         app.section = "Local harnesses"

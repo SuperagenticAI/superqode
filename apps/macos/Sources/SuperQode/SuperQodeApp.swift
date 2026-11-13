@@ -1386,7 +1386,6 @@ struct EventStream: View {
                 prompt: string(app.detail["request"] as? [String: Any] ?? [:], "prompt"),
                 context: liveChanges)
             }
-            // While the agent works, the pinned working card shows the live timer.
             if isTask && !app.active {
               RunStatsFooter(stats: stats).padding(.horizontal, 4)
             }
@@ -1451,10 +1450,10 @@ struct EventStream: View {
               status: app.activityStatus, activity: currentAgentActivity(app.events),
               startedAt: RunStats.startDate(app.detail), waitingSince: RunStats.waitingSince(app.detail),
               planLine: PlanSnapshot.compactLine(plan))
-          } else if !activity.isEmpty {
-            AgentActivityView(events: activity, active: false)
-              .id(app.selectedJob)
           }
+          // The same event list stays open while any connection is working.
+          AgentActivityView(events: activity, active: app.active)
+            .id(app.selectedJob)
         }.padding(.horizontal, 24).padding(.vertical, 6)
       }
     }

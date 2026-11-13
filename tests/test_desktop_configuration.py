@@ -34,6 +34,35 @@ def test_agent_install_explains_missing_node_and_blocks_subprocess(monkeypatch, 
     assert install_plan(tmp_path, "qwen-code")["requirements"][0]["installed"]
 
 
+def test_mac_app_install_uses_its_own_uv_and_python(monkeypatch, tmp_path):
+    from superqode.desktop_service.configuration import install_plan
+
+    uv = tmp_path / "bin" / "uv"
+    uv.parent.mkdir()
+    uv.write_text("", encoding="utf-8")
+    uv.chmod(0o755)
+    monkeypatch.setenv("SUPERQODE_APP", "1")
+    monkeypatch.setenv("SUPERQODE_STATE_DIR", str(tmp_path))
+    monkeypatch.setattr("superqode.desktop_service.app_setup.ensure_uv", lambda bin_dir: str(uv))
+    plan = install_plan(tmp_path, "fast-agent")
+    assert plan["argv"][0] == str(uv)
+    assert plan["argv"][plan["argv"].index("--python") + 1] == __import__("sys").executable
+    assert "fast-agent-mcp" in plan["argv"]
+    assert plan["requirements"][0]["installed"] is True
+
+    monkeypatch.delenv("SUPERQODE_APP")
+    terminal = install_plan(tmp_path, "fast-agent")
+    assert terminal["argv"] == [
+        "uv",
+        "tool",
+        "install",
+        "--python",
+        "3.13",
+        "-U",
+        "fast-agent-mcp",
+    ]
+
+
 def test_guided_wizard_uses_shared_builder_and_no_tool_boundaries(tmp_path):
     catalog = options()
     assert any(r["id"] == "coding" for r in catalog["starters"])

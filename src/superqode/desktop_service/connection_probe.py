@@ -59,8 +59,19 @@ async def probe_route(root: Path, route: dict, status, method_id=None, terminal_
         class ProbeTerminals:
             create = output = wait_for_exit = kill = release = staticmethod(deny_tools)
 
+        missing_packages = False
+
         async def diagnostic(message):
-            status(message)
+            nonlocal missing_packages
+            summary = dependency_install_message(message)
+            if summary:
+                if not missing_packages:
+                    status(summary)
+                missing_packages = True
+                return
+            if missing_packages:
+                return
+            status(message[:500])
 
         client = DesktopACPClient(
             root,
@@ -82,7 +93,10 @@ async def probe_route(root: Path, route: dict, status, method_id=None, terminal_
         )
         try:
             if not await asyncio.wait_for(client.start(), timeout=30):
-                raise ValueError(client.last_startup_error or "The ACP agent could not initialize.")
+                detail = client.last_startup_error or "The ACP agent could not initialize."
+                if missing_packages:
+                    detail = dependency_install_message("network was disabled")
+                raise ValueError(dependency_install_message(detail) or detail)
             methods = getattr(client, "get_auth_methods", lambda: [])()
             if terminal_method:
                 return terminal_auth_plan(route, methods, terminal_method)
@@ -310,6 +324,20 @@ async def probe_route(root: Path, route: dict, status, method_id=None, terminal_
             else "Sign in with this agent's account before starting a task.",
         }
     return {"connected": False, "message": "Agent installed. Access is checked when coding starts."}
+
+
+def dependency_install_message(text: str) -> str:
+    """Turn uv's offline resolver transcript into one install instruction."""
+    lowered = text.lower()
+    if (
+        "network was disabled" in lowered
+        or "no solution found when resolving tool dependencies" in lowered
+    ):
+        return (
+            "This agent's packages are not installed. Choose Install agent to download "
+            "the current release and its dependencies. A connection check does not download packages."
+        )
+    return ""
 
 
 def public_auth_methods(methods):

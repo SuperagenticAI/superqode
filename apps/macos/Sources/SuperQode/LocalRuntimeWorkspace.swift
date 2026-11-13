@@ -531,32 +531,42 @@ struct AppleLocalModelPanel: View {
   @State private var status: [String: Any] = [:]
   @State private var checking = false
   @State private var failure = ""
+  @State private var checkedNote = ""
+  /// A click during an in-flight check still reports when that check finishes.
+  @State private var announceResult = false
 
-  private var available: Bool { status["available"] as? Bool == true }
-  private var utility: Bool { status["utility_enabled"] as? Bool == true }
-  private var canUse: Bool {
-    available && !project.isEmpty && project == app.projectID && !app.openingProject && !app.anyActive
+  private var available: Bool { flag(status, "available") }
+  private var utility: Bool { flag(status, "utility_enabled") }
+  /// A local server job stays up while Ollama or LM Studio is running. It must not block Apple.
+  private var agentBusy: Bool {
+    app.jobs.contains {
+      string($0, "kind") != "local"
+        && ["running", "needs_approval", "queued", "cancelling"].contains(string($0, "status"))
+    }
   }
-
   var body: some View {
     VStack(alignment: .leading, spacing: 10) {
       HStack {
         Label("Apple on-device model", systemImage: "apple.logo").font(.headline)
         Spacer()
-        Button(checking ? "Checking…" : "Check availability") { Task { await refresh() } }
-          .disabled(checking || !app.connected)
+        Button(checking ? "Checking…" : "Check availability") { Task { await refresh(announce: true) } }
+          .disabled(checking)
       }
       Text(string(status, "guidance", "Requires macOS 26 or later and Apple Intelligence on a supported Mac."))
         .font(.callout).foregroundStyle(.secondary)
-      if !failure.isEmpty { Text(failure).font(.caption).foregroundStyle(.orange) }
+      if !checkedNote.isEmpty {
+        Text(checkedNote).font(.callout).textSelection(.enabled)
+          .accessibilityIdentifier("local.appleStatus")
+      }
+      if !failure.isEmpty { Text(failure).font(.caption).foregroundStyle(.orange).textSelection(.enabled) }
       HStack {
         if let url = URL(string: string(status, "docs_url")), url.scheme == "https" {
           Link("Apple setup guide", destination: url).font(.caption)
         }
         Spacer()
-        Button("Use for chat") { use(development: false) }.disabled(!canUse)
+        Button("Use for chat") { use(development: false) }.disabled(checking)
         Button("Use for development") { use(development: true) }
-          .buttonStyle(BrandButtonStyle()).disabled(!canUse)
+          .buttonStyle(BrandButtonStyle()).disabled(checking)
       }
       DisclosureGroup("Apple model settings") {
         Text("Development uses the Apple on-device harness and your project’s file permissions. Use it for small read, write and edit tasks.")
@@ -571,24 +581,85 @@ struct AppleLocalModelPanel: View {
     }.padding(16).brandSurface()
       .accessibilityIdentifier("local.appleModel")
       .task(id: String(active) + "\n" + String(app.connected)) {
-        if active && app.connected { await refresh() }
+        if active && app.connected { await refresh(announce: false) }
       }
   }
 
   private func use(development: Bool) {
-    guard canUse else { return }
+    if let reason = useBlocker() {
+      failure = reason
+      return
+    }
     app.chooseAppleModel(development: development)
+    app.notice = development
+      ? "Using Apple's on-device model for development."
+      : "Using Apple's on-device model for chat."
+    failure = ""
     onUse()
   }
 
-  private func refresh() async {
+  private func useBlocker() -> String? {
+    if !app.connected {
+      return "The local engine is not running. Open a project, then check again."
+    }
+    if status.isEmpty {
+      return "Check availability first, then choose chat or development."
+    }
+    if !available {
+      return string(status, "guidance", "Apple's on-device model is not available on this Mac.")
+    }
+    if project.isEmpty || project != app.projectID {
+      return "Open a project before using Apple's on-device model."
+    }
+    if app.openingProject {
+      return "Wait until the project finishes opening, then try again."
+    }
+    if agentBusy {
+      return "Finish the current run, then use Apple's on-device model."
+    }
+    return nil
+  }
+
+  private func refresh(announce: Bool) async {
+    if announce { announceResult = true }
     guard !checking else { return }
+    if !app.connected {
+      let message = "The local engine is not running. Open a project, then check again."
+      failure = message
+      if announceResult {
+        checkedNote = message
+        announceResult = false
+      }
+      return
+    }
     checking = true
     defer { checking = false }
     do {
       let result = try await app.engine.call("local.apple.status") as? [String: Any] ?? [:]
       guard !Task.isCancelled else { return }
-      status = result; failure = ""
-    } catch { if !Task.isCancelled { failure = error.localizedDescription } }
+      status = result
+      failure = ""
+      guard announceResult else { return }
+      announceResult = false
+      let time = Date.now.formatted(date: .omitted, time: .standard)
+      checkedNote = flag(result, "available")
+        ? "Checked at \(time). Apple's on-device model is ready. Choose Use for chat or Use for development."
+        : "Checked at \(time). " + string(result, "guidance", "Apple's on-device model is not available on this Mac.")
+    } catch {
+      if !Task.isCancelled {
+        failure = error.localizedDescription
+        if announceResult {
+          checkedNote = failure
+          announceResult = false
+        }
+      }
+    }
   }
+}
+
+/// JSON booleans arrive as Bool. NSNumber is accepted so a bridge flag cannot leave the buttons inert.
+private func flag(_ row: [String: Any], _ key: String) -> Bool {
+  if let value = row[key] as? Bool { return value }
+  if let value = row[key] as? NSNumber { return value.boolValue }
+  return false
 }

@@ -4,6 +4,7 @@ from dataclasses import replace
 import hashlib
 import json
 from pathlib import Path
+import shlex
 
 
 def options():
@@ -150,6 +151,48 @@ def installer_requirements(argv):
     ]
 
 
+def bind_app_install(argv: list[str]) -> list[str]:
+    """Point a reviewed uv install at the uv and Python shipped with the Mac app."""
+    import os
+    import sys
+
+    if os.environ.get("SUPERQODE_APP") != "1" or not argv or Path(argv[0]).name != "uv":
+        return list(argv)
+    state = os.environ.get("SUPERQODE_STATE_DIR", "")
+    if not state:
+        return list(argv)
+    from .app_setup import ensure_uv
+
+    uv = ensure_uv(Path(state) / "bin")
+    if not uv:
+        raise ValueError(
+            "SuperQode could not prepare the uv included with the app. Check the network, then choose Check installation again."
+        )
+    bound = [uv]
+    skip = False
+    saw_python = False
+    for token in argv[1:]:
+        if skip:
+            bound.append(sys.executable)
+            skip = False
+            saw_python = True
+            continue
+        if token == "--python":
+            bound.append(token)
+            skip = True
+            continue
+        if token.startswith("--python="):
+            bound.append("--python")
+            bound.append(sys.executable)
+            saw_python = True
+            continue
+        bound.append(token)
+    if not saw_python:
+        insert_at = 3 if bound[1:3] == ["tool", "install"] else 1
+        bound[insert_at:insert_at] = ["--python", sys.executable]
+    return bound
+
+
 def install_plan(root: Path, reference: str):
     from superqode.providers.connection_profiles import get_connection_profile
     from superqode.providers.acp_registry import get_bundled_acp_catalog
@@ -163,11 +206,12 @@ def install_plan(root: Path, reference: str):
         raise ValueError(
             "This agent has no reviewed native install recipe. Use the vendor's setup instructions."
         )
+    argv = bind_app_install(plan.argv)
     return {
         "reference": reference,
-        "command": plan.command,
-        "argv": plan.argv,
-        "requirements": installer_requirements(plan.argv),
+        "command": shlex.join(argv),
+        "argv": argv,
+        "requirements": installer_requirements(argv),
     }
 
 

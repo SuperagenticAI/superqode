@@ -7,6 +7,23 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [2.31.11] - 2026-11-13
+
+### Added
+
+- macOS Bring your own key lists Google, Anthropic, OpenAI, xAI (Grok), and Meta beside the Chinese providers and aggregators.
+- Harness Hub has a Protocols button for ACP, A2A, and Unified Harness Protocol connections.
+
+### Changed
+
+- macOS 0.4.5 (build 31) bundles Python engine 2.31.11.
+- The agent activity log stays open while an agent is working.
+
+### Fixed
+
+- Apple on-device Check availability reports a result. Use for chat and Use for development stay available while Ollama or LM Studio is running, and choosing the Apple on-device harness selects the system model.
+- fast-agent setup can install the current release from the app with the included uv and Python. A connection check no longer resolves that package while the network is disabled.
+
 ## [2.31.10] - 2026-11-13
 
 ### Added

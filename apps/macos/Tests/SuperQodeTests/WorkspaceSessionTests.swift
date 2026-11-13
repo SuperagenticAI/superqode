@@ -85,7 +85,18 @@ final class WorkspaceSessionTests: XCTestCase {
     app.chooseAppleModel(development: false)
     XCTAssertEqual(app.harness, "no-tool")
     XCTAssertEqual(app.interactionMode, "chat")
+    XCTAssertEqual(app.provider, "apple-foundation")
+    XCTAssertEqual(app.model, "system-on-device")
     XCTAssertEqual(app.engine.pendingRequestCount, 0, "Selecting the route must not make a generation request")
+    app.preferences.set(
+      ["apple-local": ["provider": "openai", "model": "gpt-5.4"]],
+      forKey: "nativeRouteChoices:project")
+    app.provider = "openai"
+    app.model = "gpt-5.4"
+    app.chooseHarness("apple-local")
+    XCTAssertEqual(app.harness, "apple-local")
+    XCTAssertEqual(app.provider, "apple-foundation")
+    XCTAssertEqual(app.model, "system-on-device")
   }
 
   @MainActor func testNewThreadDropsConnectionWithoutStoppingOtherWork() {

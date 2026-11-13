@@ -1055,6 +1055,11 @@ private func jobStamp(_ row: [String: Any]) -> Double {
       provider = string(local, "local_provider", provider)
       model = string(local, "local_model", model)
     }
+    // Apple on-device always uses the system model, even when a remembered route names another provider.
+    if id == "apple-local" {
+      provider = "apple-foundation"
+      model = "system-on-device"
+    }
     savePreferences()
   }
   /// Load a just-connected local model so the first prompt does not wait on a cold start.

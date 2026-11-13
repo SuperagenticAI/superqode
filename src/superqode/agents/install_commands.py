@@ -190,7 +190,9 @@ _MANAGED_AGENT_INSTALLS: dict[str, tuple[str, str, str, str]] = {
         "qwen",
     ),
     "fast-agent": (
-        "uv tool install -U fast-agent-mcp",
+        # uv 0.13 defaults to Python 3.15. fast-agent's released dependencies
+        # do not all publish 3.15 wheels, so the reviewed install pins 3.13.
+        "uv tool install --python 3.13 -U fast-agent-mcp",
         "https://github.com/evalstate/fast-agent",
         "Apache-2.0",
         "fast-agent-acp",
@@ -214,19 +216,19 @@ _MANAGED_AGENT_INSTALLS: dict[str, tuple[str, str, str, str]] = {
         "cline",
     ),
     "mistral-vibe": (
-        "uv tool install mistral-vibe",
+        "uv tool install --python 3.13 mistral-vibe",
         "https://github.com/mistralai/mistral-vibe",
         "Apache-2.0",
         "vibe-acp",
     ),
     "hermes": (
-        "uv tool install 'hermes-agent[acp]'",
+        "uv tool install --python 3.13 'hermes-agent[acp]'",
         "https://github.com/nousresearch/hermes-agent",
         "MIT",
         "hermes",
     ),
     "deepagents-code": (
-        "uv tool install deepagents-code",
+        "uv tool install --python 3.13 deepagents-code",
         "https://github.com/langchain-ai/deepagents",
         "MIT",
         "dcode",

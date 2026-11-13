@@ -62,21 +62,9 @@ struct ACPSetupView: View {
       }
       if route["custom"] as? Bool == true { Button("Edit configuration…", action: edit) }
       if !install.isEmpty && route["available"] as? Bool != true {
-        DisclosureGroup("Review installation") {
-          VStack(alignment: .leading, spacing: 12) {
-            Text(string(install, "command")).font(.system(.callout, design: .monospaced)).textSelection(.enabled)
-            Text("This package-manager command installs third-party software on your Mac. Review the named package before continuing.")
-              .font(.caption).foregroundStyle(.secondary)
-            if let requirements = install["requirements"] as? [[String: Any]], !requirements.isEmpty {
-              ConnectionRequirementsView(requirements: requirements)
-            }
-            Button("Install agent…") {
-              if app.confirm("Install this coding agent?", string(install, "command"), button: "Install") {
-                begin("acp-install", extra: ["expected_digest": string(install, "digest")])
-              }
-            }.disabled((install["requirements"] as? [[String: Any]] ?? []).contains(where: { $0["installed"] as? Bool != true }) || app.busy || app.anyActive)
-          }.padding(.top, 10)
-        }
+        installReview
+      } else if !install.isEmpty {
+        DisclosureGroup("Reinstall agent") { installReview }
       } else if !string(route, "setup_note").isEmpty {
         DisclosureGroup("Vendor setup instructions") {
           Text(string(route, "setup_note")).font(.callout).textSelection(.enabled).padding(.top, 8)
@@ -143,6 +131,23 @@ struct ACPSetupView: View {
         ACPInteractiveSignIn(plan: plan) { recheck = true; terminalPlan = nil }.environmentObject(app)
       }
     }
+  }
+
+  private var installReview: some View {
+    VStack(alignment: .leading, spacing: 12) {
+      Text("Install dependencies").font(.headline)
+      Text(string(install, "command")).font(.system(.callout, design: .monospaced)).textSelection(.enabled)
+      Text("This downloads the current release and its dependencies with the uv and Python included with SuperQode. SuperQode asks before it installs.")
+        .font(.caption).foregroundStyle(.secondary)
+      if let requirements = install["requirements"] as? [[String: Any]], !requirements.isEmpty {
+        ConnectionRequirementsView(requirements: requirements)
+      }
+      Button("Install agent…") {
+        if app.confirm("Install this coding agent?", string(install, "command"), button: "Install") {
+          begin("acp-install", extra: ["expected_digest": string(install, "digest")])
+        }
+      }.buttonStyle(BrandButtonStyle()).disabled((install["requirements"] as? [[String: Any]] ?? []).contains(where: { $0["installed"] as? Bool != true }) || app.busy || app.anyActive)
+    }.padding(16).brandSurface()
   }
 
   private func step(_ number: String, _ name: String, done: Bool) -> some View {

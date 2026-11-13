@@ -34,6 +34,12 @@ struct ConnectionSourcesView: View {
   private var featuredProviders: [[String: Any]] {
     cloudProviders.filter { ["deepseek", "qwen-cn", "qwen-intl", "alibaba", "moonshot", "zai", "zhipu", "minimax", "doubao", "siliconflow", "openrouter"].contains(string($0, "id")) }
   }
+  /// Shown in this order. A harness allow-list still applies through cloudProviders.
+  private var usProviders: [[String: Any]] {
+    ["google", "anthropic", "openai", "xai", "meta"].compactMap { id in
+      cloudProviders.first { string($0, "id") == id }
+    }
+  }
   private var cloud: [String: Any] {
     cloudProviders.first { string($0, "id") == selectedProvider } ?? [:]
   }
@@ -111,19 +117,32 @@ struct ConnectionSourcesView: View {
       .environmentObject(app)
   }
 
+  private func providerButtons(_ providers: [[String: Any]]) -> some View {
+    LazyVGrid(columns: [GridItem(.adaptive(minimum: 150))], alignment: .leading) {
+      ForEach(providers, id: \.projectRowID) { provider in
+        let id = string(provider, "id")
+        Button(string(provider, "name")) {
+          selectedProvider = id
+        }
+        .disabled(saving)
+        .accessibilityAddTraits(id == selectedProvider ? .isSelected : [])
+      }
+    }
+  }
+
   private var cloudContent: some View {
     VStack(alignment: .leading, spacing: 16) {
       if !featuredProviders.isEmpty {
         Text("Chinese models and aggregators").font(.headline)
         Text("Choose a provider to see its key type, model examples and official setup guide. API keys and coding-plan subscriptions use different routes.")
           .font(.caption).foregroundStyle(.secondary)
-        LazyVGrid(columns: [GridItem(.adaptive(minimum: 150))], alignment: .leading) {
-          ForEach(featuredProviders, id: \.projectRowID) { provider in
-            Button(string(provider, "name")) {
-              selectedProvider = string(provider, "id")
-            }.disabled(saving)
-          }
-        }
+        providerButtons(featuredProviders)
+      }
+      if !usProviders.isEmpty {
+        Text("US model providers").font(.headline)
+        Text("Google, Anthropic, OpenAI, Grok, and Meta. Select one, then paste its API key.")
+          .font(.caption).foregroundStyle(.secondary)
+        providerButtons(usProviders)
       }
       Picker("Provider", selection: $selectedProvider) {
         ForEach(cloudProviders, id: \.projectRowID) { row in
