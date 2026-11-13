@@ -27,8 +27,14 @@ struct LocalRuntimeEndpointField: NSViewRepresentable {
   func makeNSView(context: Context) -> NSTextField {
     let field = NSTextField()
     field.identifier = NSUserInterfaceItemIdentifier("local.runtime.endpoint")
+    field.setAccessibilityIdentifier("local.runtime.endpoint")
     field.placeholderString = "Local base URL, e.g. http://127.0.0.1:8000/v1"
+    field.isEditable = true
+    field.isSelectable = true
+    field.isBezeled = true
+    field.drawsBackground = true
     field.bezelStyle = .roundedBezel
+    field.setContentHuggingPriority(.defaultLow, for: .horizontal)
     field.setAccessibilityLabel("Local base URL")
     field.delegate = context.coordinator
     context.coordinator.update(field, parent: self, enabled: enabled)
@@ -212,7 +218,7 @@ struct LocalRuntimeWorkspace: View {
         }
         TextField("Profile name", text: $name).textFieldStyle(.roundedBorder)
       }
-      LocalRuntimeEndpointField(value: $endpoint).frame(height: 24)
+      LocalRuntimeEndpointField(value: $endpoint).frame(maxWidth: .infinity).frame(height: 24)
       HStack {
         SecureField("Local API key (optional)", text: $apiKey).textFieldStyle(.roundedBorder)
         Toggle("Save in Keychain", isOn: $rememberKey).toggleStyle(.checkbox)
