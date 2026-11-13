@@ -1,6 +1,15 @@
-# SuperQode for macOS public beta 0.4.6
+# SuperQode for macOS public beta 0.4.7
 
-Version 0.4.6 (build 32) bundles Python engine 2.31.13. These versions are prepared in source; native validation, signing, notarization and publication remain separate release steps.
+Version 0.4.7 (build 33) bundles Python engine 2.31.14. These versions are prepared in source; native validation, signing, notarization and publication remain separate release steps.
+
+- Local AI opens on a simple Start tab: Apple's on-device model first, then Ollama and LM Studio, your Mac's chip and memory, and one model list rated Fits, Tight or Too large.
+- A compact harness menu (Core is recommended) sits next to Start coding, and returning users get a one-tap Continue.
+- Runtimes, the model library, comparisons, model routes, harness compatibility and Apple model settings live in a separate Advanced tab.
+- The welcome screen, the Local model tile, Connect and the harness-first path open the same Start view with the existing warm-up animation.
+
+## 0.4.6 (build 32)
+
+Version 0.4.6 (build 32) bundles Python engine 2.31.13.
 
 - The API-key screen searches providers and models, shows provider logos, and keeps the model and key on one page.
 - Opening a provider or closing Connect finishes the click before the sheet changes.
