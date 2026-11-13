@@ -1,4 +1,13 @@
-# SuperQode for macOS public beta 0.4.3
+# SuperQode for macOS public beta 0.4.4
+
+Version 0.4.4 (build 30) bundles Python engine 2.31.10. These versions are prepared in source; native validation, signing, notarization and publication remain separate release steps.
+
+- Local AI retains unsaved setup and runtime settings when navigating away, while removing hidden forms from layout. Unsaved keys stay in memory.
+- Catalog menus reuse their entries to reduce navigation work. The Mac validation checklist still requires checking responsiveness on the final build.
+- Model Studio setup shows available context/output limits, tool support, pricing caveats and required thinking. DeepSeek V4 Pro and V4.1 Flash 1017 use the supported thinking adapter.
+- Antigravity Managed Agent appears in the API-key harness catalog and Harness Hub, separate from subscription sign-in.
+
+## 0.4.3 (build 29)
 
 Version 0.4.3 (build 29) bundles Python engine 2.31.9.
 

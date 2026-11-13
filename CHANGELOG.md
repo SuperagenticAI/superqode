@@ -7,6 +7,19 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [2.31.10] - 2026-11-13
+
+### Changed
+
+- macOS 0.4.4 (build 30) bundles Python engine 2.31.10. Model Studio setup displays advertised context and output limits, tool support, unknown pricing, and models that require thinking.
+- Antigravity Managed Agent appears in the API-key harness catalog and Harness Hub, separate from subscription sign-in.
+
+### Fixed
+
+- Local AI keeps unsaved Quick Start, installed-model and runtime-profile settings in memory when navigating away, without keeping hidden forms in the layout or saving unsaved keys to disk.
+- macOS reuses catalog menus instead of rebuilding large menus during navigation. The native smoke check verifies unsaved runtime endpoints across navigation while retaining the existing responsiveness limits.
+- Model Studio thinking controls recognize DeepSeek V4 Pro and V4.1 Flash 1017 aliases. Workspace model discovery reports available capabilities and limits without inventing missing metadata.
+
 ## [2.31.9] - 2026-11-12
 
 ### Added

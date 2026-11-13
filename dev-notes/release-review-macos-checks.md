@@ -74,11 +74,25 @@ in the cloud environment because no Model Studio account key was configured.
 ## Release ownership
 
 The live website metadata is already corrected to macOS 0.4.3/build 29 with
-engine 2.31.9. Its existing signed DMG has not been replaced. Before packaging
-these additional native fixes, choose a new macOS version/build and update the
-release notes; the uploader intentionally refuses changing an existing version's
-artifact bytes. Python/GitHub publication is left to the release system as
-requested. This work does not create tags, notarize, or upload a new installer.
+engine 2.31.9. Its existing signed DMG has not been replaced. The next source
+versions are Python 2.31.10 and macOS 0.4.4/build 30, with release notes updated.
+The uploader intentionally refuses changing an existing version's artifact bytes.
+Python/GitHub publication is left to the release system as requested. This work
+does not create tags, notarize, or upload a new installer.
+
+After native validation, build the app from this checkout using
+`apps/macos/scripts/release.sh` on an Apple Silicon Mac with the Developer ID
+identity and notary profile configured. Rebuild the engine; do not use
+`SKIP_ENGINE=1` with an older payload. Verify About shows 0.4.4/build 30 and the
+runtime manifest and imported engine both show 2.31.10 before publishing the
+signed DMG. Update the website release manifest only after the new artifact,
+checksum and download links are verified.
+
+For terminal and ACP users, publish fresh Python 2.31.10 wheel/sdist artifacts
+from the same source. The repository's Publish workflow uses tag `v2.31.10` and
+runs its own release checks; creating that tag starts publication and is left
+to the release owner. PyPI publication alone does not update the engine already
+bundled inside an installed macOS app.
 
 Official Alibaba references checked for the integration:
 
