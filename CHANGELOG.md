@@ -7,6 +7,17 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [2.31.13] - 2026-11-13
+
+### Changed
+
+- macOS 0.4.6 (build 32) bundles Python engine 2.31.13.
+- The Mac API-key screen searches providers and models, shows provider logos, and keeps the model and key on one page.
+
+### Fixed
+
+- Opening a provider or closing Connect finishes the click before the sheet changes, so the spinning wait cursor does not stay up.
+
 ## [2.31.12] - 2026-11-13
 
 ### Added

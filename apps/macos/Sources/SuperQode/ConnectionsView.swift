@@ -204,8 +204,11 @@ struct ProviderConnectionView: View {
       }
     }
     return Button {
-      chooseRoute(entry.routes[0])
-      choice = entry
+      let entry = entry
+      DispatchQueue.main.async {
+        chooseRoute(entry.routes[0])
+        choice = entry
+      }
     } label: {
       ConnectionCardLabel(title: entry.name, subtitle: subtitle ?? "",
         status: keyAvailable ? "Key available" : "", featured: featured) {
@@ -221,8 +224,10 @@ struct ProviderConnectionView: View {
     VStack(spacing: 0) {
       HStack(spacing: 10) {
         Button {
-          self.choice = nil
-          chooseRoute("")
+          DispatchQueue.main.async {
+            self.choice = nil
+            chooseRoute("")
+          }
         } label: {
           Label("Providers", systemImage: "chevron.left")
         }.disabled(working)
