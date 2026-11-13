@@ -7,6 +7,7 @@ from superqode.providers.dynamic import resolve_base_url
 from superqode.providers.model_studio import (
     METERED_PROVIDERS,
     is_plan_model,
+    thinking_policy,
     validate_metered_route,
     validate_workspace_endpoint,
 )
@@ -79,6 +80,20 @@ def list_workspace_models(credentials: dict[str, str], params: dict, base_url: s
     return {
         "source": result.source,
         "models": [model.id for model in result.models],
+        "model_details": [
+            {
+                "id": model.id,
+                "name": model.name,
+                "context_window": model.context_window or None,
+                "max_output": model.max_output or None,
+                "capabilities": [
+                    capability.name.lower().replace("_", "-") for capability in model.capabilities
+                ],
+                "pricing_known": model.pricing_known,
+                "thinking_policy": thinking_policy(model.id),
+            }
+            for model in result.models
+        ],
         "error": result.error,
     }
 

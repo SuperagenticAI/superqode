@@ -12,6 +12,7 @@ struct ConnectionSourcesView: View {
   @State private var saving = false
   @State private var message = ""
   @State private var workspaceModels: [String] = []
+  @State private var workspaceModelDetails: [[String: Any]] = []
   @State private var workspaceMessage = ""
   @State private var workspaceLookup: UUID?
   @State private var workspaceEndpoint = ""
@@ -159,17 +160,37 @@ struct ConnectionSourcesView: View {
                 && cloud["credential_configured"] as? Bool != true))
           if workspaceLookup != nil { ProgressView().controlSize(.small) }
           if !workspaceModels.isEmpty {
-            Picker("Workspace models", selection: $selectedModel) {
-              if !workspaceModels.contains(selectedModel) {
-                Text(selectedModel.isEmpty ? "Choose a model" : selectedModel).tag(selectedModel)
-              }
-              ForEach(workspaceModels, id: \.self) { Text($0).tag($0) }
-            }
+            CatalogPopup(label: "Workspace models", options:
+              (workspaceModels.contains(selectedModel) ? [] : [CatalogPopupOption(id: selectedModel, title: selectedModel.isEmpty ? "Choose a model" : selectedModel)])
+              + workspaceModels.map { CatalogPopupOption(id: $0, title: $0) },
+              selection: $selectedModel, placeholder: "Choose a model")
           }
         }
         if !workspaceMessage.isEmpty {
           Text(workspaceMessage).font(.caption).foregroundStyle(.secondary)
         }
+        if let detail = workspaceModelDetails.first(where: { string($0, "id") == selectedModel }) {
+          VStack(alignment: .leading, spacing: 4) {
+            if let context = detail["context_window"] as? Int {
+              Text("Advertised context: \(context.formatted()) tokens")
+            }
+            if let output = detail["max_output"] as? Int {
+              Text("Advertised maximum output: \(output.formatted()) tokens")
+            }
+            let capabilities = detail["capabilities"] as? [String] ?? []
+            Text(capabilities.contains("tools") ? "Tool calling advertised by the catalog." : "Tool support is not confirmed. Verify it with a small coding task.")
+            if string(detail, "thinking_policy") == "required" {
+              Text("This model always uses reasoning. Selecting Off does not disable it.")
+            } else if string(detail, "thinking_policy") == "unknown" {
+              Text("Thinking controls have not been verified for this model.")
+            }
+            if detail["pricing_known"] as? Bool != true {
+              Text("Pricing depends on your workspace and model. Check Alibaba before running.")
+            }
+          }.font(.caption).foregroundStyle(.secondary)
+        }
+        Link("Model Studio models and pricing", destination: URL(string: "https://www.alibabacloud.com/help/en/model-studio/models")!)
+          .font(.caption)
       }
       Toggle("Remember new key in macOS Keychain", isOn: $remember).disabled(key.isEmpty)
       Text(
@@ -211,6 +232,7 @@ struct ConnectionSourcesView: View {
   private func resetWorkspaceModels() {
     workspaceLookup = nil
     workspaceModels = []
+    workspaceModelDetails = []
     workspaceMessage = ""
   }
 
@@ -227,12 +249,14 @@ struct ConnectionSourcesView: View {
         let result = try await app.engine.call("providers.models", params) as? [String: Any] ?? [:]
         guard workspaceLookup == lookup else { return }
         workspaceModels = string(result, "source") == "live" ? result["models"] as? [String] ?? [] : []
+        workspaceModelDetails = string(result, "source") == "live" ? result["model_details"] as? [[String: Any]] ?? [] : []
         workspaceMessage = workspaceModels.isEmpty
           ? string(result, "error", "No workspace models returned.")
           : "Loaded \(workspaceModels.count) model IDs. Use Test model to verify inference."
       } catch {
         guard workspaceLookup == lookup else { return }
         workspaceModels = []
+        workspaceModelDetails = []
         workspaceMessage = error.localizedDescription
       }
     }

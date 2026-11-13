@@ -78,6 +78,7 @@ def test_model_studio_endpoint_applies_to_discovery_and_worker_without_saving_pr
     desktop, monkeypatch
 ):
     from superqode.providers import live_models
+    from superqode.providers.models import ModelInfo, ModelCapability
 
     service, _, _ = desktop
     endpoint = "https://ws-demo.ap-southeast-1.maas.aliyuncs.com/compatible-mode/v1"
@@ -87,7 +88,19 @@ def test_model_studio_endpoint_applies_to_discovery_and_worker_without_saving_pr
         assert provider == "qwen-intl" and api_key == "sk-entered-for-discovery"
         assert base_url == preview
         return live_models.LiveDiscoveryResult(
-            provider, [SimpleNamespace(id="qwen3.8-flash")], "live"
+            provider,
+            [
+                ModelInfo(
+                    id="qwen3.8-flash",
+                    name="Qwen Flash",
+                    provider=provider,
+                    context_window=256000,
+                    max_output=16384,
+                    capabilities=[ModelCapability.TOOLS],
+                    pricing_known=False,
+                )
+            ],
+            "live",
         )
 
     monkeypatch.setattr(live_models, "discover_provider_models", discover)
@@ -98,7 +111,12 @@ def test_model_studio_endpoint_applies_to_discovery_and_worker_without_saving_pr
         "providers.models",
         {"provider": "qwen-intl", "key": "sk-entered-for-discovery", "endpoint": preview},
     )
-    assert result == {"source": "live", "models": ["qwen3.8-flash"], "error": None}
+    assert result["source"] == "live" and result["models"] == ["qwen3.8-flash"]
+    assert result["error"] is None
+    detail = result["model_details"][0]
+    assert detail["context_window"] == 256000 and detail["max_output"] == 16384
+    assert detail["capabilities"] == ["tools"] and not detail["pricing_known"]
+    assert detail["thinking_policy"] == "configurable"
     assert service.credential_environment({"qwen-intl"}) == {
         "QWEN_INTL_API_KEY": "sk-saved",
         "QWEN_INTL_API_BASE": endpoint,
@@ -115,6 +133,38 @@ def test_model_studio_endpoint_applies_to_discovery_and_worker_without_saving_pr
     assert service.credential_environment({"qwen-intl"})["QWEN_INTL_API_BASE"] == endpoint
     service.dispatch("providers.endpoint.set", {"provider": "qwen-intl", "endpoint": ""})
     assert "QWEN_INTL_API_BASE" not in service.credential_environment({"qwen-intl"})
+
+
+def test_workspace_model_details_do_not_claim_unknown_capabilities_or_optional_glm_thinking(
+    monkeypatch,
+):
+    from superqode.providers import live_models
+
+    async def discover(provider, **kwargs):
+        return live_models.LiveDiscoveryResult(
+            provider,
+            [
+                live_models._model_studio_info(provider, "glm-5.3"),
+                live_models._model_studio_info(provider, "future-workspace-model"),
+            ],
+            "live",
+        )
+
+    monkeypatch.setattr(live_models, "discover_provider_models", discover)
+    result = connections.list_workspace_models({}, {"provider": "qwen-intl"})
+    glm, unknown = result["model_details"]
+    assert glm["thinking_policy"] == "required"
+    assert unknown["thinking_policy"] == "unknown"
+    assert unknown["context_window"] is None and unknown["max_output"] is None
+    assert unknown["capabilities"] == [] and not unknown["pricing_known"]
+
+
+@pytest.mark.parametrize("model", ["deepseek-v4-pro", "deepseek-v4.1-flash-1017"])
+def test_current_deepseek_workspace_aliases_can_disable_thinking(model):
+    from superqode.providers.model_studio import thinking_options, thinking_policy
+
+    assert thinking_options(model, "off") == {"enable_thinking": False}
+    assert thinking_policy(model) == "configurable"
 
 
 def test_qwen_setup_launches_interactive_cli_not_acp_or_removed_auth(desktop, monkeypatch):

@@ -51,6 +51,17 @@ superqode models --provider qwen-intl --live
 :connect byok qwen-intl qwen3.8-flash
 ```
 
+The macOS picker shows context and output limits when the workspace catalog
+provides them, advertised tool support, and whether SuperQode knows the model's
+thinking controls. Missing metadata stays unknown. GLM-5.3 always uses reasoning;
+the app explains that selecting Off cannot disable it. Model listing and the
+no-tool Test model action do not certify tool calling or coding quality.
+
+The thinking adapter also recognises `deepseek-v4-pro` and
+`deepseek-v4.1-flash-1017`, alongside the supported dated DeepSeek aliases.
+For these hybrid models, Off sends `enable_thinking=false`. Pricing depends
+on the workspace and model; the app links to Alibaba's pricing documentation.
+
 For a dedicated workspace in the shell, set the matching API base variable
 from the table. Use the workspace's OpenAI-compatible base URL
 ending in `/compatible-mode/v1`. SuperQode lists chat models from Alibaba's

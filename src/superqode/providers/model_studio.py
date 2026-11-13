@@ -97,7 +97,13 @@ def thinking_options(model: str, level: str | None) -> dict:
         if level == "off":  # The API rejects disabling thinking for this family.
             return {}
         return {"reasoning_effort": {"medium": "high", "xhigh": "max"}.get(level, level)}
-    if model in {"deepseek-v4.1-flash", "deepseek-v4-flash-0731", "deepseek-v4-pro-0813"}:
+    if model in {
+        "deepseek-v4.1-flash",
+        "deepseek-v4.1-flash-1017",
+        "deepseek-v4-flash-0731",
+        "deepseek-v4-pro",
+        "deepseek-v4-pro-0813",
+    }:
         if level == "off":
             return {"enable_thinking": False}
         return {
@@ -105,3 +111,10 @@ def thinking_options(model: str, level: str | None) -> dict:
             "reasoning_effort": {"medium": "high", "xhigh": "high"}.get(level, level),
         }
     return {}
+
+
+def thinking_policy(model: str) -> str:
+    """Describe only model families whose thinking settings we translate."""
+    if not thinking_options(model, "low"):
+        return "unknown"
+    return "configurable" if thinking_options(model, "off") else "required"

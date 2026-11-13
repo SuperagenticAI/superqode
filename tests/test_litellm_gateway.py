@@ -281,6 +281,8 @@ async def test_ollama_stream_preserves_terminal_usage_chunk(monkeypatch):
         (False, "qwen3.8-flash", "high", "xhigh"),
         (True, "qwen3.8-flash", "high", "xhigh"),
         (True, "deepseek-v4.1-flash", "medium", "high"),
+        (False, "deepseek-v4-pro", "max", "max"),
+        (True, "deepseek-v4.1-flash-1017", "low", "low"),
     ],
 )
 async def test_model_studio_request_keeps_reasoning_history_and_regional_auth(
