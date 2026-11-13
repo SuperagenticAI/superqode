@@ -651,7 +651,7 @@ class SlashCommandMixin:
         self._session_cmd(args, log)
 
     def _dispatch_work(self, args, log, cmd, c):
-        if c == "work" and args.strip():
+        if c == "work" and args.strip().lower() not in ("", "verbose", "full", "details"):
             if not self._open_work_inspector(args, log):
                 self._run_cli_group("work", args, log, "WorkOrder")
         elif c in ("work", "summary"):
