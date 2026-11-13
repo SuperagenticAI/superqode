@@ -57,16 +57,38 @@ _MODULES = {
 
 
 def engine_pythonpath(state_root: Path) -> str:
-    """Source tree plus packages installed from the app.
+    """Source tree for a coding job.
 
-    Coding jobs replace ``PYTHONPATH``. Without the extras folder, an install
-    that succeeded still looks missing inside the job.
+    ``PYTHONPATH`` is searched before the bundled runtime. App-installed
+    packages stay off this value and are appended later by ``place_app_extras``.
+    ``state_root`` stays in the signature so job callers do not change.
     """
-    source = str(Path(__file__).resolve().parents[2])
-    extras = Path(state_root) / "python-extras"
-    if extras.is_dir():
-        return os.pathsep.join((source, str(extras.resolve())))
-    return source
+    _ = state_root
+    return str(Path(__file__).resolve().parents[2])
+
+
+def place_app_extras(path: list[str] | None = None, extras: Path | None = None) -> list[str]:
+    """Put the app's extra packages after the bundled runtime.
+
+    A package dropped in ``python-extras`` must not replace a module that
+    already ships inside SuperQode. Those copies can fail to load when their
+    signature does not match the app.
+    """
+    target = list(sys.path if path is None else path)
+    folder = extras
+    if folder is None:
+        state = os.environ.get("SUPERQODE_STATE_DIR", "")
+        if not state:
+            return target
+        folder = Path(state) / "python-extras"
+    if not folder.is_dir():
+        return target
+    text = str(folder.resolve())
+    target = [item for item in target if os.path.realpath(item or "") != text]
+    target.append(text)
+    if path is None:
+        sys.path[:] = target
+    return target
 
 
 def activate_bundled_extras(root: Path) -> Path:
@@ -129,7 +151,12 @@ def _import_in_job_process(root: Path, modules: tuple[str, ...]) -> None:
     )
     env = os.environ.copy()
     env["PYTHONPATH"] = engine_pythonpath(root)
+    env["SUPERQODE_STATE_DIR"] = str(Path(root).resolve())
     env["PYTHONDONTWRITEBYTECODE"] = "1"
+    script = (
+        "from superqode.desktop_service.app_setup import place_app_extras\n"
+        "place_app_extras()\n" + script
+    )
     result = subprocess.run(
         [sys.executable, "-c", script],
         env=env,

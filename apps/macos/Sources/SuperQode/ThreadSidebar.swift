@@ -94,7 +94,7 @@ struct SidebarView: View {
             Divider()
             ForEach(app.projects, id: \.projectRowID) { row in
               Button(string(row, "name", URL(fileURLWithPath: string(row, "path")).lastPathComponent)) {
-                app.perform { try await app.open(string(row, "path")) }
+                app.openProjectInAgentSpace(string(row, "path"))
               }
             }
           } label: {
@@ -111,8 +111,8 @@ struct SidebarView: View {
           Spacer()
           Button { app.section = "Threads" } label: { Image(systemName: "list.bullet") }
             .buttonStyle(.plain).help("Open the full thread library").accessibilityLabel("All threads")
-          Button { app.selectJob("", targetSection: "Workspace") } label: { Image(systemName: "square.and.pencil") }
-            .buttonStyle(.plain).disabled(app.busy).help("New conversation").accessibilityLabel("New conversation")
+          Button { app.runWorkspaceCommand(.newTask) } label: { Image(systemName: "square.and.pencil") }
+            .buttonStyle(.plain).disabled(app.workspaceCommand(.newTask)?.isEnabled != true).help("New thread (⌘N)").accessibilityLabel("New thread")
         }
         HStack(spacing: 6) {
           Image(systemName: "magnifyingglass").foregroundStyle(.secondary)

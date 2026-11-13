@@ -42,7 +42,7 @@ struct WelcomeView: View {
             }
             if !app.project.isEmpty {
               Button("Return to " + string(app.project, "name", "Agent Space")) {
-                app.showWelcome = false
+                app.runWorkspaceCommand(.section("Workspace"))
               }
             }
           }.font(.callout)
@@ -78,6 +78,18 @@ struct WelcomeView: View {
           Text("⌘O").opacity(0.65)
         }
       }.buttonStyle(BrandButtonStyle()).disabled(!app.connected || app.openingProject)
+      HStack(spacing: 12) {
+        Button {
+          app.openConnections("source:local")
+        } label: {
+          Label("Local model", systemImage: "desktopcomputer")
+        }.accessibilityIdentifier("welcome.localModel")
+        Button {
+          app.openConnections("source:key")
+        } label: {
+          Label("API key", systemImage: "key")
+        }.accessibilityIdentifier("welcome.apiKey")
+      }.buttonStyle(.bordered).disabled(app.connectionPickerDisabled)
       Text("Your project stays on your Mac. Your chosen agent or provider handles model requests.")
         .font(.caption).foregroundStyle(.secondary).fixedSize(horizontal: false, vertical: true)
     }.padding(28).frame(maxWidth: .infinity, minHeight: 280, alignment: .topLeading)
@@ -97,7 +109,7 @@ struct WelcomeView: View {
       } else {
         ForEach(Array(app.projects.prefix(3)), id: \.projectRowID) { project in
           Button {
-            app.perform { try await app.open(string(project, "path")) }
+            app.openProjectInAgentSpace(string(project, "path"))
           } label: {
             HStack(spacing: 12) {
               Image(systemName: "folder").foregroundStyle(Brand.gradient)
@@ -115,7 +127,7 @@ struct WelcomeView: View {
           Menu("All recent projects") {
             ForEach(app.projects, id: \.projectRowID) { project in
               Button(string(project, "name", "Project")) {
-                app.perform { try await app.open(string(project, "path")) }
+                app.openProjectInAgentSpace(string(project, "path"))
               }
             }
           }.font(.caption).disabled(!app.connected || app.openingProject)

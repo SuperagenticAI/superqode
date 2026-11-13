@@ -225,6 +225,7 @@ def harnesses(service, project):
             {
                 "id": definition.id,
                 "name": definition.display_name,
+                "description": definition.description,
                 "backend": backend,
                 "group": "superqode",
                 "selectable": supported,

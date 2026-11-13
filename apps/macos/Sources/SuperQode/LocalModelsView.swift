@@ -48,13 +48,22 @@ struct ModelsView: View {
   @State private var localDraft = LocalQuickStartDraft()
   var body: some View {
     VStack(spacing: 0) {
-      Picker("Model workspace", selection: $tab) {
-        Text("Quick Start").tag("local")
-        Text("Advanced").tag("advanced")
+      Picker("Local AI workspace", selection: $tab) {
+        Text("Overview").tag("local")
+        Text("Model library").tag("models")
+        Text("Compare").tag("compare")
+        Text("Model routes").tag("routes")
       }.pickerStyle(.segmented).padding(.horizontal, 28).padding(.top, 20)
-      if tab == "local" {
-        if active { LocalQuickStartView(project: app.projectID, embedded: true, active: active, form: localDraft).id(app.projectID) }
-      } else { AdvancedLocalAIView(active: active) }
+      if active {
+        switch tab {
+        case "models": LocalModelWorkbenchView(active: active)
+        case "compare": LocalComparisonWorkspace(active: active)
+        case "routes": ModelRoutesView()
+        default:
+          LocalQuickStartView(project: app.projectID, embedded: true, active: active, form: localDraft,
+            showComparisons: { tab = "compare" }).id(app.projectID)
+        }
+      }
     }
   }
 }

@@ -210,6 +210,7 @@ struct ThinkingBar: View {
 struct ModelWarmupCard: View {
   var message: String
   var subject: String = ""
+  var note: String = ""
   @Environment(\.accessibilityReduceMotion) private var reduceMotion
   @Environment(\.colorSchemeContrast) private var contrast
   @AppStorage("animatedInterface") private var animated = true
@@ -224,7 +225,8 @@ struct ModelWarmupCard: View {
     return trimmed.isEmpty ? "Getting ready" : trimmed
   }
   private var detail: String {
-    warming ? "Loading it into memory so your first question is ready." : ""
+    if !note.isEmpty { return note }
+    return warming ? "Loading it into memory so your first question is ready." : ""
   }
 
   var body: some View {

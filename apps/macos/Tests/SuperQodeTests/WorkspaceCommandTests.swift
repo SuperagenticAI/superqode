@@ -120,6 +120,20 @@ final class WorkspaceCommandTests: XCTestCase {
     XCTAssertFalse(app.workspaceCommand(.connect)?.isEnabled ?? true)
   }
 
+  @MainActor func testNewTaskStaysAvailableBeforeAProjectIsOpen() {
+    let app = Workspace(recoveryStore: WorkspaceRecoveryStore(directory: nil))
+    app.connected = true
+    app.showWelcome = true
+    XCTAssertTrue(app.project.isEmpty)
+    XCTAssertTrue(app.workspaceCommand(.newTask)?.isEnabled == true)
+    app.runWorkspaceCommand(.newTask)
+    XCTAssertTrue(app.showConnection)
+    XCTAssertEqual(app.connectionStartPage, "menu:root")
+    XCTAssertTrue(app.showWelcome)
+    app.connected = false
+    XCTAssertFalse(app.workspaceCommand(.newTask)?.isEnabled ?? true)
+  }
+
   @MainActor func testRecentRunsAreScopedToCurrentProject() {
     let app = Workspace(recoveryStore: WorkspaceRecoveryStore(directory: nil))
     app.connected = true

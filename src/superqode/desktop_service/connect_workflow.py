@@ -482,15 +482,15 @@ def attachment_route(root: Path, entry_id: str):
 
 
 def attachment_environment(route: dict, provider: str, credentials: dict):
-    from superqode.providers.registry import PROVIDERS, ProviderTier
+    from superqode.providers.registry import ProviderTier
     from superqode.providers.harness_catalog import get_entry
     from superqode.providers.credentials import provider_api_key
-    from superqode.providers.dynamic import resolve_base_url
+    from superqode.providers.dynamic import resolve_base_url, resolve_provider_def
 
-    definition = PROVIDERS.get(provider)
+    definition = resolve_provider_def(provider)
     if not definition:
         raise ValueError("Unknown model provider")
-    local = definition.tier == ProviderTier.LOCAL
+    local = definition.tier == ProviderTier.LOCAL and definition.deployment_mode != "cloud"
     allowed = route["local_providers" if local else "byok_providers"]
     if allowed is not None and provider not in allowed:
         raise ValueError("This harness does not declare support for the selected model provider")

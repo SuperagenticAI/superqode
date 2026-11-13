@@ -7,7 +7,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
-## [2.31.11] - 2026-11-13
+## [2.31.12] - 2026-11-13
 
 ### Added
 
@@ -16,7 +16,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Changed
 
-- macOS 0.4.5 (build 31) bundles Python engine 2.31.11.
+- macOS 0.4.5 (build 31) bundles Python engine 2.31.12.
 - The agent activity log stays open while an agent is working.
 
 ### Fixed

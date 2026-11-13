@@ -28,7 +28,12 @@ private struct NativeConnectionAction: NSViewRepresentable {
   @Environment(\.isEnabled) private var enabled
   final class Coordinator: NSObject {
     var action: () -> Void = {}
-    @objc func invoke(_ sender: NSButton) { action() }
+    @objc func invoke(_ sender: NSButton) {
+      // Leave AppKit's click tracking before SwiftUI removes this button.
+      // Updating the sheet inside tracking leaves the spinning wait cursor up.
+      let action = action
+      DispatchQueue.main.async { action() }
+    }
   }
   func makeCoordinator() -> Coordinator { Coordinator() }
   final class Control: NSButton {
@@ -50,15 +55,26 @@ private struct NativeConnectionAction: NSViewRepresentable {
     if button.toolTip != title { button.toolTip = title }
     if button.isEnabled != enabled { button.isEnabled = enabled }
     if ["dialog.close", "dialog.done", "dialog.cancel", "options.close"].contains(identifier) {
-      button.keyEquivalent = "\u{1b}"
-      button.keyEquivalentModifierMask = []
+      if button.keyEquivalent != "\u{1b}" || !button.keyEquivalentModifierMask.isEmpty {
+        button.keyEquivalent = "\u{1b}"
+        button.keyEquivalentModifierMask = []
+      }
     } else if identifier == "dialog.done.default" {
-      button.keyEquivalent = "\r"
-      button.keyEquivalentModifierMask = []
+      if button.keyEquivalent != "\r" || !button.keyEquivalentModifierMask.isEmpty {
+        button.keyEquivalent = "\r"
+        button.keyEquivalentModifierMask = []
+      }
     }
   }
   func sizeThatFits(_ proposal: ProposedViewSize, nsView: NSButton, context: Context) -> CGSize? {
-    CGSize(width: proposal.width ?? 100, height: proposal.height ?? 32)
+    let width = proposal.width ?? 120
+    let height = proposal.height ?? 32
+    guard width.isFinite, height.isFinite, width > 0, height > 0 else {
+      return CGSize(width: 120, height: 32)
+    }
+    // A flexible sheet can propose its own height. A control stays row-sized,
+    // so one invisible button cannot cover the window.
+    return CGSize(width: min(width, 4000), height: min(height, 220))
   }
 }
 
@@ -83,6 +99,7 @@ struct ConnectionView: View {
   @State private var failure = ""
   @State private var search = ""
   @State private var pendingHarness = ""
+  @State private var choosingThreadProject = false
   @State private var builderPreset = "core"
   @State private var builderBackend = ""
   @State private var runtimes: [[String: Any]] = []
@@ -97,25 +114,36 @@ struct ConnectionView: View {
       initialValue: initialPage == "menu:root" ? ["menu:root"] : ["menu:root", initialPage])
   }
   private var page: String { path.last ?? "menu:root" }
-  private var modelStudioPlanSetup: (() -> Void)? {
-    guard let route = app.harnesses.first(where: {
-      string($0, "id") == "qwen-code" && string($0, "agent_id") == "qwen"
-    }) else { return nil }
-    return {
-      showDetail(["name": "Qwen Code", "description": "Alibaba Model Studio plan setup", "route": route])
-    }
+  private var needsProject: Bool { app.projectID.isEmpty && !["source:key", "source:local"].contains(page) }
+  private var connectionRows: [[String: Any]] {
+    let rows = menu["rows"] as? [[String: Any]] ?? []
+    guard page == "menu:root" else { return rows }
+    let routes: [[String: Any]] = [
+      ["id": "subscriptions", "name": "Existing subscription", "description": "Connect an agent you already subscribe to."],
+      ["id": "acp", "name": "ACP agent", "description": "Connect an agent that runs on this Mac."],
+      ["id": "models", "name": "Connect a model to a harness",
+        "description": "Choose a harness, then use a local model or your API key.", "next": "harness"],
+    ]
+    return routes + rows.filter { string($0, "id") != "models" }
   }
+  private func matchesSearch(_ row: [String: Any]) -> Bool {
+    let terms = search.split(whereSeparator: \.isWhitespace)
+    let text = ["name", "description", "id"].map { string(row, $0) }.joined(separator: " ")
+    return terms.allSatisfy { text.localizedStandardContains(String($0)) }
+  }
+
   var body: some View {
     VStack(spacing: 0) {
       HStack(spacing: 12) {
         nativeButton("connect.back", action: back) {
           Label("Back", systemImage: "chevron.left")
         }
-        .disabled(path.count == 1)
+        .disabled(path.count == 1 || app.projectID.isEmpty)
         nativeButton("connect.root", action: {
           path = ["menu:root"]
+          menu = menuCache["menu:root"] ?? [:]
           search = ""
-        }) { Text("All connections") }
+        }) { Text("All connections") }.disabled(app.projectID.isEmpty)
         if page != "menu:root" {
           Text("/").foregroundStyle(.secondary)
           Text(title).lineLimit(1).font(.headline)
@@ -131,25 +159,28 @@ struct ConnectionView: View {
       }.buttonStyle(.bordered).padding(20).background(Color.qPanel)
       Divider()
       Group {
-        if page.hasPrefix("source:") {
-          ConnectionSourcesView(mode: page == "source:local" ? "Local model" : "Provider API key",
-            openModelStudioPlan: modelStudioPlanSetup)
+        if needsProject {
+          projectPicker
+        } else if page == "source:local" {
+          LocalQuickStartView(project: app.projectID, embedded: true, dismissOnConnect: true,
+            preferredHarness: pendingHarness, openProject: {
+              app.chooseProject { path in openThreadProject(path) }
+            })
+        } else if page == "source:key" {
+          ProviderConnectionView()
         } else if page.hasPrefix("configure:") {
           HarnessConfigurationView(mode: String(page.dropFirst(10))) { id in
-            app.chooseHarness(id)
-            push("menu:models")
+            selectHarness(id)
           }
         } else if page == "systemone" {
           SystemOneConnectionView {
-            app.chooseHarness("systemone")
-            push("menu:models")
+            selectHarness("systemone")
           }
         } else if page.hasPrefix("vendor-key:") {
           VendorKeyConnectionView(entry: String(page.dropFirst(11)))
         } else if page == "builder" {
           HarnessBuilderView(initialPreset: builderPreset, initialBackend: builderBackend) { id in
-            app.chooseHarness(id)
-            push("menu:models")
+            selectHarness(id)
           }
         } else if page == "custom-acp" {
           CustomACPAgentView(project: app.projectID, initial: customEditing, removed: { path = ["menu:root", "acp"] }) { route in
@@ -160,80 +191,39 @@ struct ConnectionView: View {
             app.chooseConnection(route)
             dismiss()
           }
+        } else if page.hasPrefix("menu:") || page == "harnesses" {
+          connectionCatalog
         } else {
           ScrollView {
             VStack(alignment: .leading, spacing: 18) {
-              PageTitle(eyebrow: "Connect", title: title, subtitle: subtitle)
-              if page == "menu:root" {
-                HStack {
-                  nativeButton("connect.subscriptions", action: { push("menu:vendors") }) { Text("Existing subscription") }
-                  nativeButton("connect.acp", action: { push("acp") }) { Text("ACP agent") }
-                  nativeButton("connect.models", action: { push("menu:harness") }) { Text("Local model / API key") }
-                }.controlSize(.large)
-                HStack {
-                  Button("Build your own harness…") { push("builder") }
-                  Button("Browse all agent runtimes…") { push("runtimes") }
-                }
-              }
-              if page == "menu:root", let chips = menu["detected"] as? [[String: Any]],
-                !chips.isEmpty
-              {
-                VStack(alignment: .leading, spacing: 10) {
-                  Text("DETECTED ON THIS MAC").font(
-                    .system(size: 11, weight: .semibold, design: .monospaced)
-                  ).foregroundStyle(.secondary)
-                  ScrollView(.horizontal) {
-                    HStack {
-                      ForEach(Array(chips.enumerated()), id: \.offset) { _, chip in
-                        Button(string(chip, "label")) {
-                          if let route = chip["route"] as? [String: Any] {
-                            showDetail([
-                              "name": string(route, "name"),
-                              "description": string(route, "description"), "route": route,
-                            ])
-                          } else if string(chip, "kind") == "menu" {
-                            push("menu:" + string(chip, "target"))
-                          } else if string(chip, "kind") == "local" {
-                            push("menu:harness")
-                          }
-                        }.disabled(string(chip, "kind") == "info")
-                      }
-                    }
-                  }
-                }
-              }
-              if loading { ProgressView("Loading connections…") }
+              Text(catalogTitle).font(.title2.weight(.semibold)).accessibilityAddTraits(.isHeader)
+              if !subtitle.isEmpty { Text(subtitle).font(.callout).foregroundStyle(.secondary) }
               if !failure.isEmpty { Text(failure).foregroundStyle(.orange).textSelection(.enabled) }
               if page.hasPrefix("leaf:") {
                 leaf
               } else if ["acp", "acp-clients"].contains(page) {
                 agentRows
-              } else if page == "harnesses" {
-                harnessRows
               } else if page == "runtimes" {
                 runtimeRows
-              } else {
-                ForEach(menu["rows"] as? [[String: Any]] ?? [], id: \.projectRowID) { row in
-                  choice(row) { activate(row) }
-                }
               }
-            }.padding(28).frame(maxWidth: .infinity, alignment: .topLeading)
+            }.padding(24).frame(maxWidth: .infinity, alignment: .topLeading)
           }.defaultScrollAnchor(.top).id(page)
         }
       }.frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
-      Divider()
-      Label(
-        "Your connection owns its authentication. Remote protocol tasks go directly to the server you select.",
-        systemImage: "lock.shield"
-      )
-      .font(.caption).foregroundStyle(.secondary).padding(16)
     }.frame(
       width: min(860, (NSScreen.main?.visibleFrame.width ?? 960) - 100),
       height: min(740, (NSScreen.main?.visibleFrame.height ?? 840) - 100)
     ).background { BrandBackdrop() }
-      .task(id: page) { await loadMenu() }
-      .onExitCommand { if path.count > 1 { back() } else { dismiss() } }
-      .onChange(of: app.projectID) { _, _ in dismiss() }
+      .task(id: page + "\n" + app.projectID) { await loadMenu() }
+      .onExitCommand { if path.count > 1 && !app.projectID.isEmpty { back() } else { dismiss() } }
+      .onChange(of: app.projectID) { old, current in
+        if choosingThreadProject && old.isEmpty && !current.isEmpty {
+          choosingThreadProject = false
+          menuCache = [:]
+        } else {
+          dismiss()
+        }
+      }
       .centeredDialog(
         isPresented: Binding(
           get: { terminalLogin != nil }, set: { if !$0 { terminalLogin = nil } }),
@@ -282,6 +272,126 @@ struct ConnectionView: View {
         }
       }
   }
+  private var projectPicker: some View {
+    VStack(alignment: .leading, spacing: 14) {
+      Text("Choose a project").font(.title2.weight(.semibold)).accessibilityAddTraits(.isHeader)
+      Text("Select the folder this thread will work in.").font(.callout).foregroundStyle(.secondary)
+      Button("Open project…", systemImage: "folder.badge.plus") {
+        app.chooseProject { path in openThreadProject(path) }
+      }
+      .buttonStyle(.borderedProminent)
+      .disabled(choosingThreadProject)
+      .accessibilityIdentifier("connect.openProject")
+      if !failure.isEmpty { Text(failure).foregroundStyle(.orange).textSelection(.enabled) }
+      if !app.projects.isEmpty {
+        Divider()
+        Text("Recent projects").font(.headline)
+        ScrollView {
+          LazyVGrid(columns: [GridItem(.adaptive(minimum: 220), spacing: 8)], spacing: 8) {
+            ForEach(app.projects, id: \.projectRowID) { project in
+              Button { openThreadProject(string(project, "path")) } label: {
+                ConnectionCardLabel(title: string(project, "name", "Project"),
+                  subtitle: (string(project, "path") as NSString).abbreviatingWithTildeInPath) {
+                  Image(systemName: "folder").foregroundStyle(Color.qAccent)
+                }
+              }.buttonStyle(ConnectionChoiceStyle()).disabled(choosingThreadProject)
+            }
+          }
+        }
+      }
+      if choosingThreadProject { ProgressView("Opening project…").controlSize(.small) }
+      Spacer(minLength: 0)
+    }.padding(24).frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
+  }
+
+  private func openThreadProject(_ path: String) {
+    guard !choosingThreadProject else { return }
+    choosingThreadProject = true
+    failure = ""
+    Task {
+      do { try await app.open(path, landing: .agentSpace) }
+      catch {
+        failure = error.localizedDescription
+        choosingThreadProject = false
+      }
+    }
+  }
+
+  private var connectionCatalog: some View {
+    let rows = (page == "harnesses" ? app.harnesses.filter { string($0, "desktop_kind").isEmpty } : connectionRows)
+      .filter(matchesSearch)
+    return VStack(alignment: .leading, spacing: 0) {
+      VStack(alignment: .leading, spacing: 10) {
+        Text(catalogTitle).font(.title2.weight(.semibold)).accessibilityAddTraits(.isHeader)
+        if !subtitle.isEmpty { Text(subtitle).font(.callout).foregroundStyle(.secondary) }
+        ConnectionSearchField(title: "Search " + catalogSearchScope, text: $search)
+      }.padding(.horizontal, 24).padding(.vertical, 16)
+      Divider()
+      ScrollView {
+        LazyVStack(alignment: .leading, spacing: 14) {
+          if loading { ProgressView("Loading connections…").controlSize(.small) }
+          if !failure.isEmpty { Text(failure).foregroundStyle(.orange).textSelection(.enabled) }
+          if !loading && rows.isEmpty && !search.isEmpty {
+            Text("No matches. Try another search.").foregroundStyle(.secondary)
+          }
+          LazyVGrid(columns: [GridItem(.adaptive(minimum: 220), spacing: 8)], spacing: 8) {
+            ForEach(rows, id: \.projectRowID) { row in
+              choice(row) {
+                if page == "harnesses" { selectHarness(string(row, "id")) }
+                else { activate(row) }
+              }
+            }
+          }
+          if page == "menu:root" && search.isEmpty {
+            detectedConnections
+            Button("Browse all agent runtimes…") { push("runtimes") }
+          }
+        }.padding(24).frame(maxWidth: .infinity, alignment: .topLeading)
+      }.defaultScrollAnchor(.top).id(page)
+    }
+  }
+
+  private var catalogTitle: String {
+    switch page {
+    case "menu:root": "Choose a connection"
+    case "menu:harness", "harnesses": "Choose a harness"
+    case "menu:models", "menu:key-models": "Choose a model source"
+    case "menu:vendors": "Choose a subscription"
+    case "acp", "acp-clients": "Choose an ACP agent"
+    default: title
+    }
+  }
+
+  private var catalogSearchScope: String {
+    switch page {
+    case "menu:harness", "harnesses": "harnesses"
+    case "menu:models", "menu:key-models": "model sources"
+    case "menu:vendors": "subscriptions"
+    default: "connections"
+    }
+  }
+
+  @ViewBuilder private var detectedConnections: some View {
+    if let chips = menu["detected"] as? [[String: Any]], !chips.isEmpty {
+      Text("Detected on this Mac").font(.headline)
+      ScrollView(.horizontal) {
+        HStack {
+          ForEach(Array(chips.enumerated()), id: \.offset) { _, chip in
+            Button(string(chip, "label")) {
+              if let route = chip["route"] as? [String: Any] {
+                showDetail(["name": string(route, "name"), "description": string(route, "description"), "route": route])
+              } else if string(chip, "kind") == "menu" {
+                push("menu:" + string(chip, "target"))
+              } else if string(chip, "kind") == "local" {
+                push("menu:harness")
+              }
+            }.disabled(string(chip, "kind") == "info")
+          }
+        }
+      }
+    }
+  }
+
   private var title: String {
     if page == "configure:wizard" { return "Harness wizard" }
     if page == "configure:rlm" { return "RLM profile" }
@@ -297,7 +407,7 @@ struct ConnectionView: View {
       return page.hasSuffix("uhp") ? "Unified Harness Protocol (UHP)" : "Agent2Agent (A2A)"
     }
     if page == "source:local" { return "Local model" }
-    if page.hasPrefix("source:") { return "Connect a model to your harness" }
+    if page == "source:key" { return "API key" }
     return string(menu, "title", "Connect")
   }
   private var subtitle: String {
@@ -327,12 +437,16 @@ struct ConnectionView: View {
   }
   private func push(_ destination: String) {
     failure = ""
+    loading = false
     search = ""
     path.append(destination)
+    menu = menuCache[destination] ?? [:]
   }
   private func back() {
     if path.count > 1 {
       path.removeLast()
+      menu = menuCache[page] ?? [:]
+      loading = false
       search = ""
       failure = ""
     }
@@ -348,7 +462,7 @@ struct ConnectionView: View {
       } catch { failure = error.localizedDescription }
       return
     }
-    guard page.hasPrefix("menu:") else { return }
+    guard page.hasPrefix("menu:"), !app.projectID.isEmpty else { return }
     let target = page
     if let cached = menuCache[target] {
       menu = cached
@@ -370,20 +484,34 @@ struct ConnectionView: View {
     if page == target { loading = false }
   }
   private func choice(_ row: [String: Any], action: @escaping () -> Void) -> some View {
-    nativeButton("connect.row." + row.projectRowID, action: action, padded: false, title: string(row, "name")) {
-      HStack(spacing: 16) {
-        Image(systemName: "arrow.triangle.branch").font(.title2).foregroundStyle(Brand.gradient)
-          .frame(width: 30)
-        VStack(alignment: .leading, spacing: 7) {
-          Text(string(row, "name")).font(.system(size: 15, weight: .semibold))
-          Text(string(row, "description")).font(.callout).foregroundStyle(.secondary).fixedSize(
-            horizontal: false, vertical: true)
+    let id = row.projectRowID
+    let route = row["route"] as? [String: Any] ?? [:]
+    let nativeID = page == "menu:root" && ["subscriptions", "acp", "models"].contains(id)
+      ? "connect." + id : "connect.row." + id
+    return nativeButton(nativeID, action: action, padded: false, title: string(row, "name")) {
+      ConnectionCardLabel(title: string(row, "name"), subtitle: string(row, "description")) {
+        if !route.isEmpty {
+          HarnessIcon(identity: HarnessIdentity(route), size: 30)
+        } else {
+          Image(systemName: connectionSymbol(id)).font(.title2).foregroundStyle(Color.qAccent).frame(width: 30)
         }
-        Spacer()
-        Image(systemName: "chevron.right").foregroundStyle(.secondary)
-      }.padding(18).frame(maxWidth: .infinity, alignment: .leading).brandSurface()
-        .contentShape(Rectangle())
+      }.modifier(ConnectionCardSurface())
     }
+  }
+  private func connectionSymbol(_ id: String) -> String {
+    switch id {
+    case "subscriptions", "plan": "person.crop.circle"
+    case "acp", "protocols": "link"
+    case "byok": "key"
+    case "local": "desktopcomputer"
+    case "build": "hammer"
+    default: "arrow.triangle.branch"
+    }
+  }
+  private func selectHarness(_ id: String) {
+    pendingHarness = id
+    app.chooseHarness(id)
+    push("menu:models")
   }
   private var agentRows: some View {
     ACPAgentCatalogView(registry: registry, search: $search,
@@ -444,23 +572,11 @@ struct ConnectionView: View {
           Text(string(row, "runtime") + " · " + string(row, "description")).foregroundStyle(.secondary)
           if !string(row, "issue").isEmpty { Text(string(row, "issue")).font(.caption).textSelection(.enabled) }
           HStack {
-            Button("Use runtime") { app.chooseHarness(string(row, "id")); push("menu:models") }
+            Button("Use runtime") { selectHarness(string(row, "id")) }
               .disabled(row["available"] as? Bool != true)
             Button("Customize harness…") { builderPreset = string(row, "id"); builderBackend = ""; push("builder") }
           }
         }.padding(16).frame(maxWidth: .infinity, alignment: .leading).brandSurface()
-      }
-    }
-  }
-  private var harnessRows: some View {
-    VStack(spacing: 12) {
-      ForEach(app.harnesses.filter { string($0, "desktop_kind").isEmpty }, id: \.projectRowID) {
-        row in
-        choice(row) {
-          pendingHarness = string(row, "id")
-          app.chooseHarness(pendingHarness)
-          push("menu:models")
-        }
       }
     }
   }
@@ -573,6 +689,13 @@ struct ConnectionView: View {
     } catch { if page == identity { failure = error.localizedDescription } }
   }
   private func activate(_ row: [String: Any]) {
+    if page == "menu:root" {
+      switch string(row, "id") {
+      case "subscriptions": push("menu:vendors"); return
+      case "acp": push("acp"); return
+      default: break
+      }
+    }
     if let vendor = row["vendor_key"] as? [String: Any], string(row, "harness_ref").isEmpty,
       row["attachment"] == nil
     {
@@ -590,9 +713,7 @@ struct ConnectionView: View {
     case "a2a-picker": push("protocol:a2a")
     case "uhp-picker": push("protocol:uhp")
     case "harness-use":
-      pendingHarness = string(row, "runtime")
-      app.chooseHarness(pendingHarness)
-      push("menu:models")
+      selectHarness(string(row, "runtime"))
     case "local": push("source:local")
     case "byok": push("source:key")
     case "harness-catalog", "harness-picker": push("harnesses")
@@ -607,6 +728,7 @@ struct ConnectionView: View {
         push("menu:key-models")
       } else if let attachment = row["attachment"] as? [String: Any] {
         let id = string(attachment, "id")
+        pendingHarness = id
         if !app.harnesses.contains(where: { string($0, "id") == id }) {
           app.harnesses.append(attachment)
         }

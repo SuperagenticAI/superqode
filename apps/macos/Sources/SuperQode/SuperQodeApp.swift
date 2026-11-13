@@ -274,7 +274,7 @@ struct RootView: View {
     } message: {
       Text(app.error ?? "")
     }
-    .centeredDialog(isPresented: $app.showConnection, title: "Connect") {
+    .sheet(isPresented: $app.showConnection) {
       ConnectionView(initialPage: app.connectionStartPage).environmentObject(app)
     }
     .centeredDialog(isPresented: $app.showConnectionInspector, title: "Connection details") {
@@ -316,9 +316,9 @@ struct RootView: View {
           Button {
             app.showWelcome = true
           } label: {
-            Image(systemName: "house")
+            Label("Home", systemImage: "house")
           }
-          .help("Welcome to SuperQode").accessibilityLabel("Welcome to SuperQode")
+          .help("Return to Welcome").accessibilityIdentifier("workspace.home")
           Button(action: app.goBack) { Image(systemName: "chevron.left") }
             .disabled(app.navigationHistory.isEmpty || app.openingProject || app.restoringNavigation)
             .help("Back (⌘[)").accessibilityLabel("Back")
@@ -865,7 +865,20 @@ struct CodingComposer: View {
         }
       }
       VStack(alignment: .leading, spacing: 10) {
-      if app.isManaged || app.routeStatus["ready"] as? Bool == false {
+      if app.needsSavedProviderKey {
+        HStack {
+          Text("Use your saved API key to continue with this model.")
+            .font(.caption).foregroundStyle(.secondary)
+          Button("Use saved key") {
+            let provider = app.provider
+            app.perform {
+              if !(await app.restoreSavedProviderKey(provider)) {
+                app.notice = "The saved key couldn’t be loaded. Open API key setup to reconnect."
+              }
+            }
+          }.font(.caption).disabled(app.busy || app.active)
+        }
+      } else if app.isManaged || app.routeStatus["ready"] as? Bool == false {
         HStack {
           if app.checkingConnection { ProgressView().controlSize(.small) }
           Text(string(app.routeStatus, "message", "The agent owns sign-in and model access."))
@@ -952,8 +965,8 @@ struct CodingComposer: View {
           Button("Project text files…", action: app.attachFiles)
           Button("Images…", action: app.attachImages)
           Button("Paste image", action: app.pasteImage)
-        } label: { Image(systemName: "paperclip") }
-          .menuStyle(.borderlessButton).menuIndicator(.hidden).fixedSize().frame(width: 24)
+        } label: { Image(systemName: "paperclip").font(.system(size: 16)) }
+          .menuStyle(.borderlessButton).menuIndicator(.hidden).fixedSize().frame(width: 28)
           .accessibilityLabel("Attach context").disabled(app.projectID.isEmpty)
         Button("Context…") { showContext = true }.font(.caption)
         Menu("Tasks") {
@@ -985,7 +998,8 @@ struct CodingComposer: View {
           app.send(continueSession: continuesConversation)
         } label: {
           Label(app.busy ? "Starting…" : "Send", systemImage: "arrow.up")
-        }.buttonStyle(BrandButtonStyle())
+            .font(.system(size: 15, weight: .semibold))
+        }.buttonStyle(BrandButtonStyle()).controlSize(.large)
           .disabled(!app.canSubmitDraft)
           .keyboardShortcut(.return, modifiers: .command)
       }
@@ -1451,7 +1465,7 @@ struct EventStream: View {
               startedAt: RunStats.startDate(app.detail), waitingSince: RunStats.waitingSince(app.detail),
               planLine: PlanSnapshot.compactLine(plan))
           }
-          // The same event list stays open while any connection is working.
+          // Folded until the person opens it, including while a run is active.
           AgentActivityView(events: activity, active: app.active)
             .id(app.selectedJob)
         }.padding(.horizontal, 24).padding(.vertical, 6)

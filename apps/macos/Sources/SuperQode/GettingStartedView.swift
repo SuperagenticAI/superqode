@@ -136,14 +136,7 @@ struct GettingStartedView: View {
             Text("Describe your change").foregroundStyle(.secondary)
           }.font(.caption)
           if !hasConnection {
-            HStack(spacing: 12) {
-              Button("Connect an agent…") { app.openConnections("menu:root") }
-                .buttonStyle(BrandButtonStyle())
-              Button("Use a local model…") { app.openConnections("source:local") }
-                .buttonStyle(BrandButtonStyle())
-            }.disabled(app.connectionPickerDisabled)
-            Button("Use an API key or another harness…") { app.openConnections("menu:harness") }
-              .disabled(app.connectionPickerDisabled)
+            ConnectionStartGrid()
           }
           Button("Start with a project overview") {
             app.draft =

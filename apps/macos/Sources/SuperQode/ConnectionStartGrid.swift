@@ -10,11 +10,10 @@ struct ConnectionStartGrid: View {
     let detail: String
     let symbol: String
     let page: String
-    var recommended = false
   }
   private static let tiles: [Tile] = [
     Tile(id: "agent", title: "Your agent", detail: "Open all connections and choose the agent you already use.", symbol: "person.crop.circle", page: "menu:root"),
-    Tile(id: "harness", title: "SuperQode harness", detail: "Core, RLM, PiPy, CodeGem or Workbench with your model.", symbol: "sparkles", page: "menu:harness", recommended: true),
+    Tile(id: "harness", title: "SuperQode harness", detail: "Core, RLM, PiPy, CodeGem or Workbench with your model.", symbol: "sparkles", page: "menu:harness"),
     Tile(id: "local", title: "Local model", detail: "Pick an installed Ollama or LM Studio model and start coding.", symbol: "desktopcomputer", page: "source:local"),
     Tile(id: "key", title: "API key", detail: "Your provider key with API billing.", symbol: "key", page: "source:key"),
     Tile(id: "acp", title: "ACP agent", detail: "A coding agent you run as a local process.", symbol: "link", page: "acp"),
@@ -28,32 +27,15 @@ struct ConnectionStartGrid: View {
       LazyVGrid(columns: [GridItem(.adaptive(minimum: 180), spacing: 10)], spacing: 10) {
         ForEach(Self.tiles) { tile in
           Button { app.openConnections(tile.page) } label: {
-            VStack(alignment: .leading, spacing: 4) {
-              HStack {
-                Image(systemName: tile.symbol).foregroundStyle(Color.qAccent)
-                Spacer(minLength: 0)
-                if tile.recommended { Text("Recommended").font(.caption2).foregroundStyle(.secondary) }
-              }
-              Text(tile.title).font(.system(size: 13, weight: .semibold))
-              Text(tile.detail).font(.caption).foregroundStyle(.secondary)
-                .lineLimit(2).fixedSize(horizontal: false, vertical: true)
-            }.padding(10).frame(maxWidth: .infinity, minHeight: 84, alignment: .topLeading)
-              .background(Color.primary.opacity(0.04), in: RoundedRectangle(cornerRadius: 10))
-              .overlay(RoundedRectangle(cornerRadius: 10).stroke(Color.secondary.opacity(0.25)))
-              .contentShape(RoundedRectangle(cornerRadius: 10))
-          }.buttonStyle(.plain).focusable()
+            ConnectionCardLabel(title: tile.title, subtitle: tile.detail) {
+              Image(systemName: tile.symbol).font(.title2).foregroundStyle(Color.qAccent).frame(width: 28)
+            }
+            .frame(height: 80)
+          }.buttonStyle(ConnectionChoiceStyle())
             .accessibilityIdentifier("start.tile." + tile.id)
             .accessibilityLabel(tile.title + ". " + tile.detail)
         }
       }
-      Button {
-        app.openConnections("menu:root")
-      } label: {
-        Text("All connections").frame(maxWidth: .infinity)
-      }
-      .buttonStyle(.bordered)
-      .controlSize(.large)
-      .accessibilityIdentifier("start.allConnections")
     }.disabled(app.connectionPickerDisabled)
   }
 }

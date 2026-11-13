@@ -48,15 +48,7 @@ struct ACPAgentCatalogView: View {
         Text("Clients & ecosystem").tag("clients")
       }.pickerStyle(.segmented).frame(maxWidth: 420)
       if tab == "agents" {
-        HStack(spacing: 12) {
-          Image(systemName: "magnifyingglass").foregroundStyle(.secondary).accessibilityHidden(true)
-          TextField("Search agents by name or capability", text: $search).textFieldStyle(.plain)
-            .accessibilityLabel("Search ACP agents")
-          if !search.isEmpty {
-            Button { search = "" } label: { Image(systemName: "xmark.circle.fill") }
-              .buttonStyle(.plain).accessibilityLabel("Clear agent search")
-          }
-        }.padding(12).outlinedSurface()
+        ConnectionSearchField(title: "Search ACP agents", text: $search)
         HStack {
           Picker("Filter agents", selection: $filter) {
             ForEach(ACPAgentFilter.allCases) { Text($0.rawValue).tag($0) }
@@ -78,7 +70,7 @@ struct ACPAgentCatalogView: View {
             Button("Show all agents") { search = ""; filter = .all }
           }.frame(maxWidth: .infinity).padding(.vertical, 24)
         } else {
-          LazyVGrid(columns: [GridItem(.adaptive(minimum: 220, maximum: 400), spacing: 14)], spacing: 14) {
+          LazyVGrid(columns: [GridItem(.adaptive(minimum: 230), spacing: 8)], spacing: 8) {
             ForEach(rows, id: \.projectRowID) { route in
               ACPAgentCard(route: route, metadata: app.connectionMetadata[string(route, "id")] ?? [:],
                 selected: app.harness == string(route, "id")) { open(route) }
@@ -103,42 +95,17 @@ private struct ACPAgentCard: View {
   let metadata: [String: Any]
   let selected: Bool
   let open: () -> Void
-  @State private var hovering = false
   private var verified: Bool { verifiedACPConnection(route: route, metadata: metadata) }
   private var installed: Bool { route["available"] as? Bool == true }
   private var status: String { verified ? "Verified" : installed ? "Launcher detected" : "Setup required" }
   var body: some View {
     nativeButton("connect.row." + string(route, "id"), action: open, padded: false,
       title: string(route, "name") + ", " + status + ". Open agent setup") {
-      VStack(alignment: .leading, spacing: 12) {
-        HStack(alignment: .top) {
-          HarnessIcon(identity: HarnessIdentity(route), size: 44)
-          Spacer(minLength: 4)
-          if selected { Text("Selected").font(.caption2.weight(.semibold)).padding(.horizontal, 8).padding(.vertical, 4).outlinedSurface(radius: 6) }
-          if route["custom"] as? Bool == true { Image(systemName: "slider.horizontal.3").foregroundStyle(.secondary).accessibilityLabel("Custom agent") }
-        }
-        VStack(alignment: .leading, spacing: 4) {
-          Text(string(route, "name")).font(.headline).lineLimit(2)
-          Text(route["custom"] as? Bool == true ? "Custom launch" : !string(route, "subscription_vendor").isEmpty ? "Existing subscription" : "Agent-managed connection")
-            .font(.caption).foregroundStyle(.secondary)
-        }
-        Text(string(route, "description", "ACP-compatible coding agent"))
-          .font(.callout).foregroundStyle(.secondary).lineLimit(3)
-          .frame(maxWidth: .infinity, alignment: .leading)
-        Spacer(minLength: 0)
-        HStack(spacing: 5) {
-          Image(systemName: verified ? "checkmark.seal.fill" : installed ? "circle.dotted" : "arrow.down.circle")
-            .foregroundStyle(verified ? Color.green : Color.secondary)
-          Text(status).foregroundStyle(.secondary)
-          Spacer(minLength: 4)
-          Image(systemName: "arrow.up.right").foregroundStyle(.secondary).accessibilityHidden(true)
-        }.font(.caption)
-      }.padding(18).frame(maxWidth: .infinity, alignment: .leading).frame(height: 226)
-        .background(Color.primary.opacity(hovering ? 0.045 : 0), in: RoundedRectangle(cornerRadius: 14))
-        .brandSurface()
-        .overlay(RoundedRectangle(cornerRadius: 14).strokeBorder(selected ? Color.qAccent : Color.clear))
-        .contentShape(RoundedRectangle(cornerRadius: 14))
-    }.onHover { hovering = $0 }
+      ConnectionCardLabel(title: string(route, "name"),
+        subtitle: string(route, "description"), status: status) {
+        HarnessIcon(identity: HarnessIdentity(route), size: 44)
+      }.modifier(ConnectionCardSurface(selected: selected))
+    }
       .help(installed ? "Open setup and verify this agent's connection" : string(route, "issue", "Open installation and sign-in instructions"))
   }
 }

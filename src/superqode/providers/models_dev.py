@@ -238,6 +238,29 @@ class ModelsDev:
 
         return False
 
+    def refresh_blocking(self, timeout: float = 30) -> bool:
+        """Download models.dev on this thread and replace the in-memory catalog.
+
+        The new catalog is parsed aside and swapped in, so a reader never sees
+        an empty list while the download is applied.
+        """
+        try:
+            raw_data = self._sync_fetch(timeout=timeout)
+        except Exception as exc:  # noqa: BLE001 - a stale cache is still usable
+            logger.warning(f"models.dev refresh failed: {exc}")
+            return False
+        if not raw_data:
+            return False
+        fresh = ModelsDev(cache_ttl=self.cache_ttl)
+        fresh._parse_data(raw_data)
+        self._raw_data = raw_data
+        self._providers = fresh._providers
+        self._models = fresh._models
+        self._metadata = fresh._metadata
+        self._loaded = True
+        self._save_cache(raw_data)
+        return True
+
     def get_providers(self) -> Dict[str, ProviderInfo]:
         """Get all available providers."""
         return self._providers.copy()
@@ -391,7 +414,7 @@ class ModelsDev:
 
         return None
 
-    def _sync_fetch(self) -> Optional[Dict[str, Any]]:
+    def _sync_fetch(self, timeout: float = 30) -> Optional[Dict[str, Any]]:
         """Synchronous fallback fetch using urllib."""
         import urllib.request
         import ssl
@@ -399,7 +422,7 @@ class ModelsDev:
         ctx = ssl.create_default_context()
         req = urllib.request.Request(MODELS_DEV_API_URL, headers={"User-Agent": "SuperQode/1.0"})
 
-        with urllib.request.urlopen(req, timeout=30, context=ctx) as response:
+        with urllib.request.urlopen(req, timeout=timeout, context=ctx) as response:
             return json.loads(response.read().decode("utf-8"))
 
     def _parse_data(

@@ -5,7 +5,12 @@ struct HarnessIdentity: Identifiable, Equatable {
   let id: String
   let name: String
   let iconKey: String
-  var assetName: String? { iconKey == "superqode" ? "BrandMark" : BundledAgentIcons.assets[iconKey] }
+  /// Apple Foundation Model routes use the original fruit mark on every harness badge.
+  let appleDevice: Bool
+  var assetName: String? {
+    if appleDevice { return nil }
+    return iconKey == "superqode" ? "BrandMark" : BundledAgentIcons.assets[iconKey]
+  }
   /// Coloured official marks render as drawn; monochrome marks follow the appearance.
   var keepsBrandColours: Bool {
     guard let assetName else { return false }
@@ -23,6 +28,9 @@ struct HarnessIdentity: Identifiable, Equatable {
     let fallback = runtimes[runtime] ?? runtimes[reference] ?? (["core", "pipy", "codegem", "systemone"].contains(referenceID) ? "superqode" : reference)
     iconKey = string(row, "icon_key", string(row, "agent_id",
       string(row, "subscription_vendor", fallback)))
+    let provider = string(row, "provider")
+    appleDevice = referenceID == "apple-local" || reference == "apple-local"
+      || iconKey == "apple-local" || iconKey == "apple-device" || provider == "apple-foundation"
   }
 
   static func used(in row: [String: Any]) -> [HarnessIdentity] {
@@ -48,18 +56,24 @@ struct HarnessIcon: View {
   let identity: HarnessIdentity
   var size: CGFloat = 30
   var body: some View {
-    Group {
-      if let asset = identity.assetName, let image = NSImage(named: asset) {
-        // Menu labels use the image's own point size. A 540px PNG would otherwise
-        // fill the discussion. The copy is already the badge size.
-        let mark = Image(nsImage: displayImage(image))
-          .renderingMode(identity.keepsBrandColours ? .original : .template)
-        if identity.keepsBrandColours { mark } else { mark.foregroundStyle(.primary) }
-      } else { Image(systemName: "cpu").resizable().scaledToFit().foregroundStyle(.secondary) }
-    }.padding(size * 0.18).frame(width: size, height: size).clipped()
+    mark.padding(size * 0.18).frame(width: size, height: size).clipped()
       .background(Color.qPanel, in: RoundedRectangle(cornerRadius: size * 0.28))
       .overlay(RoundedRectangle(cornerRadius: size * 0.28).strokeBorder(.primary.opacity(0.16)))
       .accessibilityLabel(identity.name).help(identity.name)
+  }
+
+  @ViewBuilder private var mark: some View {
+    if identity.appleDevice {
+      AppleDeviceMark().fill(.primary)
+    } else if let asset = identity.assetName, let image = NSImage(named: asset) {
+      // Menu labels use the image's own point size. A 540px PNG would otherwise
+      // fill the discussion. The copy is already the badge size.
+      let picture = Image(nsImage: displayImage(image))
+        .renderingMode(identity.keepsBrandColours ? .original : .template)
+      if identity.keepsBrandColours { picture } else { picture.foregroundStyle(.primary) }
+    } else {
+      Image(systemName: "cpu").resizable().scaledToFit().foregroundStyle(.secondary)
+    }
   }
 
   /// Colour marks need a non-template copy at the badge's point size.

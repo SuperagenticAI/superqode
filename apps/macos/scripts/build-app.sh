@@ -33,6 +33,8 @@ done
 if [ -f "$APP_DIR/THIRD-PARTY-NOTICES.txt" ]; then cp "$APP_DIR/THIRD-PARTY-NOTICES.txt" "$DEST/Contents/Resources/"; fi
 cp "$APP_DIR/resources/ACP-REGISTRY-LICENSE.txt" "$DEST/Contents/Resources/"
 cp "$APP_DIR/resources/agent-icons-provenance.json" "$DEST/Contents/Resources/"
+cp "$APP_DIR/resources/PROVIDER-ICONS-LICENSE.txt" "$DEST/Contents/Resources/"
+cp "$APP_DIR/resources/provider-icons-provenance.json" "$DEST/Contents/Resources/"
 if [ -f "$APP_DIR/resources/icon.icns" ]; then cp "$APP_DIR/resources/icon.icns" "$DEST/Contents/Resources/icon.icns"; fi
 if [ -d "$APP_DIR/resources/Assets.xcassets" ]; then
     xcrun actool "$APP_DIR/resources/Assets.xcassets" --compile "$DEST/Contents/Resources" --platform macosx --minimum-deployment-target 14.0 --app-icon AppIcon --output-partial-info-plist "$APP_DIR/.build/AppIcon-Info.plist" --target-device mac

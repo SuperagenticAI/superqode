@@ -26,7 +26,7 @@ import Foundation
     @MainActor func mountedModelsSwitcher() -> NSSegmentedControl? {
       @MainActor func find(in view: NSView) -> NSSegmentedControl? {
         if let control = view as? NSSegmentedControl,
-          (0..<control.segmentCount).contains(where: { control.label(forSegment: $0) == "Quick Start" }) {
+          (0..<control.segmentCount).contains(where: { control.label(forSegment: $0) == "Overview" }) {
           return control
         }
         return view.subviews.lazy.compactMap { find(in: $0) }.first

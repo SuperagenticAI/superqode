@@ -75,6 +75,18 @@ final class AgentIdentityTests: XCTestCase {
     XCTAssertNil(HarnessIdentity(["id": "private-coder", "runtime": "custom"]).assetName)
   }
 
+  func testAppleFoundationRoutesUseTheDeviceMarkOnEveryHarness() {
+    let development = HarnessIdentity(["id": "apple-local", "name": "Apple on-device", "runtime": "builtin"])
+    XCTAssertTrue(development.appleDevice)
+    XCTAssertNil(development.assetName)
+    XCTAssertFalse(development.keepsBrandColours)
+    let chat = HarnessIdentity(["id": "no-tool", "name": "No Tool", "provider": "apple-foundation", "icon_key": "apple-device"])
+    XCTAssertTrue(chat.appleDevice)
+    XCTAssertEqual(chat.id, "no-tool")
+    XCTAssertFalse(HarnessIdentity(["id": "no-tool", "provider": "openai"]).appleDevice)
+    XCTAssertFalse(HarnessIdentity(["id": "core"]).appleDevice)
+  }
+
   func testCatalogFiltersKeepMissingAgentsDiscoverableAndRejectStaleVerification() {
     let routes: [[String: Any]] = [
       ["id": "acp:missing", "name": "Missing", "available": false],

@@ -146,7 +146,10 @@ final class EngineFrames {
     let extras = workingDirectory.appendingPathComponent("python-extras")
     try? FileManager.default.createDirectory(
       at: extras, withIntermediateDirectories: true, attributes: [.posixPermissions: 0o700])
-    env["PYTHONPATH"] = backend + ":" + extras.path
+    // Extras are appended after the bundled runtime. Putting them on PYTHONPATH
+    // would let an unsigned copy replace signed modules such as pydantic.
+    env["PYTHONPATH"] = backend
+    env["SUPERQODE_STATE_DIR"] = state
     env["SUPERQODE_APP"] = "1"
     if let executable = Bundle.main.executableURL {
       env["SUPERQODE_APPLE_HELPER"] = executable.deletingLastPathComponent().appendingPathComponent("SuperQodeAppleModel").path

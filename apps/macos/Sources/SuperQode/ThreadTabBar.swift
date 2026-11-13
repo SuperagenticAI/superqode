@@ -62,10 +62,10 @@ struct ThreadTabBar: View {
               scroll.scrollTo(identity.isEmpty ? "new-conversation" : identity, anchor: .center)
             }
         }
-        Button { app.selectJob("", targetSection: "Workspace") } label: {
+        Button { app.runWorkspaceCommand(.newTask) } label: {
           Image(systemName: "plus").padding(10)
         }.buttonStyle(.plain).help("New conversation")
-          .accessibilityLabel("New conversation tab").disabled(app.busy)
+          .accessibilityLabel("New thread").disabled(app.workspaceCommand(.newTask)?.isEnabled != true)
         Button { app.section = "Threads" } label: {
           Image(systemName: "list.bullet").padding(10)
         }.buttonStyle(.plain).help("All threads").accessibilityLabel("Show all threads")

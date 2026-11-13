@@ -1,6 +1,6 @@
 # SuperQode for macOS public beta 0.4.5
 
-Version 0.4.5 (build 31) bundles Python engine 2.31.11. These versions are prepared in source; native validation, signing, notarization and publication remain separate release steps.
+Version 0.4.5 (build 31) bundles Python engine 2.31.12. These versions are prepared in source; native validation, signing, notarization and publication remain separate release steps.
 
 - Bring your own key lists Google, Anthropic, OpenAI, xAI (Grok), and Meta beside the Chinese providers.
 - Harness Hub opens ACP, A2A, and Unified Harness Protocol from Protocols.

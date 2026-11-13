@@ -82,11 +82,17 @@ final class WorkspaceSessionTests: XCTestCase {
     XCTAssertEqual(app.model, "system-on-device")
     XCTAssertEqual(app.interactionMode, "code")
     XCTAssertTrue(app.enforcesSessionControls)
+    XCTAssertEqual(app.composerHarnessIdentity?.name, "Apple on-device")
+    XCTAssertEqual(app.composerHarnessIdentity?.appleDevice, true)
+    XCTAssertEqual(app.connectionDisplayName, "Apple on-device · development")
     app.chooseAppleModel(development: false)
     XCTAssertEqual(app.harness, "no-tool")
     XCTAssertEqual(app.interactionMode, "chat")
     XCTAssertEqual(app.provider, "apple-foundation")
     XCTAssertEqual(app.model, "system-on-device")
+    XCTAssertEqual(app.composerHarnessIdentity?.appleDevice, true)
+    XCTAssertEqual(app.composerHarnessIdentity?.name, "Apple on-device")
+    XCTAssertEqual(app.connectionDisplayName, "Apple on-device · chat")
     XCTAssertEqual(app.engine.pendingRequestCount, 0, "Selecting the route must not make a generation request")
     app.preferences.set(
       ["apple-local": ["provider": "openai", "model": "gpt-5.4"]],
@@ -149,6 +155,7 @@ final class WorkspaceSessionTests: XCTestCase {
     app.model = "last-model"
     XCTAssertEqual(app.composerHarnessIdentity?.name, "OpenCode")
     app.runWorkspaceCommand(.newTask)
+    XCTAssertTrue(app.showConnection)
     XCTAssertTrue(app.selectedJob.isEmpty)
     XCTAssertTrue(app.connectionDisconnected)
     XCTAssertNil(app.composerHarnessIdentity)
@@ -910,7 +917,7 @@ final class WorkspaceSessionTests: XCTestCase {
     projectID: String, path: String, startup: Bool = false) async throws {
     let opening = Task {
       if startup { try await app.openStartupProject(arguments: ["SuperQode", "--project", path]) }
-      else { try await app.open(path) }
+      else { try await app.open(path, landing: .agentSpace) }
     }
     await reply(engine, id: 1, result: ["id": projectID, "path": path])
     await reply(engine, id: 2, result: [["id": projectID, "path": path]])
@@ -922,7 +929,7 @@ final class WorkspaceSessionTests: XCTestCase {
     try await opening.value
   }
 
-  @MainActor func testOpeningCurrentProjectFromWelcomeEntersWorkspaceAndKeepsDraft() async throws {
+  @MainActor func testOpeningCurrentProjectEntersAgentSpaceAndKeepsDraft() async throws {
     let pipe = Pipe()
     let engine = Engine(requestTimeout: .seconds(2), input: pipe.fileHandleForWriting)
     defer { engine.stop() }
@@ -935,13 +942,12 @@ final class WorkspaceSessionTests: XCTestCase {
     try await completeProjectOpen(app, engine: engine, projectID: "project", path: "/tmp/project")
     XCTAssertFalse(app.showWelcome)
     XCTAssertFalse(app.openingProject)
-    XCTAssertEqual(app.section, "Files")
-    XCTAssertEqual(app.selectedFile, "pending.swift")
+    XCTAssertEqual(app.section, "Workspace")
     XCTAssertEqual(app.draft, "Unsent work")
     XCTAssertFalse(try XCTUnwrap(app.recoverySnapshot.lastDestination).showWelcome)
   }
 
-  @MainActor func testOpeningRecentProjectIgnoresItsSavedWelcomeDestination() async throws {
+  @MainActor func testOpeningRecentProjectWithSavedLocalAIEntersAgentSpace() async throws {
     let pipe = Pipe()
     let engine = Engine(requestTimeout: .seconds(2), input: pipe.fileHandleForWriting)
     defer { engine.stop() }
@@ -949,19 +955,19 @@ final class WorkspaceSessionTests: XCTestCase {
     app.draft = "Keep previous project"
     app.showWelcome = true
     app.recoverySnapshot.projectDestinations["next"] = WorkspaceDestination(
-      projectID: "next", projectPath: "/tmp/next", section: "Review", showWelcome: true)
+      projectID: "next", projectPath: "/tmp/next", section: "Models", showWelcome: false)
     let key = WorkspaceRecoverySnapshot.key(project: "next", conversation: "")
     app.recoverySnapshot.composers[key] = ComposerRecovery(text: "Restore recent project")
     try await completeProjectOpen(app, engine: engine, projectID: "next", path: "/tmp/next")
     XCTAssertEqual(app.projectID, "next")
     XCTAssertFalse(app.showWelcome)
-    XCTAssertEqual(app.section, "Review")
+    XCTAssertEqual(app.section, "Workspace")
     XCTAssertEqual(app.draft, "Restore recent project")
     let previousKey = WorkspaceRecoverySnapshot.key(project: "project", conversation: "")
     XCTAssertEqual(app.recoverySnapshot.composers[previousKey]?.text, "Keep previous project")
   }
 
-  @MainActor func testOpeningFirstProjectFromWelcomeEntersWorkspace() async throws {
+  @MainActor func testExplicitStartupProjectEntersWorkspace() async throws {
     let pipe = Pipe()
     let engine = Engine(requestTimeout: .seconds(2), input: pipe.fileHandleForWriting)
     defer { engine.stop() }

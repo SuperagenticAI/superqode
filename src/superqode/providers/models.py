@@ -2012,6 +2012,158 @@ def estimate_session_cost(
     return 0.0, "Unknown"
 
 
+# SuperQode ids whose models.dev catalog lives under a different key.
+# Regional Qwen routes stay on the matching Model Studio catalog.
+# Moonshot's models.dev id is moonshotai; the registry id is moonshot.
+_CATALOG_SOURCE_IDS = {
+    "alibaba": ("alibaba",),
+    "qwen-intl": ("alibaba",),
+    "qwen-cn": ("alibaba-cn",),
+    "moonshot": ("moonshotai",),
+}
+
+_catalog_session_checked = False
+_catalog_lock_guard = None
+
+
+def _catalog_lock():
+    global _catalog_lock_guard
+    if _catalog_lock_guard is None:
+        import threading
+
+        _catalog_lock_guard = threading.Lock()
+    return _catalog_lock_guard
+
+
+def _catalog_is_current(client) -> bool:
+    """True when this process already holds an unexpired models.dev snapshot."""
+    if client._metadata is None or client._metadata.is_expired:
+        return False
+    return bool(client._loaded or client._models)
+
+
+def _catalog_client():
+    """Return the models.dev client from memory or the on-disk cache.
+
+    Listing providers does not download. Launch and the API-key page call
+    ``refresh_model_catalog`` for that.
+    """
+    from .models_dev import get_models_dev
+
+    client = get_models_dev()
+    if _catalog_is_current(client):
+        return client
+    if not client._models and not client._loaded:
+        client.ensure_cache_loaded()
+    return client
+
+
+def _catalog_payload(client, status: str) -> dict[str, str | int]:
+    meta = client._metadata
+    return {
+        "status": status,
+        "fetched_at": meta.fetched_at if meta else "",
+        "model_count": sum(len(models) for models in client._models.values()),
+        "provider_count": len(client._models),
+    }
+
+
+def refresh_model_catalog(force: bool = False) -> dict[str, str | int]:
+    """Download models.dev once per desktop session when a check is due.
+
+    A fresh cache is enough until this process asks to check again. Offline
+    calls keep the saved catalog. One in-flight download is shared by launch
+    and the provider page.
+    """
+    global _catalog_session_checked
+    with _catalog_lock():
+        client = _catalog_client()
+        if _catalog_session_checked and _catalog_is_current(client):
+            return _catalog_payload(client, "fresh")
+        if not force and _catalog_is_current(client):
+            return _catalog_payload(client, "fresh")
+        ok = client.refresh_blocking(timeout=20)
+        if ok:
+            _catalog_session_checked = True
+            return _catalog_payload(client, "downloaded")
+        if client._models:
+            return _catalog_payload(client, "offline")
+        return _catalog_payload(client, "empty")
+
+
+def _catalog_label(model_id: str, released: str) -> str:
+    text = (released or "")[:10]
+    if not text:
+        return model_id
+    return f"{text} · {model_id}"
+
+
+# Alibaba publishes this one Qwen 4 id on Token Plan. models.dev does not
+# list it, and pay-as-you-go DashScope does not serve it.
+_QWEN4_PREVIEW_ID = "qwen4-max-preview"
+_QWEN4_PREVIEW_LABEL = "Qwen 4 Max Preview · Token Plan"
+_QWEN4_PREVIEW_ROUTES = frozenset({"qwen-intl", "qwen-cn"})
+
+
+def _with_published_qwen4(
+    provider_id: str, examples: list[tuple[str, str]]
+) -> list[tuple[str, str]]:
+    if provider_id not in _QWEN4_PREVIEW_ROUTES:
+        return examples
+    if any(model_id == _QWEN4_PREVIEW_ID for model_id, _label in examples):
+        return examples
+    return [(_QWEN4_PREVIEW_ID, _QWEN4_PREVIEW_LABEL), *examples]
+
+
+def catalog_examples(provider_id: str) -> list[tuple[str, str]]:
+    """Model ids for the Mac Catalog examples menu, newest release first.
+
+    Google stays on the reviewed Gemini list. Local servers and the Grok
+    subscription catalog keep their own ids. Every other provider uses the
+    full models.dev chat catalog for that provider. Embedding, speech, image,
+    and other non-chat ids are left out because this field is a coding model.
+    """
+    from .registry import PROVIDERS, ProviderTier
+
+    definition = PROVIDERS.get(provider_id)
+    fallback = [
+        (model_id, model_id) for model_id in (definition.example_models if definition else [])
+    ]
+    if provider_id == "google":
+        client = _catalog_client()
+        dated = client._models.get("google", {})
+        return _with_published_qwen4(
+            provider_id,
+            [
+                (model_id, _catalog_label(model_id, getattr(dated.get(model_id), "released", "")))
+                for model_id in LATEST_GOOGLE_MODEL_IDS
+            ],
+        )
+    if definition is not None and (
+        definition.tier == ProviderTier.LOCAL or provider_id == "grok-cli"
+    ):
+        return _with_published_qwen4(provider_id, fallback)
+
+    client = _catalog_client()
+    merged: Dict[str, ModelInfo] = {}
+    for source_id in _CATALOG_SOURCE_IDS.get(provider_id, (provider_id,)):
+        for model_id, info in client._models.get(source_id, {}).items():
+            merged.setdefault(model_id, info)
+    if not merged:
+        return _with_published_qwen4(provider_id, fallback)
+    chat = [model for model in merged.values() if _is_chat_model(model)]
+    chosen = chat or list(merged.values())
+    ordered = sorted(chosen, key=_hosted_model_sort_key, reverse=True)
+    seen: set[str] = set()
+    examples: list[tuple[str, str]] = []
+    for model in ordered:
+        if not model.id or model.id in seen:
+            continue
+        seen.add(model.id)
+        examples.append((model.id, _catalog_label(model.id, model.released)))
+    return _with_published_qwen4(provider_id, examples or fallback)
+
+
 def is_using_live_data() -> bool:
     """Check if live models.dev data is being used."""
     return _use_live_data and _live_models is not None
@@ -2042,6 +2194,8 @@ __all__ = [
     "search_models",
     "estimate_session_cost",
     "set_live_models",
+    "catalog_examples",
+    "refresh_model_catalog",
     "get_effective_models",
     "is_using_live_data",
     "get_data_source",

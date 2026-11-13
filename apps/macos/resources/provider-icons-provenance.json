@@ -1,0 +1,216 @@
+{
+  "lobehub": {
+    "package": "@lobehub/icons-static-svg",
+    "version": "1.102.0",
+    "license": "MIT",
+    "homepage": "https://github.com/lobehub/lobe-icons"
+  },
+  "simple_icons": {
+    "package": "simple-icons",
+    "version": "16.37.0",
+    "license": "CC0-1.0",
+    "homepage": "https://github.com/simple-icons/simple-icons",
+    "icons": [
+      "modal"
+    ]
+  },
+  "icons": [
+    {
+      "id": "openai",
+      "url": "https://unpkg.com/@lobehub/icons-static-svg@1.102.0/icons/openai.svg",
+      "sha256": "ca0e86f0b2d6eeb56d460315726ae767d867e9bd891c1ea3b9b8bb304ebbd818",
+      "rendering": "template"
+    },
+    {
+      "id": "anthropic",
+      "url": "https://unpkg.com/@lobehub/icons-static-svg@1.102.0/icons/claude-color.svg",
+      "sha256": "aefd539dc3a69c8100205303945f69557d7228bfff7b2097e6153e43ea32e3d6",
+      "rendering": "original"
+    },
+    {
+      "id": "google",
+      "url": "apps/macos/resources/Assets.xcassets/Agent-gemini.imageset/icon.svg",
+      "sha256": "df360bcf82bafeff8c4c91a220c2da5cb197f12ce86fa1ceb1b7d45819125af2",
+      "rendering": "original",
+      "note": "Same Gemini spark already bundled for the Gemini harness. The LobeHub gradient file did not render in CoreSVG."
+    },
+    {
+      "id": "xai",
+      "url": "https://unpkg.com/@lobehub/icons-static-svg@1.102.0/icons/grok.svg",
+      "sha256": "48a1b82e964fedce1e528521ea1646a6fde2668bd110f9b9e174f399efc7f33b",
+      "rendering": "template"
+    },
+    {
+      "id": "meta",
+      "url": "https://unpkg.com/@lobehub/icons-static-svg@1.102.0/icons/meta-color.svg",
+      "sha256": "df44c87aff6f05a1e89cdeb2248954391c654fae3710b13c354e51c5e4b36803",
+      "rendering": "original"
+    },
+    {
+      "id": "deepseek",
+      "url": "https://unpkg.com/@lobehub/icons-static-svg@1.102.0/icons/deepseek-color.svg",
+      "sha256": "e93b1cf3e9c54f1b8453b6beebb873a4faa52e773386f8d1cb231a4ba4addbf7",
+      "rendering": "original"
+    },
+    {
+      "id": "qwen",
+      "url": "https://unpkg.com/@lobehub/icons-static-svg@1.102.0/icons/qwen-color.svg",
+      "sha256": "8547684107120230b671627b702043ad7ef51cb332b154de3149d06ac1737f29",
+      "rendering": "original"
+    },
+    {
+      "id": "alibaba",
+      "url": "https://unpkg.com/@lobehub/icons-static-svg@1.102.0/icons/alibaba-color.svg",
+      "sha256": "47d801c39062debc75a4042bfcc4aef1b68f00669f9779030b0287925efa03e5",
+      "rendering": "original"
+    },
+    {
+      "id": "moonshot",
+      "url": "https://unpkg.com/@lobehub/icons-static-svg@1.102.0/icons/kimi-color.svg",
+      "sha256": "8241c136b5842cad59b288ff88eefe14c31b0842ed8f14a32da9de70e7e3f0e9",
+      "rendering": "template"
+    },
+    {
+      "id": "zai",
+      "url": "https://unpkg.com/@lobehub/icons-static-svg@1.102.0/icons/zai.svg",
+      "sha256": "247a850c02e8cfd28fa521992bfea53af9041a25d34bca648128ec9d0488c01e",
+      "rendering": "template"
+    },
+    {
+      "id": "zhipu",
+      "url": "https://unpkg.com/@lobehub/icons-static-svg@1.102.0/icons/zhipu-color.svg",
+      "sha256": "de31cc34b149b4012109115ff7f523e5438c496909b50e7276f12218aed99f7f",
+      "rendering": "original"
+    },
+    {
+      "id": "minimax",
+      "url": "https://unpkg.com/@lobehub/icons-static-svg@1.102.0/icons/minimax-color.svg",
+      "sha256": "4362e5af283b6a2b015fa3d08f39464303d846c274aad24bdf14ffca220dbdbe",
+      "rendering": "original"
+    },
+    {
+      "id": "doubao",
+      "url": "https://unpkg.com/@lobehub/icons-static-svg@1.102.0/icons/doubao-color.svg",
+      "sha256": "6424c2438800da553dfc5bc74adc4afd0c3b3d1566fac7f025323661a7c262e3",
+      "rendering": "original"
+    },
+    {
+      "id": "siliconflow",
+      "url": "https://unpkg.com/@lobehub/icons-static-svg@1.102.0/icons/siliconcloud-color.svg",
+      "sha256": "cc48f8b846a956b4431aa5cc3134be69ad45065370d67e51bb472bff85c5f8fe",
+      "rendering": "original"
+    },
+    {
+      "id": "baseten",
+      "url": "https://unpkg.com/@lobehub/icons-static-svg@1.102.0/icons/baseten.svg",
+      "sha256": "4ae76591b3d028b46a353cfee3e67e8c458b56b656d7a940cfcd66321c29d9a1",
+      "rendering": "template"
+    },
+    {
+      "id": "fireworks",
+      "url": "https://unpkg.com/@lobehub/icons-static-svg@1.102.0/icons/fireworks-color.svg",
+      "sha256": "597336a70d8e89dc13970827f1c60a2b4b7ef92267a3ceef99e8a4bad8ab3fc1",
+      "rendering": "original"
+    },
+    {
+      "id": "together",
+      "url": "https://unpkg.com/@lobehub/icons-static-svg@1.102.0/icons/together-color.svg",
+      "sha256": "19e227c353b5a6b492247f398a59b082c7d4470cd8c90c5fec2dc486416790c2",
+      "rendering": "original"
+    },
+    {
+      "id": "modal",
+      "url": "https://unpkg.com/simple-icons@16.37.0/icons/modal.svg",
+      "sha256": "2c9812a35c2b1160935c1a931634b9fc2517c6f5252812d2e5dd9055eb262a92",
+      "rendering": "template"
+    },
+    {
+      "id": "openrouter",
+      "url": "https://unpkg.com/@lobehub/icons-static-svg@1.102.0/icons/openrouter.svg",
+      "sha256": "1bb2610c95375bf86b529c2a1368dc0216624cc07d4be845a516c95d1e648cf3",
+      "rendering": "template"
+    },
+    {
+      "id": "groq",
+      "url": "https://unpkg.com/@lobehub/icons-static-svg@1.102.0/icons/groq.svg",
+      "sha256": "b07d297a490d362f3b6b7047f4b6f46bae5122d8918b010b697c7c29cae82881",
+      "rendering": "template"
+    },
+    {
+      "id": "huggingface",
+      "url": "https://unpkg.com/@lobehub/icons-static-svg@1.102.0/icons/huggingface-color.svg",
+      "sha256": "6ba13ac5a7a434f3dc4f7481df1800e61f5eae510a144dabf3cf688b70932faf",
+      "rendering": "original"
+    },
+    {
+      "id": "cerebras",
+      "url": "https://unpkg.com/@lobehub/icons-static-svg@1.102.0/icons/cerebras-color.svg",
+      "sha256": "81d2b5135f06584bbdd6456a249a02a534f5805288ba3909c191ff71cefa4050",
+      "rendering": "original"
+    },
+    {
+      "id": "perplexity",
+      "url": "https://unpkg.com/@lobehub/icons-static-svg@1.102.0/icons/perplexity-color.svg",
+      "sha256": "30ee11d0203c3628d49e0cec9b29dfd1451a419680628874830e91fa27fa61fa",
+      "rendering": "original"
+    },
+    {
+      "id": "cohere",
+      "url": "https://unpkg.com/@lobehub/icons-static-svg@1.102.0/icons/cohere-color.svg",
+      "sha256": "b9bc7e93adcfd062a74abd3b76f8396ccc35e183d566953d8c24775a5f7cc65b",
+      "rendering": "original"
+    },
+    {
+      "id": "opencode",
+      "url": "https://unpkg.com/@lobehub/icons-static-svg@1.102.0/icons/opencode.svg",
+      "sha256": "d9e4df56c42d6eb62d9c4797a0c6cd3f48946b8035b1f0b83cd7f670d5f5e3a4",
+      "rendering": "template"
+    },
+    {
+      "id": "mistral",
+      "url": "https://unpkg.com/@lobehub/icons-static-svg@1.102.0/icons/mistral-color.svg",
+      "sha256": "7f1682badbdb5a6898aaf0c9be4e0c864c014db0ae8b2100018df0c3dbe23196",
+      "rendering": "original",
+      "note": "Named color gold replaced with #FFD700."
+    },
+    {
+      "id": "baidu",
+      "url": "https://unpkg.com/@lobehub/icons-static-svg@1.102.0/icons/baidu-color.svg",
+      "sha256": "b6918f2e1a3d6b77a387fa269e0881ba8dbc0cd23e89177809d8e4d962e21346",
+      "rendering": "original"
+    },
+    {
+      "id": "nvidia",
+      "url": "https://unpkg.com/@lobehub/icons-static-svg@1.102.0/icons/nvidia-color.svg",
+      "sha256": "fcbac9f2de066692cb71217701046de1305c3b62e4f0e00240d60ec4e0f1e37b",
+      "rendering": "original"
+    },
+    {
+      "id": "cloudflare",
+      "url": "https://unpkg.com/@lobehub/icons-static-svg@1.102.0/icons/cloudflare-color.svg",
+      "sha256": "1696dee9bc184f728e777097679d2e7979bb158419ae1c463036874257db0832",
+      "rendering": "original"
+    },
+    {
+      "id": "amazon-bedrock",
+      "url": "https://unpkg.com/@lobehub/icons-static-svg@1.102.0/icons/aws-color.svg",
+      "sha256": "2d8dc099b399114a1125e020a199cbfaf633c9137f115032ed7920b865f20a6a",
+      "rendering": "original",
+      "note": "currentColor replaced with #232F3E so the wordmark stays visible."
+    },
+    {
+      "id": "azure",
+      "url": "https://unpkg.com/@lobehub/icons-static-svg@1.102.0/icons/azure-color.svg",
+      "sha256": "b9f5cfe8f1ddda6a81c3c5a6e727f3ce2732ac7c18872fabc28a4daa383b3d1c",
+      "rendering": "original",
+      "note": "Gradient paints replaced with solid #0669BC, #2892DF, and #0078D4."
+    },
+    {
+      "id": "poolside",
+      "url": "apps/macos/resources/Assets.xcassets/Agent-poolside.imageset/icon.svg",
+      "sha256": "f10616e2ec932b8f79e07d804a5acab676cab6ca8e0bca180f7859c54963f28a",
+      "rendering": "template",
+      "note": "Same mark already bundled for the Poolside harness. The LobeHub file uses masks CoreSVG does not keep."
+    }
+  ]
+}

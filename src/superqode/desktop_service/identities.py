@@ -24,6 +24,9 @@ def request_identity(request):
     icon = REGISTRY_SHORT_NAMES.get(agent, agent) or RUNTIME_ICONS.get(runtime, "")
     if not icon and reference in {"core", "pipy", "codegem", "systemone"}:
         icon = "superqode"
+    provider = str(request.get("provider") or route.get("provider") or "")
+    if reference == "apple-local" or provider == "apple-foundation":
+        icon = "apple-device"
     return {
         "id": reference,
         "name": str(saved.get("name") or route.get("name") or reference)[:160],
@@ -38,6 +41,7 @@ def thread_harnesses(service, conversations):
     rows = service._all(
         "SELECT t.project,t.conversation,"
         "json_extract(j.request,'$.harness') AS harness,"
+        "json_extract(j.request,'$.provider') AS provider,"
         "json_extract(j.request,'$._thread_harness') AS saved,"
         "json_extract(j.request,'$._desktop_route') AS route,"
         "json_extract(j.request,'$._desktop_connection') AS connection "
@@ -51,6 +55,7 @@ def thread_harnesses(service, conversations):
         identity = request_identity(
             {
                 "harness": row["harness"],
+                "provider": row["provider"] or "",
                 "_thread_harness": json.loads(row["saved"]) if row["saved"] else {},
                 "_desktop_route": json.loads(row["route"]) if row["route"] else {},
                 "_desktop_connection": json.loads(row["connection"]) if row["connection"] else {},

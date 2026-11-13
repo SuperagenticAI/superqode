@@ -215,6 +215,8 @@ struct ResponseCodeBlock: View {
 struct AgentActivityView: View {
   let events: [[String: Any]]
   let active: Bool
+  /// Stays folded while the agent is ready, working, or finished.
+  /// The person opens it when they want the event list.
   @State private var expanded = false
   var body: some View {
     DisclosureGroup(isExpanded: $expanded) {
@@ -260,8 +262,6 @@ struct AgentActivityView: View {
         Text("\(events.count) events").font(.caption).foregroundStyle(.secondary)
       }
     }.padding(12).outlinedSurface(radius: 9)
-      .onAppear { if active { expanded = true } }
-      .onChange(of: active) { _, working in if working { expanded = true } }
   }
 
   private func scrollToLatest(_ proxy: ScrollViewProxy) {

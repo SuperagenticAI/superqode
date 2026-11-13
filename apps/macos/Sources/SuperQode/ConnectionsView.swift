@@ -1,266 +1,450 @@
 import AppKit
 import SwiftUI
 
-struct ConnectionSourcesView: View {
-  @EnvironmentObject var app: Workspace
+struct ProviderConnectionView: View {
+  @EnvironmentObject private var app: Workspace
   @DialogDismiss private var dismiss
-  @State private var mode = "Local model"
-  @State private var selectedProvider = "openai"
+
+  @State private var choice: Choice?
+  @State private var route = ""
+  @State private var providerQuery = ""
+  @State private var showAllProviders = false
+  @State private var modelQuery = ""
   @State private var selectedModel = ""
+  @State private var models: [ModelRow] = []
+  @State private var catalogLoading = false
+  @State private var catalogError = ""
   @State private var key = ""
   @State private var remember = true
   @State private var saving = false
+  @State private var restoringKey = false
   @State private var message = ""
-  @State private var workspaceModels: [String] = []
-  @State private var workspaceModelDetails: [[String: Any]] = []
+  @State private var workspaceModels: [ModelRow] = []
   @State private var workspaceMessage = ""
   @State private var workspaceLookup: UUID?
   @State private var workspaceEndpoint = ""
-  let openModelStudioPlan: (() -> Void)?
-  init(mode: String, openModelStudioPlan: (() -> Void)? = nil) {
-    _mode = State(initialValue: mode)
-    self.openModelStudioPlan = openModelStudioPlan
+
+  private struct Choice: Identifiable {
+    let id: String
+    let name: String
+    let routes: [String]
+    let searchText: String
   }
-  private var cloudProviders: [[String: Any]] {
-    app.providers.filter { provider in
-      guard provider["key_supported"] as? Bool == true else { return false }
-      let selected = app.harnesses.first { string($0, "id") == app.harness } ?? [:]
-      if let allowed = selected["byok_providers"] as? [String] {
-        return allowed.contains(string(provider, "id"))
-      }
-      return true
+
+  private struct ModelRow: Identifiable {
+    let id: String
+    let name: String
+    var releaseDate: String? = nil
+  }
+
+  private static let alibabaRoutes = ["qwen-intl", "qwen-cn", "alibaba"]
+  private static let groupedRoutes = ["alibaba": alibabaRoutes, "zai": ["zai", "zhipu"]]
+  private static let groupedNames = ["alibaba": "Alibaba Model Studio", "zai": "Z.AI"]
+  private static let hiddenGroupMembers: Set<String> = ["qwen-intl", "qwen-cn", "zhipu"]
+  private static let chinaOrder = [
+    "deepseek", "moonshot", "zai", "minimax", "doubao", "baidu", "siliconflow",
+  ]
+  private static let usOrder = ["google", "anthropic", "openai", "xai", "meta", "nvidia", "poolside"]
+  private static let hostOrder = ["baseten", "fireworks", "together", "modal", "openrouter"]
+  private static let shortNames = [
+    "xai": "xAI (Grok)", "meta": "Meta", "google": "Google", "siliconflow": "SiliconFlow",
+  ]
+  private static let apiKeyNotes = [
+    "qwen-intl": "Use a Model Studio API key issued for the international region.",
+    "qwen-cn": "Use a Model Studio API key issued for the China region.",
+    "alibaba": "Use a DashScope API key.",
+    "xai": "Use an API key from the xAI Console.",
+  ]
+
+  private var harness: [String: Any] {
+    app.harnesses.first { string($0, "id") == app.harness } ?? [:]
+  }
+  private var providerRows: [[String: Any]] {
+    let allowed = harness["byok_providers"] as? [String]
+    return app.providers.filter { row in
+      let id = string(row, "id")
+      // The catalog also lists subscription plans that authenticate with keys.
+      return row["local"] as? Bool != true && row["key_supported"] as? Bool == true
+        && id != "alibaba-cn" && !id.split(separator: "-").contains("plan")
+        && (allowed?.contains(id) ?? true)
     }
   }
-  private var featuredProviders: [[String: Any]] {
-    cloudProviders.filter { ["deepseek", "qwen-cn", "qwen-intl", "alibaba", "moonshot", "zai", "zhipu", "minimax", "doubao", "siliconflow", "openrouter"].contains(string($0, "id")) }
+  private var provider: [String: Any] {
+    app.providers.first { string($0, "id") == route } ?? [:]
   }
-  /// Shown in this order. A harness allow-list still applies through cloudProviders.
-  private var usProviders: [[String: Any]] {
-    ["google", "anthropic", "openai", "xai", "meta"].compactMap { id in
-      cloudProviders.first { string($0, "id") == id }
-    }
+  private var modelStudio: Bool { route == "qwen-intl" || route == "qwen-cn" }
+  private var configured: Bool { provider["credential_configured"] as? Bool == true }
+  private var saved: Bool { app.savedCredentialProviders.contains(route) }
+  private var working: Bool { saving || restoringKey }
+  private var modelID: String { selectedModel.trimmingCharacters(in: .whitespacesAndNewlines) }
+  private var suppliedKey: String { key.trimmingCharacters(in: .whitespacesAndNewlines) }
+  private func requiresPlan(_ id: String, for route: String) -> Bool {
+    Self.alibabaRoutes.contains(route) && id.lowercased() == "qwen4-max-preview"
   }
-  private var cloud: [String: Any] {
-    cloudProviders.first { string($0, "id") == selectedProvider } ?? [:]
+  private var canConnect: Bool {
+    !working && !modelID.isEmpty && !requiresPlan(modelID, for: route)
+      && (configured || !suppliedKey.isEmpty)
   }
-  private var modelStudio: Bool { ["qwen-intl", "qwen-cn"].contains(selectedProvider) }
+
   var body: some View {
-    VStack(alignment: .leading, spacing: 16) {
-      Picker("Model source", selection: $mode) {
-        Text("Local model").tag("Local model")
-        Text("Provider API key").tag("Provider API key")
-      }.pickerStyle(.segmented)
-      if mode == "Local model" {
-        localContent.frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
+    Group {
+      if let choice {
+        detail(choice)
       } else {
-        ScrollView {
-          VStack(alignment: .leading, spacing: 20) {
-            PageTitle(
-              eyebrow: "Connect a model",
-              title: "Use your API key",
-              subtitle: "For "
-                + string(
-                  app.harnesses.first { string($0, "id") == app.harness } ?? [:], "name", app.harness))
-            if let openModelStudioPlan {
-              Button("Set up Alibaba Model Studio plan…", action: openModelStudioPlan)
-                .disabled(saving)
-                .help("Connect Token Plan or Coding Plan through Qwen Code.")
-            }
-            if cloudProviders.isEmpty {
-              EmptyState(
-                icon: "info.circle", title: "This model source needs different setup",
-                detail:
-                  "This harness does not declare an API provider supported by this picker. Go Back to choose another source, or use its terminal setup workflow."
-              ).frame(height: 200)
+        chooser
+      }
+    }
+    .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
+    .task { app.prepareModelCatalog() }
+  }
+
+  private func choices(in rows: [[String: Any]], orderedBy order: [String] = []) -> [Choice] {
+    let indexed = Dictionary(rows.map { (string($0, "id"), $0) }, uniquingKeysWith: { first, _ in first })
+    let ordered = order + indexed.keys.filter { !order.contains($0) }.sorted {
+      string(indexed[$0] ?? [:], "name").localizedStandardCompare(string(indexed[$1] ?? [:], "name")) == .orderedAscending
+    }
+    return ordered.compactMap { id in
+      if Self.hiddenGroupMembers.contains(id) { return nil }
+      let routes = (Self.groupedRoutes[id] ?? [id]).filter { indexed[$0] != nil }
+      guard let first = routes.first, let row = indexed[first] else { return nil }
+      let name = Self.groupedNames[id] ?? Self.shortNames[id] ?? string(row, "name", id)
+      let search = routes.map { $0 + " " + string(indexed[$0] ?? [:], "name") }
+      return Choice(id: id, name: name, routes: routes, searchText: ([name] + search).joined(separator: " "))
+    }
+  }
+
+  private var chooser: some View {
+    let rows = providerRows
+    let curated = rows.filter { $0["curated"] as? Bool == true }
+    let featured = choices(in: rows.filter { Self.alibabaRoutes.contains(string($0, "id")) },
+      orderedBy: ["alibaba"]).first
+    let query = providerQuery.trimmingCharacters(in: .whitespacesAndNewlines)
+    let browsingCatalog = showAllProviders || !query.isEmpty
+    let results = browsingCatalog ? choices(in: rows, orderedBy: ["alibaba"] + Self.chinaOrder + Self.usOrder)
+      .filter { query.isEmpty || $0.searchText.localizedCaseInsensitiveContains(query) } : []
+    return VStack(alignment: .leading, spacing: 0) {
+      VStack(alignment: .leading, spacing: 12) {
+        Text("Choose a provider").font(.title2.weight(.semibold)).accessibilityAddTraits(.isHeader)
+        if let name = harness["name"] as? String, !app.connectionDisconnected {
+          Text("Model provider for \(name)").font(.callout).foregroundStyle(.secondary)
+        }
+        if !rows.isEmpty {
+          Picker("Provider catalog", selection: $showAllProviders) {
+            Text("Featured providers").tag(false)
+            Text("All providers").tag(true)
+          }
+          .pickerStyle(.segmented).labelsHidden()
+          .accessibilityIdentifier("provider.catalogScope")
+          .onChange(of: showAllProviders) { _, _ in providerQuery = "" }
+        }
+        ConnectionSearchField(title: "Search all providers", text: $providerQuery)
+      }
+      .padding(.horizontal, 24).padding(.vertical, 16)
+      Divider()
+      ScrollView {
+        LazyVStack(alignment: .leading, spacing: 18) {
+          if rows.isEmpty {
+            if app.providers.isEmpty {
+              ProgressView("Loading providers…")
             } else {
-              cloudContent
+              EmptyState(icon: "key", title: "No API providers for this harness",
+                detail: "Go back to choose a different connection or harness.")
             }
-            if !message.isEmpty {
-              Label(message, systemImage: "info.circle").font(.callout).foregroundStyle(.secondary)
-                .textSelection(.enabled)
+          } else if browsingCatalog {
+            if results.isEmpty {
+              Text("No providers match your search.").foregroundStyle(.secondary)
+            } else {
+              providerGrid(results)
             }
-            if saving { ProgressView().controlSize(.small) }
-          }.frame(maxWidth: .infinity, alignment: .topLeading)
-        }.defaultScrollAnchor(.top)
-      }
-    }.padding(28).frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
-      .task(id: mode) {
-        if mode == "Local model" { await app.refreshModels() }
-      }
-      .onAppear {
-        if !cloudProviders.contains(where: { string($0, "id") == selectedProvider }),
-          let first = cloudProviders.first
-        {
-          selectedProvider = string(first, "id")
-        }
-        workspaceEndpoint = string(cloud, "workspace_endpoint_override")
-      }
-      .onChange(of: mode) { _, _ in
-        key = ""
-        message = ""
-        resetWorkspaceModels()
-      }
-      .onChange(of: selectedProvider) { _, _ in
-        key = ""
-        selectedModel = selectedProvider == app.provider ? app.model : ""
-        workspaceEndpoint = string(cloud, "workspace_endpoint_override")
-        message = ""
-        resetWorkspaceModels()
-      }
-      .onChange(of: key) { _, _ in resetWorkspaceModels() }
-      .onChange(of: workspaceEndpoint) { _, _ in resetWorkspaceModels() }
-  }
-
-  private var localContent: some View {
-    InstalledLocalModelPicker(project: app.projectID, dismissOnUse: true)
-      .id(app.projectID)
-      .environmentObject(app)
-  }
-
-  private func providerButtons(_ providers: [[String: Any]]) -> some View {
-    LazyVGrid(columns: [GridItem(.adaptive(minimum: 150))], alignment: .leading) {
-      ForEach(providers, id: \.projectRowID) { provider in
-        let id = string(provider, "id")
-        Button(string(provider, "name")) {
-          selectedProvider = id
-        }
-        .disabled(saving)
-        .accessibilityAddTraits(id == selectedProvider ? .isSelected : [])
+          } else {
+            if let featured {
+              providerButton(featured, subtitle: "Connect Qwen and other models with a Model Studio API key.")
+            }
+            providerSection("China Labs", rows: curated, category: "China Labs", order: Self.chinaOrder)
+            providerSection("US Labs", rows: curated, category: "US Labs", order: Self.usOrder)
+            providerSection("Other labs", rows: curated, category: "Other Labs")
+            providerSection("Model hosts", rows: curated, category: "Model Hosts", order: Self.hostOrder)
+            providerSection("Other providers", rows: curated, category: "Local / Self-Hosted")
+          }
+        }.padding(24).frame(maxWidth: .infinity, alignment: .leading)
+      }.id(showAllProviders)
+      if app.modelCatalogStatus == "offline" || app.modelCatalogStatus == "empty" {
+        Divider()
+        Text(app.modelCatalogStatus == "offline" ? "Showing the saved catalog." : "Showing built-in model examples.")
+          .font(.caption).foregroundStyle(.secondary).padding(.horizontal, 24).padding(.vertical, 8)
       }
     }
   }
 
-  private var cloudContent: some View {
-    VStack(alignment: .leading, spacing: 16) {
-      if !featuredProviders.isEmpty {
-        Text("Chinese models and aggregators").font(.headline)
-        Text("Choose a provider to see its key type, model examples and official setup guide. API keys and coding-plan subscriptions use different routes.")
-          .font(.caption).foregroundStyle(.secondary)
-        providerButtons(featuredProviders)
+  @ViewBuilder private func providerSection(
+    _ title: String, rows: [[String: Any]], category: String, order: [String] = []
+  ) -> some View {
+    let entries = choices(in: rows.filter {
+      string($0, "category") == category && string($0, "id") != "alibaba"
+    }, orderedBy: order)
+    if !entries.isEmpty {
+      VStack(alignment: .leading, spacing: 8) {
+        Text(title).font(.headline).accessibilityAddTraits(.isHeader)
+        providerGrid(entries)
       }
-      if !usProviders.isEmpty {
-        Text("US model providers").font(.headline)
-        Text("Google, Anthropic, OpenAI, Grok, and Meta. Select one, then paste its API key.")
-          .font(.caption).foregroundStyle(.secondary)
-        providerButtons(usProviders)
+    }
+  }
+
+  private func providerGrid(_ entries: [Choice]) -> some View {
+    LazyVGrid(columns: [GridItem(.adaptive(minimum: 166), spacing: 8)], spacing: 8) {
+      ForEach(entries) { entry in providerButton(entry) }
+    }
+  }
+
+  private func providerButton(_ entry: Choice, subtitle: String? = nil) -> some View {
+    let featured = subtitle != nil
+    let keyAvailable = entry.routes.contains { id in
+      app.savedCredentialProviders.contains(id) || app.providers.contains {
+        string($0, "id") == id && $0["credential_configured"] as? Bool == true
       }
-      Picker("Provider", selection: $selectedProvider) {
-        ForEach(cloudProviders, id: \.projectRowID) { row in
-          Text(string(row, "name")).tag(string(row, "id"))
+    }
+    return Button {
+      chooseRoute(entry.routes[0])
+      choice = entry
+    } label: {
+      ConnectionCardLabel(title: entry.name, subtitle: subtitle ?? "",
+        status: keyAvailable ? "Key available" : "", featured: featured) {
+        ProviderMark(providerID: entry.id)
+          .frame(width: featured ? 36 : 24, height: featured ? 36 : 24)
+      }
+    }
+    .buttonStyle(ConnectionChoiceStyle())
+    .accessibilityIdentifier("provider." + entry.id)
+  }
+
+  private func detail(_ choice: Choice) -> some View {
+    VStack(spacing: 0) {
+      HStack(spacing: 10) {
+        Button {
+          self.choice = nil
+          chooseRoute("")
+        } label: {
+          Label("Providers", systemImage: "chevron.left")
+        }.disabled(working)
+        ProviderMark(providerID: choice.id).frame(width: 22, height: 22).accessibilityHidden(true)
+        Text(choice.name).font(.title2.weight(.semibold)).accessibilityAddTraits(.isHeader)
+        Spacer()
+        if let url = URL(string: string(provider, "docs_url")), url.scheme == "https" {
+          Link(destination: url) { Label("Provider docs", systemImage: "arrow.up.right.square") }
         }
+      }.padding(.horizontal, 24).padding(.vertical, 14)
+      if choice.routes.count > 1 {
+        Picker("API route", selection: Binding(get: { route }, set: { chooseRoute($0) })) {
+          ForEach(choice.routes, id: \.self) { id in Text(routeTitle(id)).tag(id) }
+        }
+        .pickerStyle(.segmented)
+        .disabled(working)
+        .padding(.horizontal, 24).padding(.bottom, 14)
       }
-      if !string(cloud, "notes").isEmpty { Text(string(cloud, "notes")).font(.callout).foregroundStyle(.secondary) }
-      if modelStudio, !string(cloud, "workspace_base_url").isEmpty {
-        Text("Current endpoint: " + string(cloud, "workspace_base_url"))
-          .font(.caption.monospaced()).textSelection(.enabled)
-        TextField("Workspace endpoint (optional)", text: $workspaceEndpoint)
-          .textFieldStyle(.roundedBorder)
-        Text("Paste the OpenAI-compatible URL from Model Studio if your key belongs to a dedicated workspace.")
-          .font(.caption).foregroundStyle(.secondary)
-      } else if !string(cloud, "default_base_url").isEmpty {
-        Text("Default endpoint: " + string(cloud, "default_base_url")).font(.caption.monospaced()).textSelection(.enabled)
+      Divider()
+      HStack(spacing: 0) {
+        modelPicker.frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
+        Divider()
+        ScrollView {
+          credentials.padding(18).frame(maxWidth: .infinity, alignment: .leading)
+        }.frame(width: 284)
       }
-      Text("Key environment variable: " + (cloud["credential_variables"] as? [String] ?? []).joined(separator: " or "))
-        .font(.caption).foregroundStyle(.secondary)
-      if let url = URL(string: string(cloud, "docs_url")), url.scheme == "https", url.user == nil, url.password == nil {
-        Link("Official provider setup and pricing", destination: url)
-      }
+      Divider()
       HStack {
-        TextField("Model ID", text: $selectedModel).textFieldStyle(.roundedBorder)
-        Menu("Catalog examples") {
-          ForEach(cloud["example_models"] as? [String] ?? [], id: \.self) { model in
-            Button(model) { selectedModel = model }
-          }
+        if !message.isEmpty {
+          Text(message).font(.callout).foregroundStyle(.secondary).textSelection(.enabled)
         }
-      }
-      Text(
-        "Examples come from the installed engine catalog. You can enter another model ID supported by this provider."
-      ).font(.caption).foregroundStyle(.secondary)
-      SecureField(
-        cloud["credential_configured"] as? Bool == true
-          ? "Credential configured · enter a key to replace it" : "API key", text: $key
-      ).textFieldStyle(.roundedBorder)
-      if modelStudio {
-        HStack {
-          Button("Load workspace models") { loadWorkspaceModels() }
-            .disabled(saving || workspaceLookup != nil
-              || (key.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
-                && cloud["credential_configured"] as? Bool != true))
-          if workspaceLookup != nil { ProgressView().controlSize(.small) }
-          if !workspaceModels.isEmpty {
-            CatalogPopup(label: "Workspace models", options:
-              (workspaceModels.contains(selectedModel) ? [] : [CatalogPopupOption(id: selectedModel, title: selectedModel.isEmpty ? "Choose a model" : selectedModel)])
-              + workspaceModels.map { CatalogPopupOption(id: $0, title: $0) },
-              selection: $selectedModel, placeholder: "Choose a model")
+        Spacer()
+        if saving { ProgressView().controlSize(.small) }
+        Button("Use provider", action: connect).buttonStyle(.borderedProminent).disabled(!canConnect)
+      }.padding(.horizontal, 24).padding(.vertical, 12)
+    }
+    .task(id: "\(route):\(app.modelCatalogRevision)") { await loadCatalog(for: route) }
+  }
+
+  private var modelPicker: some View {
+    let query = modelQuery.trimmingCharacters(in: .whitespacesAndNewlines)
+    let workspaceIDs = Set(workspaceModels.map(\.id))
+    let available = workspaceModels + models.filter { !workspaceIDs.contains($0.id) }
+    let visible = query.isEmpty ? available : available.filter {
+      $0.id.localizedCaseInsensitiveContains(query) || $0.name.localizedCaseInsensitiveContains(query)
+    }
+    return VStack(alignment: .leading, spacing: 0) {
+      VStack(alignment: .leading, spacing: 8) {
+        Text("Model").font(.headline).accessibilityAddTraits(.isHeader)
+        ConnectionSearchField(title: "Search models", text: $modelQuery)
+      }.padding(.horizontal, 18).padding(.top, 16).padding(.bottom, 8)
+      ScrollView {
+        LazyVStack(spacing: 5) {
+          if visible.isEmpty {
+            if catalogLoading && available.isEmpty {
+              ProgressView("Loading models…").controlSize(.small)
+            } else {
+              Text(available.isEmpty ? "Enter a model ID below." : "No models match your search.")
+                .font(.callout).foregroundStyle(.secondary)
+            }
           }
+          ForEach(visible) { row in
+            let selected = modelID == row.id
+            Button { selectedModel = row.id } label: {
+              HStack(spacing: 10) {
+                Image(systemName: selected ? "checkmark.circle.fill" : "circle")
+                  .foregroundStyle(selected ? Color.qAccent : .secondary).accessibilityHidden(true)
+                VStack(alignment: .leading, spacing: 2) {
+                  Text(row.name).lineLimit(2)
+                  if let detail = row.releaseDate ?? (row.name == row.id ? nil : row.id) {
+                    Text(detail).font(.caption).foregroundStyle(.secondary).lineLimit(1)
+                  }
+                }
+                Spacer(minLength: 0)
+              }
+              .padding(.horizontal, 10).padding(.vertical, 7).frame(minHeight: 36)
+              .contentShape(Rectangle())
+            }
+            .buttonStyle(ConnectionChoiceStyle(selected: selected))
+            .disabled(working)
+            .accessibilityAddTraits(selected ? .isSelected : [])
+          }
+        }.padding(.horizontal, 18).padding(.vertical, 6).frame(maxWidth: .infinity, alignment: .leading)
+      }.id(route)
+      VStack(alignment: .leading, spacing: 4) {
+        TextField("Model ID", text: $selectedModel).textFieldStyle(.roundedBorder).disabled(working)
+          .accessibilityLabel("Model ID")
+        if requiresPlan(modelID, for: route) {
+          Text("Choose a model available through the Model Studio API.")
+            .font(.caption).foregroundStyle(.secondary)
+        }
+        if !catalogError.isEmpty { Text(catalogError).font(.caption).foregroundStyle(.secondary) }
+      }.padding(.horizontal, 18).padding(.vertical, 12)
+    }
+  }
+
+  private var credentials: some View {
+    VStack(alignment: .leading, spacing: 10) {
+      Text("API key").font(.headline).accessibilityAddTraits(.isHeader)
+      if configured {
+        Label("Credential configured", systemImage: "checkmark.circle")
+          .font(.callout).foregroundStyle(.secondary)
+      }
+      SecureField(configured ? "Replace API key (optional)" : "Enter API key", text: $key)
+        .textFieldStyle(.roundedBorder).accessibilityLabel("API key")
+      Toggle("Remember in Keychain", isOn: $remember).disabled(suppliedKey.isEmpty)
+      if saved && !configured {
+        Button(restoringKey ? "Opening Keychain…" : "Use saved key", action: useSavedKey)
+      }
+      if saved {
+        Button("Forget saved key", role: .destructive, action: forgetKey)
+      }
+      let variables = (provider["credential_variables"] as? [String] ?? [])
+        + (provider["optional_credential_variables"] as? [String] ?? [])
+      if !variables.isEmpty {
+        Text(variables.joined(separator: "\n")).font(.caption.monospaced()).foregroundStyle(.secondary)
+          .textSelection(.enabled)
+      }
+      if let notes = Self.apiKeyNotes[route] ?? provider["notes"] as? String, !notes.isEmpty {
+        Text(notes).font(.caption).foregroundStyle(.secondary)
+      }
+      if modelStudio {
+        Divider().padding(.vertical, 3)
+        TextField("Workspace endpoint (optional)", text: $workspaceEndpoint).textFieldStyle(.roundedBorder)
+        HStack {
+          Button("Load workspace models", action: loadWorkspaceModels)
+            .disabled(workspaceLookup != nil || (suppliedKey.isEmpty && !configured))
+          if workspaceLookup != nil { ProgressView().controlSize(.small) }
         }
         if !workspaceMessage.isEmpty {
           Text(workspaceMessage).font(.caption).foregroundStyle(.secondary)
         }
-        if let detail = workspaceModelDetails.first(where: { string($0, "id") == selectedModel }) {
-          VStack(alignment: .leading, spacing: 4) {
-            if let context = detail["context_window"] as? Int {
-              Text("Advertised context: \(context.formatted()) tokens")
-            }
-            if let output = detail["max_output"] as? Int {
-              Text("Advertised maximum output: \(output.formatted()) tokens")
-            }
-            let capabilities = detail["capabilities"] as? [String] ?? []
-            Text(capabilities.contains("tools") ? "Tool calling advertised by the catalog." : "Tool support is not confirmed. Verify it with a small coding task.")
-            if string(detail, "thinking_policy") == "required" {
-              Text("This model always uses reasoning. Selecting Off does not disable it.")
-            } else if string(detail, "thinking_policy") == "unknown" {
-              Text("Thinking controls have not been verified for this model.")
-            }
-            if detail["pricing_known"] as? Bool != true {
-              Text("Pricing depends on your workspace and model. Check Alibaba before running.")
-            }
-          }.font(.caption).foregroundStyle(.secondary)
+      }
+      let endpoint = string(provider, modelStudio ? "workspace_base_url" : "default_base_url")
+      if !endpoint.isEmpty {
+        Text(endpoint).font(.caption.monospaced()).foregroundStyle(.secondary).textSelection(.enabled)
+      }
+    }
+    .disabled(working)
+    .onChange(of: key) { _, _ in resetWorkspaceModels() }
+    .onChange(of: workspaceEndpoint) { _, _ in resetWorkspaceModels() }
+  }
+
+  private func routeTitle(_ id: String) -> String {
+    switch id {
+    case "qwen-intl": "International"
+    case "qwen-cn": "China"
+    case "alibaba": "DashScope"
+    case "zai": "Z.AI"
+    case "zhipu": "Zhipu"
+    default: id
+    }
+  }
+
+  private func chooseRoute(_ id: String) {
+    guard route != id else { return }
+    route = id
+    let row = app.providers.first { string($0, "id") == id } ?? [:]
+    selectedModel = id == app.provider ? app.model : ""
+    key = ""
+    message = ""
+    models = []
+    modelQuery = ""
+    catalogError = ""
+    catalogLoading = !id.isEmpty
+    workspaceEndpoint = string(row, "workspace_endpoint_override")
+    resetWorkspaceModels()
+  }
+
+  private func loadCatalog(for id: String) async {
+    guard !id.isEmpty else { return }
+    do {
+      let payload = try await app.engine.call("providers.catalog.models", ["provider": id]) as? [String: Any] ?? [:]
+      guard !Task.isCancelled, route == id else { return }
+      let ids = payload["example_models"] as? [String] ?? []
+      let names = payload["example_model_labels"] as? [String] ?? []
+      models = ids.enumerated().compactMap { index, model in
+        guard !requiresPlan(model, for: id) else { return nil }
+        let label = index < names.count ? names[index] : model
+        let modelSuffix = " · " + model
+        if label.hasSuffix(modelSuffix) {
+          return ModelRow(id: model, name: model, releaseDate: String(label.dropLast(modelSuffix.count)))
         }
-        Link("Model Studio models and pricing", destination: URL(string: "https://www.alibabacloud.com/help/en/model-studio/models")!)
-          .font(.caption)
+        return ModelRow(id: model, name: label)
       }
-      Toggle("Remember new key in macOS Keychain", isOn: $remember).disabled(key.isEmpty)
-      Text(
-        "Saved keys stay in this Mac’s Keychain. Session-only keys are discarded when the local engine exits. Saving a key does not verify it or send a model request."
-      ).font(.caption).foregroundStyle(.secondary)
-      if cloud["credential_configured"] as? Bool == true {
-        Pill(title: "CREDENTIAL CONFIGURED · NOT VERIFIED", color: .orange)
-      }
-      HStack {
-        Spacer()
-        if app.savedCredentialProviders.contains(selectedProvider) {
-          Button("Forget saved key", role: .destructive) {
-            guard
-              app.confirm(
-                "Forget this provider key?",
-                "Remove only the key saved by the native SuperQode app. Existing terminal credentials remain available.",
-                button: "Forget key")
-            else { return }
-            saving = true
-            Task {
-              do {
-                try await app.forgetCredential(selectedProvider)
-                resetWorkspaceModels()
-                message = "App-owned key removed."
-              } catch { message = error.localizedDescription }
-              saving = false
-            }
-          }.disabled(saving)
-        }
-        Button("Use provider") { connect() }.buttonStyle(BrandButtonStyle())
-          .disabled(
-            saving || cloudProviders.isEmpty
-              || selectedModel.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
-              || (key.isEmpty && cloud["credential_configured"] as? Bool != true))
-      }
+      catalogError = ""
+    } catch {
+      guard !Task.isCancelled, route == id else { return }
+      catalogError = "Model catalog unavailable. You can enter a model ID."
+    }
+    catalogLoading = false
+  }
+
+  private func useSavedKey() {
+    let provider = route
+    restoringKey = true
+    message = ""
+    Task {
+      let restored = await app.restoreSavedProviderKey(provider)
+      restoringKey = false
+      if !restored { message = "The saved key could not be read." }
+    }
+  }
+
+  private func forgetKey() {
+    guard app.confirm("Forget this provider key?",
+      "Remove the key saved by SuperQode from macOS Keychain.", button: "Forget key") else { return }
+    let provider = route
+    saving = true
+    Task {
+      defer { saving = false }
+      do {
+        try await app.forgetCredential(provider)
+        resetWorkspaceModels()
+        message = "Saved key removed."
+      } catch { message = error.localizedDescription }
     }
   }
 
   private func resetWorkspaceModels() {
     workspaceLookup = nil
     workspaceModels = []
-    workspaceModelDetails = []
     workspaceMessage = ""
   }
 
@@ -268,49 +452,52 @@ struct ConnectionSourcesView: View {
     let lookup = UUID()
     workspaceLookup = lookup
     workspaceMessage = ""
-    let supplied = key.trimmingCharacters(in: .whitespacesAndNewlines)
-    var params = ["provider": selectedProvider, "endpoint": workspaceEndpoint]
-    if !supplied.isEmpty { params["key"] = supplied }
+    var params = ["provider": route, "endpoint": workspaceEndpoint]
+    if !suppliedKey.isEmpty { params["key"] = suppliedKey }
     Task {
       defer { if workspaceLookup == lookup { workspaceLookup = nil } }
       do {
         let result = try await app.engine.call("providers.models", params) as? [String: Any] ?? [:]
         guard workspaceLookup == lookup else { return }
-        workspaceModels = string(result, "source") == "live" ? result["models"] as? [String] ?? [] : []
-        workspaceModelDetails = string(result, "source") == "live" ? result["model_details"] as? [[String: Any]] ?? [] : []
-        workspaceMessage = workspaceModels.isEmpty
+        let details = result["model_details"] as? [[String: Any]] ?? []
+        let names = Dictionary(details.map { (string($0, "id"), string($0, "name")) },
+          uniquingKeysWith: { first, _ in first })
+        let ids = string(result, "source") == "live" ? result["models"] as? [String] ?? [] : []
+        var seen = Set<String>()
+        workspaceModels = ids.filter { !requiresPlan($0, for: route) && seen.insert($0).inserted }.map { ModelRow(id: $0, name: names[$0] ?? $0) }
+        workspaceMessage = ids.isEmpty
           ? string(result, "error", "No workspace models returned.")
-          : "Loaded \(workspaceModels.count) model IDs. Use Test model to verify inference."
+          : "Loaded \(workspaceModels.count) workspace models."
       } catch {
         guard workspaceLookup == lookup else { return }
         workspaceModels = []
-        workspaceModelDetails = []
         workspaceMessage = error.localizedDescription
       }
     }
   }
 
   private func connect() {
+    guard canConnect else { return }
     saving = true
     message = ""
-    let supplied = key
-    let provider = selectedProvider
-    let model = selectedModel
+    let provider = route
+    let model = modelID
+    let key = suppliedKey
+    let remember = remember
     let endpoint = workspaceEndpoint.trimmingCharacters(in: .whitespacesAndNewlines)
-    let editedEndpoint = modelStudio && endpoint != string(cloud, "workspace_endpoint_override")
+    let editedEndpoint = modelStudio && endpoint != string(self.provider, "workspace_endpoint_override")
       ? endpoint : nil
     Task {
-      defer {
-        key = ""
-        saving = false
-      }
+      defer { saving = false }
       do {
-        try await app.configureConnection(
-          provider: provider, model: model, key: supplied, remember: remember,
-          workspaceEndpoint: editedEndpoint)
+        try await app.configureConnection(provider: provider, model: model, key: key,
+          remember: remember, workspaceEndpoint: editedEndpoint)
+        self.key = ""
         app.section = "Workspace"
-        app.notice =
-          "Provider selected. Credentials are configured; use Test model to verify execution."
+        if !app.projectID.isEmpty { app.showWelcome = false }
+        app.notice = app.projectID.isEmpty
+          ? "Provider selected. Open a project to use it."
+          : "Provider selected. Use Test model to verify the connection."
         dismiss()
       } catch { message = error.localizedDescription }
     }
@@ -335,11 +522,20 @@ struct InstalledLocalModelPicker: View {
   let project: String
   var dismissOnUse = false
   var active = true
-  /// Local AI keeps a prompt on this page. The connect sheet stays harness, model, then start.
+  var preferredHarness = ""
+  /// Local AI may embed a prompt after a model and harness are selected.
   var showsPrompt = false
+  var openProject: (() -> Void)?
+  var browseModels: (() -> Void)?
+  var modelFit: [[String: Any]] = []
   @State private var form: InstalledLocalDraft
-  init(project: String, dismissOnUse: Bool = false, active: Bool = true, showsPrompt: Bool = false, form: InstalledLocalDraft? = nil) {
-    self.project = project; self.dismissOnUse = dismissOnUse; self.active = active; self.showsPrompt = showsPrompt
+  init(project: String, dismissOnUse: Bool = false, active: Bool = true, preferredHarness: String = "",
+    showsPrompt: Bool = false, form: InstalledLocalDraft? = nil,
+    openProject: (() -> Void)? = nil, browseModels: (() -> Void)? = nil,
+    modelFit: [[String: Any]] = []) {
+    self.project = project; self.dismissOnUse = dismissOnUse; self.active = active
+    self.preferredHarness = preferredHarness; self.showsPrompt = showsPrompt
+    self.openProject = openProject; self.browseModels = browseModels; self.modelFit = modelFit
     _form = State(initialValue: form ?? InstalledLocalDraft())
   }
   private var models: [[String: Any]] {
@@ -371,6 +567,7 @@ struct InstalledLocalModelPicker: View {
     nonmutating set { form.failure = newValue }
   }
   @State private var busy = false
+  @State private var modelSearch = ""
   @State private var progress = ""
   @State private var showDownload = false
   private var step: String {
@@ -400,6 +597,12 @@ struct InstalledLocalModelPicker: View {
         && (inferenceEngine.isEmpty || string(row, "engine") == inferenceEngine)
     }
   }
+  private var filteredModels: [[String: Any]] {
+    let query = modelSearch.trimmingCharacters(in: .whitespacesAndNewlines)
+    return visibleModels.filter {
+      query.isEmpty || (string($0, "name") + " " + string($0, "model")).localizedCaseInsensitiveContains(query)
+    }
+  }
   private var selectedRow: [String: Any]? {
     visibleModels.first { string($0, "id") == selected }
   }
@@ -411,7 +614,7 @@ struct InstalledLocalModelPicker: View {
     }
   }
   private var canStart: Bool {
-    guard !busy, !project.isEmpty, !harness.isEmpty, let row = selectedRow, !agentBusy else { return false }
+    guard !busy, !project.isEmpty, !harness.isEmpty, !needsInstall, let row = selectedRow, !agentBusy else { return false }
     return row["advertised"] as? Bool == true || engineReady(string(row, "engine"))
   }
   private var outgoingPrompt: String {
@@ -436,69 +639,35 @@ struct InstalledLocalModelPicker: View {
     VStack(alignment: .leading, spacing: 14) {
       if preparing {
         ModelWarmupCard(message: progress, subject: warmupSubject)
-      } else {
-        Text(step == "harness" ? "Choose a harness" : "Choose a model").font(.title2.weight(.semibold))
-        Text(step == "harness"
-          ? "Step 1 of 2. Pick who writes the code. The models on this Mac come next."
-          : "Step 2 of 2. Choose an inference engine and model.")
-          .foregroundStyle(.secondary)
-        if project.isEmpty {
-          Text("Open a project first.").font(.callout).foregroundStyle(.secondary)
-          appleModel
-        } else if step == "harness" {
-          harnessStep
-          appleModel
-        } else {
-          appleModel
-          modelStep
-        }
+      } else if step == "model" {
+        Text("Installed models").font(.title2.weight(.semibold)).accessibilityAddTraits(.isHeader)
+        modelStep
+      } else if let row = selectedRow {
+        Text("Choose a harness").font(.title2.weight(.semibold)).accessibilityAddTraits(.isHeader)
+        Label(string(row, "name", string(row, "model")) + " · " + modelCaption(row), systemImage: "cpu")
+          .font(.callout).foregroundStyle(.secondary)
+        harnessStep
       }
       if !failure.isEmpty { Text(failure).foregroundStyle(.orange).textSelection(.enabled) }
-      if showsPrompt && step == "model" && !needsInstall && !preparing {
+      if showsPrompt && step == "harness" && !needsInstall && !preparing {
         TextField("Describe a change", text: $form.prompt, axis: .vertical)
-          .lineLimit(2...5)
-          .textFieldStyle(.roundedBorder)
-          .disabled(busy)
+          .lineLimit(2...5).textFieldStyle(.roundedBorder).disabled(busy)
           .accessibilityIdentifier("local.prompt")
       }
-      if !preparing {
-      HStack {
-        if step == "model" {
-          Button("Back") { step = "harness" }.disabled(busy)
-            .accessibilityIdentifier("local.back")
-        }
-        Button("Refresh") { Task { await load() } }.disabled(busy)
-        Spacer()
-        if step == "model" && needsInstall {
-          Button("Install and continue") { Task { await installSelected() } }
-            .buttonStyle(BrandButtonStyle())
-            .disabled(busy || project.isEmpty)
-            .accessibilityIdentifier("local.install")
-        } else if step == "model" {
-          Button("Download a model…") { showDownload = true }.disabled(busy)
-          if !needsInstall && !serverEngine.isEmpty {
-            Button("Context and server…") { serverRequest = ["action": "serve", "engine": serverEngine] }
-              .disabled(busy || agentBusy)
-              .help("Set the context window and cache, then start the server. A server that is already running keeps its settings until you start it again.")
-          }
-          Button(actionTitle) { Task { await startCoding() } }
-            .buttonStyle(BrandButtonStyle())
-            .disabled(!canStart)
-            .accessibilityIdentifier("local.startCoding")
-        }
-      }
-      }
+      if !preparing { actions }
     }
     .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
-    .task(id: project + "\n" + String(active)) {
+    .task(id: project + "\n" + String(active) + "\n" + String(form.refreshToken)) {
       guard active else { return }
       await load()
     }
     .onChange(of: inferenceEngine) { _, _ in
-      selected = string(visibleModels.first ?? [:], "id")
+      if selectedRow == nil { selected = "" }
       failure = ""
     }
-    .centeredDialog(isPresented: $showDownload, title: "Download a local model") {
+    .centeredDialog(isPresented: $showDownload, title: "Download a local model", onDismiss: {
+      Task { await load() }
+    }) {
       LocalQuickStartView(project: project, showInstalled: false).environmentObject(app)
     }
     .centeredDialog(
@@ -509,8 +678,42 @@ struct InstalledLocalModelPicker: View {
     }
   }
 
-  private var appleModel: some View {
-    AppleLocalModelPanel(project: project, active: active) { if dismissOnUse { dismiss() } }
+  private var actions: some View {
+    HStack {
+      if step == "harness" {
+        Button("Back to models") { step = "model"; failure = "" }.disabled(busy)
+          .accessibilityIdentifier("local.back")
+      }
+      Button("Refresh") { Task { await load() } }.disabled(busy)
+      Spacer()
+      if step == "model" {
+        Button("Download a model…") {
+          if let browseModels { browseModels() } else { showDownload = true }
+        }.disabled(busy)
+        if !serverEngine.isEmpty {
+          Button("Context and server…") { serverRequest = ["action": "serve", "engine": serverEngine] }
+            .disabled(busy || agentBusy)
+        }
+        if project.isEmpty {
+          Button("Open project…", action: openProject ?? app.chooseProject)
+            .disabled(app.openingProject || !app.connected)
+        } else {
+          Button("Choose harness", action: chooseHarnessStep).buttonStyle(.borderedProminent)
+            .disabled(busy || selectedRow == nil)
+            .accessibilityIdentifier("local.chooseHarness")
+        }
+      } else if step == "harness" {
+        if needsInstall {
+          Button("Install harness…") { Task { await installSelected() } }
+            .buttonStyle(.borderedProminent).disabled(busy || project.isEmpty)
+            .accessibilityIdentifier("local.install")
+        } else {
+          Button(actionTitle) { Task { await startCoding() } }
+            .buttonStyle(.borderedProminent).disabled(!canStart)
+            .accessibilityIdentifier("local.startCoding")
+        }
+      }
+    }
   }
 
   /// The selected model's server, or the first installed runtime.
@@ -525,64 +728,62 @@ struct InstalledLocalModelPicker: View {
 
   private var harnessStep: some View {
     Group {
+      if !preferredHarness.isEmpty && !busy && !harnesses.contains(where: { string($0, "id") == preferredHarness }) {
+        Text("The selected harness can’t use this local model setup. Choose a compatible harness below.")
+          .font(.callout).foregroundStyle(.secondary)
+      }
       if harnesses.isEmpty && busy {
         ProgressView("Loading harnesses…").controlSize(.small)
       } else if harnesses.isEmpty && !busy {
         Text("No harness here can run an Ollama or LM Studio model yet.")
           .foregroundStyle(.secondary)
       } else {
-        ScrollView {
-          harnessGrid(harnesses)
-        }.frame(maxHeight: 460)
+        harnessGrid(harnesses)
+        if needsInstall {
+          Text("Install this harness before connecting the model.").foregroundStyle(.secondary)
+        }
       }
     }
   }
 
   private var modelStep: some View {
     VStack(alignment: .leading, spacing: 10) {
-      if let row = harnessRow {
-        Text(string(row, "name")).font(.headline)
-        Text(string(row, "note")).font(.callout).foregroundStyle(.secondary)
-      }
-      if needsInstall {
-        Text("SuperQode installs this harness in the app. You do not need to install SuperQode or uv yourself.")
+      if busy && models.isEmpty {
+        ProgressView("Finding local models…").controlSize(.small)
+      } else if models.isEmpty {
+        Text("No Ollama or LM Studio models found. Download a model or connect a local server.")
           .foregroundStyle(.secondary)
       } else {
-        Picker("Inference engine", selection: $form.inferenceEngine) {
-          Text("All installed models").tag("")
+        Picker("Runtime", selection: $form.inferenceEngine) {
+          Text("All runtimes").tag("")
           Text("Ollama").tag("ollama")
           Text("LM Studio").tag("lmstudio")
-        }.disabled(busy)
-      }
-      if !needsInstall && visibleModels.isEmpty && !busy {
-        Text("No installed Ollama or LM Studio chat models were found.")
-          .foregroundStyle(.secondary)
-      } else if !needsInstall {
+        }.pickerStyle(.segmented).disabled(busy)
+        ConnectionSearchField(title: "Search models", text: $modelSearch)
+        if filteredModels.isEmpty && !busy {
+          Text("No models match your search.").foregroundStyle(.secondary)
+        }
         ScrollView {
-          VStack(spacing: 8) {
-            ForEach(visibleModels, id: \.projectRowID) { row in
+          LazyVStack(spacing: 5) {
+            ForEach(filteredModels, id: \.projectRowID) { row in
               let active = selected == string(row, "id")
               Button {
                 selected = string(row, "id")
                 failure = ""
               } label: {
                 HStack(spacing: 12) {
-                  Image(systemName: active ? "largecircle.fill.circle" : "circle")
-                    .foregroundStyle(active ? Color.qAccent : .secondary)
+                  Image(systemName: active ? "checkmark.circle.fill" : "circle")
+                    .foregroundStyle(active ? Color.qAccent : .secondary).accessibilityHidden(true)
                   VStack(alignment: .leading, spacing: 2) {
                     Text(string(row, "name", string(row, "model"))).font(.headline).lineLimit(2)
-                      .foregroundStyle(.primary)
                     Text(modelCaption(row)).font(.caption).foregroundStyle(.secondary)
                   }
                   Spacer(minLength: 0)
                 }
-                .padding(12)
-                .background(.primary.opacity(active ? 0.08 : 0.04), in: RoundedRectangle(cornerRadius: 9))
-                .overlay(
-                  RoundedRectangle(cornerRadius: 9).stroke(active ? Color.qAccent : .clear, lineWidth: 1.5)
-                )
+                .padding(.horizontal, 10).padding(.vertical, 7).frame(minHeight: 36)
+                .contentShape(Rectangle())
               }
-              .buttonStyle(.plain)
+              .buttonStyle(ConnectionChoiceStyle(selected: active))
               .disabled(busy)
               .accessibilityAddTraits(active ? .isSelected : [])
             }
@@ -594,29 +795,22 @@ struct InstalledLocalModelPicker: View {
   }
 
   private func harnessGrid(_ rows: [[String: Any]]) -> some View {
-    LazyVGrid(columns: [GridItem(.adaptive(minimum: 168), spacing: 8)], spacing: 8) {
+    LazyVGrid(columns: [GridItem(.adaptive(minimum: 205), spacing: 8)], spacing: 8) {
       ForEach(rows, id: \.projectRowID) { row in
         let id = string(row, "id")
         let active = harness == id
         Button {
           choose(id)
         } label: {
-          VStack(alignment: .leading, spacing: 4) {
-            Text(string(row, "name")).font(.system(size: 13, weight: .semibold)).lineLimit(2)
-              .foregroundStyle(Color.primary)
-            let note = string(row, "note")
-            if note != "Runs this model on your Mac." {
-              Text(note).font(.caption2).foregroundStyle(.secondary).lineLimit(2)
-            }
+          let note = string(row, "note")
+          ConnectionCardLabel(title: string(row, "name"),
+            subtitle: string(row, "description"),
+            status: row["selectable"] as? Bool == true ? "Ready to connect" : note) {
+            Image(systemName: active ? "checkmark.circle.fill" : "cpu")
+              .font(.title3).foregroundStyle(Color.qAccent)
           }
-          .padding(10)
-          .frame(maxWidth: .infinity, minHeight: 54, alignment: .topLeading)
-          .background(.primary.opacity(active ? 0.08 : 0.04), in: RoundedRectangle(cornerRadius: 9))
-          .overlay(
-            RoundedRectangle(cornerRadius: 9).stroke(active ? Color.qAccent : Color.secondary.opacity(0.35), lineWidth: active ? 1.5 : 1)
-          )
         }
-        .buttonStyle(.plain)
+        .buttonStyle(ConnectionChoiceStyle(selected: active))
         .disabled(busy)
         .accessibilityIdentifier("local.harness." + id)
         .accessibilityAddTraits(active ? .isSelected : [])
@@ -624,19 +818,29 @@ struct InstalledLocalModelPicker: View {
     }
   }
 
+  private func chooseHarnessStep() {
+    if harness.isEmpty && harnesses.contains(where: { string($0, "id") == preferredHarness }) {
+      harness = preferredHarness
+    }
+    step = "harness"
+  }
+
   private func choose(_ id: String) {
     harness = id
     failure = ""
-    if !visibleModels.contains(where: { string($0, "id") == selected }) {
-      selected = string(visibleModels.first ?? [:], "id")
-    }
-    step = "model"
   }
 
   private func modelCaption(_ row: [String: Any]) -> String {
     let engine = string(row, "engine") == "lmstudio" ? "LM Studio" : "Ollama"
-    guard let size = row["size_gb"] as? Double, size > 0 else { return engine }
-    return engine + " · " + String(format: "%.1f GB", size)
+    var summary = [engine]
+    if let size = row["size_gb"] as? Double, size > 0 {
+      summary.append(String(format: "%.1f GB", size))
+    }
+    if let entry = modelFit.first(where: { $0.projectRowID == row.projectRowID }),
+      let fit = entry["fit"] as? [String: Any], let rating = fit["rating"] as? String {
+      summary.append(rating)
+    }
+    return summary.joined(separator: " · ")
   }
 
   private func readiness(_ row: [String: Any]) -> String {
@@ -668,10 +872,22 @@ struct InstalledLocalModelPicker: View {
       }
       if !harness.isEmpty && !harnesses.contains(where: { string($0, "id") == harness }) {
         harness = ""
-        step = "harness"
       }
-      if step == "model" && !visibleModels.contains(where: { string($0, "id") == selected }) {
-        selected = string(visibleModels.first ?? [:], "id")
+      if let prepared = form.preparedModel {
+        form.preparedModel = nil
+        inferenceEngine = prepared.engine
+        if let row = visibleModels.first(where: { string($0, "model") == prepared.model }) {
+          selected = row.projectRowID
+          chooseHarnessStep()
+        } else {
+          step = "model"
+          failure = "Refresh to find the model you just set up."
+          return
+        }
+      }
+      if selectedRow == nil {
+        selected = ""
+        step = "model"
       }
       failure = ""
     } catch { if !Task.isCancelled { failure = error.localizedDescription } }
@@ -726,7 +942,7 @@ struct InstalledLocalModelPicker: View {
   }
 
   private func startCoding() async {
-    guard !project.isEmpty, !harness.isEmpty, let row = selectedRow else { return }
+    guard canStart, let row = selectedRow else { return }
     let outgoing = outgoingPrompt
     busy = true
     progress = "Connecting…"

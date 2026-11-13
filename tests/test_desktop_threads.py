@@ -17,6 +17,7 @@ def task(
     title=None,
     harness="core",
     route=None,
+    provider=None,
 ):
     service._write(
         "INSERT INTO jobs VALUES(?,?,?,?,?,?,?,?,?)",
@@ -31,6 +32,7 @@ def task(
                     "parent_id": parent,
                     "prompt": "PRIVATE_PROMPT",
                     "harness": harness,
+                    "provider": provider,
                     "_desktop_route": route,
                     "model": "research-model",
                 }
@@ -242,6 +244,37 @@ def test_delete_removes_one_thread_and_leaves_the_project(desktop):
         service.dispatch("threads.delete", {"project": project["id"], "id": "missing"})
     with pytest.raises(ValueError, match="Choose a thread"):
         service.dispatch("threads.delete", {"project": project["id"], "id": "../runs"})
+
+
+def test_apple_foundation_chat_keeps_the_device_mark_on_its_harness(desktop):
+    service, project, _ = desktop
+    task(
+        service,
+        project["id"],
+        "apple-chat",
+        title="Apple chat",
+        harness="no-tool",
+        provider="apple-foundation",
+        route={"name": "No Tool"},
+    )
+    row = service.dispatch("threads.list", {"project": project["id"], "query": "Apple chat"})[
+        "items"
+    ][0]
+    assert row["harnesses_used"] == [
+        {"id": "no-tool", "name": "No Tool", "icon_key": "apple-device"}
+    ]
+    task(
+        service,
+        project["id"],
+        "apple-dev",
+        title="Apple development",
+        harness="apple-local",
+        route={"name": "Apple on-device"},
+    )
+    development = service.dispatch(
+        "threads.list", {"project": project["id"], "query": "Apple development"}
+    )["items"][0]
+    assert development["harnesses_used"][0]["icon_key"] == "apple-device"
 
 
 def test_harness_badges_include_full_history_and_survive_restart(desktop):

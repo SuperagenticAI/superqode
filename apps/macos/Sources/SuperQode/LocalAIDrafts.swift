@@ -30,8 +30,11 @@ import Observation
   var selected: String = ""
   var inferenceEngine: String = ""
   var failure: String = ""
-  var step: String = "harness"
+  var step = "model"
+  var preparedModel: (engine: String, model: String)?
+  var refreshToken = 0
   var prompt: String = ""
+
 }
 
 @MainActor @Observable final class LocalRuntimeDraft {

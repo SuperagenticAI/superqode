@@ -282,7 +282,17 @@ private func jobStamp(_ row: [String: Any]) -> Double {
   let terminals = ProjectTerminals()
   let credentialStore = CredentialStore()
   @Published var providers: [[String: Any]] = []
+  /// Result of this launch's models.dev check: downloaded, fresh, offline, or empty.
+  @Published private(set) var modelCatalogStatus = ""
+  @Published private(set) var modelCatalogRevision = 0
+  private var modelCatalogTask: Task<Void, Never>?
+  private var welcomeProviderRoute: (provider: String, model: String)?
   @Published var savedCredentialProviders: [String] = []
+  var needsSavedProviderKey: Bool {
+    !isManaged && savedCredentialProviders.contains(provider) && providers.contains {
+      string($0, "id") == provider && $0["credential_configured"] as? Bool != true
+    }
+  }
   @Published var routeStatus: [String: Any] = [:]
   @Published var openingProject = false
   @Published var showWelcome = true { didSet { persistDestination() } }
@@ -693,6 +703,7 @@ private func jobStamp(_ row: [String: Any]) -> Double {
   var connectionDisconnected: Bool { harness == "disconnected" }
   /// Detach the selected route without logging out of vendor-owned accounts or deleting history.
   func disconnectConnection() {
+    welcomeProviderRoute = nil
     guard !anyActive, !busy else { return }
     chooseHarness("disconnected")
     provider = ""
@@ -834,31 +845,8 @@ private func jobStamp(_ row: [String: Any]) -> Double {
       resetThreadConnection()
       theme = string(settings, "theme", "dark")
       savedCredentialProviders = settings["credential_providers"] as? [String] ?? []
-      for provider in savedCredentialProviders {
-        do {
-          let store = credentialStore
-          if let key = try await Task.detached(operation: { try store.read(provider) }).value {
-            _ = try await engine.call(
-              "providers.credentials.set", ["provider": provider, "key": key])
-          }
-        } catch {
-          notice =
-            "A saved provider key could not be loaded. Open Connect model to reconnect. "
-            + error.localizedDescription
-        }
-      }
-      // Only explicitly remembered, app-owned local keys are restored. This
-      // metadata lookup does not probe servers, scan folders or load models.
-      if let runtimes = try await engine.call("local.runtimes.catalog") as? [String: Any] {
-        for row in runtimes["profiles"] as? [[String: Any]] ?? [] where row["remember_key"] as? Bool == true {
-          let identity = string(row, "id"); let account = "local-runtime:" + identity; let store = credentialStore
-          do {
-            if let key = try await Task.detached(operation: { try store.read(account) }).value {
-              _ = try await engine.call("local.runtimes.key", ["id": identity, "key": key, "restore": true])
-            }
-          } catch { notice = "A saved local runtime key could not be loaded. Reconnect it in Local AI. " + error.localizedDescription }
-        }
-      }
+      // Load only the list of saved providers at launch. Reading a legacy
+      // login-keychain item can show an access dialog even with a silent LAContext.
       await refreshProviders()
       projects = try await engine.call("projects.list") as? [[String: Any]] ?? []
       packs = try await engine.call("evals.packs") as? [[String: Any]] ?? []
@@ -900,7 +888,13 @@ private func jobStamp(_ row: [String: Any]) -> Double {
       !arguments[index + 1].hasPrefix("--"), !arguments[index + 1].isEmpty else { return }
     try await open(arguments[index + 1])
   }
-  func chooseProject() {
+  func chooseProject() { chooseProject(openFolder: openProjectInAgentSpace) }
+
+  func openProjectInAgentSpace(_ path: String) {
+    perform { try await self.open(path, landing: .agentSpace) }
+  }
+
+  func chooseProject(openFolder: (String) -> Void) {
     guard !openingProject, !restoringNavigation else { return }
     let panel = NSOpenPanel()
     panel.canChooseDirectories = true
@@ -917,9 +911,15 @@ private func jobStamp(_ row: [String: Any]) -> Double {
     {
       return
     }
-    perform { try await self.open(url.path) }
+    openFolder(url.path)
   }
-  func open(_ path: String, recordHistory: Bool = true, expectedProjectID: String? = nil) async throws {
+  enum ProjectLanding {
+    case workspace
+    case agentSpace
+  }
+
+  func open(_ path: String, recordHistory: Bool = true, expectedProjectID: String? = nil,
+    landing: ProjectLanding = .workspace) async throws {
     guard !openingProject else { throw EngineError(message: "Wait for the current project to finish opening.") }
     saveDraft(flush: false)
     let previous = currentDestination
@@ -953,13 +953,13 @@ private func jobStamp(_ row: [String: Any]) -> Double {
     let nextForks = try await engine.call("threads.fork.list", params) as? [[String: Any]] ?? []
     var nextHarnesses = definitions + routes
     for entry in UserDefaults.standard.stringArray(forKey: "nativeVendorKeys") ?? [] {
-      if let key = try? credentialStore.read("vendor:" + entry),
+      if let key = try? credentialStore.read("vendor:" + entry, prompt: false),
         let route = try? await engine.call("connect.vendor.key", ["project": openedID, "entry": entry, "key": key]) as? [String: Any] {
         nextHarnesses.append(route)
       }
     }
     if UserDefaults.standard.bool(forKey: "nativeSystemOneKey"),
-      let key = try? credentialStore.read("systemone") {
+      let key = try? credentialStore.read("systemone", prompt: false) {
       _ = try? await engine.call("connect.systemone.key", ["key": key])
     }
     let settings = try await engine.call("settings.get") as? [String: Any] ?? [:]
@@ -1009,12 +1009,18 @@ private func jobStamp(_ row: [String: Any]) -> Double {
     migrateLegacyDraft(settings: settings)
     restoreComposer(conversationID: "")
     section = "Workspace"
-    if recordHistory, let saved = savedDestinations[projectID] { applyDestination(saved) }
-    // Explicit project opens must enter the workspace, even when its saved
-    // destination was Welcome. History/restart restoration can apply Welcome
-    // separately after open returns.
+    if recordHistory, landing == .workspace, let saved = savedDestinations[projectID] {
+      applyDestination(saved)
+    }
     showWelcome = false
-    if selectedJob.isEmpty { resetThreadConnection() }
+    if selectedJob.isEmpty {
+      resetThreadConnection()
+      if let route = welcomeProviderRoute {
+        welcomeProviderRoute = nil
+        chooseModelRoute(route.provider, route.model)
+        perform { await self.checkRoute() }
+      }
+    }
     perform {
       await self.refreshGit()
       await self.loadRepositoryLayout()
@@ -1597,8 +1603,22 @@ private func jobStamp(_ row: [String: Any]) -> Double {
     harnesses = definitions + routes
   }
   func refreshProviders() async {
-    do { providers = try await engine.call("providers.list") as? [[String: Any]] ?? [] } catch {
+    do { providers = try await engine.call("providers.list", ["compact": true]) as? [[String: Any]] ?? [] } catch {
       self.error = error.localizedDescription
+    }
+  }
+  /// Check models.dev once this launch. The provider list keeps using the saved catalog until this finishes.
+  func prepareModelCatalog() {
+    guard modelCatalogTask == nil else { return }
+    modelCatalogTask = Task { [weak self] in
+      guard let self else { return }
+      let result = (try? await engine.call("providers.catalog.refresh")) as? [String: Any] ?? [:]
+      let status = string(result, "status", "offline")
+      if status == "downloaded" {
+        await refreshProviders()
+        modelCatalogRevision += 1
+      }
+      modelCatalogStatus = status
     }
   }
   func checkRoute() async {
@@ -1655,8 +1675,9 @@ private func jobStamp(_ row: [String: Any]) -> Double {
     if !key.isEmpty {
       try await storeProviderCredential(selectedProvider, key: key, remember: remember)
     }
-    chooseModelRoute(
-      selectedProvider, selectedModel.trimmingCharacters(in: .whitespacesAndNewlines))
+    let model = selectedModel.trimmingCharacters(in: .whitespacesAndNewlines)
+    chooseModelRoute(selectedProvider, model)
+    if projectID.isEmpty { welcomeProviderRoute = (selectedProvider, model) }
     await refreshProviders()
     await checkRoute()
   }
@@ -1691,6 +1712,25 @@ private func jobStamp(_ row: [String: Any]) -> Double {
         _ = try await engine.call("settings.set", ["key": "credential_providers", "value": savedCredentialProviders])
       }
     await refreshProviders()
+  }
+  /// Reads a remembered key and installs it for this session. This is the point
+  /// where Keychain may ask, because the person chose that provider.
+  func restoreSavedProviderKey(_ provider: String) async -> Bool {
+    let store = credentialStore
+    do {
+      guard let key = try await Task.detached(operation: { try store.read(provider) }).value,
+        !key.isEmpty
+      else { return false }
+      _ = try await engine.call("providers.credentials.set", ["provider": provider, "key": key])
+      credentialGeneration += 1
+      if self.provider == provider { verifiedRoute = "" }
+      await refreshProviders()
+      if self.provider == provider { await checkRoute() }
+      return true
+    } catch {
+      notice = error.localizedDescription
+      return false
+    }
   }
   func forgetCredential(_ provider: String) async throws {
     let store = credentialStore
@@ -2290,11 +2330,13 @@ private func jobStamp(_ row: [String: Any]) -> Double {
       guard showWelcome, draft == existingDraft else {
         throw EngineError(message: "Loading startup recovery navigated away from Welcome")
       }
-      try await open(string(project, "path"))
-      guard !showWelcome, draft == existingDraft else {
-        throw EngineError(message: "Reopening a project from Welcome did not enter its workspace with its draft")
+      recoverySnapshot.projectDestinations[projectID] = WorkspaceDestination(
+        projectID: projectID, projectPath: string(project, "path"), section: "Models")
+      try await open(string(project, "path"), landing: .agentSpace)
+      guard !showWelcome, section == "Workspace", draft == existingDraft else {
+        throw EngineError(message: "Opening a recent project did not enter Agent Space with its draft")
       }
-      report["welcome_navigation"] = "passed; startup navigation stays on Welcome until an explicit project open, which enters the workspace and preserves its draft"
+      report["welcome_navigation"] = "passed; opening a recent project with Local AI saved enters Agent Space and preserves its draft"
       let visible = conversationEvents(
         [
           ["type": "stage"], ["type": "approval"], ["type": "error"],
@@ -2417,7 +2459,7 @@ private func jobStamp(_ row: [String: Any]) -> Double {
       {
         let destination = URL(fileURLWithPath: ProcessInfo.processInfo.arguments[index + 1])
         for page in [
-          "menu:root", "menu:vendors", "menu:protocols", "source:key", "configure:wizard",
+          "menu:root", "menu:vendors", "menu:protocols", "source:key", "source:local", "configure:wizard",
           "configure:rlm", "configure:rlm-routing", "systemone",
           "runtimes", "acp", "acp-clients", "custom-acp", "acp-setup-preview", "thread-identities-preview", "thread-identities-preview-light",
         ] {
@@ -3040,6 +3082,18 @@ private func jobStamp(_ row: [String: Any]) -> Double {
     try await press("connect.back")
     try await press("connect.acp")
     try await press("connect.back")
+    try await press("connect.models")
+    try await press("connect.row.harness-core")
+    try await press("connect.row.byok")
+    try await press("connect.back")
+    try await press("connect.row.local")
+    guard let content = main.attachedSheet?.contentView,
+      control("local.runtimes.show", in: content) != nil else {
+      throw EngineError(message: "Local model did not open the Local AI overview")
+    }
+    try await press("connect.back")
+    try await press("connect.back")
+    try await press("connect.back")
     try await press("connect.close")
     try await assertClosed()
 
@@ -3151,7 +3205,7 @@ private func jobStamp(_ row: [String: Any]) -> Double {
     guard contextFiles == ["fixture-b.txt"], imageAttachments.isEmpty else {
       throw EngineError(message: "Attachment removal was overwritten after layout")
     }
-    return "passed; Connect Back/Close, ACP Use, Escape, Done/Cancel and X in seven product sheets, nested X ownership, notification X, attachment X and reopen"
+    return "passed; subscription, harness, API key and local model navigation, Connect Back/Close, ACP Use, Escape, Done/Cancel and X in seven product sheets, nested X ownership, notification X, attachment X and reopen"
 
 
   }

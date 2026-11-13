@@ -19,10 +19,11 @@ def test_worker_pythonpath_keeps_packages_installed_by_the_app(tmp_path):
     extras = tmp_path / "python-extras"
     extras.mkdir()
     path = app_setup.engine_pythonpath(tmp_path)
-    assert path.split(os.pathsep) == [
-        str(Path(app_setup.__file__).resolve().parents[2]),
-        str(extras.resolve()),
-    ]
+    assert path == str(Path(app_setup.__file__).resolve().parents[2])
+    ordered = app_setup.place_app_extras(
+        [str(extras), "/bundled/site-packages", str(extras.resolve())], extras
+    )
+    assert ordered == ["/bundled/site-packages", str(extras.resolve())]
 
 
 def test_installable_extras_match_pyproject():

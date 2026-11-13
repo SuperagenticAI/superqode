@@ -942,11 +942,13 @@ class DesktopService:
                 if kind == "check":
                     credential_env = {}
                     remote_config = {}
+                from superqode.providers.dynamic import resolve_provider_def
+
                 allowed = {
                     name
                     for provider in providers
-                    if provider in PROVIDERS
-                    for name in (PROVIDERS[provider].env_vars or [])
+                    if (definition := resolve_provider_def(provider)) is not None
+                    for name in (*definition.env_vars, *definition.optional_env)
                 }
                 if kind == "tuning":
                     allowed.add("TYPESAFE_API_KEY")
@@ -1002,6 +1004,7 @@ class DesktopService:
                         ),
                         "PYTHONUNBUFFERED": "1",
                         "PYTHONPATH": engine_pythonpath(self.root),
+                        "SUPERQODE_STATE_DIR": str(self.root),
                         "SUPERQODE_DESKTOP_PARENT_PID": str(os.getpid()),
                         "SUPERQODE_DESKTOP_LEASE_FD": str(lease.fd),
                     },
@@ -1264,6 +1267,16 @@ class DesktopService:
                     else "Local configuration changed. Return to Advanced."
                 ),
             }
+        if method == "providers.catalog.refresh":
+            from superqode.providers.models import refresh_model_catalog
+
+            # Stay off the service lock so a models.dev download does not stall
+            # jobs, transcripts, or the rest of the provider list.
+            return refresh_model_catalog(force=bool(params.get("force")))
+        if method == "providers.catalog.models":
+            from .connections import connection_catalog
+
+            return connection_catalog(str(params.get("provider") or ""))
         if method in {
             "providers.list",
             "providers.credentials.set",
@@ -1375,7 +1388,9 @@ class DesktopService:
                                 else "The selected local model/server changed. Refresh Local AI.",
                             }
                 return inspect_route(credentials, params)
-            return list_connections(credentials, endpoints)
+            return list_connections(
+                credentials, endpoints, include_models=not params.get("compact")
+            )
         if method == "hello":
             from superqode import __version__
 

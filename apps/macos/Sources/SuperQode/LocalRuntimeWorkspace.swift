@@ -277,6 +277,8 @@ struct LocalRuntimeWorkspace: View {
           Text("A key is configured for this app session.").font(.caption).foregroundStyle(.secondary)
           Button("Remove key") { removeKey() }.font(.caption).disabled(busy)
         }
+      } else if selected["remember_key"] as? Bool == true {
+        Button("Use saved key", action: useSavedKey).font(.caption).disabled(busy)
       }
       HStack {
         Text("Context cap").font(.caption)
@@ -427,6 +429,21 @@ struct LocalRuntimeWorkspace: View {
       await loadHarnesses(); message = "Profile saved. Check the server to choose a model."
     }
   }
+  private func useSavedKey() {
+    let profileID = identity
+    let store = app.credentialStore
+    action {
+      guard let key = try await Task.detached(operation: {
+        try store.read("local-runtime:" + profileID)
+      }).value else {
+        throw EngineError(message: "The saved key is missing. Enter the key to reconnect.")
+      }
+      _ = try await app.engine.call("local.runtimes.key", ["id": profileID, "key": key, "restore": true])
+      await library.load(app.engine)
+      if identity == profileID { message = "Saved key is available for this session." }
+    }
+  }
+
   private func removeKey() {
     action {
       let profileID = identity
@@ -546,8 +563,10 @@ struct AppleLocalModelPanel: View {
   }
   var body: some View {
     VStack(alignment: .leading, spacing: 10) {
-      HStack {
-        Label("Apple on-device model", systemImage: "apple.logo").font(.headline)
+      HStack(spacing: 8) {
+        AppleDeviceMark().fill(.primary).frame(width: 22, height: 22)
+          .accessibilityHidden(true)
+        Text("Apple on-device model").font(.headline)
         Spacer()
         Button(checking ? "Checking…" : "Check availability") { Task { await refresh(announce: true) } }
           .disabled(checking)

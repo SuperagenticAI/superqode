@@ -28,13 +28,21 @@ struct CredentialStore {
         + " You can use a key for this session without saving it.")
   }
 
-  func read(_ provider: String) throws -> String? {
+  /// Project restoration may reuse keys that this build can read silently.
+  /// This store uses the macOS login keychain and its legacy access controls.
+  func read(_ provider: String, prompt: Bool = true) throws -> String? {
     var request = query(provider)
     request[kSecReturnData as String] = true
     request[kSecMatchLimit as String] = kSecMatchLimitOne
+    if !prompt {
+      request[kSecUseAuthenticationUI as String] = kSecUseAuthenticationUIFail
+    }
     var result: CFTypeRef?
     let status = SecItemCopyMatching(request as CFDictionary, &result)
     if status == errSecItemNotFound { return nil }
+    if !prompt && (status == errSecInteractionNotAllowed || status == errSecUserCanceled || status == errSecAuthFailed) {
+      return nil
+    }
     guard status == errSecSuccess, let data = result as? Data,
       let key = String(data: data, encoding: .utf8)
     else { throw failure(status) }

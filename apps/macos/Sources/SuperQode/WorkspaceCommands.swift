@@ -26,9 +26,9 @@ import AppKit
       .init(action: .openProject, title: "Open Project…", detail: "Choose a local repository",
         symbol: "folder.badge.plus", keywords: "repository folder", key: "o",
         disabledReason: engineReason ?? idleReason),
-      .init(action: .newTask, title: "New Task", detail: "Start composing a task",
-        symbol: "square.and.pencil", keywords: "new chat conversation", key: "n",
-        disabledReason: projectReason ?? idleReason),
+      .init(action: .newTask, title: "New Thread", detail: "Start a conversation and choose its connection",
+        symbol: "square.and.pencil", keywords: "new chat conversation thread", key: "n",
+        disabledReason: engineReason ?? idleReason),
       .init(action: .section("Agent activity"), title: "All Work",
         detail: "See project threads and connect external session history",
         symbol: "square.stack.3d.up", keywords: "fleet agents activity threads all projects working blocked needs attention external codex history sessions",
@@ -131,8 +131,11 @@ import AppKit
     switch action {
     case .openProject: chooseProject()
     case .newTask:
-      selectJob("", targetSection: "Workspace")
-      showWelcome = false
+      if !project.isEmpty {
+        selectJob("", targetSection: "Workspace")
+        showWelcome = false
+      }
+      openConnections()
     case .sendToThread: openSendToThread(source: selectedJob)
     case .connect: openConnections()
     case .connectionPage(let page): openConnections(page)
@@ -157,7 +160,7 @@ import AppKit
       default: destinationSection = "Workspace"
       }
       selectJob(id, targetSection: destinationSection)
-    case .project(let path): perform { try await self.open(path) }
+    case .project(let path): openProjectInAgentSpace(path)
     }
   }
 }

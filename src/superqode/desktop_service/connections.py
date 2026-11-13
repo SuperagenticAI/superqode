@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 from superqode.providers.credentials import provider_api_key
-from superqode.providers.dynamic import resolve_base_url
+from superqode.providers.dynamic import connect_provider_ids, resolve_base_url, resolve_provider_def
 from superqode.providers.model_studio import (
     METERED_PROVIDERS,
     is_plan_model,
@@ -11,23 +11,29 @@ from superqode.providers.model_studio import (
     validate_metered_route,
     validate_workspace_endpoint,
 )
+from superqode.providers.models import catalog_examples
 from superqode.providers.registry import PROVIDERS, ProviderTier
 
 # These definitions use multiple, unrelated fields rather than one API key.
-ADVANCED_AUTH = {"bedrock", "azure", "vertex", "cloudflare"}
+ADVANCED_AUTH = {"amazon-bedrock", "azure", "vertex", "cloudflare"}
 
 
-def key_provider(provider_id: str):
-    definition = PROVIDERS.get(provider_id)
-    if (
+def _accepts_key(definition) -> bool:
+    return not (
         not definition
         or not definition.env_vars
         or definition.harness_only
         or definition.auth_mode != "byok"
-        or definition.tier == ProviderTier.LOCAL
-        or provider_id in ADVANCED_AUTH
+        or (definition.tier == ProviderTier.LOCAL and definition.deployment_mode != "cloud")
+        or definition.id in ADVANCED_AUTH
+        or (definition.id not in PROVIDERS and len(definition.env_vars) != 1)
         or any("BASE" in field or "CREDENTIALS" in field for field in definition.env_vars)
-    ):
+    )
+
+
+def key_provider(provider_id: str):
+    definition = resolve_provider_def(provider_id)
+    if not _accepts_key(definition):
         raise ValueError("This provider requires its existing local authentication workflow")
     return definition
 
@@ -106,46 +112,57 @@ def environment(credentials: dict[str, str]) -> dict[str, str]:
     return output
 
 
-def list_connections(credentials: dict[str, str], endpoints: dict[str, str] | None = None):
+def list_connections(
+    credentials: dict[str, str],
+    endpoints: dict[str, str] | None = None,
+    *,
+    include_models: bool = True,
+):
     result = []
-    for definition in PROVIDERS.values():
-        if definition.harness_only:
+    for provider_id in connect_provider_ids():
+        definition = resolve_provider_def(provider_id)
+        if definition is None:
             continue
-        try:
-            key_provider(definition.id)
-            accepts_key = True
-        except ValueError:
-            accepts_key = False
         configured = definition.id in credentials or bool(provider_api_key(definition))
         local = definition.tier == ProviderTier.LOCAL and definition.deployment_mode != "cloud"
         configured_endpoint = (endpoints or {}).get(definition.id)
-        result.append(
-            {
-                "id": definition.id,
-                "name": definition.name,
-                "local": local,
-                "key_supported": accepts_key,
-                "credential_configured": configured,
-                "credential_source": "desktop session"
-                if definition.id in credentials
-                else "existing local configuration"
-                if configured
-                else "not configured",
-                "example_models": definition.example_models,
-                "docs_url": definition.docs_url,
-                "category": definition.category.value,
-                "notes": definition.notes,
-                "credential_variables": list(definition.env_vars),
-                "default_base_url": definition.default_base_url,
-                "workspace_base_url": configured_endpoint or resolve_base_url(definition)
-                if definition.id in METERED_PROVIDERS
-                else None,
-                "workspace_endpoint_override": configured_endpoint,
-                "base_url_env": definition.base_url_env or "",
-                "verified": False,
-            }
-        )
+        row = {
+            "id": definition.id,
+            "name": definition.name,
+            "local": local,
+            "curated": definition.id in PROVIDERS,
+            "key_supported": _accepts_key(definition),
+            "credential_configured": configured,
+            "credential_source": "desktop session"
+            if definition.id in credentials
+            else "existing local configuration"
+            if configured
+            else "not configured",
+            "docs_url": definition.docs_url,
+            "category": definition.category.value,
+            "notes": definition.notes,
+            "credential_variables": list(definition.env_vars),
+            "optional_credential_variables": list(definition.optional_env),
+            "default_base_url": definition.default_base_url,
+            "workspace_base_url": configured_endpoint or resolve_base_url(definition)
+            if definition.id in METERED_PROVIDERS
+            else None,
+            "workspace_endpoint_override": configured_endpoint,
+            "base_url_env": definition.base_url_env or "",
+            "verified": False,
+        }
+        if include_models:
+            row.update(connection_catalog(definition.id))
+        result.append(row)
     return result
+
+
+def connection_catalog(provider_id: str) -> dict:
+    examples = catalog_examples(provider_id)
+    return {
+        "example_models": [model_id for model_id, _label in examples],
+        "example_model_labels": [label for _model_id, label in examples],
+    }
 
 
 def inspect_route(credentials: dict[str, str], params: dict):
@@ -177,20 +194,21 @@ def inspect_route(credentials: dict[str, str], params: dict):
             if found
             else "Model not found. Open Ollama, install the model, then refresh.",
         }
-    row = next((row for row in list_connections(credentials) if row["id"] == provider), None)
-    if not row:
+    definition = resolve_provider_def(provider)
+    if not definition:
         return {
             "ready": False,
             "state": "unknown-provider",
             "message": "This provider is not in the installed engine catalog.",
         }
-    if row["local"]:
+    if definition.tier == ProviderTier.LOCAL and definition.deployment_mode != "cloud":
         return {
             "ready": None,
             "state": "needs-test",
             "message": "Local server route configured. Run a test to verify the model and server.",
         }
-    if row["key_supported"] and not row["credential_configured"]:
+    configured = provider in credentials or bool(provider_api_key(definition))
+    if _accepts_key(definition) and not configured:
         return {
             "ready": False,
             "state": "missing-credential",
@@ -200,6 +218,6 @@ def inspect_route(credentials: dict[str, str], params: dict):
         "ready": None,
         "state": "needs-test",
         "message": "Credential configured; not verified."
-        if row["credential_configured"]
+        if configured
         else "This provider uses an existing local authentication workflow. Run a test to verify it.",
     }
