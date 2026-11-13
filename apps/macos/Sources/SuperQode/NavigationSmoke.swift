@@ -37,7 +37,7 @@ import Foundation
     @MainActor func mountedRuntimeEndpoint() -> NSTextField? {
       @MainActor func find(in view: NSView) -> NSTextField? {
         if let field = view as? NSTextField,
-          field.placeholderString == "Local base URL, e.g. http://127.0.0.1:8000/v1" { return field }
+          field.identifier?.rawValue == "local.runtime.endpoint" { return field }
         return view.subviews.lazy.compactMap { find(in: $0) }.first
       }
       guard let content = NSApp.windows.first(where: { $0.title == "SuperQode" })?.contentView else { return nil }
@@ -117,7 +117,7 @@ import Foundation
         && initialRuntimeEndpoint?.stringValue == unsavedEndpoint
       if let initialRuntimeEndpoint { editEndpoint(initialRuntimeEndpoint, value: originalEndpoint) }
       guard runtimeFormPreserved else {
-        throw EngineError(message: "Navigation discarded the unsaved Local AI runtime endpoint")
+        throw EngineError(message: "Navigation discarded the unsaved Local AI runtime endpoint (found: \(initialRuntimeEndpoint != nil), retained: \(mountedRuntimeEndpoint() === initialRuntimeEndpoint), draft checks passed: \(runtimeFormPreserved))")
       }
       return ["section_changes": sections.count * passes, "worst_ui_heartbeat_ms": worstTick * 1000,
         "local_runtime_form_preserved": runtimeFormPreserved,

@@ -1,6 +1,44 @@
 import AppKit
 import SwiftUI
 
+/// Keep URL edits in a stable native field, including across hidden-page updates.
+struct LocalRuntimeEndpointField: NSViewRepresentable {
+  @Binding var value: String
+  @Environment(\.isEnabled) private var enabled
+
+  final class Coordinator: NSObject, NSTextFieldDelegate {
+    var parent: LocalRuntimeEndpointField
+    init(_ parent: LocalRuntimeEndpointField) { self.parent = parent }
+
+    func controlTextDidChange(_ notification: Notification) {
+      guard let field = notification.object as? NSTextField, field.isEnabled else { return }
+      parent.value = field.stringValue
+    }
+
+    func update(_ field: NSTextField, parent: LocalRuntimeEndpointField, enabled: Bool) {
+      self.parent = parent
+      if field.stringValue != parent.value { field.stringValue = parent.value }
+      if field.isEnabled != enabled { field.isEnabled = enabled }
+      if !enabled && field.currentEditor() != nil { field.window?.makeFirstResponder(nil) }
+    }
+  }
+
+  func makeCoordinator() -> Coordinator { Coordinator(self) }
+  func makeNSView(context: Context) -> NSTextField {
+    let field = NSTextField()
+    field.identifier = NSUserInterfaceItemIdentifier("local.runtime.endpoint")
+    field.placeholderString = "Local base URL, e.g. http://127.0.0.1:8000/v1"
+    field.bezelStyle = .roundedBezel
+    field.setAccessibilityLabel("Local base URL")
+    field.delegate = context.coordinator
+    context.coordinator.update(field, parent: self, enabled: enabled)
+    return field
+  }
+  func updateNSView(_ field: NSTextField, context: Context) {
+    context.coordinator.update(field, parent: self, enabled: enabled)
+  }
+}
+
 @MainActor final class LocalRuntimeLibrary: ObservableObject {
   @Published var profiles: [[String: Any]] = []
   @Published var templates: [[String: Any]] = []
@@ -174,8 +212,7 @@ struct LocalRuntimeWorkspace: View {
         }
         TextField("Profile name", text: $name).textFieldStyle(.roundedBorder)
       }
-      TextField("Local base URL, e.g. http://127.0.0.1:8000/v1", text: $endpoint).textFieldStyle(.roundedBorder)
-        .accessibilityIdentifier("local.runtime.endpoint")
+      LocalRuntimeEndpointField(value: $endpoint).frame(height: 24)
       HStack {
         SecureField("Local API key (optional)", text: $apiKey).textFieldStyle(.roundedBorder)
         Toggle("Save in Keychain", isOn: $rememberKey).toggleStyle(.checkbox)
