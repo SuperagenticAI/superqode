@@ -8,26 +8,73 @@ struct LocalQuickStartView: View {
   var embedded = false
   var active = true
   var showInstalled = true
-  @State private var hardware: [String: Any] = [:]
-  @State private var engines: [[String: Any]] = []
-  @State private var warnings: [String] = []
+  @State private var form: LocalQuickStartDraft
+  init(project: String, embedded: Bool = false, active: Bool = true, showInstalled: Bool = true, form: LocalQuickStartDraft? = nil) {
+    self.project = project; self.embedded = embedded; self.active = active; self.showInstalled = showInstalled
+    _form = State(initialValue: form ?? LocalQuickStartDraft())
+  }
+  private var hardware: [String: Any] {
+    get { form.hardware }
+    nonmutating set { form.hardware = newValue }
+  }
+  private var engines: [[String: Any]] {
+    get { form.engines }
+    nonmutating set { form.engines = newValue }
+  }
+  private var warnings: [String] {
+    get { form.warnings }
+    nonmutating set { form.warnings = newValue }
+  }
   @State private var learnMore = false
   @State private var advanced = false
   @State private var operation: [String: Any]?
-  @State private var operationJob = ""
-  @State private var operationStatus = ""
+  private var operationJob: String {
+    get { form.operationJob }
+    nonmutating set { form.operationJob = newValue }
+  }
+  private var operationStatus: String {
+    get { form.operationStatus }
+    nonmutating set { form.operationStatus = newValue }
+  }
   @State private var showOperationLog = false
-  @State private var choices: [[String: Any]] = []
-  @State private var presets: [[String: Any]] = []
-  @State private var selection = ""
-  @State private var step: [String: Any] = [:]
-  @State private var failure = ""
+  private var choices: [[String: Any]] {
+    get { form.choices }
+    nonmutating set { form.choices = newValue }
+  }
+  private var presets: [[String: Any]] {
+    get { form.presets }
+    nonmutating set { form.presets = newValue }
+  }
+  private var selection: String {
+    get { form.selection }
+    nonmutating set { form.selection = newValue }
+  }
+  private var step: [String: Any] {
+    get { form.step }
+    nonmutating set { form.step = newValue }
+  }
+  private var failure: String {
+    get { form.failure }
+    nonmutating set { form.failure = newValue }
+  }
   @State private var busy = false
-  @State private var progress: [String: Any] = [:]
-  @State private var output = ""
-  @State private var command = UUID().uuidString
+  private var progress: [String: Any] {
+    get { form.progress }
+    nonmutating set { form.progress = newValue }
+  }
+  private var output: String {
+    get { form.output }
+    nonmutating set { form.output = newValue }
+  }
+  private var command: String {
+    get { form.command }
+    nonmutating set { form.command = newValue }
+  }
   @State private var closed = false
-  @State private var showSetup = false
+  private var showSetup: Bool {
+    get { form.showSetup }
+    nonmutating set { form.showSetup = newValue }
+  }
   private var state: String { string(step, "step") }
   private var plan: [String: Any] { step["plan"] as? [String: Any] ?? [:] }
   private var validProject: Bool { app.projectID == project && !closed && !app.openingProject }
@@ -47,10 +94,10 @@ struct LocalQuickStartView: View {
         if !embedded { Button("Advanced…") { advanced = true } }
       }
       if showInstalled {
-        InstalledLocalModelPicker(project: project, dismissOnUse: !embedded, active: active)
+        InstalledLocalModelPicker(project: project, dismissOnUse: !embedded, active: active, form: form.installed)
           .id(project)
-        if embedded { LocalRuntimeWorkspace(active: active).id("local.runtimes") }
-        DisclosureGroup(isExpanded: $showSetup) {
+        if embedded { LocalRuntimeWorkspace(active: active, form: form.runtime).id("local.runtimes") }
+        DisclosureGroup(isExpanded: $form.showSetup) {
           VStack(alignment: .leading, spacing: 16) {
             LocalAINotice(learnMore: $learnMore)
             setupGuide
@@ -115,7 +162,7 @@ struct LocalQuickStartView: View {
       Text("Download a starter model only when it is not already installed. Review each install, download and load before it runs.").foregroundStyle(.secondary)
       CatalogPopup(label: "Model", options: setupChoices.map { row in
         CatalogPopupOption(id: string(row, "id"), title: string(row, "name") + " · " + string(row["fit"] as? [String: Any] ?? [:], "rating", "Unknown"))
-      }, selection: $selection, placeholder: "Choose a model or preset")
+      }, selection: $form.selection, placeholder: "Choose a model or preset")
         .disabled(busy || state == "working")
       if let row = choices.first(where: { string($0, "id") == selection }) {
         Text(string(row, "detail")).font(.callout).foregroundStyle(.secondary)
@@ -289,7 +336,7 @@ struct LocalQuickStartView: View {
         output = string(row, "title") + " · " + string(row, "status")
         if changed && ["completed", "failed", "cancelled"].contains(string(row, "status")) { await load() }
       }
-    } catch { failure = error.localizedDescription }
+    } catch { if !Task.isCancelled { failure = error.localizedDescription } }
   }
 
   private var downloads: [[String: Any]] { choices.filter { $0["installed"] as? Bool != true && $0["setup_preset"] == nil } }
@@ -330,7 +377,7 @@ struct LocalQuickStartView: View {
       } else {
         selection = saved
       }
-    } catch { failure = error.localizedDescription }
+    } catch { if !Task.isCancelled { failure = error.localizedDescription } }
   }
   private func refresh(retry: Bool = false) async {
     let selected = selection
@@ -358,7 +405,7 @@ struct LocalQuickStartView: View {
       let job = try await app.engine.call("local.models.quickstart.start", ["project": project, "choice": selection, "plan": string(plan, "id"), "expected_digest": string(plan, "digest"), "command_id": command]) as? [String: Any] ?? [:]
       guard validProject else { return }
       step = ["step": "working", "job": string(job, "id")]; output = ""; failure = ""
-    } catch { failure = error.localizedDescription }
+    } catch { if !Task.isCancelled { failure = error.localizedDescription } }
   }
   private func useModel() async {
     guard validProject else { return }
@@ -372,7 +419,7 @@ struct LocalQuickStartView: View {
       try await app.warmLocalModel(
         endpoint: string(result, "endpoint"), model: string(result, "model"), server: string(result, "provider"))
       app.section = "Workspace"; closed = true; dismiss()
-    } catch { failure = error.localizedDescription }
+    } catch { if !Task.isCancelled { failure = error.localizedDescription } }
   }
   private func connect(_ requested: String) async throws -> [String: Any] {
     do {

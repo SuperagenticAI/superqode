@@ -70,21 +70,65 @@ struct LocalRuntimeEndpointField: NSViewRepresentable {
 struct LocalRuntimeWorkspace: View {
   @EnvironmentObject var app: Workspace
   var active = true
+  @State private var form: LocalRuntimeDraft
+  init(active: Bool = true, form: LocalRuntimeDraft? = nil) {
+    self.active = active
+    _form = State(initialValue: form ?? LocalRuntimeDraft())
+  }
   @StateObject private var library = LocalRuntimeLibrary()
   @State private var restoringProfile = false
-  @State private var template = "vllm-metal"
-  @State private var identity = UUID().uuidString.lowercased()
-  @State private var name = "vLLM Metal"
-  @State private var endpoint = "http://127.0.0.1:8000/v1"
-  @State private var context = 8192
-  @State private var capability = "unknown"
-  @State private var apiKey = ""
-  @State private var rememberKey = false
-  @State private var includeUsage = true
-  @State private var models: [[String: Any]] = []
-  @State private var model = ""
-  @State private var coding = false
-  @State private var harness = "core"
+  private var template: String {
+    get { form.template }
+    nonmutating set { form.template = newValue }
+  }
+  private var identity: String {
+    get { form.identity }
+    nonmutating set { form.identity = newValue }
+  }
+  private var name: String {
+    get { form.name }
+    nonmutating set { form.name = newValue }
+  }
+  private var endpoint: String {
+    get { form.endpoint }
+    nonmutating set { form.endpoint = newValue }
+  }
+  private var context: Int {
+    get { form.context }
+    nonmutating set { form.context = newValue }
+  }
+  private var capability: String {
+    get { form.capability }
+    nonmutating set { form.capability = newValue }
+  }
+  private var apiKey: String {
+    get { form.apiKey }
+    nonmutating set { form.apiKey = newValue }
+  }
+  private var rememberKey: Bool {
+    get { form.rememberKey }
+    nonmutating set { form.rememberKey = newValue }
+  }
+  private var includeUsage: Bool {
+    get { form.includeUsage }
+    nonmutating set { form.includeUsage = newValue }
+  }
+  private var models: [[String: Any]] {
+    get { form.models }
+    nonmutating set { form.models = newValue }
+  }
+  private var model: String {
+    get { form.model }
+    nonmutating set { form.model = newValue }
+  }
+  private var coding: Bool {
+    get { form.coding }
+    nonmutating set { form.coding = newValue }
+  }
+  private var harness: String {
+    get { form.harness }
+    nonmutating set { form.harness = newValue }
+  }
   @State private var harnesses: [[String: Any]] = []
   @State private var busy = false
   @State private var message = ""
@@ -212,7 +256,7 @@ struct LocalRuntimeWorkspace: View {
           CatalogPopupOption(id: "jan", title: "Jan"),
           CatalogPopupOption(id: "gpt4all", title: "GPT4All"),
           CatalogPopupOption(id: "custom", title: "Other compatible server"),
-        ], selection: $template, placeholder: "Choose a setup template")
+        ], selection: $form.template, placeholder: "Choose a setup template")
         .onChange(of: template) { _, next in
           if restoringProfile { restoringProfile = false; return }
           if let row = library.templates.first(where: { string($0, "id") == next }) {
@@ -220,12 +264,12 @@ struct LocalRuntimeWorkspace: View {
             capability = next == "gpt4all" ? "no" : "unknown"; apiKey = ""; rememberKey = false; models = []; model = ""; setup = [:]
           }
         }
-        TextField("Profile name", text: $name).textFieldStyle(.roundedBorder)
+        TextField("Profile name", text: $form.name).textFieldStyle(.roundedBorder)
       }
-      LocalRuntimeEndpointField(value: $endpoint).frame(maxWidth: .infinity).frame(height: 24)
+      LocalRuntimeEndpointField(value: $form.endpoint).frame(maxWidth: .infinity).frame(height: 24)
       HStack {
-        SecureField("Local API key (optional)", text: $apiKey).textFieldStyle(.roundedBorder)
-        Toggle("Save in Keychain", isOn: $rememberKey).toggleStyle(.checkbox)
+        SecureField("Local API key (optional)", text: $form.apiKey).textFieldStyle(.roundedBorder)
+        Toggle("Save in Keychain", isOn: $form.rememberKey).toggleStyle(.checkbox)
       }
       if selected["key_configured"] as? Bool == true {
         HStack {
@@ -243,9 +287,9 @@ struct LocalRuntimeWorkspace: View {
           CatalogPopupOption(id: "unknown", title: "Unknown · check first"),
           CatalogPopupOption(id: "yes", title: "Declared supported"),
           CatalogPopupOption(id: "no", title: "Chat only"),
-        ], selection: $capability, placeholder: "Choose tool support")
+        ], selection: $form.capability, placeholder: "Choose tool support")
       }
-      Toggle("Request token usage from this server", isOn: $includeUsage).font(.caption)
+      Toggle("Request token usage from this server", isOn: $form.includeUsage).font(.caption)
       Text("Disable usage reporting only if an older server rejects stream_options. Missing token counts are shown as unknown.")
         .font(.caption2).foregroundStyle(.secondary)
       Text("Set the context to what the server actually loaded. A model's advertised maximum is not its loaded memory allocation. Keys stay in this session or your Mac Keychain.")
@@ -260,13 +304,13 @@ struct LocalRuntimeWorkspace: View {
         Divider()
         CatalogPopup(label: "Advertised model", options: models.map {
           CatalogPopupOption(id: string($0, "id"), title: string($0, "id"))
-        }, selection: $model, placeholder: "Choose a model")
+        }, selection: $form.model, placeholder: "Choose a model")
         if let row = models.first(where: { string($0, "id") == model }) {
           Text("Context cap: \(row["context"] ?? context) · " + string(row, "context_source")).font(.caption).foregroundStyle(.secondary)
         }
-        Toggle("Use a coding harness", isOn: $coding)
+        Toggle("Use a coding harness", isOn: $form.coding)
         if coding {
-          Picker("Harness", selection: $harness) {
+          Picker("Harness", selection: $form.harness) {
             ForEach(harnesses.filter { $0["selectable"] as? Bool == true }, id: \.projectRowID) { row in Text(string(row, "name")).tag(string(row, "id")) }
           }
           Text("Run the read-only tool check first. It inspects generated-data arguments without executing tools or reading project files.").font(.caption).foregroundStyle(.secondary)

@@ -22,7 +22,7 @@ import Foundation
       guard let content = NSApp.windows.first(where: { $0.title == "SuperQode" })?.contentView else { return nil }
       return find(in: content)
     }
-    /// Both the switcher and unsaved Local AI forms stay mounted while hidden.
+    /// The switcher stays mounted; in-memory drafts outlive hidden content.
     @MainActor func mountedModelsSwitcher() -> NSSegmentedControl? {
       @MainActor func find(in view: NSView) -> NSSegmentedControl? {
         if let control = view as? NSSegmentedControl,
@@ -52,24 +52,28 @@ import Foundation
         if let button = view as? NSButton, button.identifier?.rawValue == "local.runtimes.show" { return button }
         return view.subviews.lazy.compactMap { runtimeButton(in: $0) }.first
       }
+      @MainActor func openForm() async throws -> NSTextField {
+        var opened = false
+        for _ in 0..<100 {
+          try await Task.sleep(for: .milliseconds(30))
+          if let content = NSApp.windows.first(where: { $0.title == "SuperQode" })?.contentView,
+            let button = runtimeButton(in: content), button.isEnabled {
+            button.performClick(nil); opened = true; break
+          }
+        }
+        guard opened else { throw EngineError(message: "Local runtime navigation button did not become available") }
+        var endpoint: NSTextField?
+        for _ in 0..<100 {
+          try await Task.sleep(for: .milliseconds(30))
+          if let field = mountedRuntimeEndpoint(), field.isEnabled { endpoint = field; break }
+        }
+        guard let endpoint else { throw EngineError(message: "Local runtime endpoint did not appear after opening its form") }
+        return endpoint
+      }
       let previous = section
       section = "Models"
       defer { section = previous }
-      var opened = false
-      for _ in 0..<100 {
-        try await Task.sleep(for: .milliseconds(30))
-        if let content = NSApp.windows.first(where: { $0.title == "SuperQode" })?.contentView,
-          let button = runtimeButton(in: content), button.isEnabled {
-          button.performClick(nil); opened = true; break
-        }
-      }
-      guard opened else { throw EngineError(message: "Local runtime navigation button did not become available") }
-      var endpoint: NSTextField?
-      for _ in 0..<100 {
-        try await Task.sleep(for: .milliseconds(30))
-        if let field = mountedRuntimeEndpoint(), field.isEnabled { endpoint = field; break }
-      }
-      guard let endpoint else { throw EngineError(message: "Local runtime endpoint did not appear after opening its form") }
+      let endpoint = try await openForm()
       let original = endpoint.stringValue
       let unsaved = "http://127.0.0.1:49321/v1"
       editEndpoint(endpoint, value: unsaved)
@@ -77,18 +81,12 @@ import Foundation
       section = "Workspace"
       try await Task.sleep(for: .milliseconds(30))
       section = "Models"
-      var restored: NSTextField?
-      for _ in 0..<100 {
-        try await Task.sleep(for: .milliseconds(30))
-        if let field = mountedRuntimeEndpoint(), field.isEnabled { restored = field; break }
-      }
-      let preserved = restored?.stringValue == unsaved
-      if let restored {
-        editEndpoint(restored, value: original)
-        if let scroll = restored.enclosingScrollView {
-          scroll.contentView.scroll(to: .zero)
-          scroll.reflectScrolledClipView(scroll.contentView)
-        }
+      let restored = try await openForm()
+      let preserved = restored.stringValue == unsaved
+      editEndpoint(restored, value: original)
+      if let scroll = restored.enclosingScrollView {
+        scroll.contentView.scroll(to: .zero)
+        scroll.reflectScrolledClipView(scroll.contentView)
       }
       return preserved
     }

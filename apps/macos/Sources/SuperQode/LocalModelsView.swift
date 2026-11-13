@@ -45,6 +45,7 @@ struct ModelsView: View {
   @EnvironmentObject var app: Workspace
   var active = true
   @State private var tab = "local"
+  @State private var localDraft = LocalQuickStartDraft()
   var body: some View {
     VStack(spacing: 0) {
       Picker("Model workspace", selection: $tab) {
@@ -52,7 +53,7 @@ struct ModelsView: View {
         Text("Advanced").tag("advanced")
       }.pickerStyle(.segmented).padding(.horizontal, 28).padding(.top, 20)
       if tab == "local" {
-        LocalQuickStartView(project: app.projectID, embedded: true, active: active).id(app.projectID)
+        if active { LocalQuickStartView(project: app.projectID, embedded: true, active: active, form: localDraft).id(app.projectID) }
       } else { AdvancedLocalAIView(active: active) }
     }
   }

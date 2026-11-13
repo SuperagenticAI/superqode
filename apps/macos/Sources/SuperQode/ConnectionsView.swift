@@ -285,18 +285,50 @@ struct InstalledLocalModelPicker: View {
   var active = true
   /// Local AI keeps a prompt on this page. The connect sheet stays harness, model, then start.
   var showsPrompt = false
-  @State private var models: [[String: Any]] = []
-  @State private var engines: [[String: Any]] = []
-  @State private var harnesses: [[String: Any]] = []
-  @State private var harness = ""
-  @State private var selected = ""
-  @State private var inferenceEngine = ""
-  @State private var failure = ""
+  @State private var form: InstalledLocalDraft
+  init(project: String, dismissOnUse: Bool = false, active: Bool = true, showsPrompt: Bool = false, form: InstalledLocalDraft? = nil) {
+    self.project = project; self.dismissOnUse = dismissOnUse; self.active = active; self.showsPrompt = showsPrompt
+    _form = State(initialValue: form ?? InstalledLocalDraft())
+  }
+  private var models: [[String: Any]] {
+    get { form.models }
+    nonmutating set { form.models = newValue }
+  }
+  private var engines: [[String: Any]] {
+    get { form.engines }
+    nonmutating set { form.engines = newValue }
+  }
+  private var harnesses: [[String: Any]] {
+    get { form.harnesses }
+    nonmutating set { form.harnesses = newValue }
+  }
+  private var harness: String {
+    get { form.harness }
+    nonmutating set { form.harness = newValue }
+  }
+  private var selected: String {
+    get { form.selected }
+    nonmutating set { form.selected = newValue }
+  }
+  private var inferenceEngine: String {
+    get { form.inferenceEngine }
+    nonmutating set { form.inferenceEngine = newValue }
+  }
+  private var failure: String {
+    get { form.failure }
+    nonmutating set { form.failure = newValue }
+  }
   @State private var busy = false
   @State private var progress = ""
   @State private var showDownload = false
-  @State private var step = "harness"
-  @State private var prompt = ""
+  private var step: String {
+    get { form.step }
+    nonmutating set { form.step = newValue }
+  }
+  private var prompt: String {
+    get { form.prompt }
+    nonmutating set { form.prompt = newValue }
+  }
   @State private var serverRequest: [String: Any]?
 
   private var selectable: [[String: Any]] {
@@ -371,7 +403,7 @@ struct InstalledLocalModelPicker: View {
       }
       if !failure.isEmpty { Text(failure).foregroundStyle(.orange).textSelection(.enabled) }
       if showsPrompt && step == "model" && !needsInstall && !preparing {
-        TextField("Describe a change", text: $prompt, axis: .vertical)
+        TextField("Describe a change", text: $form.prompt, axis: .vertical)
           .lineLimit(2...5)
           .textFieldStyle(.roundedBorder)
           .disabled(busy)
@@ -464,7 +496,7 @@ struct InstalledLocalModelPicker: View {
         Text("SuperQode installs this harness in the app. You do not need to install SuperQode or uv yourself.")
           .foregroundStyle(.secondary)
       } else {
-        Picker("Inference engine", selection: $inferenceEngine) {
+        Picker("Inference engine", selection: $form.inferenceEngine) {
           Text("All installed models").tag("")
           Text("Ollama").tag("ollama")
           Text("LM Studio").tag("lmstudio")
@@ -590,7 +622,7 @@ struct InstalledLocalModelPicker: View {
         selected = string(visibleModels.first ?? [:], "id")
       }
       failure = ""
-    } catch { failure = error.localizedDescription }
+    } catch { if !Task.isCancelled { failure = error.localizedDescription } }
   }
 
   private func installSelected() async {
