@@ -206,10 +206,14 @@ struct LocalRuntimeWorkspace: View {
         }
       }
       HStack {
-        Picker("Setup template", selection: $template) {
-          Text("vLLM Metal").tag("vllm-metal"); Text("oMLX").tag("omlx")
-          Text("Jan").tag("jan"); Text("GPT4All").tag("gpt4all"); Text("Other compatible server").tag("custom")
-        }.onChange(of: template) { _, next in
+        CatalogPopup(label: "Setup template", options: [
+          CatalogPopupOption(id: "vllm-metal", title: "vLLM Metal"),
+          CatalogPopupOption(id: "omlx", title: "oMLX"),
+          CatalogPopupOption(id: "jan", title: "Jan"),
+          CatalogPopupOption(id: "gpt4all", title: "GPT4All"),
+          CatalogPopupOption(id: "custom", title: "Other compatible server"),
+        ], selection: $template, placeholder: "Choose a setup template")
+        .onChange(of: template) { _, next in
           if restoringProfile { restoringProfile = false; return }
           if let row = library.templates.first(where: { string($0, "id") == next }) {
             identity = UUID().uuidString.lowercased(); name = string(row, "name"); endpoint = string(row, "endpoint")
@@ -230,12 +234,14 @@ struct LocalRuntimeWorkspace: View {
         }
       }
       HStack {
-        Picker("Context cap", selection: $context) {
-          ForEach([2048, 4096, 8192, 16384, 32768, 65536], id: \.self) { Text($0.formatted()).tag($0) }
-        }
-        Picker("Tool capability", selection: $capability) {
-          Text("Unknown · check first").tag("unknown"); Text("Declared supported").tag("yes"); Text("Chat only").tag("no")
-        }
+        CatalogPopup(label: "Context cap", options: [2048, 4096, 8192, 16384, 32768, 65536].map {
+          CatalogPopupOption(id: String($0), title: $0.formatted())
+        }, selection: Binding(get: { String(context) }, set: { if let value = Int($0) { context = value } }), placeholder: "Choose a context cap")
+        CatalogPopup(label: "Tool capability", options: [
+          CatalogPopupOption(id: "unknown", title: "Unknown · check first"),
+          CatalogPopupOption(id: "yes", title: "Declared supported"),
+          CatalogPopupOption(id: "no", title: "Chat only"),
+        ], selection: $capability, placeholder: "Choose tool support")
       }
       Toggle("Request token usage from this server", isOn: $includeUsage).font(.caption)
       Text("Disable usage reporting only if an older server rejects stream_options. Missing token counts are shown as unknown.")

@@ -161,7 +161,9 @@ import Foundation
     var result = try await measure(passes: 3)
     result["first_open"] = firstOpen
     result["local_runtime_form_preserved"] = try await checkRuntimeDraft()
-    guard (result["worst_ui_heartbeat_ms"] as? Double ?? 0) >= 250,
+    let slowestUnprofiled = max(result["worst_ui_heartbeat_ms"] as? Double ?? 0,
+      firstOpen["worst_ui_heartbeat_ms"] as? Double ?? 0)
+    guard slowestUnprofiled >= 250,
       ProcessInfo.processInfo.environment["SUPERQODE_NAV_PROFILE"] == "1" else { return result }
     let arguments = ProcessInfo.processInfo.arguments
     guard let index = arguments.firstIndex(of: "--snapshot-dir"), arguments.count > index + 1 else { return result }

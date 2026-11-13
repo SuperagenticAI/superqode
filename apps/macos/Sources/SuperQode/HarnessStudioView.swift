@@ -160,9 +160,12 @@ struct HarnessStudioView: View {
       ScrollView {
         VStack(alignment: .leading, spacing: 16) {
           Text("Model source").font(.headline)
-          Picker("Source", selection: $library.source) {
-            Text("From definition").tag("definition"); Text("Local server").tag("local"); Text("Provider configuration").tag("provider"); Text("Agent-owned").tag("agent")
-          }
+          CatalogPopup(label: "Source", options: [
+            CatalogPopupOption(id: "definition", title: "From definition"),
+            CatalogPopupOption(id: "local", title: "Local server"),
+            CatalogPopupOption(id: "provider", title: "Provider configuration"),
+            CatalogPopupOption(id: "agent", title: "Agent-owned"),
+          ], selection: $library.source, placeholder: "Choose a source")
           if library.source == "local" {
             Picker("Runtime", selection: $library.localEngine) {
               Text("Ollama").tag("ollama"); Text("LM Studio").tag("lmstudio"); Text("MLX").tag("mlx"); Text("llama.cpp").tag("llama.cpp")
@@ -172,10 +175,9 @@ struct HarnessStudioView: View {
               Button("Load models") { loadModels() }
             }
             if !availableModels.isEmpty {
-              Picker("Available models", selection: $library.model) {
-                Text("Choose a model").tag("")
-                ForEach(availableModels, id: \.self) { Text($0).tag($0) }
-              }
+              CatalogPopup(label: "Available models", options: availableModels.map {
+                CatalogPopupOption(id: $0, title: $0)
+              }, selection: $library.model, placeholder: "Choose a model")
             }
             if !serverFailure.isEmpty { Text(serverFailure).font(.caption).foregroundStyle(.orange) }
             Button("Open Local AI") { app.section = "Models" }

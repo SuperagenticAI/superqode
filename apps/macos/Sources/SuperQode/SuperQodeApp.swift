@@ -460,16 +460,13 @@ struct RouteControls: View {
     HStack(alignment: .bottom, spacing: 12) {
       VStack(alignment: .leading, spacing: 6) {
         Text("HARNESS").font(.system(size: 11, design: .monospaced)).foregroundStyle(.secondary)
-        Picker("Harness", selection: Binding(get: { app.harness }, set: { app.chooseHarness($0) }))
-        {
-          if !allowACP && app.isManaged { Text("Choose a HarnessSpec").tag(app.harness) }
-          ForEach(
-            app.harnesses.filter { allowACP || string($0, "desktop_kind").isEmpty },
-            id: \.projectRowID
-          ) { row in
-            Text(string(row, "name")).tag(string(row, "id"))
-          }
-        }.labelsHidden().frame(minWidth: 170)
+        CatalogPopup(label: "Harness", options:
+          (!allowACP && app.isManaged ? [CatalogPopupOption(id: app.harness, title: "Choose a HarnessSpec")] : [])
+          + app.harnesses.filter { allowACP || string($0, "desktop_kind").isEmpty }.map {
+            CatalogPopupOption(id: string($0, "id"), title: string($0, "name"))
+          }, selection: Binding(get: { app.harness }, set: { app.chooseHarness($0) }),
+          placeholder: "Choose a harness")
+          .frame(minWidth: 170)
       }
       VStack(alignment: .leading, spacing: 6) {
         Text("PROVIDER").font(.system(size: 11, design: .monospaced)).foregroundStyle(.secondary)
