@@ -1,4 +1,11 @@
-# SuperQode for macOS public beta 0.4.9
+# SuperQode for macOS public beta 0.4.10
+
+Version 0.4.10 (build 36) bundles Python engine 2.31.17.
+
+- The bundled engine includes the SystemOne terminal commands and narrow-terminal layout fixes.
+- Choose TypeSafe Jev, Google Gemini Decision, or OpenAI Decisions separately from your coding model. Agent activity shows each SystemOne tool check and its outcome.
+
+## 0.4.9 (build 35)
 
 Version 0.4.9 (build 35) bundles Python engine 2.31.16.
 

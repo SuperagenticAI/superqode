@@ -7,6 +7,19 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [2.31.17] - 2026-11-14
+
+### Added
+
+- SystemOne supports Google Gemini Decision and OpenAI Decisions alongside TypeSafe Jev. Choose the decision provider separately from the coding model in the CLI, TUI, and Mac app.
+
+### Fixed
+
+- Mac Agent activity shows SystemOne tool decisions as they stream. The setup screen shows provider logos and available models, and saving decision keys to Keychain is opt-in.
+- The TUI command list and dispatcher expose SystemOne decision evaluation, provider listing, and the decision routing server.
+- SystemOne provider links and environment variables are covered in the reference, and the connection menu fits narrow terminals.
+- macOS 0.4.10 (build 36) bundles Python engine 2.31.17.
+
 ## [2.31.16] - 2026-11-14
 
 ### Added

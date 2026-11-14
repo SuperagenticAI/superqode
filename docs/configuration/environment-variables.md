@@ -48,6 +48,12 @@ Every `SUPERQODE_*` variable in one place. Most behavior is configurable per-har
 | `SUPERQODE_SYSTEMONE_MODE` | `enforce`/`shadow` | per harness | Override whether Jev tool-gate decisions enforce or only observe policy. |
 | `SUPERQODE_SYSTEMONE_TOOL_SEARCH` | `off`/`shadow`/`rerank` | per harness | Override Jev's role in deferred tool selection. |
 | `SUPERQODE_SYSTEMONE_TRACE_DIR` | path | unset | Write sanitized System One decision and tool-search traces. |
+| `SUPERQODE_SYSTEMONE_PROVIDER` | `typesafe`/`google`/`openai` | per harness | Select the decision provider. |
+| `SUPERQODE_SYSTEMONE_MODEL` | model ID | per provider | Select the decision model. |
+| `SUPERQODE_SYSTEMONE_ENDPOINT` | URL | per provider | Override the decision endpoint. Google and OpenAI require their documented endpoints. |
+| `SUPERQODE_SYSTEMONE_API_KEY_ENV` | environment variable name | per provider | Read the decision credential from the named variable. |
+| `SUPERQODE_SYSTEMONE_POLICY_REVIEWED` | boolean | per harness | Acknowledge that the configured decision policy has been reviewed. |
+| `SUPERQODE_SYSTEMONE_RECORD_DIR` | path | unset | Save decision API outcomes and redacted request evidence for replay. |
 | `SUPERQODE_TOOL_ROUTING` | `off`/`shadow`/`enforce` | `off` | Ask Jev once per native SuperQode turn which tool schemas are needed. Shadow records the decision; enforce sends only the selected schemas. Missing credentials and decision failures keep the full list. |
 | `SUPERQODE_TOOL_ROUTING_THRESHOLD` | float from `0` to `1` | `0.30` | Minimum Jev Noul probability for a non-core tool to remain visible. |
 | `SUPERQODE_TOOL_ROUTING_TIMEOUT_MS` | positive integer | `1500` | Deadline for the once-per-turn Jev routing decision. |

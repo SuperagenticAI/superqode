@@ -4694,6 +4694,8 @@ class CommandImplMixin:
             "auto-bench",
             "candidates",
             "compile",
+            "decision",
+            "decision-providers",
             "diff",
             "drain",
             "eval",

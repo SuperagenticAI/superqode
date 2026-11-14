@@ -138,6 +138,10 @@ model routes, and `jev` opens Jev Tool Routing setup. See the
 [SystemOne guide](../advanced/systemone.md) and
 [Jev Tool Routing guide](../advanced/jev-tool-routing.md).
 
+Use `:connect systemone-google` for Gemini Decision or `:connect systemone-openai`
+for OpenAI Decisions. Both use a decision API key. See the
+[decision provider guide](../advanced/systemone-providers.md).
+
 | Root option | What it asks | What it opens |
 | --- | --- | --- |
 | `:connect agents` | Use an agent you already have | Vendor coding agents, the full ACP catalog, and optional harness integrations |

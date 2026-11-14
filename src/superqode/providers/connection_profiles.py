@@ -537,7 +537,7 @@ _ROOT_PROFILES.append(
     ConnectionProfile(
         id="systemone-models",
         label="Connect with SystemOne models",
-        description="Typed decisions with TypeSafe Jev, Google, or OpenAI",
+        description="Decisions with TypeSafe, Google, and OpenAI",
         connector="systemone-picker",
         detect=lambda: True,
     )

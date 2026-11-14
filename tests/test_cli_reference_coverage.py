@@ -216,6 +216,8 @@ def test_every_connection_profile_has_a_sidebar_page(monkeypatch):
         "protocol-uhp": "providers/uhp.md",
         "models": "providers/index.md",
         "systemone-models": "advanced/systemone.md",
+        "systemone-google": "advanced/systemone-providers.md",
+        "systemone-openai": "advanced/systemone-providers.md",
         "build": "concepts/modes.md",
         "harness-core": "concepts/modes.md",
         "harness-systemone": "advanced/systemone.md",
@@ -404,6 +406,9 @@ def test_superqode_environment_variables_are_in_the_environment_reference():
         "SUPERQODE_DESKTOP_TOOL_SECRETS",
         "SUPERQODE_DESKTOP_PARENT_PID",
         "SUPERQODE_DESKTOP_LEASE_FD",
+        "SUPERQODE_SYSTEMONE_API_KEY",
+        # Prefix used when filtering inherited overrides.
+        "SUPERQODE_SYSTEMONE_",
     }
 
     source_names = set(re.findall(r"SUPERQODE_[A-Z0-9_]+", source_text))
