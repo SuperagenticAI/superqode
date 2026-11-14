@@ -874,13 +874,63 @@ class DesktopService:
                     )
                     credential_env = {name: key for name in route["env_vars"]}
                     secrets = tuple(sorted(set(secrets) | {key}, key=len, reverse=True))
+                decision_key_env = ""
+                decision_environment = {}
                 if (
-                    "systemone" in str(params.get("harness") or "")
-                    and "systemone" in self.vendor_keys
-                    and not (params.get("_desktop_route") or params.get("_desktop_connection"))
+                    kind != "check"
+                    and params.get("harness")
+                    and not (
+                        params.get("_desktop_route")
+                        or params.get("_desktop_connection")
+                        or params.get("_local_harness")
+                    )
                 ):
-                    credential_env["TYPESAFE_API_KEY"] = self.vendor_keys["systemone"]
-                    secrets = tuple(set(secrets) | {self.vendor_keys["systemone"]})
+                    from superqode.systemone.config import resolve_systemone
+                    from superqode.harness.catalog import resolve_harness
+
+                    decision_spec = resolve_harness(params["harness"], root=root).spec
+                    if kind == "tuning":
+                        from .tuning import directory as tuning_directory
+                        from superqode.systemone.tune import load_run
+                        from superqode.harness.loader import harness_spec_from_dict
+
+                        manifest = load_run(
+                            tuning_directory(self.root, project_id, str(params["id"]))
+                        )
+                        if manifest.get("harness"):
+                            decision_spec = harness_spec_from_dict(manifest["harness"])
+                    decision = resolve_systemone(
+                        spec=decision_spec,
+                        environ={
+                            name: value
+                            for name, value in os.environ.items()
+                            if not name.startswith("SUPERQODE_SYSTEMONE_")
+                            and name != "SUPERQODE_SYSTEMONE"
+                        },
+                    )
+                    if decision.enabled and decision.client == "live":
+                        decision_key_env = decision.api_key_env
+                        decision_environment.update(
+                            {
+                                "SUPERQODE_SYSTEMONE_PROVIDER": decision.provider,
+                                "SUPERQODE_SYSTEMONE_MODEL": decision.model,
+                                "SUPERQODE_SYSTEMONE_ENDPOINT": decision.endpoint,
+                                "SUPERQODE_SYSTEMONE_API_KEY_ENV": decision.api_key_env,
+                                "SUPERQODE_SYSTEMONE_MODE": decision.mode,
+                                "SUPERQODE_SYSTEMONE_POLICY_REVIEWED": "true"
+                                if decision.policy_reviewed
+                                else "false",
+                            }
+                        )
+                        key = self.vendor_keys.get("systemone:" + decision.provider) or (
+                            self.vendor_keys.get("systemone")
+                            if decision.provider == "typesafe"
+                            else ""
+                        )
+                        if key:
+                            # Separate from the coding provider key, even for the same vendor.
+                            credential_env["SUPERQODE_SYSTEMONE_API_KEY"] = key
+                            secrets = tuple(set(secrets) | {key})
                 if tool_plan:
                     secrets = tuple(set(secrets) | set(tool_plan["secrets"]))
                 if kind == "local-comparison":
@@ -950,8 +1000,9 @@ class DesktopService:
                     if (definition := resolve_provider_def(provider)) is not None
                     for name in (*definition.env_vars, *definition.optional_env)
                 }
-                if kind == "tuning":
-                    allowed.add("TYPESAFE_API_KEY")
+                if decision_key_env:
+                    allowed.add(decision_key_env)
+                    allowed.add("SUPERQODE_SYSTEMONE_API_KEY")
                 if (
                     kind == "local"
                     and params.get("local_plan", {}).get("action") == "download"
@@ -993,6 +1044,7 @@ class DesktopService:
                     cwd=root,
                     env={
                         **inherited,
+                        **decision_environment,
                         **credential_env,
                         "SUPERQODE_DESKTOP_KEY_VARS": json.dumps(sorted(key_vars)),
                         "SUPERQODE_DESKTOP_REMOTE": json.dumps(remote_config),
@@ -1916,7 +1968,26 @@ class DesktopService:
             from .configuration import configured_spec
 
             return configured_spec(self.project(params["project"]), params)
+        if method == "connect.systemone.providers":
+            from superqode.systemone.providers import provider_rows
+
+            return provider_rows()
+        if method == "connect.systemone.configure":
+            from .systemone import configure
+
+            with self.lock:
+                from .ownership import assert_project_idle
+
+                assert_project_idle(self, params["project"])
+                return configure(self, params)
+        if method == "connect.systemone.test":
+            from .systemone import test_decision
+
+            return test_decision(self, params)
         if method == "connect.systemone.key":
+            from superqode.systemone.providers import get_provider
+
+            provider = get_provider(str(params.get("provider") or "typesafe"))
             key = params.get("key")
             if key is not None and (
                 not isinstance(key, str)
@@ -1924,12 +1995,13 @@ class DesktopService:
                 or len(key) > 16000
                 or any(ord(c) < 32 for c in key)
             ):
-                raise ValueError("Enter a valid TypeSafe API key")
+                raise ValueError(f"Enter a valid {provider.label} API key")
+            identity = "systemone" if provider.id == "typesafe" else "systemone:" + provider.id
             if key is None:
-                self.vendor_keys.pop("systemone", None)
+                self.vendor_keys.pop(identity, None)
             else:
-                self.vendor_keys["systemone"] = key.strip()
-            return {"harness": "systemone"}
+                self.vendor_keys[identity] = key.strip()
+            return {"harness": "systemone", "provider": provider.id}
         if method == "connect.vendor.key":
             from .configuration import vendor_key_route
 

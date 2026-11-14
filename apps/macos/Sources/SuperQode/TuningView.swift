@@ -10,6 +10,8 @@ struct TuningView: View {
   @State private var selected = ""
   @State private var source = ""
   @State private var pack = "factory_route"
+  @State private var decisionProvider = "typesafe"
+  @State private var decisionModel = "jev-1.13.0"
   @State private var reflection = "openai/gpt-4.1-mini"
   @State private var evaluations = 30
   @State private var cost = 2.0
@@ -41,6 +43,16 @@ struct TuningView: View {
             }
             Text("Provide at least six distinct examples with state and optional label columns. Unlabeled pools use uncertainty selection plus random audit examples.")
               .font(.caption).foregroundStyle(.secondary)
+            Picker("Decision engine", selection: $decisionProvider) {
+              Text("TypeSafe Jev").tag("typesafe")
+              Text("Google Gemini Decision").tag("google")
+              Text("OpenAI Decisions").tag("openai")
+            }.onChange(of: decisionProvider) { _, value in
+              decisionModel = value == "google" ? "gemini-decision-1" : value == "openai" ? "gpt-6-luna" : "jev-1.13.0"
+            }
+            TextField("Decision model", text: $decisionModel)
+            Text("Uses the selected decision engine’s API key. Decision calls and reflection calls have separate usage charges.")
+              .font(.caption).foregroundStyle(.secondary)
             HStack {
               TextField("Question pack", text: $pack)
               TextField("Reflection provider/model", text: $reflection)
@@ -58,7 +70,7 @@ struct TuningView: View {
                   "max_evals": evaluations, "max_cost": cost, "batch_size": batch])
               }.disabled(blocked || app.projectID.isEmpty)
               Button("Prepare examples") {
-                request("tuning.prepare", ["data": source, "pack": pack,
+                request("tuning.prepare", ["data": source, "pack": pack, "decision_provider": decisionProvider, "decision_model": decisionModel,
                   "reflection_model": reflection, "max_evals": evaluations,
                   "max_cost": cost, "batch_size": batch])
               }.disabled(blocked || source.isEmpty || reflection.isEmpty)
@@ -119,10 +131,13 @@ struct TuningView: View {
         Text("\(String(describing: counts["train"] ?? 0)) train · \(String(describing: counts["validation"] ?? 0)) validation · \(String(describing: counts["test"] ?? 0)) sealed test")
           .font(.caption)
       }
-      Text("Reflection: \(string(options, "reflection_lm")) · up to \(String(describing: options["max_evals"] ?? 0)) optimization evaluations · $\(String(describing: options["max_reflection_cost"] ?? 0)) reflection ceiling. Jev usage, retries and final test evaluations are additional.")
+      Text("Reflection: \(string(options, "reflection_lm")) · up to \(String(describing: options["max_evals"] ?? 0)) optimization evaluations · $\(String(describing: options["max_reflection_cost"] ?? 0)) reflection ceiling. Decision-model usage, retries and final test evaluations are additional.")
+      let decision = current["decision"] as? [String: Any] ?? [:]
+      Text("Decision engine: \(string(decision, "provider", "typesafe")) · \(string(decision, "model", "jev-1.13.0"))")
+        .font(.caption).foregroundStyle(.secondary)
         .font(.caption).foregroundStyle(.secondary)
       if current["needs_acquisition"] as? Bool == true {
-        Text("Select the next review batch using uncertainty and a random audit sample. This makes Jev calls.")
+        Text("Select the next review batch using uncertainty and a random audit sample. This makes decision-model calls.")
         Button("Select examples…") { start("acquire") }.disabled(blocked)
       } else if !example.isEmpty {
         GroupBox("Review example " + string(example, "id")) {
@@ -176,8 +191,8 @@ struct TuningView: View {
     request("tuning.decide", ["id": selected, "revision": string(current, "revision"), "decision": decision])
   }
   private func start(_ stage: String) {
-    guard app.confirm(stage == "acquire" ? "Select examples with Jev?" : "Start live tuning?",
-      "This makes model calls using the saved experiment budgets. Reflection limits exclude Jev usage, retries and final test evaluations. Interrupted runs are not automatically replayed.", button: "Start live run") else { return }
+    guard app.confirm(stage == "acquire" ? "Select examples with the decision engine?" : "Start live tuning?",
+      "This makes model calls using the saved experiment budgets. Reflection limits exclude Decision-model usage, retries and final test evaluations. Interrupted runs are not automatically replayed.", button: "Start live run") else { return }
     app.start("tuning.start", extra: ["id": selected, "revision": string(current, "revision"), "stage": stage, "live": true])
   }
   private func request(_ method: String, _ values: [String: Any]) {

@@ -23,7 +23,14 @@ def validate_evaluator(task: dict[str, Any]) -> None:
     if not isinstance(config, dict):
         raise ValueError("evaluator must be a mapping")
     kind = config.get("type")
-    if kind not in {"decision", "contains", "non_empty", "jev_rubric", "repository"}:
+    if kind not in {
+        "decision",
+        "contains",
+        "non_empty",
+        "jev_rubric",
+        "systemone_rubric",
+        "repository",
+    }:
         raise ValueError(f"Unknown evaluator type: {kind}")
     if kind == "repository":
         from .repository_grader import validate
@@ -31,7 +38,7 @@ def validate_evaluator(task: dict[str, Any]) -> None:
         validate(config)
     if kind == "decision" and not (isinstance(config.get("expected"), dict) and config["expected"]):
         raise ValueError("decision evaluator requires non-empty expected outputs")
-    if kind == "jev_rubric" and not str(config.get("rubric") or "").strip():
+    if kind in {"jev_rubric", "systemone_rubric"} and not str(config.get("rubric") or "").strip():
         raise ValueError("jev_rubric evaluator requires rubric")
     if kind == "contains" and not config.get("expected"):
         raise ValueError("contains evaluator requires expected text")
@@ -47,7 +54,7 @@ async def evaluate_content(content: str, task: dict[str, Any], *, spec=None) -> 
             status="ungraded",
             reason="Repository grading requires an isolated live evaluation workspace",
         )
-    if kind == "jev_rubric":
+    if kind in {"jev_rubric", "systemone_rubric"}:
         from superqode.agent.rubric import evaluate_jev_rubric
 
         result = await evaluate_jev_rubric(config["rubric"], content, spec=spec)

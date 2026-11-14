@@ -31,10 +31,12 @@ async def select_discovery_tools(
         from ..tools.discovery import resolve_discovery_settings
 
         discovery = resolve_discovery_settings(ctx.harness_spec)
-        if discovery.enabled and discovery.judge_backend == "jev":
+        if discovery.enabled and discovery.judge_backend in {"jev", "systemone"}:
             mode = discovery.judge_mode
     except (AttributeError, TypeError, ValueError):
         pass
+    if settings.provider != "typesafe" and not settings.policy_reviewed and mode == "rerank":
+        mode = "shadow"
     if not settings.enabled or mode == "off":
         return matches, {}
     if candidates is not None:
@@ -56,6 +58,7 @@ async def select_discovery_tools(
         "kind": "tool_search",
         "mode": mode,
         "model": settings.model,
+        "provider": settings.provider,
         "timestamp": datetime.now(timezone.utc).isoformat(),
         "session_id": ctx.session_id,
         "candidates": [tool.name for tool in candidate_tools],
@@ -114,7 +117,7 @@ async def select_discovery_tools(
                 selectedTool=options[selected.choice].name if selected.choice in options else None,
                 reason="selected" if accepted and selected.choice in options else "abstain",
             )
-            if mode == "rerank":
+            if mode == "rerank" and (settings.provider == "typesafe" or settings.policy_reviewed):
                 effective = (
                     [(1.0, options[selected.choice])]
                     if accepted and selected.choice in options

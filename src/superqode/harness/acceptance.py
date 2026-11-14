@@ -69,7 +69,7 @@ def heldout_acceptance(report: dict) -> dict:
                 or not isinstance(evaluation, dict)
                 or evaluation.get("status") != row.get("status")
                 or evaluation.get("evaluator")
-                not in ("contains", "decision", "jev_rubric", "repository")
+                not in ("contains", "decision", "jev_rubric", "systemone_rubric", "repository")
                 or not isinstance(evidence, dict)
                 or evidence.get("smoke_only", False) is not False
             ):

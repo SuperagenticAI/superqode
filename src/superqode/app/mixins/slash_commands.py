@@ -57,7 +57,7 @@ class SlashCommandMixin:
 
     def _systemone_cmd(self, args: str, log: ConversationLog) -> None:
         """Show or enable the System One tool gate in this TUI process."""
-        from superqode.systemone.config import LIVE_API_KEY_ENV, SYSTEMONE_ENV, resolve_systemone
+        from superqode.systemone.config import SYSTEMONE_ENV, resolve_systemone
 
         try:
             words = shlex.split(args)
@@ -65,6 +65,54 @@ class SlashCommandMixin:
             log.add_error("Invalid quoting. Use :systemone connect <pack>.")
             return
         action = words[0].lower() if words else ""
+        if action in {"providers", "provider"}:
+            from superqode.systemone.providers import get_provider, provider_rows
+
+            if len(words) == 1:
+                for row in provider_rows():
+                    log.add_system(
+                        f"{row['id']}: {row['label']} · {row['model']} · {row['api_key_env']} · {row['docs']}"
+                    )
+                log.add_system(
+                    "Select: :systemone provider google (or openai/typesafe). API usage is billed separately; cloud decisions send bounded evidence to that provider."
+                )
+                return
+            try:
+                from dataclasses import replace
+                from superqode.harness.templates import systemone_template
+
+                if len(words) not in {2, 3}:
+                    raise ValueError("Use :systemone provider <typesafe|google|openai> [model]")
+                definition = get_provider(words[1])
+                model = words[2] if len(words) == 3 else definition.model
+                if model not in definition.models:
+                    raise ValueError(
+                        "Choose a supported decision model: " + ", ".join(definition.models)
+                    )
+                pure = self._ensure_pure_mode()
+                spec = getattr(pure, "_harness_spec", None) or systemone_template()
+                spec = replace(
+                    spec,
+                    metadata={**spec.metadata, "decision_provider_pinned": True},
+                    systemone=replace(
+                        spec.systemone,
+                        enabled=True,
+                        client="live",
+                        provider=definition.id,
+                        model=model,
+                        endpoint=definition.endpoint,
+                        api_key_env=definition.api_key_env,
+                        mode="shadow",
+                        policy_reviewed=False,
+                    ),
+                )
+                pure.set_harness(spec)
+                log.add_system(
+                    f"{definition.label} selected in shadow mode. Set {definition.api_key_env}; saving this choice makes no model call. Use :systemone connect <pack> for standalone decisions."
+                )
+            except (ValueError, OSError) as exc:
+                log.add_error(str(exc))
+            return
         if action == "tune":
             from superqode.widgets.systemone_tune import SystemOneTuneScreen
 
@@ -107,7 +155,13 @@ class SlashCommandMixin:
 
                     pure.connect_decision(spec=load_harness_spec(words[2]))
                 elif len(words) <= 2:
-                    pure.connect_decision(words[1] if len(words) == 2 else "factory_route")
+                    selected = getattr(getattr(pure, "_harness_spec", None), "systemone", None)
+                    pure.connect_decision(
+                        words[1] if len(words) == 2 else "factory_route",
+                        decision_provider=getattr(selected, "provider", None),
+                    )
+                elif len(words) == 4 and words[2] == "--provider":
+                    pure.connect_decision(words[1], decision_provider=words[3])
                 else:
                     raise ValueError(
                         "Use :systemone connect <pack> or :systemone connect --spec <harness.yaml>"
@@ -119,7 +173,7 @@ class SlashCommandMixin:
             return
         if action not in {"", "status", "live", "shadow", "on", "off", "0"}:
             log.add_error(
-                "Use :systemone [status|discovery|live|shadow|off|packs|tune|connect <pack>]"
+                "Use :systemone [providers|provider <id>|status|discovery|live|shadow|off|packs|tune|connect <pack> [--provider <id>]]"
             )
             return
         spec = None
@@ -128,7 +182,7 @@ class SlashCommandMixin:
         )
         if pure is not None:
             spec = getattr(pure, "_harness_spec", None)
-        key_env = getattr(getattr(spec, "systemone", None), "api_key_env", LIVE_API_KEY_ENV)
+        key_env = resolve_systemone(spec=spec).api_key_env
         key_set = bool(os.environ.get(key_env, "").strip()) if key_env else True
         if action in {"live", "shadow", "on"}:
             if not key_set:
@@ -138,8 +192,21 @@ class SlashCommandMixin:
                 return
             os.environ[SYSTEMONE_ENV] = "live"
             os.environ["SUPERQODE_SYSTEMONE_MODE"] = "shadow" if action == "shadow" else "enforce"
+            if spec is not None and (spec.metadata or {}).get("decision_provider_pinned"):
+                from dataclasses import replace
+
+                spec = replace(
+                    spec,
+                    systemone=replace(
+                        spec.systemone,
+                        client="live",
+                        enabled=True,
+                        mode="shadow" if action == "shadow" else "enforce",
+                    ),
+                )
+                pure.set_harness(spec)
             log.add_system(
-                f"System One {os.environ['SUPERQODE_SYSTEMONE_MODE']} enabled for the native runtime."
+                f"System One {resolve_systemone(spec=spec).mode} enabled for the native runtime. New providers require a reviewed policy before enforcement."
             )
         elif action in {"off", "0"}:
             os.environ[SYSTEMONE_ENV] = "0"
@@ -155,7 +222,8 @@ class SlashCommandMixin:
             and getattr(pure, "runtime_name", "builtin") != "builtin"
         ):
             t.append(
-                "Jev tool checks require the native Core/BYOK runtime.\n", style=THEME["warning"]
+                "SystemOne tool checks require the native Core/BYOK runtime.\n",
+                style=THEME["warning"],
             )
         if last:
             from superqode.systemone.runtime import format_decision
@@ -170,13 +238,17 @@ class SlashCommandMixin:
                 style=THEME["muted"],
             )
             t.append(
-                "  Use your coding provider's key; Jev uses TYPESAFE_API_KEY separately.\n",
+                "  Your coding model and decision engine use independently selected API keys.\n",
                 style=THEME["muted"],
             )
-            t.append("  Simple chat without tools does not call Jev.\n\n", style=THEME["muted"])
+            t.append(
+                "  Simple chat without tools does not call the decision engine.\n\n",
+                style=THEME["muted"],
+            )
         t.append(f"    enabled     {settings.enabled}\n", style=THEME["muted"])
         t.append(f"    mode        {settings.mode}\n", style=THEME["muted"])
         t.append(f"    client      {settings.client}\n", style=THEME["muted"])
+        t.append(f"    provider    {settings.provider}\n", style=THEME["muted"])
         t.append(f"    model       {settings.model}\n", style=THEME["muted"])
         t.append(f"    pack        {settings.pack}\n", style=THEME["muted"])
         t.append(f"    skip        {settings.skip_reason or 'no'}\n", style=THEME["muted"])
@@ -190,7 +262,7 @@ class SlashCommandMixin:
         t.append("\n  Tool discovery\n", style=f"bold {THEME['purple']}")
         t.append(
             f"    {discovery.mode} · {discovery.search_backend} → "
-            f"{discovery.rank_backend} · Jev {discovery.judge_mode} · MCP {discovery.mcp_mode}\n",
+            f"{discovery.rank_backend} · Decision {discovery.judge_mode} · MCP {discovery.mcp_mode}\n",
             style=THEME["muted"],
         )
         if latest_discovery:
@@ -208,7 +280,14 @@ class SlashCommandMixin:
             "\n  :systemone live   turn the sidecar on (needs the API key)\n", style=THEME["dim"]
         )
         t.append("  :systemone off    force the sidecar off\n", style=THEME["dim"])
-        t.append("  :systemone connect <pack>   evaluate directly with Jev\n", style=THEME["dim"])
+        t.append(
+            "  :systemone connect <pack>   evaluate with the selected decision engine\n",
+            style=THEME["dim"],
+        )
+        t.append("  :systemone providers       list decision engines\n", style=THEME["dim"])
+        t.append(
+            "  :systemone provider google select Google (or openai/typesafe)\n", style=THEME["dim"]
+        )
         t.append("  :systemone packs           list decision packs\n", style=THEME["dim"])
         t.append(
             "  :systemone tune            improve decisions from reviewed examples\n",

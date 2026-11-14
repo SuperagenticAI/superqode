@@ -241,7 +241,8 @@ nav:
     - 🔁 Omnigent Compatibility: advanced/omnigent-compat.md
 
   - 🧭 SystemOne Harness:
-    - Jev Integration: advanced/systemone.md
+    - SystemOne Integration: advanced/systemone.md
+    - Decision Providers: advanced/systemone-providers.md
     - Progressive Tool Discovery: advanced/progressive-tool-discovery.md
     - GEPA Jev Optimization: advanced/systemone-tune.md
   - 🧠 Jev Tool Routing:

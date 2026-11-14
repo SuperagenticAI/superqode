@@ -14,7 +14,7 @@ from starlette.requests import Request
 from starlette.responses import JSONResponse, Response
 from starlette.routing import Route
 
-from superqode.systemone.live import LiveSystemOneClient
+from superqode.systemone.config import routing_settings, build_client
 from superqode.systemone.tool_router import (
     SystemOneToolDecisionProvider,
     ToolRouter,
@@ -32,13 +32,27 @@ class RoutingCoordinator:
     """Share one Jev client and turn caches across HTTP and MCP transports."""
 
     def __init__(self, *, api_key: str | None = None, timeout_ms: int = 1500) -> None:
-        key = (api_key if api_key is not None else os.getenv("TYPESAFE_API_KEY", "")).strip()
+        settings = routing_settings(timeout_ms=timeout_ms)
+        if not settings.enabled or settings.client != "live":
+            raise RuntimeError("The routing service requires an enabled live decision client")
+        key = (
+            api_key
+            if api_key is not None
+            else os.getenv("SUPERQODE_SYSTEMONE_API_KEY") or os.getenv(settings.api_key_env, "")
+        ).strip()
         if not key:
-            raise RuntimeError("TYPESAFE_API_KEY is required")
+            raise RuntimeError(f"{settings.api_key_env} is required")
         self.timeout_ms = max(int(timeout_ms), 1)
-        self._provider = SystemOneToolDecisionProvider(
-            LiveSystemOneClient(api_key=key, timeout_ms=self.timeout_ms)
+        from dataclasses import replace
+
+        settings = replace(settings, skip_reason="", enabled=True)
+        client = build_client(settings, api_key=key)
+        if client is None:
+            raise RuntimeError("Decision routing is disabled")
+        self._shadow_only = settings.provider != "typesafe" and (
+            not settings.policy_reviewed or settings.mode == "shadow"
         )
+        self._provider = SystemOneToolDecisionProvider(client)
         self._routers: dict[tuple[str, float], JevToolRouting] = {}
 
     async def route(
@@ -51,6 +65,8 @@ class RoutingCoordinator:
         threshold: float = 0.30,
     ) -> RoutingResult:
         _validate_route_input(request, tools, mode, threshold)
+        if self._shadow_only:
+            mode = "shadow"
         key = (mode, round(float(threshold), 6))
         router = self._routers.get(key)
         if router is None:

@@ -1,4 +1,9 @@
-# Jev Integration
+# SystemOne Integration
+
+SystemOne supports **TypeSafe Jev**, **Google Gemini Decision**, and **OpenAI
+Decisions** across CLI, terminal UI and macOS. See [Decision providers](systemone-providers.md)
+for provider selection, credentials, native setup, routing and tuning. The
+examples below retain TypeSafe defaults for existing Jev configurations.
 
 Open SystemOne from the TUI with `:connect harness-systemone`, or choose its
 model routes with `:connect systemone-models`.
@@ -284,8 +289,9 @@ systemone:
 `endpoint` must implement the System One state/questions/answers wire contract.
 An empty `api_key_env` sends no Authorization header; otherwise set it to the
 name of that service's credential variable. The default endpoint and variable
-are TypeSafe's endpoint and `TYPESAFE_API_KEY`. No other live model adapter or
-local classifier is bundled. The exported async `SystemOneClient` protocol and
+are TypeSafe's endpoint and `TYPESAFE_API_KEY`. Native Google and OpenAI Decisions
+adapters use their own provider-specific endpoints and credentials; no local
+classifier is bundled. The exported async `SystemOneClient` protocol and
 `evaluate_decision` function also support application-supplied Python clients.
 
 Pack, replay, and recording paths in a harness file resolve relative to that

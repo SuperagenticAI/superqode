@@ -1,4 +1,10 @@
-# SystemOne Tune (GEPA Jev optimization)
+# SystemOne Tune (GEPA decision optimization)
+
+Choose TypeSafe Jev, Google Gemini Decision, or OpenAI Decisions as the scorer,
+independently of the reflection model. CLI flags `--decision-provider` and
+`--decision-model`, and the TUI/macOS decision-engine controls, select and save
+the scorer for a new experiment. A supplied decision HarnessSpec overrides the
+picker. See [Decision providers](systemone-providers.md).
 
 Improve a fixed SystemOne decision pack from reviewed examples, then compare the
 candidate on held-out data before you use it. The active harness stays unchanged

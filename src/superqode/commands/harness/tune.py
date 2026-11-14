@@ -14,6 +14,10 @@ from superqode.systemone import tune
 
 @harness.command("tune")
 @click.option(
+    "--decision-provider", type=click.Choice(["typesafe", "google", "openai"]), default=None
+)
+@click.option("--decision-model", default="")
+@click.option(
     "--setup",
     is_flag=True,
     help="Install tested tuning support into SuperQode's Python environment; makes no model calls.",
@@ -78,6 +82,8 @@ from superqode.systemone import tune
     help="Machine-readable result; requires labeled examples and --live for new runs.",
 )
 def harness_tune(
+    decision_provider,
+    decision_model,
     setup,
     spec,
     pack,
@@ -170,6 +176,8 @@ def harness_tune(
                 )
             options = tune.TuneOptions(
                 pack=pack,
+                decision_provider=decision_provider or "",
+                decision_model=decision_model,
                 spec=str(spec or ""),
                 reflection_lm=reflection_lm,
                 max_evals=max_evals,

@@ -16,6 +16,7 @@ import tempfile
 from typing import Any, Mapping, Sequence
 
 from .profiles import get_profile, profiles
+from superqode.systemone.providers import get_provider as get_decision_provider
 
 CONFIG_VERSION = 1
 CONFIG_NAME = "jev-routing.json"
@@ -39,6 +40,9 @@ class LauncherEntry:
     model: str
     mode: str
     threshold: float
+    decision_provider: str = "typesafe"
+    decision_model: str = "jev-1.13.0"
+    policy_reviewed: bool = False
 
     def as_dict(self) -> dict[str, Any]:
         return {
@@ -47,6 +51,17 @@ class LauncherEntry:
             "model": self.model,
             "mode": self.mode,
             "threshold": self.threshold,
+            **(
+                {
+                    "decision_provider": self.decision_provider,
+                    "decision_model": self.decision_model,
+                    "policy_reviewed": self.policy_reviewed,
+                }
+                if self.decision_provider != "typesafe"
+                or self.decision_model != "jev-1.13.0"
+                or self.policy_reviewed
+                else {}
+            ),
         }
 
 
@@ -228,6 +243,26 @@ def enable_launchers(
         except FileExistsError as exc:
             skipped.append({"harness": harness, "reason": str(exc)})
             continue
+        previous = configured.get(harness, {})
+        decision_provider = os.environ.get("SUPERQODE_SYSTEMONE_PROVIDER") or previous.get(
+            "decision_provider", "typesafe"
+        )
+        definition = get_decision_provider(decision_provider)
+        same_provider = decision_provider == previous.get("decision_provider", "typesafe")
+        decision_model = (
+            os.environ.get("SUPERQODE_SYSTEMONE_MODEL")
+            or (previous.get("decision_model") if same_provider else None)
+            or definition.model
+        )
+        if decision_model not in definition.models:
+            raise ValueError("Choose a supported decision model")
+        reviewed = (
+            (os.environ["SUPERQODE_SYSTEMONE_POLICY_REVIEWED"].lower() in {"1", "true", "yes"})
+            if "SUPERQODE_SYSTEMONE_POLICY_REVIEWED" in os.environ
+            else same_provider
+            and decision_model == previous.get("decision_model", definition.model)
+            and previous.get("policy_reviewed") is True
+        )
         entry = LauncherEntry(
             harness=harness,
             launcher=str(launcher),
@@ -235,6 +270,9 @@ def enable_launchers(
             model=chosen_model,
             mode=mode,
             threshold=threshold,
+            decision_provider=decision_provider,
+            decision_model=decision_model,
+            policy_reviewed=reviewed,
         )
         configured[harness] = entry.as_dict()
         enabled.append(entry)
@@ -296,6 +334,8 @@ def launcher_rows(path: Path | None = None) -> list[dict[str, Any]]:
                 "model": str(raw.get("model", "")),
                 "mode": str(raw.get("mode", "shadow")),
                 "threshold": float(raw.get("threshold", 0.30)),
+                "decision_provider": str(raw.get("decision_provider", "typesafe")),
+                "decision_model": str(raw.get("decision_model", "jev-1.13.0")),
                 "executable": shutil.which(harness) or "",
             }
         )
@@ -309,7 +349,18 @@ def launch_arguments(
     raw = data.get("harnesses", {}).get(harness)
     if not isinstance(raw, dict):
         raise ValueError(f"{harness}-jev is not enabled; run superqode optimize enable {harness}")
-    command = ["optimize", "run", harness]
+    command = ["optimize"]
+    if decision_provider := raw.get("decision_provider"):
+        from superqode.systemone.providers import get_provider
+
+        definition = get_provider(str(decision_provider))
+        decision_model = str(raw.get("decision_model") or definition.model)
+        if decision_model not in definition.models:
+            raise ValueError("Saved decision model is unsupported; configure the launcher again")
+        command.extend(["--decision-provider", definition.id, "--decision-model", decision_model])
+        if raw.get("policy_reviewed") is True:
+            command.append("--reviewed-policy")
+    command.extend(["run", harness])
     if provider := str(raw.get("provider", "") or ""):
         command.extend(["--provider", provider])
     if model := str(raw.get("model", "") or ""):

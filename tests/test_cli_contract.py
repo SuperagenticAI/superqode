@@ -12,7 +12,7 @@ import click
 from superqode.main import cli_main
 
 
-EXPECTED_COMMAND_COUNT = 331
+EXPECTED_COMMAND_COUNT = 334
 # Rebaselined for `superqode update` (261 -> 262: exactly one command added),
 # and again for the `copilot-cli` / `grok-cli` subscription runtimes, which
 # widen the --runtime choice list without adding a Click command. The same work
@@ -179,11 +179,13 @@ EXPECTED_COMMAND_COUNT = 331
 # changed. Command count stays 331; both old digests were reproduced first.
 # Connection setup clarifies existing credentials, ACP, and API keys in the
 # root and connect help pages. Both renderers still expose 331 routes.
-EXPECTED_HELP_TREE_SHA256 = "590565befe1f9c21b83bc05f77bb1adf47c156f82b996c594d26d7fea872f633"
+# SystemOne adds decision, decision-providers and serve decisions (331 -> 334).
+# Help fixtures were regenerated without invoking callbacks or running tests.
+EXPECTED_HELP_TREE_SHA256 = "52158843fe080cb23b00d7858a989dbaeb33f2a51a63feda6a88c28945a0c54b"
 # Click 8.5 renders optional group commands as [COMMAND] and case-insensitive
 # choices in lower case. Both verified renders expose the same command tree.
 EXPECTED_MODERN_CLICK_HELP_TREE_SHA256 = (
-    "d314495df95502f2f18bfc3b424d1a596b4574ce0a161b64fa30eb5202a7d603"
+    "de938f9f12100a4187207e25eb937b7d7b40b217da318135efe361ddec644a93"
 )
 
 

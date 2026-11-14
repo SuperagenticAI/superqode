@@ -16,6 +16,16 @@ LIVE_API_KEY_ENV = "TYPESAFE_API_KEY"
 DEFAULT_MODEL = "jev-1.13.0"
 _FALSE = {"0", "false", "off", "no", "disabled"}
 _CLIENTS = {"stub", "replay", "live"}
+SELECTION_ENV = frozenset(
+    {
+        "SUPERQODE_SYSTEMONE_PROVIDER",
+        "SUPERQODE_SYSTEMONE_MODEL",
+        "SUPERQODE_SYSTEMONE_ENDPOINT",
+        "SUPERQODE_SYSTEMONE_API_KEY_ENV",
+        "SUPERQODE_SYSTEMONE_POLICY_REVIEWED",
+        "SUPERQODE_SYSTEMONE_MODE",
+    }
+)
 
 
 @dataclass(frozen=True)
@@ -27,6 +37,8 @@ class SystemOneSettings:
     trace_dir: str = ""
     tool_search_mode: str = "off"
     client: str = "stub"
+    provider: str = "typesafe"
+    policy_reviewed: bool = False
     pack: str = "tool_gate"
     endpoint: str = "https://api.typesafe.ai/v1/systemone"
     api_key_env: str = "TYPESAFE_API_KEY"
@@ -89,13 +101,56 @@ def resolve_systemone(
 ) -> SystemOneSettings:
     """Merge harness spec, AgentConfig.systemone, and env. Env wins on enable."""
     env = environ if environ is not None else os.environ
+    if (getattr(spec, "metadata", None) or {}).get("decision_provider_pinned"):
+        env = {key: value for key, value in env.items() if key not in SELECTION_ENV}
     declared = explicit if explicit is not None else _spec_systemone(spec)
+    from .providers import get_provider
+
+    provider = str(
+        env.get("SUPERQODE_SYSTEMONE_PROVIDER") or getattr(declared, "provider", "typesafe")
+    )
+    definition = get_provider(provider)
     enabled = bool(getattr(declared, "enabled", False))
     client = str(getattr(declared, "client", None) or "stub").strip().lower() or "stub"
     pack = str(getattr(declared, "pack", None) or "tool_gate").strip() or "tool_gate"
     model = str(getattr(declared, "model", None) or DEFAULT_MODEL).strip() or DEFAULT_MODEL
     endpoint = str(getattr(declared, "endpoint", "https://api.typesafe.ai/v1/systemone"))
     api_key_env = str(getattr(declared, "api_key_env", LIVE_API_KEY_ENV))
+    # A provider selected through env must not inherit another provider's defaults.
+    for field, old_default in (
+        ("model", DEFAULT_MODEL),
+        ("endpoint", "https://api.typesafe.ai/v1/systemone"),
+        ("api_key_env", LIVE_API_KEY_ENV),
+    ):
+        value = str(getattr(declared, field, "") or "")
+        anonymous = (
+            field == "api_key_env"
+            and provider == "typesafe"
+            and getattr(declared, field, None) == ""
+        )
+        if (
+            (not value and not anonymous)
+            or (provider != "typesafe" and value == old_default)
+            or (
+                env.get("SUPERQODE_SYSTEMONE_PROVIDER")
+                and provider != getattr(declared, "provider", "typesafe")
+            )
+        ):
+            value = getattr(definition, field)
+        value = str(env.get("SUPERQODE_SYSTEMONE_" + field.upper()) or value)
+        if field == "model":
+            model = value
+        elif field == "endpoint":
+            endpoint = value
+        else:
+            api_key_env = value
+    if model not in definition.models and provider != "typesafe":
+        raise ValueError(f"{definition.label} Decisions supports {', '.join(definition.models)}")
+    policy_reviewed = bool(getattr(declared, "policy_reviewed", False))
+    if provider != getattr(declared, "provider", "typesafe"):
+        policy_reviewed = False
+    if "SUPERQODE_SYSTEMONE_POLICY_REVIEWED" in env:
+        policy_reviewed = bool(_truthy_env(env["SUPERQODE_SYSTEMONE_POLICY_REVIEWED"]))
     replay_path = str(getattr(declared, "replay_path", None) or "")
     replay_trace = str(getattr(declared, "replay_trace", None) or "")
     record_dir = str(getattr(declared, "record_dir", None) or "")
@@ -116,6 +171,8 @@ def resolve_systemone(
     mode = str(env.get("SUPERQODE_SYSTEMONE_MODE") or getattr(declared, "mode", "enforce"))
     if mode not in {"enforce", "shadow"}:
         raise ValueError("System One mode must be enforce or shadow")
+    if provider != "typesafe" and not policy_reviewed:
+        mode = "shadow"
     trace_dir = str(env.get("SUPERQODE_SYSTEMONE_TRACE_DIR") or getattr(declared, "trace_dir", ""))
 
     tool_search_mode = (
@@ -133,7 +190,10 @@ def resolve_systemone(
     if enabled and is_airplane(spec, env) and airplane == "skip":
         skip_reason = "airplane"
     elif (
-        enabled and client == "live" and api_key_env and not str(env.get(api_key_env) or "").strip()
+        enabled
+        and client == "live"
+        and api_key_env
+        and not str(env.get("SUPERQODE_SYSTEMONE_API_KEY") or env.get(api_key_env) or "").strip()
     ):
         skip_reason = "live_unavailable"
 
@@ -143,6 +203,8 @@ def resolve_systemone(
         trace_dir=trace_dir,
         tool_search_mode=tool_search_mode,
         client=client,
+        provider=provider,
+        policy_reviewed=policy_reviewed,
         pack=pack,
         model=model,
         endpoint=endpoint,
@@ -156,11 +218,15 @@ def resolve_systemone(
     )
 
 
-def build_client(settings: SystemOneSettings, injected: Any = None) -> Any | None:
+def build_client(
+    settings: SystemOneSettings, injected: Any = None, *, api_key: str | None = None
+) -> Any | None:
     """Return a System One client, or None when the gate should stay silent."""
     if injected is not None:
         return injected
-    if not settings.enabled or settings.skip_client:
+    if not settings.enabled or (
+        settings.skip_client and not (api_key and settings.skip_reason == "live_unavailable")
+    ):
         return None
     from .client import ReplaySystemOneClient, StubSystemOneClient
 
@@ -170,16 +236,39 @@ def build_client(settings: SystemOneSettings, injected: Any = None) -> Any | Non
         return ReplaySystemOneClient(settings.replay_path, trace_id=settings.replay_trace or None)
     if settings.client == "live":
         from .live import LiveSystemOneClient
+        from .api_clients import GoogleDecisionClient, OpenAIDecisionClient
 
-        return LiveSystemOneClient(
+        client_type = {
+            "typesafe": LiveSystemOneClient,
+            "google": GoogleDecisionClient,
+            "openai": OpenAIDecisionClient,
+        }[settings.provider]
+        return client_type(
             model=settings.model,
             url=settings.endpoint,
-            api_key=os.environ.get(settings.api_key_env, "") if settings.api_key_env else "",
+            api_key=(
+                api_key
+                if api_key is not None
+                else os.environ.get("SUPERQODE_SYSTEMONE_API_KEY")
+                or os.environ.get(settings.api_key_env, "")
+            )
+            if settings.api_key_env
+            else "",
             require_api_key=bool(settings.api_key_env),
             timeout_ms=settings.timeout_ms,
             record_dir=settings.record_dir or None,
         )
     return StubSystemOneClient()
+
+
+def routing_settings(*, timeout_ms: int = 1500, environ=None) -> SystemOneSettings:
+    """Use the same selected decision provider for every routing entry point."""
+    from types import SimpleNamespace
+
+    return resolve_systemone(
+        explicit=SimpleNamespace(enabled=True, client="live", timeout_ms=timeout_ms),
+        environ=environ,
+    )
 
 
 __all__ = [
@@ -190,4 +279,5 @@ __all__ = [
     "build_client",
     "is_airplane",
     "resolve_systemone",
+    "routing_settings",
 ]

@@ -9,6 +9,7 @@ answers always preserve the complete catalogue.
 from __future__ import annotations
 
 import os
+import asyncio
 import re
 import time
 from dataclasses import dataclass, field
@@ -16,7 +17,6 @@ from typing import Mapping, Protocol, Sequence
 
 from ..providers.gateway.base import ToolDefinition
 from .client import SystemOneClient
-from .live import LiveSystemOneClient
 from .types import NoulQuestion
 
 
@@ -144,7 +144,11 @@ class ToolRouter:
             )
         started = time.monotonic()
         try:
-            probabilities = dict(await self.provider.probabilities(request, tools))
+            probabilities = dict(
+                await asyncio.wait_for(
+                    self.provider.probabilities(request, tools), self.settings.timeout_ms / 1000
+                )
+            )
             if set(probabilities) != set(original):
                 raise ValueError("tool routing response did not cover the full catalogue")
             selected = tuple(
@@ -212,16 +216,27 @@ def build_tool_router(
     settings: ToolRoutingSettings | None = None,
     *,
     client: SystemOneClient | None = None,
+    decision_settings=None,
 ) -> ToolRouter | None:
     """Build the Jev-backed router only when explicitly enabled and usable."""
     resolved = settings or resolve_tool_routing()
     if not resolved.enabled:
         return None
     if client is None:
-        api_key = os.environ.get("TYPESAFE_API_KEY", "").strip()
-        if not api_key:
+        from .config import build_client, routing_settings
+
+        decision_settings = decision_settings or routing_settings(timeout_ms=resolved.timeout_ms)
+        client = build_client(decision_settings)
+        if client is None:
             return None
-        client = LiveSystemOneClient(api_key=api_key, timeout_ms=resolved.timeout_ms)
+    if (
+        decision_settings is not None
+        and decision_settings.provider != "typesafe"
+        and (not decision_settings.policy_reviewed or decision_settings.mode == "shadow")
+    ):
+        from dataclasses import replace
+
+        resolved = replace(resolved, mode="shadow")
     return ToolRouter(SystemOneToolDecisionProvider(client), resolved)
 
 

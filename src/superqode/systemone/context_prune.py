@@ -13,7 +13,7 @@ import json
 import logging
 import os
 import time
-from dataclasses import dataclass
+from dataclasses import dataclass, replace
 from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any, Mapping
@@ -437,6 +437,12 @@ def _client_for(loop: Any, environ: Mapping[str, str]) -> tuple[Any | None, str,
         environ=environ,
     )
     requested = str(environ.get(CLIENT_ENV) or "").strip().lower()
+    if (
+        settings.provider != "typesafe"
+        and not settings.policy_reviewed
+        and context_mode(environ) == "enforce"
+    ):
+        return None, settings.provider, "provider_policy_not_reviewed"
     if settings.enabled and not requested:
         if settings.skip_client:
             return None, settings.client, settings.skip_reason or "skipped"
@@ -445,19 +451,14 @@ def _client_for(loop: Any, environ: Mapping[str, str]) -> tuple[Any | None, str,
     if name == "live":
         if is_airplane(getattr(getattr(loop, "config", None), "harness_spec", None), environ):
             return None, "live", "airplane"
-        key = str(environ.get("TYPESAFE_API_KEY") or "").strip()
+        key = str(
+            environ.get("SUPERQODE_SYSTEMONE_API_KEY") or environ.get(settings.api_key_env) or ""
+        ).strip()
         if not key:
             return None, "live", "live_unavailable"
-        from .live import LiveSystemOneClient
-
         return (
-            LiveSystemOneClient(
-                model=settings.model,
-                url=settings.endpoint,
-                api_key=key,
-                require_api_key=True,
-                timeout_ms=settings.timeout_ms,
-                record_dir=settings.record_dir or None,
+            build_client(
+                replace(settings, enabled=True, client="live", skip_reason=""), api_key=key
             ),
             "live",
             "",

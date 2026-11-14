@@ -537,7 +537,7 @@ _ROOT_PROFILES.append(
     ConnectionProfile(
         id="systemone-models",
         label="Connect with SystemOne models",
-        description="Typed decisions with Jev from TypeSafe AI",
+        description="Typed decisions with TypeSafe Jev, Google, or OpenAI",
         connector="systemone-picker",
         detect=lambda: True,
     )
@@ -552,7 +552,25 @@ _SYSTEMONE_PROFILES = [
         menu=CONNECT_MENU_SYSTEMONE,
         detect=lambda: bool(os.environ.get("TYPESAFE_API_KEY", "").strip()),
         unavailable_hint="Get a key at https://console.typesafe.ai, set TYPESAFE_API_KEY, then restart SuperQode",
-    )
+    ),
+    ConnectionProfile(
+        id="systemone-google",
+        label="Google Gemini Decision",
+        description="Typed decisions with gemini-decision-1; separate Gemini API billing",
+        connector="systemone",
+        menu=CONNECT_MENU_SYSTEMONE,
+        detect=lambda: bool(os.environ.get("GEMINI_API_KEY", "").strip()),
+        unavailable_hint="Set GEMINI_API_KEY. Setup: https://aistudio.google.com/docs/decisions-api",
+    ),
+    ConnectionProfile(
+        id="systemone-openai",
+        label="OpenAI Decisions",
+        description="Typed decisions with gpt-6-luna; separate OpenAI API billing",
+        connector="systemone",
+        menu=CONNECT_MENU_SYSTEMONE,
+        detect=lambda: bool(os.environ.get("OPENAI_API_KEY", "").strip()),
+        unavailable_hint="Set OPENAI_API_KEY. Setup: https://developers.openai.com/api/docs/guides/decisions",
+    ),
 ]
 
 # Step one of the harness route: which harness runs. The model is chosen
@@ -606,7 +624,7 @@ _HARNESS_PROFILES: List[ConnectionProfile] = [
     ConnectionProfile(
         id="harness-systemone",
         label="SystemOne",
-        description="Coding models write code; Jev checks decisions and discovers tools",
+        description="Coding models write code; your decision provider checks decisions and discovers tools",
         connector="harness-use",
         runtime="systemone",
         menu=CONNECT_MENU_HARNESS,

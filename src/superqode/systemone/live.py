@@ -36,6 +36,7 @@ class LiveSystemOneClient:
     """POST state + questions; bind the answers through the local schema."""
 
     name = "live"
+    provider = "typesafe"
 
     def __init__(
         self,
@@ -89,25 +90,38 @@ class LiveSystemOneClient:
             body, transport = await asyncio.wait_for(self._post(payload), self.timeout_ms / 1000)
         except asyncio.TimeoutError as exc:
             raise SystemOneTimeout(f"live evaluate timed out after {self.timeout_ms}ms") from exc
-        raw_answers = _answers_from_response(body)
+        raw_answers = self._decode_answers(body, bound)
         try:
             answers = bind_answers(bound, raw_answers, fill_missing=False)
         except (ValueError, TypeError) as exc:
             raise SchemaViolation("live response did not match the question schema") from exc
         answers.metadata = {
             **transport,
+            "provider": self.provider,
+            "adapter_version": 1,
+            "requested_model": self.model,
+            "resolved_model": body.get("model"),
             "model": body.get("model", self.model),
-            "usage": body.get("usage", {}),
+            "usage": self._usage(body),
             "latency_ms": round((time.monotonic() - started) * 1000),
         }
         try:
-            self._record(payload, body)
+            self._record_evaluation(payload, body, answers, bound, state)
         except OSError:
             answers.metadata["recording_error"] = True
             logging.getLogger("superqode.systemone").warning(
                 "System One response could not be recorded"
             )
         return answers
+
+    def _decode_answers(self, body, questions):
+        return _answers_from_response(body)
+
+    def _usage(self, body):
+        return body.get("usage", {})
+
+    def _record_evaluation(self, payload, body, answers, questions, state):
+        self._record(payload, body)
 
     async def _post(self, payload: dict[str, Any]) -> tuple[dict[str, Any], dict[str, Any]]:
         timeout = self.timeout_ms / 1000.0

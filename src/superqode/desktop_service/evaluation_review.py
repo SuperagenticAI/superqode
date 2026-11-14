@@ -61,6 +61,7 @@ def _grading_issue(task):
         "contains",
         "decision",
         "jev_rubric",
+        "systemone_rubric",
         "repository",
     }:
         return "The grading method is missing or unsupported."

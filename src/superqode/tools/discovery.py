@@ -145,8 +145,10 @@ def resolve_discovery_settings(
         fallbacks = [item.strip() for item in fallbacks.split(",") if item.strip()]
     judge_backend = str(judge.get("backend") or "none").strip().lower()
     judge_mode = str(judge.get("mode") or "off").strip().lower()
-    if judge_backend not in {"none", "jev"}:
-        raise ValueError("tool_discovery.judge.backend must be none or jev")
+    if judge_backend not in {"none", "jev", "systemone"}:
+        raise ValueError(
+            "tool_discovery.judge.backend must be none, systemone, or the legacy jev alias"
+        )
     if judge_mode not in {"off", "shadow", "rerank"}:
         raise ValueError("tool_discovery.judge.mode must be off, shadow, or rerank")
     mcp_mode = str(mcp.get("mode") or "meta_tools").strip().lower()

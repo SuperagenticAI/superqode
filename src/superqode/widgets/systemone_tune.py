@@ -54,6 +54,20 @@ class SystemOneTuneScreen(Screen[str | None]):
             )
             with Vertical(id="tune-setup"):
                 yield Static("Decision pack or harness")
+                yield Select(
+                    [
+                        ("TypeSafe Jev", "typesafe"),
+                        ("Google Gemini Decision", "google"),
+                        ("OpenAI Decisions", "openai"),
+                    ],
+                    value="typesafe",
+                    allow_blank=False,
+                    id="tune-decision-provider",
+                )
+                yield Input(
+                    placeholder="Decision model (blank uses the selected provider default)",
+                    id="tune-decision-model",
+                )
                 yield Input(
                     value="factory_route",
                     placeholder="Built-in pack ID or question-pack path",
@@ -90,7 +104,7 @@ class SystemOneTuneScreen(Screen[str | None]):
                 )
                 yield Input(
                     value="2.00",
-                    placeholder="Reflection dollar limit (Jev usage additional)",
+                    placeholder="Reflection dollar limit (Decision-model usage additional)",
                     id="tune-cost",
                 )
                 yield Input(
@@ -149,9 +163,16 @@ class SystemOneTuneScreen(Screen[str | None]):
                 spec = harness_spec_from_dict(self.manifest["harness"])
             elif self.is_mounted and self._value("spec"):
                 spec = load_harness_spec(self._value("spec"))
+            decision_provider = (
+                str(self.query_one("#tune-decision-provider", Select).value)
+                if self.is_mounted
+                else "typesafe"
+            )
             probe = resolve_systemone(
                 spec=spec,
-                explicit=None if spec else SimpleNamespace(enabled=True, client="live"),
+                explicit=None
+                if spec
+                else SimpleNamespace(enabled=True, client="live", provider=decision_provider),
             )
             # An empty value deliberately means a no-auth compatible endpoint.
             api_key_env = getattr(probe, "api_key_env", api_key_env)
@@ -199,6 +220,11 @@ class SystemOneTuneScreen(Screen[str | None]):
     def _value(self, name: str) -> str:
         return self.query_one(f"#tune-{name}", Input).value.strip()
 
+    @on(Select.Changed, "#tune-decision-provider")
+    def decision_provider_changed(self) -> None:
+        if self.is_mounted:
+            self._refresh_support_status()
+
     def _status(self, text: str) -> None:
         self.query_one("#tune-status", Static).update(Text(text))
 
@@ -213,6 +239,8 @@ class SystemOneTuneScreen(Screen[str | None]):
             else:
                 options = tune.TuneOptions(
                     pack=self._value("pack"),
+                    decision_provider=str(self.query_one("#tune-decision-provider", Select).value),
+                    decision_model=self._value("decision-model"),
                     spec=self._value("spec"),
                     reflection_lm=self._value("model") or tune.preferred_reflection_model(),
                     max_evals=int(self._value("evals")),
@@ -292,7 +320,7 @@ class SystemOneTuneScreen(Screen[str | None]):
                 if not selected:
                     self.query_one("#tune-acquire").display = True
                     self._status(
-                        f"Round {self.manifest.get('round', 1)} is ready. Jev will score only the development pool, then select uncertain examples plus a random audit and reserved sample.\nSaved experiment: {self.output}"
+                        f"Round {self.manifest.get('round', 1)} is ready. The decision provider will score only the development pool, then select uncertain examples plus a random audit and reserved sample.\nSaved experiment: {self.output}"
                     )
                     return
             test_count = sum(
@@ -304,8 +332,8 @@ class SystemOneTuneScreen(Screen[str | None]):
             self._status(
                 f"Ready · {reviewed_count} reviewed examples\n"
                 f"Up to {options['max_evals']} optimization evaluations + {2 * test_count} final test evaluations.\n"
-                f"Reflection: {options['reflection_lm'] or 'not configured'} · ceiling ${options['max_reflection_cost']:.2f}. Jev usage/retries are additional.\n"
-                "Jev receives example inputs and criteria. The reflection provider also receives development examples and rationales.\n"
+                f"Reflection: {options['reflection_lm'] or 'not configured'} · ceiling ${options['max_reflection_cost']:.2f}. Decision-model usage/retries are additional.\n"
+                "The decision provider receives example inputs and criteria. The reflection provider also receives development examples and rationales.\n"
                 f"Saved experiment: {self.output}\nSmall demos are pilots and cannot qualify for adoption."
                 + (("\n" + creds) if creds else "")
             )
@@ -399,7 +427,7 @@ class SystemOneTuneScreen(Screen[str | None]):
         self._status(
             "Starting · reflection "
             f"{details.get('reflection_model') or details.get('model')} · "
-            f"Jev {details.get('model')} at {details.get('endpoint')}"
+            f"Decision engine {details.get('model')} at {details.get('endpoint')}"
         )
         self._run()
 

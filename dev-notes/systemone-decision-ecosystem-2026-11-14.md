@@ -1,5 +1,11 @@
 # SystemOne decision-model ecosystem and integration plan
 
+Subsequent implementation: see [implementation handoff](systemone-decision-implementation.md)
+and the [user setup guide](../docs/advanced/systemone-providers.md). The research
+below describes the earlier baseline and distinguishes vendor documentation
+from runtime measurements. The new implementation has not been tested or built
+in this environment, at the user's request.
+
 Researched 14 November 2026 against main `a9ce9048` (Python 2.31.15,
 macOS 0.4.8/build 34). This is a source review and implementation proposal.
 No provider adapter was added, paid inference performed, or CI started.

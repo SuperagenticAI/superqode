@@ -1,4 +1,4 @@
-"""Inspect Jev shadow evidence without live model calls."""
+"""Run typed decision packs and inspect recorded SystemOne evidence."""
 
 import json
 from pathlib import Path
@@ -6,6 +6,66 @@ from pathlib import Path
 import click
 
 from ._group import harness
+
+
+@harness.command("decision-providers")
+def decision_providers():
+    """List supported decision engines without making network requests."""
+    from superqode.systemone.providers import provider_rows
+
+    click.echo(json.dumps(provider_rows(), indent=2))
+
+
+@harness.command("decision")
+@click.option(
+    "--provider",
+    type=click.Choice(["typesafe", "google", "openai"]),
+    default="typesafe",
+    show_default=True,
+)
+@click.option("--model", default=None)
+@click.option("--pack", default="factory_route", show_default=True)
+@click.option(
+    "--prompt",
+    "-p",
+    required=True,
+    help="Text or JSON state. This explicit command makes a metered decision request.",
+)
+@click.option("--timeout-ms", type=click.IntRange(min=1, max=60000), default=5000)
+def decision(provider, model, pack, prompt, timeout_ms):
+    """Evaluate a decision pack using your selected provider's API key."""
+    import asyncio
+    from types import SimpleNamespace
+    from superqode.systemone.config import build_client, resolve_systemone, SELECTION_ENV
+    from superqode.systemone.providers import get_provider
+    from superqode.systemone.pack import load_pack
+    from superqode.systemone.decision import evaluate_decision, parse_state
+    from superqode.systemone.client import SystemOneError
+
+    try:
+        definition = get_provider(provider)
+        import os
+
+        settings = resolve_systemone(
+            explicit=SimpleNamespace(
+                enabled=True,
+                client="live",
+                provider=provider,
+                model=model or definition.model,
+                timeout_ms=timeout_ms,
+            ),
+            environ={key: value for key, value in os.environ.items() if key not in SELECTION_ENV},
+        )
+        client = build_client(settings)
+        if client is None:
+            raise ValueError(
+                f"Decision engine unavailable ({settings.skip_reason}); set {settings.api_key_env}"
+            )
+        questions = load_pack(pack)
+        result = asyncio.run(evaluate_decision(client, parse_state(prompt, questions), questions))
+        click.echo(result.model_dump_json(indent=2))
+    except (ValueError, OSError, SystemOneError) as exc:
+        raise click.ClickException(str(exc)) from exc
 
 
 @harness.command("decision-report")

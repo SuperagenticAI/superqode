@@ -16,6 +16,8 @@ from .decision import DecisionResult, evaluate_decision
 from .compose import GateAction, GateDecision, compose_tool_gate, evaluate_tool_gate
 from .config import DEFAULT_MODEL, SYSTEMONE_ENV, SystemOneSettings, resolve_systemone
 from .live import LiveSystemOneClient
+from .api_clients import GoogleDecisionClient, OpenAIDecisionClient, DecisionRefused
+from .providers import DecisionProvider, get_provider, provider_rows
 from .pack import QuestionPack, ToolGateThresholds, builtin_pack_ids, load_pack
 from .runtime import apply_systemone_gate
 from .state import ToolGateState
@@ -50,6 +52,12 @@ __all__ = [
     "GateAction",
     "GateDecision",
     "LiveSystemOneClient",
+    "GoogleDecisionClient",
+    "OpenAIDecisionClient",
+    "DecisionRefused",
+    "DecisionProvider",
+    "get_provider",
+    "provider_rows",
     "NoulAnswer",
     "NoulQuestion",
     "Question",

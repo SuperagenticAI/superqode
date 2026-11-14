@@ -134,10 +134,18 @@ async def evaluate_jev_rubric(rubric: str, work: str, *, spec=None, client=None)
         from types import SimpleNamespace
 
         declared = getattr(spec, "systemone", None)
-        if declared is None or not getattr(declared, "enabled", False):
+        if declared is None:
             declared = SimpleNamespace(enabled=True, client="live")
         else:
-            declared = SimpleNamespace(**{**vars(declared), "enabled": True})
+            declared = SimpleNamespace(
+                **{
+                    **vars(declared),
+                    "enabled": True,
+                    "client": getattr(declared, "client", "live")
+                    if getattr(declared, "enabled", False)
+                    else "live",
+                }
+            )
         settings = resolve_systemone(spec=spec, explicit=declared)
         settings = replace(settings, pack="rubric")
         active = build_client(settings, injected=client)
@@ -152,7 +160,7 @@ async def evaluate_jev_rubric(rubric: str, work: str, *, spec=None, client=None)
         verdict = decision.outputs.get("verdict") if decision.status == "decided" else "ungraded"
         return {
             "verdict": verdict or "ungraded",
-            "reason": "Jev rubric: " + str(verdict or "ungraded"),
+            "reason": "SystemOne rubric: " + str(verdict or "ungraded"),
             "decision": decision.model_dump(mode="json"),
         }
     except Exception:

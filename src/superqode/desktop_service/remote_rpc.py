@@ -263,7 +263,8 @@ def dispatch(access, device, method, params, key):
 
             suite = load_eval_tasks(eval_pack_path(request["tasks"]))
             if suite["variants"] or any(
-                (task.get("evaluator") or {}).get("type") == "jev_rubric" for task in suite["tasks"]
+                (task.get("evaluator") or {}).get("type") in {"jev_rubric", "systemone_rubric"}
+                for task in suite["tasks"]
             ):
                 raise ValueError(
                     "This suite has alternate harnesses or a model-based grader whose local routes are not verified. Choose a deterministic single-harness suite for Local only."

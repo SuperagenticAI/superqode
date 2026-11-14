@@ -98,6 +98,7 @@ class ReplaySystemOneClient:
         self._source = Path(source)
         self._trace_id = trace_id
         self._traces = _load_replay(self._source)
+        self._metadata = _load_replay_metadata(self._source)
         self.calls: list[tuple[Any, dict[str, Any]]] = []
 
     async def evaluate(
@@ -110,7 +111,11 @@ class ReplaySystemOneClient:
             (state, {qid: q.model_dump(mode="json") for qid, q in bound_questions.items()})
         )
         raw = self._lookup()
-        return bind_answers(bound_questions, raw, fill_missing=False)
+        answers = bind_answers(bound_questions, raw, fill_missing=False)
+        identity = self._trace_id or (next(iter(self._traces)) if len(self._traces) == 1 else "")
+        answers.metadata = dict(self._metadata.get(identity, {}))
+        answers.metadata["replayed"] = True
+        return answers
 
     def _lookup(self) -> dict[str, Mapping[str, Any]]:
         if self._trace_id:
@@ -122,6 +127,35 @@ class ReplaySystemOneClient:
         if "" in self._traces:
             return self._traces[""]
         raise SystemOneError("replay has multiple traces; pass trace_id")
+
+
+def _load_replay_metadata(path: Path) -> dict[str, dict[str, Any]]:
+    def details(payload):
+        response = payload.get("response", payload)
+        if not isinstance(response, dict):
+            return {}
+        return {
+            "provider": payload.get("provider", "typesafe"),
+            "model": response.get("model"),
+            "usage": response.get("usage", {}),
+            "adapter_version": payload.get("adapter_version"),
+        }
+
+    if path.is_dir():
+        result = {}
+        for file in sorted(path.glob("*.json")):
+            payload = json.loads(file.read_text(encoding="utf-8"))
+            if isinstance(payload, dict):
+                result[str(payload.get("id") or file.stem)] = details(payload)
+        return result
+    payload = json.loads(path.read_text(encoding="utf-8"))
+    if isinstance(payload.get("traces"), dict):
+        return {
+            str(key): details(body)
+            for key, body in payload["traces"].items()
+            if isinstance(body, dict)
+        }
+    return {str(payload.get("id") or ""): details(payload)}
 
 
 def _load_replay(path: Path) -> dict[str, dict[str, Mapping[str, Any]]]:

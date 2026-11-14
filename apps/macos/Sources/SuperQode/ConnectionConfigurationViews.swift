@@ -319,39 +319,149 @@ struct VendorKeyConnectionView: View {
 
 struct SystemOneConnectionView: View {
   @EnvironmentObject var app: Workspace
-  let complete: () -> Void
+  var initialProvider = "typesafe"
+  let complete: (String) -> Void
+  @State private var providers: [[String: Any]] = []
+  @State private var provider = "typesafe"
+  @State private var model = "jev-1.13.0"
   @State private var key = ""
   @State private var remember = true
   @State private var failure = ""
+  @State private var status = ""
+  @State private var busy = false
+  @State private var reviewed = false
+  @State private var enforce = false
+  private var selected: [String: Any] { providers.first { string($0, "id") == provider } ?? [:] }
+  private var identity: String { provider == "typesafe" ? "systemone" : "systemone:" + provider }
+  private var models: [String] { selected["models"] as? [String] ?? [] }
+  private var ready: Bool { !busy && !providers.isEmpty && !key.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty && models.contains(model) }
+
   var body: some View {
     ScrollView {
       VStack(alignment: .leading, spacing: 20) {
-        PageTitle(
-          eyebrow: "SystemOne · Jev", title: "Connect the decision plane",
-          subtitle:
-            "Use Jev for typed decisions and tool discovery alongside your coding model. Configure the TypeSafe key here, then choose the coding model for the SystemOne harness."
-        )
-        SecureField("TypeSafe API key", text: $key).textFieldStyle(.roundedBorder)
-        Toggle("Remember in this Mac’s Keychain", isOn: $remember)
-        Text("Live decisions contact TypeSafe directly. Saving this key makes no model request.")
-          .font(.caption).foregroundStyle(.secondary)
-        if !failure.isEmpty { Text(failure).foregroundStyle(.orange) }
-        Button("Connect and choose coding model") {
-          Task {
-            do {
-              _ = try await app.engine.call("connect.systemone.key", ["key": key])
-              if remember {
-                try app.credentialStore.save("systemone", key: key)
-                UserDefaults.standard.set(true, forKey: "nativeSystemOneKey")
-              }
-              key = ""
-              complete()
-            } catch { failure = error.localizedDescription }
+        PageTitle(eyebrow: "SystemOne", title: "Connect the decision engine",
+          subtitle: "Choose who evaluates typed questions, tool relevance and policy checks. Your coding model stays independent and writes the code.")
+        Picker("Decision engine", selection: $provider) {
+          ForEach(providers, id: \.projectRowID) { row in
+            Text(string(row, "label")).tag(string(row, "id"))
           }
-        }.buttonStyle(BrandButtonStyle()).disabled(key.isEmpty)
+        }.disabled(busy || providers.isEmpty)
+        Picker("Decision model", selection: $model) {
+          ForEach(models, id: \.self) { value in Text(value).tag(value) }
+        }.disabled(busy)
+        if let url = URL(string: string(selected, "docs")), !selected.isEmpty {
+          Link("Provider setup and API documentation", destination: url)
+        }
+        Text("Decisions use a separate API key and usage-based billing. Bounded task and tool evidence is sent directly to the selected provider, even when your coding model runs locally. Saving makes no model request.")
+          .font(.callout).foregroundStyle(.secondary)
+        SecureField(string(selected, "api_key_env", "API key"), text: $key)
+          .textFieldStyle(.roundedBorder).disabled(busy)
+        Button("Load saved decision key") {
+          do {
+            guard let saved = try app.credentialStore.read(identity), !saved.isEmpty else {
+              failure = "No saved decision key. Enter an API key from the provider’s setup page."
+              return
+            }
+            key = saved; failure = ""
+          } catch { failure = error.localizedDescription }
+        }.disabled(busy || providers.isEmpty)
+        if provider != "typesafe" {
+          Button("Use my saved provider API key") {
+            do {
+              guard let saved = try app.credentialStore.read(provider), !saved.isEmpty else {
+                failure = "No saved API key for this provider. Enter a key or open the provider setup documentation."
+                return
+              }
+              key = saved; failure = ""; status = "Saved key loaded. No request sent."
+            } catch { failure = error.localizedDescription }
+          }.disabled(busy)
+        }
+        Toggle("Remember in this Mac’s Keychain", isOn: $remember).disabled(busy)
+        Text("Shadow mode records recommendations and keeps the existing permission policy. Review separate evaluations for each provider and model before enabling enforcement.")
+          .font(.caption).foregroundStyle(.secondary)
+        DisclosureGroup("Advanced · reviewed policy") {
+          VStack(alignment: .leading, spacing: 10) {
+            Toggle("I reviewed this model and policy on representative held-out examples", isOn: $reviewed)
+            Toggle("Enforce reviewed decisions and tool discovery", isOn: $enforce).disabled(!reviewed)
+            Text("This acknowledgement does not certify quality. Hard denials still apply; provider confidence scales differ. A new model requires a new review.")
+              .font(.caption).foregroundStyle(.secondary)
+          }.disabled(busy)
+        }
+        if !failure.isEmpty { Text(failure).foregroundStyle(.orange).textSelection(.enabled) }
+        if !status.isEmpty { Text(status).foregroundStyle(.secondary).textSelection(.enabled) }
+        if busy { ProgressView("Working with the decision engine…") }
+        HStack {
+          Button("Test decision…") { testDecision() }.disabled(!ready)
+          Button("Connect and choose coding model") { connect() }
+            .buttonStyle(BrandButtonStyle()).disabled(!ready || app.projectID.isEmpty)
+        }
       }.padding(28).frame(maxWidth: .infinity, alignment: .topLeading)
     }.defaultScrollAnchor(.top)
-      .task { key = (try? app.credentialStore.read("systemone")) ?? "" }
+      .task {
+        do {
+          providers = try await app.engine.call("connect.systemone.providers") as? [[String: Any]] ?? []
+          provider = providers.contains { string($0, "id") == initialProvider } ? initialProvider : "typesafe"
+          restoreSelection()
+        } catch { failure = error.localizedDescription }
+      }
+      .onChange(of: provider) { _, _ in restoreSelection() }
+      .onChange(of: model) { _, _ in reviewed = false; enforce = false; status = "" }
+      .onChange(of: reviewed) { _, value in if !value { enforce = false } }
+      .onChange(of: key) { _, _ in status = "" }
+  }
+
+  private func restoreSelection() {
+    model = string(selected, "model")
+    key = (try? app.credentialStore.read(identity, prompt: false)) ?? ""
+    reviewed = false; enforce = false; failure = ""; status = ""
+  }
+
+  private func testDecision() {
+    guard ready, app.confirm("Test this decision engine?",
+      "This sends a small synthetic code-review question to the selected provider and may incur API charges. It verifies connectivity, not decision quality.", button: "Test decision") else { return }
+    busy = true; failure = ""; status = ""
+    Task {
+      defer { busy = false }
+      do {
+        let result = try await app.engine.call("connect.systemone.test", ["provider": provider, "model": model, "key": key]) as? [String: Any] ?? [:]
+        status = "Connected · " + string(result, "model") + ". Connectivity only; quality is not certified."
+      } catch { failure = error.localizedDescription }
+    }
+  }
+
+  private func connect() {
+    guard ready else { return }
+    busy = true; failure = ""; status = ""
+    Task {
+      defer { busy = false }
+      do {
+        // Write Keychain first so its failure cannot leave a hidden active connection.
+        if remember {
+          try app.credentialStore.save(identity, key: key)
+          if provider == "typesafe" { UserDefaults.standard.set(true, forKey: "nativeSystemOneKey") }
+          var saved = UserDefaults.standard.stringArray(forKey: "nativeSystemOneProviders") ?? []
+          if !saved.contains(provider) { saved.append(provider) }
+          UserDefaults.standard.set(saved, forKey: "nativeSystemOneProviders")
+        } else {
+          try app.credentialStore.remove(identity)
+          var saved = UserDefaults.standard.stringArray(forKey: "nativeSystemOneProviders") ?? []
+          saved.removeAll { $0 == provider }
+          UserDefaults.standard.set(saved, forKey: "nativeSystemOneProviders")
+          if provider == "typesafe" { UserDefaults.standard.set(false, forKey: "nativeSystemOneKey") }
+        }
+        _ = try await app.engine.call("connect.systemone.key", ["provider": provider, "key": key])
+        let result = try await app.engine.call("connect.systemone.configure", [
+          "project": app.projectID, "provider": provider, "model": model,
+          "policy_reviewed": reviewed, "mode": reviewed && enforce ? "enforce" : "shadow",
+        ]) as? [String: Any] ?? [:]
+        let id = string(result, "id")
+        guard !id.isEmpty else { throw EngineError(message: "The engine did not return a decision harness.") }
+        let rows = try await app.engine.call("harnesses.list", ["project": app.projectID]) as? [[String: Any]] ?? []
+        app.harnesses = rows + app.harnesses.filter { row in !rows.contains { string($0, "id") == string(row, "id") } }
+        key = ""
+        complete(id)
+      } catch { failure = error.localizedDescription }
+    }
   }
 }
 

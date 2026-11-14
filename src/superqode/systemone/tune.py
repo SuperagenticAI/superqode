@@ -96,6 +96,8 @@ def install_support() -> str:
 class TuneOptions:
     pack: str = "factory_route"
     spec: str = ""
+    decision_provider: str = ""
+    decision_model: str = ""
     reflection_lm: str = ""
     max_evals: int = 120
     max_reflection_cost: float = 2.0
@@ -181,9 +183,14 @@ def missing_tune_credentials(
     """Blockers that would make Start do nothing useful without a clear error."""
     missing: list[str] = []
     key_env = str(api_key_env).strip()
-    if key_env and not str(os.environ.get(key_env) or "").strip():
+    if (
+        key_env
+        and not str(
+            os.environ.get("SUPERQODE_SYSTEMONE_API_KEY") or os.environ.get(key_env) or ""
+        ).strip()
+    ):
         missing.append(
-            f"Set {key_env} for live Jev scoring (export {key_env}=... in this shell, then restart SuperQode)."
+            f"Set {key_env} for live decision scoring (export {key_env}=... in this shell, then restart SuperQode)."
         )
     model = (reflection_lm or "").strip()
     if not model:
@@ -209,9 +216,52 @@ def format_missing_tune_credentials(missing: list[str]) -> str:
 
 
 def load_tune_pack(options: TuneOptions) -> tuple[QuestionPack, Any]:
-    from superqode.harness.loader import load_harness_spec
+    from superqode.harness.loader import load_harness_spec, harness_spec_from_dict
+    from types import SimpleNamespace
+    from .providers import get_provider
 
     spec = load_harness_spec(options.spec) if options.spec else None
+    if spec is None:
+        provider = options.decision_provider or os.environ.get(
+            "SUPERQODE_SYSTEMONE_PROVIDER", "typesafe"
+        )
+        definition = get_provider(provider)
+        model = (
+            options.decision_model
+            or os.environ.get("SUPERQODE_SYSTEMONE_MODEL")
+            or definition.model
+        )
+        if model not in definition.models:
+            raise ValueError("Choose a supported decision model")
+        from .config import SELECTION_ENV
+
+        environment = (
+            {key: value for key, value in os.environ.items() if key not in SELECTION_ENV}
+            if options.decision_provider
+            else os.environ
+        )
+        resolved = resolve_systemone(
+            explicit=SimpleNamespace(enabled=True, client="live", provider=provider, model=model),
+            environ=environment,
+        )
+        spec = harness_spec_from_dict(
+            {
+                "name": "decision-tune",
+                "flavor": "decision",
+                "runtime": {"backend": "systemone"},
+                "metadata": {"decision_provider_pinned": True},
+                "systemone": {
+                    "enabled": True,
+                    "client": "live",
+                    "provider": resolved.provider,
+                    "model": resolved.model,
+                    "endpoint": resolved.endpoint,
+                    "api_key_env": resolved.api_key_env,
+                    "mode": "shadow",
+                    "pack": options.pack,
+                },
+            }
+        )
     if spec and spec.runtime.backend != "systemone":
         raise ValueError(
             "Choose a SystemOne decision harness; coding-harness tuning uses harness optimize."
@@ -417,6 +467,7 @@ def prepare_run(options: TuneOptions, rows: list[dict], output: Path) -> dict:
         "round": 1,
         "history": [],
         "options": asdict(options),
+        "decision_adapter_version": 1,
         "pack": pack.model_dump(mode="json"),
         "harness": harness_spec_to_dict(spec) if spec else None,
         "examples": [row for part in partitions.values() for row in part],
@@ -574,7 +625,7 @@ def _acquire_review_batch(
             predicted = decision.outputs[qid]
         except Exception as exc:
             raise ValueError(
-                "Jev could not score the review pool. No examples were selected; check the endpoint and try again."
+                "The decision provider could not score the review pool. No examples were selected; check the endpoint and try again."
             ) from exc
         scored.append(
             {
@@ -706,7 +757,7 @@ def _settings(manifest: dict):
         if missing:
             raise ValueError(format_missing_tune_credentials(missing))
         raise ValueError(
-            "Tune needs live Jev evaluation. Check SystemOne settings and API credentials; stub/replay cannot measure new prompts."
+            "Tune needs live decision evaluation. Check SystemOne settings and API credentials; stub/replay cannot measure new prompts."
         )
     return settings
 
@@ -746,6 +797,7 @@ def preflight(manifest: dict, *, check_gepa: bool = True) -> dict:
             ) from exc
     return {
         "endpoint": settings.endpoint,
+        "provider": settings.provider,
         "model": settings.model,
         "reflection_model": options.reflection_lm,
         "max_evals": options.max_evals,
@@ -767,11 +819,16 @@ def preflight_acquisition(manifest: dict) -> dict:
         spec=spec, explicit=None if spec else SimpleNamespace(enabled=True, client="live")
     )
     api_key_env = str(getattr(probe, "api_key_env", "TYPESAFE_API_KEY") or "").strip()
-    if api_key_env and not str(os.environ.get(api_key_env) or "").strip():
+    if (
+        api_key_env
+        and not str(
+            os.environ.get("SUPERQODE_SYSTEMONE_API_KEY") or os.environ.get(api_key_env) or ""
+        ).strip()
+    ):
         raise ValueError(
             format_missing_tune_credentials(
                 [
-                    f"Set {api_key_env} for live Jev scoring (export {api_key_env}=... in this shell, then restart SuperQode)."
+                    f"Set {api_key_env} for live decision scoring (export {api_key_env}=... in this shell, then restart SuperQode)."
                 ]
             )
         )
@@ -1035,7 +1092,7 @@ def _run_tune_locked(
             "candidate_harness": str(harness_path.resolve()),
             "candidate_harness_hash": hashlib.sha256(harness_path.read_bytes()).hexdigest(),
             "diff": diff,
-            "cost_note": "Reflection limit excludes Jev evaluation usage; unknown costs remain unknown.",
+            "cost_note": "Reflection limit excludes decision-model evaluation usage; unknown costs remain unknown.",
         }
         write_json(output / "report.json", report)
         if active_workflow:

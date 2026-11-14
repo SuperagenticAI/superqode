@@ -409,6 +409,12 @@ def harness_spec_to_dict(spec: HarnessSpec) -> dict[str, Any]:
                     "trace_dir": spec.systemone.trace_dir,
                     "tool_search_mode": spec.systemone.tool_search_mode,
                     "client": spec.systemone.client,
+                    **(
+                        {"provider": spec.systemone.provider}
+                        if spec.systemone.provider != "typesafe"
+                        else {}
+                    ),
+                    **({"policy_reviewed": True} if spec.systemone.policy_reviewed else {}),
                     "pack": spec.systemone.pack,
                     **(
                         {"replay_path": spec.systemone.replay_path}
@@ -704,6 +710,8 @@ def harness_spec_json_schema() -> dict[str, Any]:
                     "trace_dir": {"type": "string"},
                     "tool_search_mode": {"type": "string", "enum": ["off", "shadow", "rerank"]},
                     "client": {"type": "string", "enum": ["stub", "replay", "live"]},
+                    "provider": {"type": "string", "enum": ["typesafe", "google", "openai"]},
+                    "policy_reviewed": {"type": "boolean"},
                     "endpoint": {"type": "string"},
                     "api_key_env": {"type": "string"},
                     "pack": {"type": "string"},
@@ -1056,6 +1064,11 @@ def _optimization(value: Any) -> OptimizationSpec:
 
 def _systemone(value: Any) -> SystemOneSpec:
     data = value if isinstance(value, dict) else {}
+    from superqode.systemone.providers import get_provider
+
+    provider = get_provider(str(data.get("provider") or "typesafe"))
+    if not isinstance(data.get("policy_reviewed", False), bool):
+        raise ValueError("systemone.policy_reviewed must be a boolean")
     client = str(data.get("client") or "stub").strip().lower() or "stub"
     if client not in {"stub", "replay", "live"}:
         raise ValueError("systemone.client must be stub, replay, or live")
@@ -1077,10 +1090,12 @@ def _systemone(value: Any) -> SystemOneSpec:
         trace_dir=str(data.get("trace_dir") or ""),
         enabled=bool(data.get("enabled", False)),
         client=client,
+        provider=provider.id,
+        policy_reviewed=data.get("policy_reviewed", False),
         pack=str(data.get("pack") or "tool_gate").strip() or "tool_gate",
-        model=str(data.get("model") or "jev-1.13.0").strip() or "jev-1.13.0",
-        endpoint=str(data.get("endpoint") or "https://api.typesafe.ai/v1/systemone"),
-        api_key_env=str(data.get("api_key_env", "TYPESAFE_API_KEY")),
+        model=str(data.get("model") or provider.model).strip() or provider.model,
+        endpoint=str(data.get("endpoint") or provider.endpoint),
+        api_key_env=str(data.get("api_key_env", provider.api_key_env)),
         replay_path=str(data.get("replay_path") or ""),
         replay_trace=str(data.get("replay_trace") or ""),
         record_dir=str(data.get("record_dir") or ""),

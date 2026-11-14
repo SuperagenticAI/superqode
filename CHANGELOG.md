@@ -7,6 +7,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added
+
+- SystemOne decision engines for Google Gemini Decision 1 and OpenAI Decisions with GPT-6 Luna, alongside existing TypeSafe Jev support. CLI, terminal UI and macOS offer separate decision-provider/model selection and retain independent coding-model settings.
+- Provider-aware tool routing, discovery, context pruning, rubric grading and GEPA Tune. Native setup includes provider documentation, explicit connectivity checks, session-only or Keychain keys, and project-scoped harness profiles. Routing launchers retain decision settings without credentials.
+- Shadow defaults for new Google/OpenAI policies, explicit reviewed enforcement, strict native response translation, bounded evaluation deadlines and conservative handling of refusals, safety blocks and invalid responses. Existing Jev commands and custom SystemOne-compatible endpoints remain available.
+
 ## [2.31.15] - 2026-11-13
 
 ### Changed

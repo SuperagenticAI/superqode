@@ -86,7 +86,11 @@ class JevToolRouting:
         )
         resolved = router or build_tool_router(settings)
         if resolved is None:
-            raise RuntimeError("TYPESAFE_API_KEY is required for local Jev Tool Routing")
+            from superqode.systemone.config import routing_settings
+
+            raise RuntimeError(
+                f"{routing_settings().api_key_env} is required for local SystemOne Tool Routing"
+            )
         self._router = ToolRequestRouter(
             resolved,
             cache=TurnPlanCache(ttl_seconds=turn_ttl),

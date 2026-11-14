@@ -203,6 +203,8 @@ _FLAT_PROFILE_IDS_V1 = [
     "build-wizard",
     "build-blank",
     "jev",
+    "systemone-google",
+    "systemone-openai",
     # Open catalog rows, then Closed. Both are appended by _flat_profiles so
     # `--connect` and completion accept every row the pickers draw.
     "strands",

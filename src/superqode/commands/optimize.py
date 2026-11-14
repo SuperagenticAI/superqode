@@ -1,4 +1,4 @@
-"""One-command local Jev Tool Routing for external coding harnesses."""
+"""One-command local SystemOne Tool Routing for external coding harnesses."""
 
 from __future__ import annotations
 
@@ -25,13 +25,17 @@ from superqode.optimize.profiles import (
     provider_upstream,
 )
 
+from superqode.systemone.cli import decision_options, apply_selection, credential_status
+
 console = Console()
 _PROVIDERS = click.Choice(["openai", "anthropic", "google", "xai"])
 
 
 @click.group()
-def optimize():
-    """Jev Tool Routing for local coding harnesses."""
+@decision_options
+def optimize(decision_provider, decision_model, reviewed_policy):
+    """SystemOne Tool Routing for local coding harnesses."""
+    apply_selection(decision_provider, decision_model, reviewed_policy)
 
 
 @optimize.command("enable")
@@ -80,7 +84,8 @@ def enable(
     except ValueError as exc:
         raise click.ClickException(str(exc)) from exc
     payload = {
-        "feature": "Jev Tool Routing",
+        "feature": "SystemOne Tool Routing",
+        "decision_provider": credential_status()[0].provider,
         "config": str(config_path()),
         "credentials_written": False,
         "enabled": [entry.as_dict() | {"harness": entry.harness} for entry in enabled],
@@ -89,7 +94,7 @@ def enable(
     if as_json:
         click.echo(json.dumps(payload, indent=2))
     else:
-        console.print("[bold]Jev Tool Routing · local launchers[/bold]")
+        console.print("[bold]SystemOne Tool Routing · local launchers[/bold]")
         for entry in enabled:
             console.print(
                 f"[green]enabled[/green] {entry.harness:<10} → [cyan]{entry.launcher}[/cyan] "
@@ -114,15 +119,17 @@ def launcher_status(as_json: bool) -> None:
 
     rows = launcher_rows()
     payload = {
-        "feature": "Jev Tool Routing",
+        "feature": "SystemOne Tool Routing",
+        "decision_provider": credential_status()[0].provider,
         "config": str(config_path()),
         "typesafe_key_present": bool(os.environ.get("TYPESAFE_API_KEY", "").strip()),
+        "decision_key_present": credential_status()[1],
         "enabled": rows,
     }
     if as_json:
         click.echo(json.dumps(payload, indent=2))
         return
-    table = Table(title="Jev Tool Routing launchers")
+    table = Table(title="SystemOne Tool Routing launchers")
     table.add_column("Harness")
     table.add_column("Launcher")
     table.add_column("Route")
@@ -141,8 +148,10 @@ def launcher_status(as_json: bool) -> None:
     console.print(table)
     if not rows:
         console.print("[dim]No managed launchers. Run: superqode optimize enable[/dim]")
-    if not payload["typesafe_key_present"]:
-        console.print("[yellow]TYPESAFE_API_KEY is not set; routing will fail open.[/yellow]")
+    if not payload["decision_key_present"]:
+        console.print(
+            f"[yellow]{credential_status()[0].api_key_env} is not set; routing will fail open.[/yellow]"
+        )
 
 
 def _disable_launchers(harnesses: tuple[str, ...], *, as_json: bool) -> None:
@@ -150,7 +159,8 @@ def _disable_launchers(harnesses: tuple[str, ...], *, as_json: bool) -> None:
 
     removed, retained = disable_launchers(harnesses)
     payload = {
-        "feature": "Jev Tool Routing",
+        "feature": "SystemOne Tool Routing",
+        "decision_provider": credential_status()[0].provider,
         "config": str(config_path()),
         "removed": removed,
         "retained": retained,
@@ -198,13 +208,13 @@ def launch(harness: str, harness_args: tuple[str, ...]) -> None:
 
 @optimize.command("mcp")
 def mcp_server() -> None:
-    """Run Jev Tool Routing as a local MCP server over stdio."""
-    if not os.environ.get("TYPESAFE_API_KEY", "").strip():
-        raise click.ClickException("TYPESAFE_API_KEY is required")
+    """Run SystemOne Tool Routing as a local MCP server over stdio."""
+    if not credential_status()[1]:
+        raise click.ClickException(f"{credential_status()[0].api_key_env} is required")
     from superqode.mcp.jev_router_server import run_jev_mcp_server
 
     # stdout is the MCP transport; human-facing output belongs on stderr.
-    click.echo("SuperQode Jev Tool Routing MCP server listening on stdio", err=True)
+    click.echo("SuperQode SystemOne Tool Routing MCP server listening on stdio", err=True)
     run_jev_mcp_server()
 
 
@@ -212,7 +222,7 @@ def mcp_server() -> None:
 @click.argument("harness", required=False)
 @click.option("--model", default="", help="Model id used to validate the Pi adapter")
 @click.option("--threshold", default=0.30, show_default=True, type=click.FloatRange(0.0, 1.0))
-@click.option("--no-live", is_flag=True, help="Skip the one-call Jev connectivity check")
+@click.option("--no-live", is_flag=True, help="Skip the one-call decision connectivity check")
 @click.option("--json", "as_json", is_flag=True, help="Emit machine-readable output")
 def setup(
     harness: str | None,
@@ -226,17 +236,21 @@ def setup(
     This developer-preview setup never writes credentials or harness config.
     """
     selected = (_profile(harness),) if harness else profiles()
-    key_present = bool(os.environ.get("TYPESAFE_API_KEY", "").strip())
+    key_present = credential_status()[1]
     probe: dict[str, object] = {"status": "skipped"}
     if not no_live and key_present:
         probe = _run_routing_probe(threshold)
     elif not no_live:
-        probe = {"status": "missing-key", "error": "TYPESAFE_API_KEY is not set"}
+        probe = {
+            "status": "missing-key",
+            "error": f"{credential_status()[0].api_key_env} is not set",
+        }
 
     rows = [_setup_row(profile, model=model) for profile in selected]
     ready = key_present and probe.get("status") == "ok"
     payload = {
-        "feature": "Jev Tool Routing",
+        "feature": "SystemOne Tool Routing",
+        "decision_provider": credential_status()[0].provider,
         "release_stage": "developer-preview",
         "writes_configuration": False,
         "typesafe_key_present": key_present,
@@ -247,20 +261,21 @@ def setup(
     if as_json:
         click.echo(json.dumps(payload, indent=2))
     else:
-        console.print("[bold]Jev Tool Routing · local setup[/bold]")
+        console.print("[bold]SystemOne Tool Routing · local setup[/bold]")
         console.print(
-            "TypeSafe key: " + ("[green]found[/green]" if key_present else "[red]missing[/red]")
+            f"{credential_status()[0].provider} decision key: "
+            + ("[green]found[/green]" if key_present else "[red]missing[/red]")
         )
         if probe.get("status") == "ok":
             console.print(
-                "Jev connectivity: [green]ok[/green] · "
+                "Decision connectivity: [green]ok[/green] · "
                 f"{probe['original_tools']}→{probe['selected_tools']} control tools · "
                 f"{probe['latency_ms']}ms"
             )
         elif probe.get("status") == "skipped":
-            console.print("Jev connectivity: [yellow]skipped[/yellow]")
+            console.print("Decision connectivity: [yellow]skipped[/yellow]")
         else:
-            console.print(f"Jev connectivity: [red]{probe.get('status')}[/red]")
+            console.print(f"Decision connectivity: [red]{probe.get('status')}[/red]")
         table = Table(title="Local harness readiness")
         table.add_column("Harness")
         table.add_column("Status")
@@ -282,14 +297,14 @@ def setup(
 @click.option("--threshold", default=0.30, show_default=True, type=click.FloatRange(0.0, 1.0))
 @click.option("--json", "as_json", is_flag=True, help="Emit machine-readable output")
 def verify(harness: str, model: str, threshold: float, as_json: bool) -> None:
-    """Verify the local adapter and Jev decision path for HARNESS.
+    """Verify the local adapter and decision-provider path for HARNESS.
 
     This controlled check does not spend coding-model tokens or claim that a
     harness with hidden tools received a reduced catalogue.
     """
     profile = _profile(harness)
     row = _setup_row(profile, model=model)
-    key_present = bool(os.environ.get("TYPESAFE_API_KEY", "").strip())
+    key_present = credential_status()[1]
     probe: dict[str, object] = {"status": "missing-key"}
     if key_present:
         probe = _run_routing_probe(threshold)
@@ -308,7 +323,8 @@ def verify(harness: str, model: str, threshold: float, as_json: bool) -> None:
     else:
         status = "verified"
     payload = {
-        "feature": "Jev Tool Routing",
+        "feature": "SystemOne Tool Routing",
+        "decision_provider": credential_status()[0].provider,
         "harness": profile.id,
         "status": status,
         "verified": verified,
@@ -332,7 +348,7 @@ def verify(harness: str, model: str, threshold: float, as_json: bool) -> None:
             if status in {"gateway-limited", "detect-only"}
             else "red"
         )
-        console.print(f"[bold]Jev Tool Routing · {profile.label}[/bold]")
+        console.print(f"[bold]SystemOne Tool Routing · {profile.label}[/bold]")
         console.print(f"Status: [{color}]{status}[/{color}]")
         console.print(f"Adapter: {'ready' if adapter_ready else 'not ready'}")
         console.print(f"Tool catalogue visible: {'yes' if catalogue_visible else 'no'}")
@@ -348,7 +364,7 @@ def verify(harness: str, model: str, threshold: float, as_json: bool) -> None:
         if profile.note:
             console.print(f"[yellow]{profile.note}[/yellow]")
         console.print(
-            "[dim]This check validates the adapter and Jev path without invoking the coding model. "
+            "[dim]This check validates the adapter and decision-provider path without invoking the coding model. "
             "The optimize run report verifies actual harness traffic.[/dim]"
         )
     if not verified:
@@ -379,7 +395,7 @@ def doctor(harness: str | None, as_json: bool) -> None:
     if as_json:
         click.echo(json.dumps(rows, indent=2))
         return
-    table = Table(title="SuperQode Jev Tool Routing")
+    table = Table(title="SuperQode SystemOne Tool Routing")
     table.add_column("Harness")
     table.add_column("Local")
     table.add_column("Support")
@@ -392,9 +408,9 @@ def doctor(harness: str | None, as_json: bool) -> None:
             row["integration"],
         )
     console.print(table)
-    if not os.environ.get("TYPESAFE_API_KEY"):
+    if not credential_status()[1]:
         console.print(
-            "[yellow]TYPESAFE_API_KEY is not set; the gateway will pass through unchanged.[/yellow]"
+            f"[yellow]{credential_status()[0].api_key_env} is not set; the gateway will pass through unchanged.[/yellow]"
         )
 
 
@@ -446,9 +462,9 @@ def environment(harness: str, provider: str | None, port: int, model: str, as_js
 @click.option("--threshold", default=0.30, show_default=True, type=click.FloatRange(0.0, 1.0))
 @click.option("--json", "as_json", is_flag=True, help="Emit machine-readable results")
 def benchmark(threshold: float, as_json: bool) -> None:
-    """Run the local labeled Jev Tool Routing benchmark."""
-    if not os.environ.get("TYPESAFE_API_KEY", "").strip():
-        raise click.ClickException("TYPESAFE_API_KEY is required")
+    """Run the local labeled SystemOne Tool Routing benchmark."""
+    if not credential_status()[1]:
+        raise click.ClickException(f"{credential_status()[0].api_key_env} is required")
     from superqode.providers.gateway.base import ToolDefinition
     from superqode.systemone.tool_router import ToolRoutingSettings, build_tool_router
 
@@ -460,7 +476,7 @@ def benchmark(threshold: float, as_json: bool) -> None:
         ToolRoutingSettings(mode="shadow", threshold=threshold, timeout_ms=5000)
     )
     if router is None:
-        raise click.ClickException("Jev Tool Routing is unavailable")
+        raise click.ClickException("SystemOne Tool Routing is unavailable")
 
     async def evaluate():
         return await asyncio.gather(
@@ -487,7 +503,8 @@ def benchmark(threshold: float, as_json: bool) -> None:
             }
         )
     summary = {
-        "feature": "Jev Tool Routing",
+        "feature": "SystemOne Tool Routing",
+        "decision_provider": credential_status()[0].provider,
         "threshold": threshold,
         "scenarios": rows,
         "average_reduction_percent": round(
@@ -499,7 +516,7 @@ def benchmark(threshold: float, as_json: bool) -> None:
     if as_json:
         click.echo(json.dumps(summary, indent=2))
         return
-    table = Table(title="Jev Tool Routing benchmark")
+    table = Table(title="SystemOne Tool Routing benchmark")
     table.add_column("Scenario")
     table.add_column("Tools")
     table.add_column("Reduction")
@@ -619,7 +636,7 @@ def run_harness(
         try:
             _wait_for_gateway(gateway_url, gateway)
             console.print(
-                f"[cyan]Jev Tool Routing · {profile.label} · {chosen_provider} · {mode}[/cyan]"
+                f"[cyan]SystemOne Tool Routing · {profile.label} · {chosen_provider} · {mode}[/cyan]"
             )
             if plan.note:
                 console.print(f"[yellow]{plan.note}[/yellow]")
@@ -733,14 +750,14 @@ def _wait_for_gateway(url: str, process: subprocess.Popen, timeout: float = 10.0
     deadline = time.monotonic() + timeout
     while time.monotonic() < deadline:
         if process.poll() is not None:
-            raise click.ClickException("Jev Tool Routing gateway exited during startup")
+            raise click.ClickException("SystemOne Tool Routing gateway exited during startup")
         try:
             with urlopen(url + "/healthz", timeout=0.25) as response:
                 if response.status == 200:
                     return
         except OSError:
             time.sleep(0.05)
-    raise click.ClickException("Jev Tool Routing gateway did not become ready")
+    raise click.ClickException("SystemOne Tool Routing gateway did not become ready")
 
 
 def _print_report(url: str, *, mode: str = "shadow") -> None:
@@ -751,7 +768,7 @@ def _print_report(url: str, *, mode: str = "shadow") -> None:
         return
     reduction_label = "applied reduction" if mode == "enforce" else "recommended reduction"
     console.print(
-        "[bold]Jev Tool Routing report[/bold] · "
+        "[bold]SystemOne Tool Routing report[/bold] · "
         f"{report['routed_requests']}/{report['model_requests']} routed requests · "
         f"{report['original_tools']}→{report['selected_tools']} tool entries · "
         f"{report['tool_entry_reduction_percent']}% {reduction_label} · "

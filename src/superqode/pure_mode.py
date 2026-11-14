@@ -185,7 +185,9 @@ class PureMode:
         self.last_context_selection = None
         self._sync_harness_session_fields()
 
-    def connect_decision(self, pack: str = "factory_route", *, spec=None) -> None:
+    def connect_decision(
+        self, pack: str = "factory_route", *, spec=None, decision_provider: str | None = None
+    ) -> None:
         """Connect a decision harness without selecting a generation provider."""
         from superqode.harness.loader import harness_spec_from_dict
         from superqode.systemone.config import resolve_systemone
@@ -198,7 +200,13 @@ class PureMode:
                     "name": f"decision-{loaded.id}",
                     "flavor": "decision",
                     "runtime": {"backend": "systemone"},
-                    "systemone": {"enabled": True, "client": "live", "pack": pack},
+                    "metadata": {"decision_provider_pinned": bool(decision_provider)},
+                    "systemone": {
+                        "enabled": True,
+                        "client": "live",
+                        "pack": pack,
+                        **({"provider": decision_provider} if decision_provider else {}),
+                    },
                 }
             )
         if not spec.is_decision or spec.runtime.backend != "systemone":

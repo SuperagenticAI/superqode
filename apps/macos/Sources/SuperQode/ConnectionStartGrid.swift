@@ -19,7 +19,7 @@ struct ConnectionStartGrid: View {
     Tile(id: "acp", title: "ACP agent", detail: "A coding agent you run as a local process.", symbol: "link", page: "acp"),
     Tile(id: "protocols", title: "Protocols", detail: "Reach an agent over ACP, A2A or UHP.", symbol: "network", page: "menu:protocols"),
     Tile(id: "builder", title: "Build your harness", detail: "Import a config, use presets or start with the wizard.", symbol: "hammer", page: "builder"),
-    Tile(id: "systemone", title: "SystemOne", detail: "Typed decisions with Jev from TypeSafe AI.", symbol: "checkmark.shield", page: "systemone"),
+    Tile(id: "systemone", title: "SystemOne", detail: "Typed decisions with Jev, Google or OpenAI.", symbol: "checkmark.shield", page: "systemone"),
   ]
 
   var body: some View {

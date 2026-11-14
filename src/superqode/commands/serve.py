@@ -11,6 +11,8 @@ from pathlib import Path
 from typing import Optional
 
 import click
+
+from superqode.systemone.cli import decision_options, apply_selection, credential_status
 from rich.console import Console
 
 from superqode.enterprise import require_enterprise
@@ -20,9 +22,20 @@ console = Console()
 
 @click.group()
 @click.pass_context
-def serve(ctx: click.Context):
+@decision_options
+def serve(ctx: click.Context, decision_provider, decision_model, reviewed_policy):
     """Server commands for IDE and web integration."""
-    if ctx.invoked_subcommand in {"api", "harness", "acp", "a2a", "uhp", "optimize", "jev"}:
+    apply_selection(decision_provider, decision_model, reviewed_policy)
+    if ctx.invoked_subcommand in {
+        "api",
+        "harness",
+        "acp",
+        "a2a",
+        "uhp",
+        "optimize",
+        "jev",
+        "decisions",
+    }:
         return
     if not require_enterprise("Server integrations"):
         raise SystemExit(1)
@@ -101,7 +114,7 @@ def serve_optimize(
     )
     if request_router is None:
         console.print(
-            "[yellow]TYPESAFE_API_KEY is not set; starting in transparent passthrough mode.[/yellow]"
+            f"[yellow]{credential_status()[0].api_key_env} is not set; starting in transparent passthrough mode.[/yellow]"
         )
     api_key = os.environ.get(upstream_key_env, "").strip() if upstream_key_env else ""
     try:
@@ -116,7 +129,7 @@ def serve_optimize(
     except (RuntimeError, ValueError) as exc:
         raise click.ClickException(str(exc)) from exc
 
-    console.print(f"[cyan]SuperQode Jev Tool Routing: http://{host}:{port}/v1[/cyan]")
+    console.print(f"[cyan]SuperQode SystemOne Tool Routing: http://{host}:{port}/v1[/cyan]")
     console.print(f"[dim]Upstream: {upstream} · routing: {mode if router else 'passthrough'}[/dim]")
     if allow_remote:
         console.print(
@@ -141,8 +154,8 @@ def serve_jev(host: str, port: int, jev_timeout_ms: int, allow_remote: bool) -> 
     is_loopback = host in {"127.0.0.1", "localhost", "::1"}
     if not is_loopback and not allow_remote:
         raise click.ClickException("Use --allow-remote to bind outside localhost.")
-    if not os.getenv("TYPESAFE_API_KEY", "").strip():
-        raise click.ClickException("TYPESAFE_API_KEY is required")
+    if not credential_status()[1]:
+        raise click.ClickException(f"{credential_status()[0].api_key_env} is required")
     token = os.getenv("SUPERQODE_JEV_SERVICE_TOKEN", "").strip()
     if not is_loopback and not token:
         raise click.ClickException("SUPERQODE_JEV_SERVICE_TOKEN is required for a remote bind")
@@ -156,8 +169,8 @@ def serve_jev(host: str, port: int, jev_timeout_ms: int, allow_remote: bool) -> 
         app = create_jev_service_app(coordinator=coordinator, token=token)
     except (RuntimeError, ValueError) as exc:
         raise click.ClickException(str(exc)) from exc
-    console.print(f"[cyan]Jev Tool Routing API: http://{host}:{port}/v1/route-tools[/cyan]")
-    console.print(f"[cyan]Jev Tool Routing MCP: http://{host}:{port}/mcp[/cyan]")
+    console.print(f"[cyan]SystemOne Tool Routing API: http://{host}:{port}/v1/route-tools[/cyan]")
+    console.print(f"[cyan]SystemOne Tool Routing MCP: http://{host}:{port}/mcp[/cyan]")
     uvicorn.run(app, host=host, port=port, log_level="info")
 
 
@@ -676,3 +689,6 @@ def serve_status(project: str):
         console.print(f"[dim]Web Server:[/dim] Not running")
 
     console.print()
+
+
+serve.add_command(serve_jev, name="decisions")

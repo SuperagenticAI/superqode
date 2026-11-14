@@ -18,6 +18,23 @@ from ._group import harness
     "--model", "model_name", envvar="SUPERQODE_MODEL", default="gpt-4o-mini", show_default=True
 )
 @click.option("--runtime", "runtime_name", default=None, help="Override runtime or backend")
+@click.option(
+    "--decision-provider",
+    type=click.Choice(["typesafe", "google", "openai"]),
+    default=None,
+    help="SystemOne decision engine, independent of the coding provider. New selections use shadow mode.",
+)
+@click.option(
+    "--decision-model", default=None, help="Model for the selected SystemOne decision engine"
+)
+@click.option(
+    "--decision-mode", type=click.Choice(["shadow", "enforce"]), default="shadow", show_default=True
+)
+@click.option(
+    "--reviewed-decision-policy",
+    is_flag=True,
+    help="Acknowledge evaluation of this decision provider/model policy before enforcement",
+)
 @click.option("--session", "session_id", default=None, help="Reuse a harness session id")
 @click.option(
     "--store",
@@ -63,6 +80,10 @@ def harness_run(
     provider,
     model_name,
     runtime_name,
+    decision_provider,
+    decision_model,
+    decision_mode,
+    reviewed_decision_policy,
     session_id,
     store_kind,
     working_dir,
@@ -104,6 +125,34 @@ def harness_run(
             if spec_path is not None
             else resolve_harness(reference, root=working_dir).spec
         )
+        if decision_provider:
+            from dataclasses import replace
+            from superqode.systemone.providers import get_provider
+
+            definition = get_provider(decision_provider)
+            if decision_model and decision_model not in definition.models:
+                raise click.ClickException("Unsupported decision model")
+            if decision_mode == "enforce" and not reviewed_decision_policy:
+                raise click.UsageError(
+                    "Evaluate this provider/model policy first, then explicitly use --reviewed-decision-policy for enforcement"
+                )
+            spec = replace(
+                spec,
+                metadata={**spec.metadata, "decision_provider_pinned": True},
+                systemone=replace(
+                    spec.systemone,
+                    enabled=True,
+                    client="live",
+                    provider=definition.id,
+                    model=decision_model or definition.model,
+                    endpoint=definition.endpoint,
+                    api_key_env=definition.api_key_env,
+                    mode=decision_mode,
+                    policy_reviewed=reviewed_decision_policy,
+                ),
+            )
+        elif decision_model or reviewed_decision_policy or decision_mode != "shadow":
+            raise click.UsageError("Use --decision-provider with decision-model and policy options")
         store = create_harness_store(
             store_kind or spec.observability.run_store,
             (

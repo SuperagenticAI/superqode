@@ -985,8 +985,14 @@ class AgentLoop:
         if tool_router is None:
             try:
                 from ..systemone.tool_router import build_tool_router
+                from ..systemone.config import resolve_systemone
 
-                tool_router = build_tool_router()
+                decision_settings = resolve_systemone(
+                    spec=config.harness_spec, explicit=config.systemone
+                )
+                tool_router = build_tool_router(
+                    decision_settings=decision_settings if decision_settings.enabled else None
+                )
             except (ImportError, ValueError):
                 tool_router = None
         self.tool_router = tool_router

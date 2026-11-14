@@ -250,6 +250,8 @@ class SystemOneSpec:
     trace_dir: str = ""
     tool_search_mode: str = "off"  # off | shadow | rerank
     client: str = "stub"  # stub | replay | live
+    provider: str = "typesafe"
+    policy_reviewed: bool = False
     pack: str = "tool_gate"
     endpoint: str = "https://api.typesafe.ai/v1/systemone"
     api_key_env: str = "TYPESAFE_API_KEY"

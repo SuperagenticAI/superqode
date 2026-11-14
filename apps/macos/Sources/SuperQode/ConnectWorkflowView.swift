@@ -175,9 +175,9 @@ struct ConnectionView: View {
           HarnessConfigurationView(mode: String(page.dropFirst(10))) { id in
             selectHarness(id)
           }
-        } else if page == "systemone" {
-          SystemOneConnectionView {
-            selectHarness("systemone")
+        } else if page == "systemone" || page.hasPrefix("systemone:") {
+          SystemOneConnectionView(initialProvider: page.hasPrefix("systemone:") ? String(page.dropFirst(10)) : "typesafe") { id in
+            selectHarness(id)
           }
         } else if page.hasPrefix("vendor-key:") {
           VendorKeyConnectionView(entry: String(page.dropFirst(11)))
@@ -399,7 +399,7 @@ struct ConnectionView: View {
     if page == "configure:wizard" { return "Harness wizard" }
     if page == "configure:rlm" { return "RLM profile" }
     if page == "configure:rlm-routing" { return "A2A routing" }
-    if page == "systemone" { return "SystemOne" }
+    if page == "systemone" || page.hasPrefix("systemone:") { return "SystemOne" }
     if page.hasPrefix("vendor-key:") { return "Vendor API key" }
     if page.hasPrefix("leaf:") { return string(selected, "name", "Connection") }
     if page == "builder" { return "Build your own harness" }
@@ -417,7 +417,7 @@ struct ConnectionView: View {
     if page == "configure:wizard" { return "Harness wizard" }
     if page == "configure:rlm" { return "RLM profile" }
     if page == "configure:rlm-routing" { return "A2A routing" }
-    if page == "systemone" { return "SystemOne" }
+    if page == "systemone" || page.hasPrefix("systemone:") { return "SystemOne" }
     if page.hasPrefix("vendor-key:") { return "Vendor API key" }
     if page.hasPrefix("leaf:") { return string(selected, "description") }
     if ["acp", "acp-clients"].contains(page) {
@@ -711,7 +711,9 @@ struct ConnectionView: View {
       return
     }
     switch string(row, "connector") {
-    case "systemone": push("systemone")
+    case "systemone":
+      let choice = string(row, "id")
+      push(choice == "systemone-google" ? "systemone:google" : choice == "systemone-openai" ? "systemone:openai" : "systemone")
     case "acp-picker": push("acp")
     case "a2a-picker": push("protocol:a2a")
     case "uhp-picker": push("protocol:uhp")

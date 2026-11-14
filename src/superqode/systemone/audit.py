@@ -59,7 +59,7 @@ def finish_trace(loop: Any, call_id: str | None, action: str, result: Any = None
         logger.warning("System One trace could not be recorded")
 
 
-def disagreement_report(
+def _disagreement_summary(
     events: list[dict[str, Any]], reference: str = "policyAction"
 ) -> dict[str, Any]:
     """Compare only evaluated decisions with explicit labels; unknowns stay unknown."""
@@ -113,6 +113,29 @@ def disagreement_report(
         "latency_p50_ms": latencies[(len(latencies) - 1) // 2] if latencies else None,
         "confusion_matrix": dict(sorted(matrix.items())),
     }
+
+
+def disagreement_report(
+    events: list[dict[str, Any]], reference: str = "policyAction"
+) -> dict[str, Any]:
+    """Keep the aggregate contract and report each decision engine separately."""
+    report = _disagreement_summary(events, reference)
+    groups: dict[str, list[dict[str, Any]]] = {}
+    for event in events:
+        evaluation = event.get("evaluation") or {}
+        provider = str(event.get("provider") or evaluation.get("provider") or "typesafe")
+        model = str(
+            evaluation.get("resolved_model")
+            or evaluation.get("model")
+            or event.get("model")
+            or "unknown"
+        )
+        groups.setdefault(provider + "/" + model, []).append(event)
+    report["by_decision_engine"] = {
+        identity: _disagreement_summary(rows, reference)
+        for identity, rows in sorted(groups.items())
+    }
+    return report
 
 
 def distribution_diagnostics(probabilities: dict[str, float]) -> dict[str, float | None]:

@@ -58,7 +58,12 @@ def publish_decision(loop: Any, decision: GateDecision, tool: str) -> None:
         **decision.metadata(),
     }
     settings = _settings(loop)
-    event.update(mode=settings.mode, intendedAction=decision.action.value)
+    event.update(
+        mode=settings.mode,
+        provider=settings.provider,
+        policy_reviewed=settings.policy_reviewed,
+        intendedAction=decision.action.value,
+    )
     loop.last_systemone_decision = event
     callback = getattr(loop, "on_systemone", None)
     if callback:
@@ -77,7 +82,7 @@ def publish_decision(loop: Any, decision: GateDecision, tool: str) -> None:
 def format_decision(event: dict[str, Any]) -> str:
     evaluation = event.get("evaluation") or {}
     status = evaluation.get("status", "skipped")
-    details = f"Jev {event.get('mode', 'enforce')} {status} · {event.get('tool', '')} · {event.get('action', 'ask').upper()}"
+    details = f"SystemOne {event.get('provider', 'typesafe')} {event.get('mode', 'enforce')} {status} · {event.get('tool', '')} · {event.get('action', 'ask').upper()}"
     if status == "success":
         details += f" · {evaluation.get('model', event.get('client', ''))} · {evaluation.get('latency_ms', 0)}ms"
         usage = evaluation.get("usage") or {}
@@ -179,6 +184,8 @@ async def apply_systemone_gate(
     event = loop.last_systemone_decision
     event["state"] = state.to_payload()
     event["model"] = settings.model
+    event["provider"] = settings.provider
+    event["policy_reviewed"] = settings.policy_reviewed
     event["thresholds"] = pack.thresholds.model_dump()
     from .audit import distribution_diagnostics
 

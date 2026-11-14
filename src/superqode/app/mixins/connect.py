@@ -2081,18 +2081,21 @@ class ConnectMixin:
             self._show_connect_type_picker(log, menu=CONNECT_MENU_SYSTEMONE)
         elif conn == "systemone":
             import os
+            from superqode.systemone.providers import get_provider
 
-            if not os.environ.get("TYPESAFE_API_KEY", "").strip():
+            decision_provider = {"systemone-google": "google", "systemone-openai": "openai"}.get(
+                profile.id, "typesafe"
+            )
+            definition = get_provider(decision_provider)
+            if not os.environ.get(definition.api_key_env, "").strip():
                 log.add_info(
-                    "Jev needs a TypeSafe AI API key. Get one at https://console.typesafe.ai "
-                    "(request access at https://typesafe.ai if needed). In your terminal, run "
-                    "export TYPESAFE_API_KEY='your-key', restart SuperQode, then choose "
-                    ":connect → Connect with SystemOne models → Jev."
+                    f"{definition.label} needs {definition.api_key_env}. Setup: {definition.docs}. "
+                    "Set the key in your launching terminal and restart SuperQode. API usage is billed separately."
                 )
                 return
             pure = self._ensure_pure_mode()
             try:
-                pure.connect_decision("factory_route")
+                pure.connect_decision("factory_route", decision_provider=decision_provider)
             except (ValueError, OSError) as exc:
                 log.add_error(str(exc))
                 return

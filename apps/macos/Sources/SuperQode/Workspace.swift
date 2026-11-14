@@ -971,6 +971,13 @@ private func jobStamp(_ row: [String: Any]) -> Double {
       let key = try? credentialStore.read("systemone", prompt: false) {
       _ = try? await engine.call("connect.systemone.key", ["key": key])
     }
+    for provider in UserDefaults.standard.stringArray(forKey: "nativeSystemOneProviders") ?? [] {
+      guard ["typesafe", "google", "openai"].contains(provider) else { continue }
+      let identity = provider == "typesafe" ? "systemone" : "systemone:" + provider
+      if let key = try? credentialStore.read(identity, prompt: false) {
+        _ = try? await engine.call("connect.systemone.key", ["provider": provider, "key": key])
+      }
+    }
     let settings = try await engine.call("settings.get") as? [String: Any] ?? [:]
     guard generation == projectGeneration else { return }
     if recordHistory { recordNavigation(previous) }

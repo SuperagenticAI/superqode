@@ -23,6 +23,12 @@ Local `serve a2a` works today. See [A2A Protocol](../providers/a2a.md#public-age
 
 ## serve jev
 
+The provider-neutral alias is `superqode serve decisions`. Select Google with
+`superqode serve --decision-provider google decisions`, or OpenAI with
+`superqode serve --decision-provider openai decisions`. Each uses its own API
+key. Existing `serve jev` invocations keep the TypeSafe default. See
+[decision-provider setup](../advanced/systemone-providers.md).
+
 Run the reusable Jev Tool Routing service locally:
 
 ```bash

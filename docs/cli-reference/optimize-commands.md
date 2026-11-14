@@ -1,5 +1,12 @@
 # Jev Tool Routing Commands
 
+Routing also supports Google Gemini Decision and OpenAI Decisions. Use
+`superqode optimize --decision-provider google <subcommand>` or
+`superqode optimize --decision-provider openai <subcommand>`. Decision selection
+is independent of a harness's coding `--provider` and `--model`. Existing
+invocations keep their TypeSafe defaults. See [Decision providers](../advanced/systemone-providers.md)
+for credentials, shadow mode, reviewed enforcement and saved launchers.
+
 The `superqode optimize` command group adds local, provider-neutral Jev Tool
 Routing to supported coding harnesses. Start in shadow mode so Jev recommends a
 smaller catalogue while the harness still receives its complete tool list.

@@ -43,6 +43,7 @@ def review(output: Path) -> dict:
         "review": rows,
         "counts": counts,
         "options": manifest["options"],
+        "decision": (manifest.get("harness") or {}).get("systemone", {}),
         "report": report,
         "revision": hashlib.sha256((output / "run.json").read_bytes()).hexdigest(),
         "needs_acquisition": manifest["workflow"] == "active"
@@ -62,6 +63,8 @@ def handle(service, method, params):
     if method == "tuning.prepare":
         options = tune.TuneOptions(
             pack=str(params.get("pack") or "factory_route"),
+            decision_provider=str(params.get("decision_provider") or "typesafe"),
+            decision_model=str(params.get("decision_model") or ""),
             reflection_lm=str(params.get("reflection_model") or ""),
             max_evals=int(params.get("max_evals", 30)),
             max_reflection_cost=float(params.get("max_cost", 2)),
