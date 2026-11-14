@@ -67,6 +67,13 @@ def build_shell_env(base: Optional[Dict[str, str]] = None) -> Optional[Dict[str,
     """
     if any(key.startswith("HERDR_") for key in (os.environ if base is None else base)):
         base = child_env(base)
+    # App-owned decision credentials are not a shell credential, even when a
+    # developer deliberately inherits their ordinary command environment.
+    source = os.environ if base is None else base
+    if "SUPERQODE_SYSTEMONE_API_KEY" in source:
+        base = {
+            name: value for name, value in source.items() if name != "SUPERQODE_SYSTEMONE_API_KEY"
+        }
     policy = env_policy()
     if policy in ("inherit", "off", "none", ""):
         return None if base is None else dict(base)

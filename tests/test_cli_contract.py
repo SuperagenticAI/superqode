@@ -181,11 +181,11 @@ EXPECTED_COMMAND_COUNT = 334
 # root and connect help pages. Both renderers still expose 331 routes.
 # SystemOne adds decision, decision-providers and serve decisions (331 -> 334).
 # Help fixtures were regenerated without invoking callbacks or running tests.
-EXPECTED_HELP_TREE_SHA256 = "52158843fe080cb23b00d7858a989dbaeb33f2a51a63feda6a88c28945a0c54b"
+EXPECTED_HELP_TREE_SHA256 = "de7e8197b076c282b4ac30c712c0a24abb34124816d0c9d9a2465b6dc68a761b"
 # Click 8.5 renders optional group commands as [COMMAND] and case-insensitive
 # choices in lower case. Both verified renders expose the same command tree.
 EXPECTED_MODERN_CLICK_HELP_TREE_SHA256 = (
-    "de938f9f12100a4187207e25eb937b7d7b40b217da318135efe361ddec644a93"
+    "9fef4f9be5895f6024116bb4c23f732a23b41253ba4586d07a380ea6e61db136"
 )
 
 

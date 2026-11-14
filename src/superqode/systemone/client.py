@@ -163,6 +163,12 @@ def _load_replay(path: Path) -> dict[str, dict[str, Mapping[str, Any]]]:
         traces: dict[str, dict[str, Mapping[str, Any]]] = {}
         for file in sorted(path.glob("*.json")):
             payload = json.loads(file.read_text(encoding="utf-8"))
+            if (
+                isinstance(payload, dict)
+                and payload.get("record_version") == 1
+                and payload.get("status") != "success"
+            ):
+                continue
             if file.name == "verdict.json" and "action" in payload:
                 continue
             answers = _answers_from_payload(payload)
@@ -180,6 +186,8 @@ def _load_replay(path: Path) -> dict[str, dict[str, Mapping[str, Any]]]:
 def _answers_from_payload(payload: Any) -> dict[str, Mapping[str, Any]]:
     if not isinstance(payload, dict):
         raise SystemOneError("replay payload must be an object")
+    if payload.get("record_version") == 1 and payload.get("status") != "success":
+        raise SystemOneError("Recorded evaluation failed; there are no answers to replay")
     if "response" in payload and "request" in payload:
         payload = payload["response"]
         if not isinstance(payload, dict):

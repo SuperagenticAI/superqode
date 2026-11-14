@@ -23,6 +23,9 @@ def configure(service, params):
         raise ValueError("Choose shadow or reviewed enforcement")
     if mode == "enforce" and not reviewed:
         raise ValueError("Review this provider/model policy before enforcement")
+    record = params.get("record_decisions", False)
+    if not isinstance(record, bool):
+        raise ValueError("Choose whether to record decision calls")
     name = "systemone-" + provider.id + "-" + uuid4().hex[:8]
     spec = systemone_template(name=name)
     spec = replace(
@@ -43,6 +46,9 @@ def configure(service, params):
             mode=mode,
             policy_reviewed=reviewed,
             tool_search_mode="rerank" if mode == "enforce" else "shadow",
+            record_dir=str(service.root / "decision-records" / params["project"] / name)
+            if record
+            else "",
         ),
     )
     return save_harness(

@@ -32,7 +32,13 @@ def decision_providers():
     help="Text or JSON state. This explicit command makes a metered decision request.",
 )
 @click.option("--timeout-ms", type=click.IntRange(min=1, max=60000), default=5000)
-def decision(provider, model, pack, prompt, timeout_ms):
+@click.option(
+    "--record-dir",
+    type=click.Path(file_okay=False, path_type=Path),
+    default=None,
+    help="Opt in to private, redacted API records, including failures and retries",
+)
+def decision(provider, model, pack, prompt, timeout_ms, record_dir):
     """Evaluate a decision pack using your selected provider's API key."""
     import asyncio
     from types import SimpleNamespace
@@ -53,6 +59,7 @@ def decision(provider, model, pack, prompt, timeout_ms):
                 provider=provider,
                 model=model or definition.model,
                 timeout_ms=timeout_ms,
+                record_dir=str(record_dir or ""),
             ),
             environ={key: value for key, value in os.environ.items() if key not in SELECTION_ENV},
         )

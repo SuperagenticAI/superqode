@@ -6,16 +6,13 @@ import asyncio
 import json
 import math
 import os
-import time
-from pathlib import Path
-from uuid import uuid4
 
 import httpx
 
 from .client import SystemOneError, SystemOneTimeout
 from .live import LiveSystemOneClient
 from .providers import get_provider
-from .state import prepare_decision_state, redact_evidence
+from .state import prepare_decision_state
 from .types import ChoiceQuestion, NoulQuestion, SchemaViolation, coerce_questions, wire_questions
 
 
@@ -104,6 +101,7 @@ class _DecisionAPIClient(LiveSystemOneClient):
         )
         try:
             for attempt in range(3):
+                event = self._begin_attempt()
                 try:
                     async with client.stream(
                         "POST",
@@ -112,6 +110,10 @@ class _DecisionAPIClient(LiveSystemOneClient):
                         json=payload,
                         follow_redirects=False,
                     ) as response:
+                        event.update(
+                            http_status=response.status_code,
+                            request_id=response.headers.get("x-request-id", ""),
+                        )
                         chunks = []
                         size = 0
                         async for chunk in response.aiter_bytes():
@@ -186,11 +188,11 @@ class _DecisionAPIClient(LiveSystemOneClient):
         if self.record_dir is None:
             return
         # Normalize recordings so existing replay works for all providers.
-        self.record_dir.mkdir(parents=True, exist_ok=True)
-        path = Path(self.record_dir) / f"{int(time.time() * 1000)}-{uuid4().hex[:8]}.json"
         record = {
+            "status": "success",
             "provider": self.provider,
             "adapter_version": 1,
+            "evaluation": answers.metadata,
             "request": {
                 "state": prepare_decision_state(state),
                 "questions": wire_questions(questions),
@@ -204,8 +206,7 @@ class _DecisionAPIClient(LiveSystemOneClient):
                 "usage": self._usage(body),
             },
         }
-        with os.fdopen(os.open(path, os.O_WRONLY | os.O_CREAT | os.O_EXCL, 0o600), "w") as stream:
-            json.dump(redact_evidence(record), stream, ensure_ascii=False)
+        self._write_record(record, typed_answers=record["response"]["answers"])
 
     def _validate(self, raw, questions):
         if set(raw) != set(questions):

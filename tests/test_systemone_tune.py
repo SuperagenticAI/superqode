@@ -497,7 +497,7 @@ def test_installer_targets_running_python_without_shell(monkeypatch):
 def test_preflight_rejects_replay_and_offline(tmp_path, monkeypatch):
     out = prepare(tmp_path)
     monkeypatch.setenv("SUPERQODE_SYSTEMONE", "replay")
-    with pytest.raises(ValueError, match="live Jev"):
+    with pytest.raises(ValueError, match="live decision"):
         tune.preflight(tune.load_run(out), check_gepa=False)
 
 

@@ -331,6 +331,7 @@ struct SystemOneConnectionView: View {
   @State private var busy = false
   @State private var reviewed = false
   @State private var enforce = false
+  @State private var recordDecisions = false
   private var selected: [String: Any] { providers.first { string($0, "id") == provider } ?? [:] }
   private var identity: String { provider == "typesafe" ? "systemone" : "systemone:" + provider }
   private var models: [String] { selected["models"] as? [String] ?? [] }
@@ -383,6 +384,9 @@ struct SystemOneConnectionView: View {
           VStack(alignment: .leading, spacing: 10) {
             Toggle("I reviewed this model and policy on representative held-out examples", isOn: $reviewed)
             Toggle("Enforce reviewed decisions and tool discovery", isOn: $enforce).disabled(!reviewed)
+            Toggle("Record redacted decision API calls on this Mac", isOn: $recordDecisions)
+            Text("Records include the provider, model, retries, usage and outcome. Successful records also include redacted evidence and questions for replay; review them before sharing.")
+              .font(.caption).foregroundStyle(.secondary)
             Text("This acknowledgement does not certify quality. Hard denials still apply; provider confidence scales differ. A new model requires a new review.")
               .font(.caption).foregroundStyle(.secondary)
           }.disabled(busy)
@@ -452,7 +456,7 @@ struct SystemOneConnectionView: View {
         _ = try await app.engine.call("connect.systemone.key", ["provider": provider, "key": key])
         let result = try await app.engine.call("connect.systemone.configure", [
           "project": app.projectID, "provider": provider, "model": model,
-          "policy_reviewed": reviewed, "mode": reviewed && enforce ? "enforce" : "shadow",
+          "policy_reviewed": reviewed, "mode": reviewed && enforce ? "enforce" : "shadow", "record_decisions": recordDecisions,
         ]) as? [String: Any] ?? [:]
         let id = string(result, "id")
         guard !id.isEmpty else { throw EngineError(message: "The engine did not return a decision harness.") }

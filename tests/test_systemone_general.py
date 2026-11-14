@@ -200,7 +200,7 @@ async def test_mounted_tui_connects_decision_pack_and_evaluates_input(monkeypatc
         await pilot.press("enter")
         await pilot.pause()
         text = "\n".join(line.text for line in log.lines)
-        assert "coding provider" in text
+        assert "coding model" in text
         assert not app._pure_mode.session.connected
         entry.value = ":connect systemone factory_route"
         await pilot.press("enter")

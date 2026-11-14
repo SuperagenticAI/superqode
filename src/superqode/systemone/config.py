@@ -153,7 +153,9 @@ def resolve_systemone(
         policy_reviewed = bool(_truthy_env(env["SUPERQODE_SYSTEMONE_POLICY_REVIEWED"]))
     replay_path = str(getattr(declared, "replay_path", None) or "")
     replay_trace = str(getattr(declared, "replay_trace", None) or "")
-    record_dir = str(getattr(declared, "record_dir", None) or "")
+    record_dir = str(
+        env.get("SUPERQODE_SYSTEMONE_RECORD_DIR") or getattr(declared, "record_dir", None) or ""
+    )
     timeout_ms = int(getattr(declared, "timeout_ms", None) or 5000)
     airplane = str(getattr(declared, "airplane", None) or "skip").strip().lower() or "skip"
 

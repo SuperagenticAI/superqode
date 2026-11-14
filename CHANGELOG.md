@@ -13,6 +13,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Provider-aware tool routing, discovery, context pruning, rubric grading and GEPA Tune. Native setup includes provider documentation, explicit connectivity checks, session-only or Keychain keys, and project-scoped harness profiles. Routing launchers retain decision settings without credentials.
 - Shadow defaults for new Google/OpenAI policies, explicit reviewed enforcement, strict native response translation, bounded evaluation deadlines and conservative handling of refusals, safety blocks and invalid responses. Existing Jev commands and custom SystemOne-compatible endpoints remain available.
 
+- Opt-in private decision API records across CLI, TUI and macOS, including outcomes, retries, timeouts, cancellations and safe usage telemetry. Checked-in cloud validation includes per-case results and simulated API-call metadata.
+
+### Fixed
+
+- Decision recording preserves typed answer identifiers and token counters for replay while redacting credentials. Failed records cannot replay as successful decisions. App-managed decision credentials are removed from model-spawned shell environments.
+
 ## [2.31.15] - 2026-11-13
 
 ### Changed

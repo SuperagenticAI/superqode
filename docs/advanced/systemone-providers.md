@@ -213,3 +213,32 @@ supports 400 questions and 10 rubric levels. Unsupported packs fail before
 sending. No adapter silently drops questions or changes rubric levels. Safety
 blocks, per-question refusals, malformed responses and timeouts never become
 affirmative decisions. Optional live recordings use the shared replay format.
+
+## Record decision API calls
+
+Recording is opt-in because successful records include redacted evidence and
+question text. Review records before sharing; redaction is not a guarantee that
+all private project information has been removed.
+
+Use `--record-dir` for a standalone CLI request:
+
+```sh
+superqode harness decision --provider google --pack factory_route \
+  --record-dir ./decision-records --prompt 'Review this code change'
+```
+
+For a harness, set `systemone.record_dir` or
+`SUPERQODE_SYSTEMONE_RECORD_DIR`. In macOS setup, Advanced offers **Record
+redacted decision API calls on this Mac**. App-managed files stay beneath the
+private app state folder, grouped by project and profile.
+
+Each evaluation writes a private file, including failures, refusals, timeouts,
+cancellations and unsupported requests. Records identify the provider, model,
+endpoint, latency, outcome and observed HTTP attempts. Successful records also
+retain normalized answers, question fingerprints and available token usage.
+Unknown usage stays unknown. Authentication headers and raw provider error
+bodies are not recorded. Files use owner-only permissions.
+
+Replay accepts successful records and skips failed evaluations when loading a
+recording directory. A failed record alone cannot become a successful replay.
+These local records do not upload themselves or start another model request.

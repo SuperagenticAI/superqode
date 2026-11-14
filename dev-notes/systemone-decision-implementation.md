@@ -1,9 +1,10 @@
 # SystemOne Google/OpenAI implementation handoff
 
 Implemented against main after the 14 November 2026 ecosystem review.
-User instruction: do not run tests, native builds, CI, or paid inference here.
-None were run for this implementation. Source formatting and CLI help fixture
-generation were performed; generating help never invokes command callbacks.
+The initial implementation followed the user's instruction to skip tests and
+builds. The user subsequently requested local cloud tests and API/case records.
+See [validation results](systemone-validation.md) for the later executed checks
+and their limits. GitHub CI, native builds and paid API inference remain unrun.
 
 ## Implemented surfaces
 
@@ -69,7 +70,8 @@ provider charges. Paid account tests were not performed during development.
 
 ## Validation for the user's system
 
-These checks are for the validation owner to run later, not checks performed here.
+The cloud tests now cover the Python/API cases described in the validation
+report. Native Mac and real-account checks remain for the validation owner.
 
 1. Build the Mac app and run the project's Python/Swift checks. Exercise CLI help,
    new TUI completions, provider selection and the existing Jev/custom endpoint
