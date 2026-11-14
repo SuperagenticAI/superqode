@@ -325,7 +325,7 @@ struct SystemOneConnectionView: View {
   @State private var provider = "typesafe"
   @State private var model = "jev-1.13.0"
   @State private var key = ""
-  @State private var remember = true
+  @State private var remember = false
   @State private var failure = ""
   @State private var status = ""
   @State private var busy = false
@@ -339,28 +339,16 @@ struct SystemOneConnectionView: View {
 
   var body: some View {
     ScrollView {
-      VStack(alignment: .leading, spacing: 20) {
+      VStack(alignment: .leading, spacing: 16) {
         PageTitle(eyebrow: "SystemOne", title: "Connect the decision engine",
-          subtitle: "Choose who evaluates typed questions, tool relevance and policy checks. Your coding model stays independent and writes the code.")
-        Picker("Decision engine", selection: $provider) {
-          ForEach(providers, id: \.projectRowID) { row in
-            Text(string(row, "label")).tag(string(row, "id"))
-          }
-        }.disabled(busy || providers.isEmpty)
-        if !selected.isEmpty {
-          HStack(spacing: 10) {
-            ProviderMark(providerID: provider).frame(width: 26, height: 26).accessibilityHidden(true)
-            Text(string(selected, "label")).font(.headline)
-          }
-        }
-        Picker("Decision model", selection: $model) {
-          ForEach(models, id: \.self) { value in Text(value).tag(value) }
-        }.disabled(busy)
+          subtitle: "Choose a provider for typed decisions, tool relevance and policy checks. You’ll choose your coding model separately.")
+        if !providers.isEmpty { providerSelection }
+        if !models.isEmpty { modelSelection }
         if let url = URL(string: string(selected, "docs")), !selected.isEmpty {
           Link("Provider setup and API documentation", destination: url)
         }
-        Text("Decisions use a separate API key and usage-based billing. Bounded task and tool evidence is sent directly to the selected provider, even when your coding model runs locally. Saving makes no model request.")
-          .font(.callout).foregroundStyle(.secondary)
+        Text("Decision requests send task and tool context to the provider, even with a local coding model. They use a separate API key and are billed by usage. Saving sends no request.")
+          .font(.callout).foregroundStyle(.secondary).fixedSize(horizontal: false, vertical: true)
         SecureField(string(selected, "api_key_env", "API key"), text: $key)
           .textFieldStyle(.roundedBorder).disabled(busy)
         Button("Load saved decision key") {
@@ -400,13 +388,20 @@ struct SystemOneConnectionView: View {
         if !failure.isEmpty { Text(failure).foregroundStyle(.orange).textSelection(.enabled) }
         if !status.isEmpty { Text(status).foregroundStyle(.secondary).textSelection(.enabled) }
         if busy { ProgressView("Working with the decision engine…") }
-        HStack {
-          Button("Test decision…") { testDecision() }.disabled(!ready)
-          Button("Connect and choose coding model") { connect() }
-            .buttonStyle(BrandButtonStyle()).disabled(!ready || app.projectID.isEmpty)
-        }
       }.padding(28).frame(maxWidth: .infinity, alignment: .topLeading)
     }.defaultScrollAnchor(.top)
+      .safeAreaInset(edge: .bottom, spacing: 0) {
+        VStack(spacing: 0) {
+          Divider()
+          ViewThatFits(in: .horizontal) {
+            HStack(spacing: 12) { connectionActions }
+            VStack(alignment: .leading, spacing: 8) { connectionActions }
+          }
+          .frame(maxWidth: .infinity, alignment: .leading)
+          .padding(.horizontal, 28)
+          .padding(.vertical, 12)
+        }.background(Color.qPanel)
+      }
       .task {
         do {
           providers = try await app.engine.call("connect.systemone.providers") as? [[String: Any]] ?? []
@@ -420,9 +415,75 @@ struct SystemOneConnectionView: View {
       .onChange(of: key) { _, _ in status = "" }
   }
 
+  private var providerSelection: some View {
+    VStack(alignment: .leading, spacing: 8) {
+      Text("Decision engine").font(.headline).accessibilityAddTraits(.isHeader)
+      LazyVGrid(columns: [GridItem(.adaptive(minimum: 170), spacing: 10, alignment: .top)], spacing: 10) {
+        ForEach(providers, id: \.projectRowID) { row in
+          let id = string(row, "id")
+          let isSelected = provider == id
+          Button { provider = id } label: {
+            VStack(alignment: .leading, spacing: 10) {
+              HStack {
+                ProviderMark(providerID: id).frame(width: 28, height: 28)
+                Spacer()
+                selectionMark(isSelected)
+              }.accessibilityHidden(true)
+              Text(string(row, "label")).font(.headline)
+            }
+            .multilineTextAlignment(.leading)
+            .fixedSize(horizontal: false, vertical: true)
+            .padding(12)
+            .frame(maxWidth: .infinity, minHeight: 86, alignment: .topLeading)
+            .contentShape(Rectangle())
+          }
+          .buttonStyle(ConnectionChoiceStyle(selected: isSelected))
+          .accessibilityIdentifier("systemone.provider." + id)
+          .accessibilityAddTraits(isSelected ? .isSelected : [])
+        }
+      }.frame(maxWidth: 700, alignment: .leading)
+    }.disabled(busy)
+  }
+
+  private var modelSelection: some View {
+    VStack(alignment: .leading, spacing: 8) {
+      Text("Decision model").font(.headline).accessibilityAddTraits(.isHeader)
+      LazyVGrid(columns: [GridItem(.adaptive(minimum: 170), spacing: 10)], spacing: 10) {
+        ForEach(models, id: \.self) { value in
+          let isSelected = model == value
+          Button { model = value } label: {
+            HStack(spacing: 8) {
+              selectionMark(isSelected).accessibilityHidden(true)
+              Text(value).font(.system(.callout, design: .monospaced))
+                .multilineTextAlignment(.leading).fixedSize(horizontal: false, vertical: true)
+            }
+            .padding(10)
+            .frame(maxWidth: .infinity, minHeight: 38, alignment: .leading)
+            .contentShape(Rectangle())
+          }
+          .buttonStyle(ConnectionChoiceStyle(selected: isSelected))
+          .accessibilityIdentifier("systemone.model." + value)
+          .accessibilityAddTraits(isSelected ? .isSelected : [])
+        }
+      }.frame(maxWidth: 400, alignment: .leading)
+    }.disabled(busy)
+  }
+
+  private func selectionMark(_ isSelected: Bool) -> some View {
+    Image(systemName: isSelected ? "checkmark.circle.fill" : "circle")
+      .font(.callout).foregroundStyle(isSelected ? Color.qAccent : Color.secondary)
+  }
+
+  @ViewBuilder private var connectionActions: some View {
+    Button("Test decision…") { testDecision() }.disabled(!ready)
+    Button("Connect and choose coding model") { connect() }
+      .buttonStyle(BrandButtonStyle()).disabled(!ready || app.projectID.isEmpty)
+  }
+
   private func restoreSelection() {
     model = string(selected, "model")
     key = (try? app.credentialStore.read(identity, prompt: false)) ?? ""
+    remember = false
     reviewed = false; enforce = false; failure = ""; status = ""
   }
 
@@ -452,12 +513,6 @@ struct SystemOneConnectionView: View {
           var saved = UserDefaults.standard.stringArray(forKey: "nativeSystemOneProviders") ?? []
           if !saved.contains(provider) { saved.append(provider) }
           UserDefaults.standard.set(saved, forKey: "nativeSystemOneProviders")
-        } else {
-          try app.credentialStore.remove(identity)
-          var saved = UserDefaults.standard.stringArray(forKey: "nativeSystemOneProviders") ?? []
-          saved.removeAll { $0 == provider }
-          UserDefaults.standard.set(saved, forKey: "nativeSystemOneProviders")
-          if provider == "typesafe" { UserDefaults.standard.set(false, forKey: "nativeSystemOneKey") }
         }
         _ = try await app.engine.call("connect.systemone.key", ["provider": provider, "key": key])
         let result = try await app.engine.call("connect.systemone.configure", [

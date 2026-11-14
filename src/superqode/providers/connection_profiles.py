@@ -747,8 +747,8 @@ _MODEL_PROFILES: List[ConnectionProfile] = [
     ),
     ConnectionProfile(
         id="plan",
-        label="Use your subscription (Experimental)",
-        description="Model access for your selected harness; integration status shown per provider",
+        label="Use your subscription — Coming soon",
+        description="Use subscription models with your selected harness",
         connector="plan-picker",
         runtime="builtin",
         menu=CONNECT_MENU_MODELS,
@@ -756,7 +756,7 @@ _MODEL_PROFILES: List[ConnectionProfile] = [
     ),
 ]
 
-# Experimental model subscriptions. Pending integrations only show guidance;
+# Unavailable model subscriptions show guidance;
 # they never switch to a vendor agent or fall back to API-credit billing.
 _PLAN_PROFILES: List[ConnectionProfile] = [
     ConnectionProfile(
@@ -782,42 +782,27 @@ _PLAN_PROFILES: List[ConnectionProfile] = [
     ),
     ConnectionProfile(
         id="plan-chatgpt",
-        label="OpenAI / ChatGPT — Partner integration in progress",
-        description="Experimental subscription model access; not available in SuperQode yet",
+        label="OpenAI / ChatGPT",
+        description="Model access through a ChatGPT subscription",
         connector="plan-guidance",
         auth_mode="subscription",
         menu=CONNECT_MENU_PLAN,
-        unavailable_hint=(
-            "OpenAI / ChatGPT: Partner integration in progress. "
-            "SuperQode access and integration are not confirmed. "
-            "ChatGPT sign-in is not available here yet; no credentials are requested."
-        ),
     ),
     ConnectionProfile(
         id="plan-kimi-models",
-        label="Kimi Code models — Integration in progress",
-        description="Experimental model access for your selected harness; not a Kimi agent switch",
+        label="Kimi Code models",
+        description="Kimi Code models for your selected harness",
         connector="plan-guidance",
         auth_mode="subscription",
         menu=CONNECT_MENU_PLAN,
-        unavailable_hint=(
-            "Kimi Code models: Integration in progress. "
-            "A dedicated membership-key model adapter needs implementation and live testing. "
-            "This option does not connect Kimi's agent or use Moonshot API credits."
-        ),
     ),
     ConnectionProfile(
         id="plan-alibaba-models",
-        label="Alibaba Token Plan — Integration in progress",
-        description="Experimental interactive coding model access; eligibility and adapter pending",
+        label="Alibaba Token Plan",
+        description="Alibaba Token Plan models for your selected harness",
         connector="plan-guidance",
         auth_mode="subscription",
         menu=CONNECT_MENU_PLAN,
-        unavailable_hint=(
-            "Alibaba Token Plan: Integration in progress. "
-            "SuperQode workflow eligibility and the dedicated plan adapter need verification. "
-            "No subscription connection or API-credit fallback is enabled here yet."
-        ),
     ),
 ]
 
@@ -829,14 +814,11 @@ _PLAN_PROFILES = [
         id=f"{profile.id}-experimental"
         if profile.id in {"plan-minimax", "plan-grok"}
         else profile.id,
-        label=f"{profile.label.split(' (')[0].split(' —')[0]} — Partner integration in progress",
-        description="Experimental model subscription; partner integration in progress",
+        label=f"{profile.label.split(' (')[0]} — Coming soon",
+        description="Subscription models for your selected harness",
         connector="plan-guidance",
         detect=lambda: False,
-        unavailable_hint=(
-            f"{profile.label.split(' (')[0].split(' —')[0]}: Partner integration in progress. "
-            "Subscription connection is not available yet."
-        ),
+        unavailable_hint="Subscription model access is coming soon.",
     )
     for profile in _PLAN_PROFILES
 ]
@@ -1797,8 +1779,8 @@ CONNECT_MENU_TITLES = {
         "Local, your API key, or the agent’s own authenticated account.",
     ),
     CONNECT_MENU_PLAN: (
-        "Use your subscription (Experimental)",
-        "Partner integration in progress. Subscription connections are not available yet.",
+        "Subscription models",
+        "Coming soon",
     ),
     CONNECT_MENU_BUILD: (
         "Build your own harness (Advanced)",

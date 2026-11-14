@@ -658,7 +658,7 @@ def test_model_step_offers_local_key_and_experimental_subscriptions():
     assert [(p.id, p.label) for p in list_connection_profiles(CONNECT_MENU_MODELS)] == [
         ("local", "Local"),
         ("byok", "BYOK (use your own API key)"),
-        ("plan", "Use your subscription (Experimental)"),
+        ("plan", "Use your subscription — Coming soon"),
     ]
 
 
@@ -1360,9 +1360,8 @@ def test_subscription_is_a_real_menu_not_a_printed_list():
         assert profile.menu == CONNECT_MENU_PLAN
         # Every row has to lead somewhere the dispatcher understands.
         assert profile.connector == "plan-guidance"
-        assert "Partner integration in progress" in profile.label
-        assert "Partner integration in progress" in profile.unavailable_hint
-        assert "Subscription connection is not available yet." in profile.unavailable_hint
+        assert profile.label.endswith(" — Coming soon")
+        assert profile.unavailable_hint == "Subscription model access is coming soon."
         assert "adapter" not in profile.unavailable_hint
         assert "credentials" not in profile.unavailable_hint
         assert not profile.available
@@ -1393,7 +1392,7 @@ def test_experimental_subscription_cards_preserve_connection_state():
         assert stub._connection_attempt_state == "Connected"
         assert stub._connection_retry_target == ("existing", ())
         assert not stub.harness_commands
-        assert any("Partner integration in progress" in item for item in log.items)
+        assert any("Subscription model access is coming soon." in item for item in log.items)
 
 
 def test_choosing_a_plan_connects_that_provider():
@@ -1944,12 +1943,16 @@ def test_prime_only_offers_local_engines_it_can_be_pointed_at():
         assert resolve_base_url(resolve_provider_def(provider_id)), provider_id
 
 
-def test_systemone_picker_opens_jev_menu():
+def test_systemone_picker_opens_decision_provider_menu():
     from superqode.providers.connection_profiles import CONNECT_MENU_SYSTEMONE
 
     stub = dispatch("systemone-models")
     assert stub.menus == [CONNECT_MENU_SYSTEMONE]
-    assert [p.id for p in list_connection_profiles(CONNECT_MENU_SYSTEMONE)] == ["jev"]
+    assert [p.id for p in list_connection_profiles(CONNECT_MENU_SYSTEMONE)] == [
+        "jev",
+        "systemone-google",
+        "systemone-openai",
+    ]
 
 
 def test_jev_missing_key_shows_setup_without_connecting(monkeypatch):
@@ -1960,8 +1963,8 @@ def test_jev_missing_key_shows_setup_without_connecting(monkeypatch):
     log = FakeLog()
     SuperQodeApp._dispatch_connection_profile(stub, get_connection_profile("jev"), log)
     rendered = " ".join(log.items)
-    assert "https://console.typesafe.ai" in rendered
-    assert "export TYPESAFE_API_KEY" in rendered
+    assert "https://docs.typesafe.ai/models" in rendered
+    assert "TYPESAFE_API_KEY" in rendered
     assert "restart SuperQode" in rendered
 
 
@@ -1971,8 +1974,9 @@ def test_jev_key_connects_existing_decision_session_without_exposing_key(monkeyp
     monkeypatch.setenv("TYPESAFE_API_KEY", "test-private-key")
 
     class Pure:
-        def connect_decision(self, pack):
+        def connect_decision(self, pack, *, decision_provider):
             self.pack = pack
+            self.provider = decision_provider
 
     class Stub(DispatchStub):
         pure = Pure()
@@ -1988,6 +1992,7 @@ def test_jev_key_connects_existing_decision_session_without_exposing_key(monkeyp
     SuperQodeApp._dispatch_connection_profile(stub, get_connection_profile("jev"), log)
     assert stub.activated is stub.pure
     assert stub.pure.pack == "factory_route"
+    assert stub.pure.provider == "typesafe"
     assert "test-private-key" not in " ".join(log.items)
 
 
@@ -1997,7 +2002,7 @@ def test_jev_connection_error_is_visible(monkeypatch):
     monkeypatch.setenv("TYPESAFE_API_KEY", "test-private-key")
 
     class Pure:
-        def connect_decision(self, pack):
+        def connect_decision(self, pack, *, decision_provider):
             raise ValueError("Decision client is disabled")
 
     class Stub(DispatchStub):

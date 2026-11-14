@@ -7,6 +7,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [2.31.16] - 2026-11-14
+
 ### Added
 
 - SystemOne decision engines for Google Gemini Decision 1 and OpenAI Decisions with GPT-6 Luna, alongside existing TypeSafe Jev support. CLI, terminal UI and macOS offer separate decision-provider/model selection and retain independent coding-model settings.
@@ -15,8 +17,14 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 - Opt-in private decision API records across CLI, TUI and macOS, including outcomes, retries, timeouts, cancellations and safe usage telemetry. Checked-in cloud validation includes per-case results and simulated API-call metadata.
 
+### Changed
+
+- macOS 0.4.9 (build 35) bundles Python engine 2.31.16. SystemOne setup uses provider and model buttons, Keychain saving is opt-in, and connection cards wrap their text.
+- Unavailable subscription model options are labeled Coming soon.
+
 ### Fixed
 
+- SystemOne tool decisions reach streaming clients. Mac Agent activity shows the tool, provider, model, HTTP result, and recommendation for each recorded check.
 - Decision API setup now checks all three question types with synthetic input. Official documentation examples have independent contract tests. All providers bound response reads and reject malformed JSON; retry waits honor server instructions, and key, quota and model-access errors include setup guidance. macOS decision setup shows provider marks.
 - Decision recording preserves typed answer identifiers and token counters for replay while redacting credentials. Failed records cannot replay as successful decisions. App-managed decision credentials are removed from model-spawned shell environments.
 

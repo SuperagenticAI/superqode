@@ -29,14 +29,14 @@ struct ConnectionCardLabel<Icon: View>: View {
     HStack(spacing: featured ? 16 : 12) {
       icon().accessibilityHidden(true)
       VStack(alignment: .leading, spacing: 3) {
-        Text(title).font(featured ? .title3.weight(.semibold) : .system(size: 15, weight: .semibold)).lineLimit(2)
+        Text(title).font(featured ? .title3.weight(.semibold) : .system(size: 15, weight: .semibold))
         if !subtitle.isEmpty {
-          Text(subtitle).font(.callout).foregroundStyle(.secondary).lineLimit(2)
+          Text(subtitle).font(.callout).foregroundStyle(.secondary)
         }
         if !status.isEmpty {
           Text(status).font(.caption).foregroundStyle(.secondary)
         }
-      }
+      }.fixedSize(horizontal: false, vertical: true)
       Spacer(minLength: 0)
       Image(systemName: "chevron.right").font(.callout).foregroundStyle(.tertiary)
         .accessibilityHidden(true)

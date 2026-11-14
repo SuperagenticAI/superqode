@@ -2430,6 +2430,17 @@ private func jobStamp(_ row: [String: Any]) -> Double {
         for dark in [false, true] {
           let host = NSHostingView(rootView: VStack(alignment: .leading, spacing: 14) {
             AgentResponseView(text: sample)
+            if dark {
+              Text("Simulated SystemOne response").font(.caption).foregroundStyle(.secondary)
+              AgentActivityView(events: [toolEvent("systemone.decision", [
+                "tool": "read_file", "mode": "shadow", "provider": "google", "action": "allow",
+                "evaluation": [
+                  "status": "success", "http_status": 200, "requested_model": "gemini-decision-1",
+                  "latency_ms": 241, "question_count": 6, "usage": ["input_tokens": 128],
+                  "request_id": "fixture-request",
+                ],
+              ])], active: false, expanded: true)
+            }
             AgentWorkingCard(status: "running", activity: currentAgentActivity([toolEvent("tool_call", ["tool_name": "bash", "args": ["command": "uv run pytest -q tests/test_desktop_studio_execution.py --disable-warnings"]])]))
           }.padding(24)
             .background(Color.qPanel).environment(\.colorScheme, dark ? .dark : .light))

@@ -61,6 +61,7 @@ def publish_decision(loop: Any, decision: GateDecision, tool: str) -> None:
     event.update(
         mode=settings.mode,
         provider=settings.provider,
+        model=settings.model,
         policy_reviewed=settings.policy_reviewed,
         intendedAction=decision.action.value,
     )
@@ -183,7 +184,6 @@ async def apply_systemone_gate(
     publish_decision(loop, decision, name)
     event = loop.last_systemone_decision
     event["state"] = state.to_payload()
-    event["model"] = settings.model
     event["provider"] = settings.provider
     event["policy_reviewed"] = settings.policy_reviewed
     event["thresholds"] = pack.thresholds.model_dump()

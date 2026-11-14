@@ -16,6 +16,8 @@ from superqode.providers.gateway.base import (
 )
 from superqode.runtime import AgentRuntime, BuiltinRuntime, create_runtime
 from superqode.harness import ContextSpec, HarnessSpec, load_approval_memory_rules
+from superqode.harness.spec import SystemOneSpec
+from superqode.systemone.client import StubSystemOneClient
 from superqode.tools.base import Tool, ToolContext, ToolRegistry, ToolResult
 from superqode.tools.permissions import Permission, PermissionConfig, PermissionManager
 
@@ -166,6 +168,49 @@ async def test_builtin_runtime_streaming_yields_chunks():
     # ScriptedGateway emits "hello" + " world"
     joined = "".join(chunks)
     assert "hello" in joined and "world" in joined
+
+
+@pytest.mark.asyncio
+async def test_builtin_harness_stream_includes_systemone_tool_decision(monkeypatch):
+    monkeypatch.setenv("SUPERQODE_SYSTEMONE", "stub")
+    monkeypatch.delenv("SUPERQODE_SYSTEMONE_MODE", raising=False)
+    client = StubSystemOneClient()
+    observed = []
+    runtime = create_runtime(
+        "builtin",
+        gateway=ScriptedGateway([]),
+        tools=ToolRegistry.empty(),
+        config=AgentConfig(
+            provider="test",
+            model="test-model",
+            systemone=SystemOneSpec(enabled=True, mode="shadow"),
+        ),
+        permission_manager=PermissionManager(PermissionConfig(default=Permission.ALLOW)),
+        systemone_client=client,
+        on_systemone=observed.append,
+    )
+    original_callback = runtime.loop.on_systemone
+
+    async def stream(prompt, *, images=None):
+        assert (
+            await runtime.loop._check_tool_permission("read_file", {"path": "shipping.py"}) is None
+        )
+        yield "done"
+
+    monkeypatch.setattr(runtime.loop, "run_streaming", stream)
+    events = [event async for event in runtime.run_harness_events("Read shipping.py")]
+
+    assert [event.type for event in events] == [
+        "model_request",
+        "systemone.decision",
+        "model_delta",
+    ]
+    assert len(client.calls) == 1
+    assert observed == [events[1].data]
+    assert events[1].data["tool"] == "read_file"
+    assert events[1].data["mode"] == "shadow"
+    assert events[1].data["evaluation"]["status"] == "success"
+    assert runtime.loop.on_systemone is original_callback
 
 
 def test_builtin_runtime_cancel_propagates_to_loop():

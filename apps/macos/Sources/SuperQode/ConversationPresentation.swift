@@ -1,5 +1,62 @@
 import Foundation
 
+struct SystemOneActivity {
+  let tool: String
+  let provider: String
+  let model: String
+  let mode: String
+  let outcome: String
+  let recommendation: String
+  let telemetry: String
+  let requestID: String
+  let note: String
+
+  init?(event: [String: Any]) {
+    guard let data = event["data"] as? [String: Any],
+      string(data, "event") == "systemone.decision",
+      let payload = data["payload"] as? [String: Any]
+    else { return nil }
+
+    let evaluation = payload["evaluation"] as? [String: Any] ?? [:]
+    let usage = evaluation["usage"] as? [String: Any] ?? [:]
+    tool = string(payload, "tool", "Tool call")
+    switch string(evaluation, "provider", string(payload, "provider")) {
+    case "google": provider = "Google"
+    case "openai": provider = "OpenAI"
+    case "typesafe": provider = "TypeSafe"
+    default: provider = string(payload, "provider")
+    }
+    model = string(evaluation, "requested_model", string(evaluation, "model", string(payload, "model")))
+    mode = string(payload, "mode").capitalized
+
+    let status = string(evaluation, "status")
+    let httpStatus = evaluation["http_status"] as? Int
+    let skipped = payload["skipped_client"] as? Bool == true
+    if skipped {
+      outcome = "Skipped"
+    } else if status == "error" {
+      outcome = "Check failed"
+    } else if evaluation["replayed"] as? Bool == true || string(payload, "client") == "replay" {
+      outcome = "Replay"
+    } else if status == "success", let httpStatus {
+      outcome = "HTTP \(httpStatus)"
+    } else {
+      outcome = status == "success" ? "Local result" : "No result"
+    }
+
+    let action = string(payload, "action")
+    recommendation = status == "success" && ["allow", "ask", "deny"].contains(action)
+      ? (mode == "Shadow" ? "Would \(action)" : action.capitalized) : ""
+    telemetry = [
+      (evaluation["latency_ms"] as? Int).map { "\($0) ms" },
+      (evaluation["question_count"] as? Int).map { $0 == 1 ? "1 question" : "\($0) questions" },
+      (usage["input_tokens"] as? Int).map { "\($0) input tokens" },
+    ].compactMap { $0 }.joined(separator: " · ")
+    requestID = string(evaluation, "request_id")
+    note = skipped || status == "error" ? string(payload, "message") : ""
+  }
+}
+
 /// One recent row per task lineage. Individual run records remain available to the engine.
 func groupedRecentRuns(_ jobs: [[String: Any]]) -> [[String: Any]] {
   var seen = Set<String>()

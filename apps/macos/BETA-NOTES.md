@@ -1,4 +1,12 @@
-# SuperQode for macOS public beta 0.4.8
+# SuperQode for macOS public beta 0.4.9
+
+Version 0.4.9 (build 35) bundles Python engine 2.31.16.
+
+- SystemOne supports TypeSafe Jev, Google Gemini Decision, and OpenAI Decisions. Choose the decision provider and model, then connect a separate coding model.
+- Agent activity shows SystemOne tool decisions with the model, HTTP result, and shadow recommendation.
+- Decision keys are saved to Keychain only when requested. Connection cards wrap long text, and unavailable subscription options say Coming soon.
+
+## 0.4.8 (build 34)
 
 Version 0.4.8 (build 34) bundles Python engine 2.31.15.
 

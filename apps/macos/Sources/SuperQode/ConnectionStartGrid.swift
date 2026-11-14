@@ -12,29 +12,39 @@ struct ConnectionStartGrid: View {
     let page: String
   }
   private static let tiles: [Tile] = [
-    Tile(id: "agent", title: "Your agent", detail: "Open all connections and choose the agent you already use.", symbol: "person.crop.circle", page: "menu:root"),
-    Tile(id: "harness", title: "SuperQode harness", detail: "Core, RLM, PiPy, CodeGem or Workbench with your model.", symbol: "sparkles", page: "menu:harness"),
-    Tile(id: "local", title: "Local model", detail: "Pick an installed Ollama or LM Studio model and start coding.", symbol: "desktopcomputer", page: "source:local"),
+    Tile(id: "agent", title: "Your agent", detail: "Connect the coding agent you already use.", symbol: "person.crop.circle", page: "menu:root"),
+    Tile(id: "harness", title: "SuperQode harness", detail: "Choose a harness for your coding model.", symbol: "sparkles", page: "menu:harness"),
+    Tile(id: "local", title: "Local model", detail: "Code with a model in Ollama or LM Studio.", symbol: "desktopcomputer", page: "source:local"),
+    Tile(id: "systemone", title: "SystemOne", detail: "Use TypeSafe Jev, Google or OpenAI for decisions.", symbol: "checkmark.shield", page: "systemone"),
     Tile(id: "key", title: "API key", detail: "Your provider key with API billing.", symbol: "key", page: "source:key"),
     Tile(id: "acp", title: "ACP agent", detail: "A coding agent you run as a local process.", symbol: "link", page: "acp"),
     Tile(id: "protocols", title: "Protocols", detail: "Reach an agent over ACP, A2A or UHP.", symbol: "network", page: "menu:protocols"),
     Tile(id: "builder", title: "Build your harness", detail: "Import a config, use presets or start with the wizard.", symbol: "hammer", page: "builder"),
-    Tile(id: "systemone", title: "SystemOne", detail: "Typed decisions with Jev, Google or OpenAI.", symbol: "checkmark.shield", page: "systemone"),
   ]
 
   var body: some View {
-    VStack(spacing: 10) {
-      LazyVGrid(columns: [GridItem(.adaptive(minimum: 180), spacing: 10)], spacing: 10) {
-        ForEach(Self.tiles) { tile in
-          Button { app.openConnections(tile.page) } label: {
-            ConnectionCardLabel(title: tile.title, subtitle: tile.detail) {
-              Image(systemName: tile.symbol).font(.title2).foregroundStyle(Color.qAccent).frame(width: 28)
+    LazyVGrid(columns: [GridItem(.adaptive(minimum: 198), spacing: 12, alignment: .top)], spacing: 12) {
+      ForEach(Self.tiles) { tile in
+        Button { app.openConnections(tile.page) } label: {
+          VStack(alignment: .leading, spacing: 6) {
+            HStack {
+              Image(systemName: tile.symbol).font(.title3).foregroundStyle(Color.qAccent)
+              Spacer()
+              Image(systemName: "chevron.right").font(.caption).foregroundStyle(.tertiary)
             }
-            .frame(height: 80)
-          }.buttonStyle(ConnectionChoiceStyle())
-            .accessibilityIdentifier("start.tile." + tile.id)
-            .accessibilityLabel(tile.title + ". " + tile.detail)
+            .accessibilityHidden(true)
+            Text(tile.title).font(.headline)
+            Text(tile.detail).font(.callout).foregroundStyle(.secondary)
+          }
+          .multilineTextAlignment(.leading)
+          .fixedSize(horizontal: false, vertical: true)
+          .padding(12)
+          .frame(maxWidth: .infinity, minHeight: 112, alignment: .topLeading)
+          .contentShape(Rectangle())
         }
+        .buttonStyle(ConnectionChoiceStyle())
+        .accessibilityIdentifier("start.tile." + tile.id)
+        .accessibilityLabel(tile.title + ". " + tile.detail)
       }
     }.disabled(app.connectionPickerDisabled)
   }

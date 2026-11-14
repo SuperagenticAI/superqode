@@ -218,18 +218,33 @@ struct AgentActivityView: View {
   /// Stays folded while the agent is ready, working, or finished.
   /// The person opens it when they want the event list.
   @State private var expanded = false
+
+  init(events: [[String: Any]], active: Bool, expanded: Bool = false) {
+    self.events = events
+    self.active = active
+    _expanded = State(initialValue: expanded)
+  }
+
   var body: some View {
+    let decisions = events.compactMap(SystemOneActivity.init(event:))
+    let otherEvents = events.filter { event in
+      let data = event["data"] as? [String: Any] ?? [:]
+      return string(data, "event") != "systemone.decision"
+    }
     DisclosureGroup(isExpanded: $expanded) {
+      if !decisions.isEmpty {
+        SystemOneActivityList(decisions: decisions)
+      }
       if events.isEmpty {
         Text("Activity appears here as the agent works.")
           .font(.caption).foregroundStyle(.secondary)
           .frame(maxWidth: .infinity, alignment: .leading)
           .padding(.top, 8)
-      } else {
+      } else if !otherEvents.isEmpty {
         ScrollViewReader { proxy in
           ScrollView {
             LazyVStack(alignment: .leading, spacing: 10) {
-              ForEach(Array(events.enumerated()), id: \.offset) { index, event in
+              ForEach(Array(otherEvents.enumerated()), id: \.offset) { index, event in
                 let data = event["data"] as? [String: Any] ?? [:]
                 let payload = data["payload"] as? [String: Any] ?? data
                 let name = string(data, "event", string(event, "type"))
@@ -250,22 +265,74 @@ struct AgentActivityView: View {
               }
             }.padding(.top, 10).padding(.trailing, 6)
           }
-          .frame(height: min(180, CGFloat(events.count) * 54))
-          .onAppear { scrollToLatest(proxy) }
-          .onChange(of: events.count) { _, _ in scrollToLatest(proxy) }
+          .frame(height: min(180, CGFloat(otherEvents.count) * 54))
+          .onAppear { scrollToLatest(proxy, count: otherEvents.count) }
+          .onChange(of: otherEvents.count) { _, count in scrollToLatest(proxy, count: count) }
         }
       }
     } label: {
-      HStack(spacing: 8) {
-        Image(systemName: "terminal").foregroundStyle(Color.qAccent)
-        Text(active ? "Agent activity · Working" : "Agent activity").font(.system(size: 13, weight: .medium))
-        Text("\(events.count) events").font(.caption).foregroundStyle(.secondary)
+      VStack(alignment: .leading, spacing: 4) {
+        HStack(spacing: 8) {
+          Image(systemName: "terminal").foregroundStyle(Color.qAccent)
+          Text(active ? "Agent activity · Working" : "Agent activity").font(.system(size: 13, weight: .medium))
+          Text(events.count == 1 ? "1 event" : "\(events.count) events")
+            .font(.caption).foregroundStyle(.secondary)
+        }
+        if !decisions.isEmpty {
+          Text(decisions.count == 1 ? "1 SystemOne check" : "\(decisions.count) SystemOne checks")
+            .font(.caption.weight(.medium)).foregroundStyle(Color.qAccent)
+        }
       }
     }.padding(12).outlinedSurface(radius: 9)
   }
 
-  private func scrollToLatest(_ proxy: ScrollViewProxy) {
-    guard active, let last = events.indices.last else { return }
-    proxy.scrollTo(last, anchor: .bottom)
+  private func scrollToLatest(_ proxy: ScrollViewProxy, count: Int) {
+    guard active, count > 0 else { return }
+    proxy.scrollTo(count - 1, anchor: .bottom)
+  }
+}
+
+private struct SystemOneActivityList: View {
+  let decisions: [SystemOneActivity]
+
+  var body: some View {
+    VStack(alignment: .leading, spacing: 8) {
+      Label("SystemOne decisions", systemImage: "checkmark.shield")
+        .font(.caption.weight(.semibold)).foregroundStyle(Color.qAccent)
+        .accessibilityAddTraits(.isHeader)
+      if decisions.count == 1, let decision = decisions.first {
+        row(decision)
+      } else {
+        ScrollView {
+          LazyVStack(alignment: .leading, spacing: 8) {
+            ForEach(Array(decisions.enumerated()), id: \.offset) { _, decision in
+              row(decision)
+            }
+          }.padding(.trailing, 6)
+        }.frame(height: 150)
+      }
+    }.padding(.top, 8)
+  }
+
+  private func row(_ decision: SystemOneActivity) -> some View {
+    VStack(alignment: .leading, spacing: 4) {
+      Text([decision.tool, decision.outcome, decision.recommendation]
+        .filter { !$0.isEmpty }.joined(separator: " · "))
+        .font(.callout.weight(.medium))
+      Text([decision.provider, decision.model, decision.mode, decision.telemetry]
+        .filter { !$0.isEmpty }.joined(separator: " · "))
+        .font(.caption).foregroundStyle(.secondary)
+      if !decision.requestID.isEmpty {
+        Text("Request ID · " + decision.requestID)
+          .font(.caption.monospaced()).foregroundStyle(.secondary)
+      }
+      if !decision.note.isEmpty {
+        Text(decision.note).font(.caption).foregroundStyle(.secondary)
+      }
+    }
+    .fixedSize(horizontal: false, vertical: true)
+    .textSelection(.enabled)
+    .frame(maxWidth: .infinity, alignment: .leading)
+    .padding(8).outlinedSurface(radius: 7)
   }
 }

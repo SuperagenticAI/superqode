@@ -92,6 +92,7 @@ class BuiltinRuntime:
         previous_tool_call = self._loop.on_tool_call
         previous_tool_result = self._loop.on_tool_result
         previous_thinking = self._loop.on_thinking
+        previous_systemone = self._loop.on_systemone
 
         def on_tool_call(name: str, args: dict) -> None:
             if previous_tool_call is not None:
@@ -125,9 +126,15 @@ class BuiltinRuntime:
             if text:
                 pending.append(HarnessEvent(type="thinking", data={"text": text}))
 
+        def on_systemone(decision: dict) -> None:
+            if previous_systemone is not None:
+                previous_systemone(decision)
+            pending.append(HarnessEvent(type="systemone.decision", data=decision))
+
         self._loop.on_tool_call = on_tool_call
         self._loop.on_tool_result = on_tool_result
         self._loop.on_thinking = on_thinking
+        self._loop.on_systemone = on_systemone
         yield HarnessEvent(type="model_request", data={"runtime": self.name})
         try:
             async for chunk in self._loop.run_streaming(prompt, images=images):
@@ -141,6 +148,7 @@ class BuiltinRuntime:
             self._loop.on_tool_call = previous_tool_call
             self._loop.on_tool_result = previous_tool_result
             self._loop.on_thinking = previous_thinking
+            self._loop.on_systemone = previous_systemone
 
     def cancel(self) -> None:
         self._loop.cancel()

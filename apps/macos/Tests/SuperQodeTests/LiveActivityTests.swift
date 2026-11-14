@@ -44,4 +44,35 @@ final class LiveActivityTests: XCTestCase {
     XCTAssertEqual(currentAgentActivity(events), command)
     XCTAssertEqual(currentAgentActivity([event("model.thinking", [:])]), "Thinking…")
   }
+
+  func testSystemOneReadsTheRecordedHTTPResultForTheTool() throws {
+    let decision = try XCTUnwrap(SystemOneActivity(event: event("systemone.decision", [
+      "tool": "read_file", "provider": "google", "mode": "shadow", "action": "allow",
+      "evaluation": [
+        "status": "success", "requested_model": "gemini-decision-1", "http_status": 200,
+        "latency_ms": 241, "question_count": 6, "usage": ["input_tokens": 128],
+        "request_id": "fixture-request",
+      ],
+    ])))
+    XCTAssertEqual(decision.tool, "read_file")
+    XCTAssertEqual(decision.provider, "Google")
+    XCTAssertEqual(decision.model, "gemini-decision-1")
+    XCTAssertEqual(decision.outcome, "HTTP 200")
+    XCTAssertEqual(decision.recommendation, "Would allow")
+    XCTAssertEqual(decision.telemetry, "241 ms · 6 questions · 128 input tokens")
+    XCTAssertEqual(decision.requestID, "fixture-request")
+  }
+
+  func testSystemOneDistinguishesSkippedAndReplayedEvaluationsFromLiveResults() throws {
+    let skipped = try XCTUnwrap(SystemOneActivity(event: event("systemone.decision", [
+      "tool": "read_file", "skipped_client": true, "action": "ask", "message": "live_unavailable",
+    ])))
+    XCTAssertEqual(skipped.outcome, "Skipped")
+    XCTAssertTrue(skipped.recommendation.isEmpty)
+    let replay = try XCTUnwrap(SystemOneActivity(event: event("systemone.decision", [
+      "evaluation": ["status": "success", "http_status": 200, "replayed": true],
+    ])))
+    XCTAssertEqual(replay.outcome, "Replay")
+    XCTAssertNil(SystemOneActivity(event: event("tool.requested", [:])))
+  }
 }
