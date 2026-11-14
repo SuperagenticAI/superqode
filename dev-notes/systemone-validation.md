@@ -1,23 +1,27 @@
 # SystemOne cloud validation
 
 Validation completed in the Linux cloud workspace on 14 November 2026.
-**686 passed, 0 failed, 9 skipped** across 35 test files.
+**761 passed, 0 failed, 9 skipped** across 36 test files.
 GitHub CI was not started. No release was published.
 
 [Machine-readable evidence](systemone-validation-results.json) records every
-collected case ID, outcome, duration and skip reason, plus 157 mocked decision
+collected case ID, outcome, duration and skip reason, plus 225 mocked decision
 HTTP attempts. It includes source hashes and the base source commit. Requests
 are explicitly labelled `httpx.MockTransport`; they are not live vendor calls.
 The evidence contains no request prompts, response bodies or authentication values.
+
+The follow-up [official API contract review](systemone-official-api-review.md)
+links the vendor guides, SDK definitions and hashed source manifest. Documentation
+examples have independent request/answer fixtures in addition to synthetic cases.
 
 ## Decision APIs exercised
 
 | Provider | Requested model | Mocked HTTP attempts |
 | --- | --- | --- |
-| google | `gemini-decision-1` | 65 |
-| openai | `gpt-6-luna` | 65 |
-| typesafe | `jev-1.13.0` | 18 |
-| typesafe | `jev-1.14.0` | 9 |
+| google | `gemini-decision-1` | 88 |
+| openai | `gpt-6-luna` | 85 |
+| typesafe | `jev-1.13.0` | 40 |
+| typesafe | `jev-1.14.0` | 12 |
 
 All four models were exercised with Choice, Score and Noul/predicate questions,
 usage, recording and replay. Additional cases exercise real backend execution,
@@ -65,6 +69,20 @@ Worker boundary review also found that the reserved decision key could reach a
 model-spawned shell under ordinary environment inheritance. The shell environment
 builder now always removes that reserved key. Both inherit/filter policies and the
 allowlist case have regression coverage.
+
+## Official contract follow-up
+
+The latest run adds thirteen documentation-derived request/answer cases across
+all four models, plus regression checks for server retry instructions, billing
+exhaustion, actionable setup errors, malformed keys, TypeSafe response types,
+Google option controls and bounded/strict response decoding. CLI, mounted TUI
+and native RPC tests cover the new `provider_check` pack. Native setup checks
+yes/no, choice and score in one explicit synthetic request.
+
+A local Python wheel was built, checked for the updated adapters/check pack and
+imported outside the source tree. The package-check evidence is
+[recorded separately](systemone-package-validation.json). The wheel was not
+published and no version changed.
 
 ## Skips and limits
 

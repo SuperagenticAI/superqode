@@ -347,6 +347,12 @@ struct SystemOneConnectionView: View {
             Text(string(row, "label")).tag(string(row, "id"))
           }
         }.disabled(busy || providers.isEmpty)
+        if !selected.isEmpty {
+          HStack(spacing: 10) {
+            ProviderMark(providerID: provider).frame(width: 26, height: 26).accessibilityHidden(true)
+            Text(string(selected, "label")).font(.headline)
+          }
+        }
         Picker("Decision model", selection: $model) {
           ForEach(models, id: \.self) { value in Text(value).tag(value) }
         }.disabled(busy)
@@ -422,13 +428,13 @@ struct SystemOneConnectionView: View {
 
   private func testDecision() {
     guard ready, app.confirm("Test this decision engine?",
-      "This sends a small synthetic code-review question to the selected provider and may incur API charges. It verifies connectivity, not decision quality.", button: "Test decision") else { return }
+      "This sends one small synthetic request with yes/no, choice and score questions to the selected provider and may incur API charges. It verifies API connectivity and answer formats, not decision quality.", button: "Test decision") else { return }
     busy = true; failure = ""; status = ""
     Task {
       defer { busy = false }
       do {
         let result = try await app.engine.call("connect.systemone.test", ["provider": provider, "model": model, "key": key]) as? [String: Any] ?? [:]
-        status = "Connected · " + string(result, "model") + ". Connectivity only; quality is not certified."
+        status = "Connected · " + string(result, "model") + ". Yes/no, choice and score checked. Quality is not certified."
       } catch { failure = error.localizedDescription }
     }
   }

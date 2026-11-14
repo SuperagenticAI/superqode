@@ -108,3 +108,7 @@ No version bump, tag, PyPI upload, signed app, notarization or release was made
 for this work. CI is skipped on the implementation commit as requested. The
 release owner must package a new Python distribution and a rebuilt Mac app with
 the new engine when ready; an existing signed DMG cannot gain these source changes.
+
+The follow-up [official API contract review](systemone-official-api-review.md)
+records source verification, protocol examples, connection checks and corrections
+from the documentation audit. See cloud validation for the latest case results.

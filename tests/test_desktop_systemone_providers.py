@@ -12,6 +12,7 @@ import pytest
 from test_desktop_service import desktop, wait_job
 from superqode.harness.loader import load_harness_spec
 from superqode.systemone.providers import PROVIDERS, get_provider
+from superqode.systemone.pack import load_pack
 from superqode.tools.env_policy import build_shell_env
 from test_systemone_provider_apis import success_body, CLIENTS
 
@@ -79,11 +80,7 @@ def test_native_connectivity_action_uses_only_synthetic_input(desktop, provider,
         body = success_body(
             provider,
             get_provider(provider).model,
-            {
-                "review": __import__(
-                    "superqode.systemone.types", fromlist=["NoulQuestion"]
-                ).NoulQuestion(instructions="Review?")
-            },
+            load_pack("provider_check").questions,
         )
         assert "Please review this code change" in json.dumps(payload)
         return httpx.Response(200, json=body)
@@ -97,6 +94,7 @@ def test_native_connectivity_action_uses_only_synthetic_input(desktop, provider,
         "connect.systemone.test", {"provider": provider, "key": "PRIVATE_API_KEY"}
     )
     assert result["status"] == "connected" and result["provider"] == provider
+    assert result["checked_primitives"] == ["noul", "choice", "score"]
     assert len(seen) == 1 and "PRIVATE_API_KEY" not in json.dumps(result)
     assert not service._all("SELECT * FROM jobs")
 

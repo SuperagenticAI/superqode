@@ -61,7 +61,7 @@ def configure(service, params):
 def test_decision(service, params):
     from superqode.systemone.live import LiveSystemOneClient
     from superqode.systemone.api_clients import GoogleDecisionClient, OpenAIDecisionClient
-    from superqode.systemone.types import NoulQuestion
+    from superqode.systemone.connectivity import check_connection
 
     provider = get_provider(str(params.get("provider") or "typesafe"))
     identity = "systemone" if provider.id == "typesafe" else "systemone:" + provider.id
@@ -83,17 +83,8 @@ def test_decision(service, params):
     }[provider.id]
 
     async def run():
-        answers = await client_type(api_key=key.strip(), model=model, timeout_ms=5000).evaluate(
-            {"message": "Please review this code change."},
-            {"review": NoulQuestion(instructions="Does the message request a code review?")},
+        return await check_connection(
+            client_type(api_key=key.strip(), model=model, timeout_ms=10000)
         )
-        return {
-            "status": "connected",
-            "provider": provider.id,
-            "model": model,
-            "latency_ms": answers.metadata.get("latency_ms"),
-            "usage": answers.metadata.get("usage"),
-            "note": "Connectivity only; this does not certify decision quality.",
-        }
 
     return asyncio.run(run())

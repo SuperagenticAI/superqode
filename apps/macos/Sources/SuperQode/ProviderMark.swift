@@ -30,6 +30,7 @@ enum ProviderMarks {
 
   private static let marks: [String: Mark] = [
     "google": Mark(asset: "Provider-google", keepsColour: true),
+    "typesafe": Mark(asset: "Provider-typesafe", keepsColour: false),
     "anthropic": Mark(asset: "Provider-anthropic", keepsColour: true),
     "openai": Mark(asset: "Provider-openai", keepsColour: false),
     "xai": Mark(asset: "Provider-xai", keepsColour: false),

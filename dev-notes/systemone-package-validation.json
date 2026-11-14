@@ -1,0 +1,15 @@
+{
+  "artifact": "superqode-2.31.15-py3-none-any.whl",
+  "published": false,
+  "sha256": "937eb84d4d857402f3489584bf674278b081200fe131e2e81be901ae3e554ba4",
+  "packaged_files_match_source": [
+    "systemone/providers.py",
+    "systemone/api_clients.py",
+    "systemone/live.py",
+    "systemone/http_contract.py",
+    "systemone/connectivity.py",
+    "systemone/packs/provider_check.yaml"
+  ],
+  "import_smoke": "Passed after extraction to /tmp/systemone-wheel-smoke; package import path checked outside the source tree.",
+  "pack_smoke": "provider_check loaded yes/no, choice and score; catalog returned typesafe/google/openai without network."
+}

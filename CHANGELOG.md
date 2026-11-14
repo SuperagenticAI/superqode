@@ -17,6 +17,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Fixed
 
+- Decision API setup now checks all three question types with synthetic input. Official documentation examples have independent contract tests. All providers bound response reads and reject malformed JSON; retry waits honor server instructions, and key, quota and model-access errors include setup guidance. macOS decision setup shows provider marks.
 - Decision recording preserves typed answer identifiers and token counters for replay while redacting credentials. Failed records cannot replay as successful decisions. App-managed decision credentials are removed from model-spawned shell environments.
 
 ## [2.31.15] - 2026-11-13

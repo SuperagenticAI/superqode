@@ -1,0 +1,75 @@
+{
+  "verified_at": "2026-11-14T13:48:33.974403+00:00",
+  "method": "Unauthenticated HTTPS GET of official documentation and SDK definitions; HTTP 200 for each source. No provider inference.",
+  "sources": [
+    {
+      "url": "https://docs.typesafe.ai/models.md",
+      "http_status": 200,
+      "sha256": "09ff62cff4c56b2d4d1827541e2af06f1d15c21f0ef8879dd488e72a373b34ca",
+      "bytes": 8177
+    },
+    {
+      "url": "https://api.typesafe.ai/openapi.json",
+      "http_status": 200,
+      "sha256": "3ca93b6e6b9aa8d7820531b78c66ed7a9798b11e6e163ad96b140fb3d75fbcf4",
+      "bytes": 22467
+    },
+    {
+      "url": "https://docs.typesafe.ai/api/errors.md",
+      "http_status": 200,
+      "sha256": "e0465b1d78a056ea4f2cf3bff66290dadc0feee39c96e99b0ad4b78852c01632",
+      "bytes": 2722
+    },
+    {
+      "url": "https://aistudio.google.com/docs/decisions-api",
+      "http_status": 200,
+      "sha256": "592f3c676f8af4c50c36dc1454b22879c00639d28a6d70bb6f24be7ee0443a24",
+      "bytes": 46477
+    },
+    {
+      "url": "https://aistudio.google.com/docs/models/gemini-decision-1",
+      "http_status": 200,
+      "sha256": "ff5d06a56dd217268eafef0fbb56dae2b526313ccd8d07830196870c6a640588",
+      "bytes": 8832
+    },
+    {
+      "url": "https://developers.openai.com/api/docs/guides/decisions",
+      "http_status": 200,
+      "sha256": "4f2bb35d298501c55c5c8cbb512af9f4d9fb5d89f3114b29999457a89a675ca7",
+      "bytes": 656389
+    },
+    {
+      "url": "https://developers.openai.com/api/reference/resources/decisions/methods/create",
+      "http_status": 200,
+      "sha256": "2217f8c35d4f32d42e46c7e8cfbb0fea91fa8e00261281d3030920644fabf8a6",
+      "bytes": 885353
+    },
+    {
+      "url": "https://raw.githubusercontent.com/openai/openai-python/main/src/openai/types/decision_create_params.py",
+      "http_status": 200,
+      "sha256": "6803b3841127d2226aea298eab2c802c60040752fdfb2626e1a5ff1f43a010a4",
+      "bytes": 10895
+    },
+    {
+      "url": "https://raw.githubusercontent.com/openai/openai-python/main/src/openai/types/decision.py",
+      "http_status": 200,
+      "sha256": "0f3d7418efebcd85c3378556bf5165e1ca433d16bbe85ccb83e2c7207cf03ab1",
+      "bytes": 3151
+    },
+    {
+      "url": "https://raw.githubusercontent.com/googleapis/python-genai/main/google/genai/decisions.py",
+      "http_status": 200,
+      "sha256": "a0febd6ae2788c566d5b5e23481751b33a2f1ab96bd220b69ea412e3d0bad448",
+      "bytes": 2993
+    }
+  ],
+  "brand_assets": [
+    {
+      "provider": "typesafe",
+      "source": "https://docs.typesafe.ai/mintlify-assets/_mintlify/favicons/ts-docs/zg2v0DiYB7xPw0I2/_generated/favicon/android-chrome-192x192.png",
+      "sha256": "0eecbdbff164c2c158e1f26ef112d22e52fd757f98d1090e7e6bb9fbcb6454cd",
+      "use": "Unmodified official documentation favicon. Rendered as a monochrome template for appearance contrast. Vendor mark remains the property of TypeSafe.",
+      "path": "apps/macos/resources/Assets.xcassets/Provider-typesafe.imageset/icon.png"
+    }
+  ]
+}

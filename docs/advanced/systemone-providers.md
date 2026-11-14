@@ -30,7 +30,8 @@ Open a project, choose **New thread → SystemOne**, then:
    saved decision key, or keep the new key only for this session. Remembering
    uses this Mac's Keychain; keys are not written into the harness file.
 3. Optionally use **Test decision**. This explicit action sends a small synthetic
-   question and can incur API charges. It checks connectivity, not quality.
+   request containing yes/no, choice and score questions and can incur API
+   charges. It checks connectivity and answer formats, not quality.
 4. Choose **Connect and choose coding model**. This saves a separate project
    harness with a pinned decision provider/model, then opens coding-model setup.
 
@@ -113,6 +114,50 @@ Decision settings default to shadow mode. After reviewing your provider/model
 policy, `--decision-mode enforce --reviewed-decision-policy` explicitly enables
 enforcement. Existing deterministic denials still apply. Do not copy Jev's
 confidence thresholds to another provider without evaluating them.
+
+
+## Check your API key and model access
+
+In macOS, use **Test decision** before connecting. It sends one small synthetic
+request and checks all three answer types. It does not read a repository or
+start a coding job. Opening setup or saving a key sends no inference request.
+
+For the CLI, set the selected provider's documented API-key environment variable
+in your shell, then run:
+
+```sh
+superqode harness decision --provider google --pack provider_check \
+  --prompt 'Please review this code change.' --timeout-ms 10000
+
+superqode harness decision --provider openai --pack provider_check \
+  --prompt 'Please review this code change.' --timeout-ms 10000
+
+superqode harness decision --provider typesafe --model jev-1.14.0 \
+  --pack provider_check --prompt 'Please review this code change.' --timeout-ms 10000
+```
+
+In the TUI, connect the check pack, then send the synthetic message:
+
+```text
+:systemone connect provider_check --provider google
+Please review this code change.
+```
+
+Substitute `openai` or `typesafe` for another engine. Each explicit message makes
+one metered request. The check validates the API contract, not decision quality;
+an uncertain result can correctly abstain. Never paste an API key as a message.
+Use the secure field on macOS or your shell's environment setup.
+
+Key and permission errors point to the provider's setup documentation. Check API
+billing and decision-model access if a valid key is refused. A consumer coding
+subscription does not grant these API entitlements. Rate-limit waits obey the
+server's retry instructions and the total timeout. Exhausted billing is reported
+without repeated requests. Raw provider error messages are not displayed.
+
+SystemOne currently sends bounded text or serialized JSON evidence and supports
+Noul/Choice/Score. Vendor media APIs, TypeSafe Box questions and experimental
+long-context options are outside this integration. Request and response bodies
+are capped at 4 MiB; the regular harness also bounds task evidence separately.
 
 ## Harness files and context pruning
 
@@ -208,7 +253,8 @@ Retain raw distributions and evaluate abstention, false approvals, required-tool
 recall, task outcomes, latency and cost on held-out examples before enforcement.
 No vendor latency claim is a measurement of your Mac or workload.
 
-Google supports up to 1,000 questions and 255 rubric levels per request; OpenAI
+TypeSafe accepts at most 10 rubric levels. Google supports up to 1,000 questions
+and 255 rubric levels per request; OpenAI
 supports 400 questions and 10 rubric levels. Unsupported packs fail before
 sending. No adapter silently drops questions or changes rubric levels. Safety
 blocks, per-question refusals, malformed responses and timeouts never become

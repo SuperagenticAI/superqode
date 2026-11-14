@@ -116,6 +116,8 @@ class Evidence:
             set(root.glob("src/superqode/systemone/*.py"))
             | set(root.glob("src/superqode/desktop_service/systemone.py"))
             | set(root.glob("tests/test_systemone*.py"))
+            | set(root.glob("src/superqode/systemone/packs/*.yaml"))
+            | set(root.glob("tests/fixtures/systemone/official-api-contracts.json"))
             | {Path(__file__).resolve()}
         )
         modified = subprocess.check_output(

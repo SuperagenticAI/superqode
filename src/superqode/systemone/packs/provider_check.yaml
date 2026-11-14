@@ -1,0 +1,30 @@
+id: provider_check
+version: "1.0.0"
+description: >
+  Check the API contract for yes/no, choice and score questions using synthetic
+  input. An explicit metered request; does not certify decision quality or enable
+  tool execution. Enter a synthetic message, never credentials.
+questions:
+  review:
+    type: noul
+    instructions: Does the message request a code review?
+  route:
+    type: choice
+    instructions: Which topic best describes the message?
+    criteria:
+      review: A request to review code.
+      other: Any other topic.
+  quality:
+    type: score
+    instructions: How clearly does the message request a code review?
+    criteria:
+      - No code review is requested.
+      - A code review may be intended, but the request is ambiguous.
+      - A code review is explicitly requested.
+state_schema:
+  type: object
+  required: [message]
+  properties:
+    message: {type: string, minLength: 1}
+  additionalProperties: false
+input_key: message

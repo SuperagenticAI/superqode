@@ -2,22 +2,15 @@
 
 from __future__ import annotations
 
-import asyncio
 import json
 import math
 import os
 
-import httpx
-
-from .client import SystemOneError, SystemOneTimeout
+from .http_contract import DecisionRefused, post_decision, validate_api_key
 from .live import LiveSystemOneClient
 from .providers import get_provider
 from .state import prepare_decision_state
 from .types import ChoiceQuestion, NoulQuestion, SchemaViolation, coerce_questions, wire_questions
-
-
-class DecisionRefused(SystemOneError):
-    """A required decision was refused or blocked; never an affirmative answer."""
 
 
 def _text(value):
@@ -44,21 +37,6 @@ def _distribution(value, keys):
     return values
 
 
-def _json_body(data):
-    def nonfinite(_value):
-        raise SchemaViolation("Decision response contains a non-finite JSON number")
-
-    def unique(pairs):
-        result = {}
-        for key, value in pairs:
-            if key in result:
-                raise SchemaViolation("Decision response contains a duplicate JSON field")
-            result[key] = value
-        return result
-
-    return json.loads(data, object_pairs_hook=unique, parse_constant=nonfinite)
-
-
 class _DecisionAPIClient(LiveSystemOneClient):
     provider: str
 
@@ -78,8 +56,7 @@ class _DecisionAPIClient(LiveSystemOneClient):
         )
 
     def _headers(self):
-        if not self.api_key:
-            raise SystemOneError(f"Set {get_provider(self.provider).api_key_env} for {self.name}")
+        validate_api_key(self.provider, self.api_key)
         if self.provider == "google":
             return {"x-goog-api-key": self.api_key, "Content-Type": "application/json"}
         headers = {"Authorization": f"Bearer {self.api_key}", "Content-Type": "application/json"}
@@ -92,97 +69,10 @@ class _DecisionAPIClient(LiveSystemOneClient):
         return headers
 
     async def _post(self, payload):
-        # The parent evaluate deadline includes every retry, wait and read.
-        if len(json.dumps(payload, ensure_ascii=False).encode()) > 4 * 1024 * 1024:
-            raise SchemaViolation("Decision request exceeds the size limit")
-        own = self._http is None
-        client = self._http or httpx.AsyncClient(
-            timeout=self.timeout_ms / 1000, follow_redirects=False
+        body, metadata = await post_decision(
+            self, payload, retry_statuses={429, 500, 502, 503, 504, 529}
         )
-        try:
-            for attempt in range(3):
-                event = self._begin_attempt()
-                try:
-                    async with client.stream(
-                        "POST",
-                        self.url,
-                        headers=self._headers(),
-                        json=payload,
-                        follow_redirects=False,
-                    ) as response:
-                        event.update(
-                            http_status=response.status_code,
-                            request_id=response.headers.get("x-request-id", ""),
-                        )
-                        chunks = []
-                        size = 0
-                        async for chunk in response.aiter_bytes():
-                            size += len(chunk)
-                            if size > 4 * 1024 * 1024:
-                                raise SystemOneError("Decision response exceeds the size limit")
-                            chunks.append(chunk)
-                        if response.status_code in {429, 500, 502, 503, 504, 529} and attempt < 2:
-                            try:
-                                delay = min(
-                                    2.0,
-                                    max(
-                                        0.0,
-                                        float(
-                                            response.headers.get("retry-after", 0.2 * 2**attempt)
-                                        ),
-                                    ),
-                                )
-                            except ValueError:
-                                delay = 0.2 * 2**attempt
-                            await asyncio.sleep(delay)
-                            continue
-                        if response.status_code in {401, 403}:
-                            raise SystemOneError(
-                                f"{self.name} HTTP {response.status_code}: check the API key and decision-model access"
-                            )
-                        if response.status_code == 400 and self.provider == "google":
-                            try:
-                                error = json.loads(b"".join(chunks)).get("error", {})
-                            except (ValueError, AttributeError):
-                                error = {}
-                            if isinstance(error, dict) and error.get("code") in {
-                                "safety",
-                                "prohibited_content",
-                                "blocklist",
-                                "image_safety",
-                                "content_blocked",
-                            }:
-                                raise DecisionRefused(
-                                    "Google blocked the decision input; existing policy remains in force"
-                                )
-                        if response.status_code != 200:
-                            raise SystemOneError(
-                                f"{self.name} HTTP {response.status_code}: decision evaluation failed; check setup and request limits"
-                            )
-                        try:
-                            body = _json_body(b"".join(chunks))
-                        except ValueError as exc:
-                            raise SystemOneError("Decision endpoint returned invalid JSON") from exc
-                        if not isinstance(body, dict):
-                            raise SystemOneError("Decision endpoint returned a non-object")
-                        return body, {
-                            "provider": self.provider,
-                            "adapter_version": 1,
-                            "http_status": response.status_code,
-                            "request_id": response.headers.get("x-request-id", ""),
-                            "raw_usage": body.get("usage", {}),
-                            "vendor_answers": body.get("answers"),
-                        }
-                except httpx.TimeoutException as exc:
-                    raise SystemOneTimeout(
-                        f"{self.name} timed out after {self.timeout_ms}ms"
-                    ) from exc
-                except httpx.HTTPError as exc:
-                    raise SystemOneError(f"{self.name} transport failure") from exc
-            raise SystemOneError("Decision evaluation failed")
-        finally:
-            if own:
-                await client.aclose()
+        return body, {**metadata, "vendor_answers": body.get("answers")}
 
     def _record_evaluation(self, payload, body, answers, questions, state):
         if self.record_dir is None:
@@ -280,7 +170,10 @@ class GoogleDecisionClient(_DecisionAPIClient):
                     or option != option.strip()
                     or len(option) > 128
                     or len(option.encode()) > 512
-                    or any(ord(c) < 32 or (c.isspace() and c != " ") for c in option)
+                    or any(
+                        ord(c) < 32 or 127 <= ord(c) <= 159 or (c.isspace() and c != " ")
+                        for c in option
+                    )
                     for option in question.options
                 ):
                     raise SchemaViolation(

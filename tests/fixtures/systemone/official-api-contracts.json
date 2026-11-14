@@ -1,0 +1,525 @@
+{
+  "schema_version": 1,
+  "description": "Independent documentation-derived contract fixtures, not live provider recordings. See per-case adaptations and source manifest.",
+  "cases": [
+    {
+      "id": "google-is_damaged",
+      "provider": "google",
+      "source": "https://aistudio.google.com/docs/decisions-api",
+      "source_section": "noul",
+      "state": "The blue mug I ordered on Monday arrived cracked on Wednesday.",
+      "local_questions": {
+        "is_damaged": {
+          "type": "noul",
+          "instructions": "Did the item arrive damaged?"
+        }
+      },
+      "documented_request": {
+        "model": "gemini-decision-1",
+        "input": "The blue mug I ordered on Monday arrived cracked on Wednesday.",
+        "questions": {
+          "is_damaged": {
+            "type": "noul",
+            "instructions": "Did the item arrive damaged?"
+          }
+        }
+      },
+      "documented_response": {
+        "answers": {
+          "is_damaged": {
+            "type": "noul",
+            "noul": 0.99,
+            "confidence": 0.99
+          }
+        },
+        "usage": {
+          "total_input_tokens": 100,
+          "input_tokens_by_modality": [
+            {
+              "modality": "text",
+              "tokens": 100
+            }
+          ],
+          "total_output_tokens": 0,
+          "total_tokens": 100
+        }
+      },
+      "adaptation": "Only wire question IDs are remapped to q0; question contents and answer values are unchanged."
+    },
+    {
+      "id": "google-is_defect",
+      "provider": "google",
+      "source": "https://aistudio.google.com/docs/decisions-api",
+      "source_section": "noul",
+      "state": "Customer returned the sweater because they preferred green over blue.",
+      "local_questions": {
+        "is_defect": {
+          "type": "noul",
+          "instructions": "Is the customer reporting a product defect?",
+          "criteria": {
+            "true": "The product itself is broken or faulty.",
+            "false": "Preference, sizing, shipping, or pricing complaint."
+          }
+        }
+      },
+      "documented_request": {
+        "model": "gemini-decision-1",
+        "input": "Customer returned the sweater because they preferred green over blue.",
+        "questions": {
+          "is_defect": {
+            "type": "noul",
+            "instructions": "Is the customer reporting a product defect?",
+            "criteria": {
+              "true_description": "The product itself is broken or faulty.",
+              "false_description": "Preference, sizing, shipping, or pricing complaint."
+            }
+          }
+        }
+      },
+      "documented_response": {
+        "answers": {
+          "is_defect": {
+            "type": "noul",
+            "noul": 0.03,
+            "confidence": 0.97
+          }
+        }
+      },
+      "adaptation": "Only wire question IDs are remapped to q0; question contents and answer values are unchanged."
+    },
+    {
+      "id": "google-department",
+      "provider": "google",
+      "source": "https://aistudio.google.com/docs/decisions-api",
+      "source_section": "choice",
+      "state": "I was charged twice for my order.",
+      "local_questions": {
+        "department": {
+          "type": "choice",
+          "instructions": "Which department should handle this request?",
+          "criteria": {
+            "billing": "Payments, invoices, and refunds.",
+            "technical": "Problems using the product.",
+            "shipping": "Delivery and tracking.",
+            "other": "Anything outside these categories."
+          }
+        }
+      },
+      "documented_request": {
+        "model": "gemini-decision-1",
+        "input": "I was charged twice for my order.",
+        "questions": {
+          "department": {
+            "type": "choice",
+            "instructions": "Which department should handle this request?",
+            "criteria": {
+              "billing": "Payments, invoices, and refunds.",
+              "technical": "Problems using the product.",
+              "shipping": "Delivery and tracking.",
+              "other": "Anything outside these categories."
+            }
+          }
+        }
+      },
+      "documented_response": {
+        "answers": {
+          "department": {
+            "type": "choice",
+            "choice": "billing",
+            "probabilities": {
+              "billing": 0.99,
+              "shipping": 0.004,
+              "other": 0.003,
+              "technical": 0.002
+            },
+            "confidence": 0.99
+          }
+        }
+      },
+      "adaptation": "Only wire question IDs are remapped to q0; question contents and answer values are unchanged."
+    },
+    {
+      "id": "google-severity",
+      "provider": "google",
+      "source": "https://aistudio.google.com/docs/decisions-api",
+      "source_section": "score",
+      "state": "Export fails in Safari but works in Chrome.",
+      "local_questions": {
+        "severity": {
+          "type": "score",
+          "instructions": "How severe is this issue for the user?",
+          "criteria": [
+            "Cosmetic: appearance only, no lost functionality.",
+            "Workaround available: a task fails, but another way works.",
+            "Fully blocked: a task fails with no workaround."
+          ]
+        }
+      },
+      "documented_request": {
+        "model": "gemini-decision-1",
+        "input": "Export fails in Safari but works in Chrome.",
+        "questions": {
+          "severity": {
+            "type": "score",
+            "instructions": "How severe is this issue for the user?",
+            "criteria": [
+              "Cosmetic: appearance only, no lost functionality.",
+              "Workaround available: a task fails, but another way works.",
+              "Fully blocked: a task fails with no workaround."
+            ]
+          }
+        }
+      },
+      "documented_response": {
+        "answers": {
+          "severity": {
+            "type": "score",
+            "score": 1.12,
+            "legend": {
+              "0": "Cosmetic: appearance only, no lost functionality.",
+              "1": "Workaround available: a task fails, but another way works.",
+              "2": "Fully blocked: a task fails with no workaround."
+            },
+            "probabilities": {
+              "0": 0.03,
+              "1": 0.83,
+              "2": 0.15
+            },
+            "confidence": 0.83
+          }
+        }
+      },
+      "adaptation": "Only wire question IDs are remapped to q0; question contents and answer values are unchanged."
+    },
+    {
+      "id": "openai-department",
+      "provider": "openai",
+      "source": "https://developers.openai.com/api/docs/guides/decisions",
+      "source_section": "choice",
+      "state": "I was charged twice for my order.",
+      "local_questions": {
+        "department": {
+          "type": "choice",
+          "instructions": "Which department should handle this complaint?",
+          "criteria": {
+            "billing": "Payments, invoices, and refunds.",
+            "technical": "Problems using the product.",
+            "shipping": "Delivery and tracking.",
+            "other": "Requests outside these categories."
+          }
+        }
+      },
+      "documented_request": {
+        "model": "gpt-6-luna",
+        "input": "I was charged twice for my order.",
+        "questions": [
+          {
+            "type": "choice",
+            "name": "department",
+            "instructions": "Which department should handle this complaint?",
+            "choices": [
+              {
+                "value": "billing",
+                "description": "Payments, invoices, and refunds."
+              },
+              {
+                "value": "technical",
+                "description": "Problems using the product."
+              },
+              {
+                "value": "shipping",
+                "description": "Delivery and tracking."
+              },
+              {
+                "value": "other",
+                "description": "Requests outside these categories."
+              }
+            ]
+          }
+        ]
+      },
+      "documented_response": {
+        "answers": [
+          {
+            "type": "choice",
+            "name": "department",
+            "choice": "billing",
+            "probabilities": [
+              {
+                "value": "billing",
+                "probability": 0.95
+              },
+              {
+                "value": "technical",
+                "probability": 0.02
+              },
+              {
+                "value": "shipping",
+                "probability": 0.01
+              },
+              {
+                "value": "other",
+                "probability": 0.02
+              }
+            ],
+            "confidence": 0.93
+          }
+        ]
+      },
+      "adaptation": "Wire names are remapped to q0 and score labels to their numeric indices. Descriptions and probabilities are unchanged."
+    },
+    {
+      "id": "openai-severity",
+      "provider": "openai",
+      "source": "https://developers.openai.com/api/docs/guides/decisions",
+      "source_section": "score",
+      "state": "Export fails in Safari but works in Chrome.",
+      "local_questions": {
+        "severity": {
+          "type": "score",
+          "instructions": "How severe is this issue?",
+          "criteria": [
+            "Appearance only; no lost functionality.",
+            "A task fails, but another way works.",
+            "A task fails with no workaround."
+          ]
+        }
+      },
+      "documented_request": {
+        "model": "gpt-6-luna",
+        "input": "Export fails in Safari but works in Chrome.",
+        "questions": [
+          {
+            "type": "score",
+            "name": "severity",
+            "instructions": "How severe is this issue?",
+            "levels": [
+              {
+                "label": "Cosmetic",
+                "description": "Appearance only; no lost functionality."
+              },
+              {
+                "label": "Workaround available",
+                "description": "A task fails, but another way works."
+              },
+              {
+                "label": "Fully blocked",
+                "description": "A task fails with no workaround."
+              }
+            ]
+          }
+        ]
+      },
+      "documented_response": {
+        "answers": [
+          {
+            "type": "score",
+            "name": "severity",
+            "score": 1.1,
+            "probabilities": [
+              {
+                "value": 0,
+                "label": "Cosmetic",
+                "probability": 0.1
+              },
+              {
+                "value": 1,
+                "label": "Workaround available",
+                "probability": 0.7
+              },
+              {
+                "value": 2,
+                "label": "Fully blocked",
+                "probability": 0.2
+              }
+            ],
+            "confidence": 0.55
+          }
+        ]
+      },
+      "adaptation": "Wire names are remapped to q0 and score labels to their numeric indices. Descriptions and probabilities are unchanged."
+    },
+    {
+      "id": "openai-visible_damage",
+      "provider": "openai",
+      "source": "https://developers.openai.com/api/docs/guides/decisions",
+      "source_section": "predicate",
+      "state": "The packaging has a visible tear.",
+      "local_questions": {
+        "visible_damage": {
+          "type": "noul",
+          "instructions": "Is there visible damage to the packaging?"
+        }
+      },
+      "documented_request": {
+        "model": "gpt-6-luna",
+        "input": "The packaging has a visible tear.",
+        "questions": [
+          {
+            "type": "predicate",
+            "name": "visible_damage",
+            "instructions": "Is there visible damage to the packaging?"
+          }
+        ]
+      },
+      "documented_response": {
+        "answers": [
+          {
+            "type": "predicate",
+            "name": "visible_damage",
+            "probability": 0.92
+          }
+        ]
+      },
+      "adaptation": "Uses synthetic text instead of an image, matching the harness text-only scope. Wire name is remapped to q0. The answer is the guide example, not an observed inference."
+    },
+    {
+      "id": "typesafe-noul",
+      "provider": "typesafe",
+      "source": "https://api.typesafe.ai/openapi.json",
+      "source_section": "components.schemas.NoulQuestion/Answer",
+      "state": "Please help with this message.",
+      "local_questions": {
+        "noul_example": {
+          "type": "noul",
+          "instructions": "Is this message spam?"
+        }
+      },
+      "documented_request": {
+        "model": "jev-1.13.0",
+        "state": "Please help with this message.",
+        "questions": {
+          "noul_example": {
+            "type": "noul",
+            "instructions": "Is this message spam?"
+          }
+        }
+      },
+      "documented_response": {
+        "model": "jev-1.13.0",
+        "answers": {
+          "noul_example": {
+            "type": "noul",
+            "noul": 0.98
+          }
+        },
+        "usage": {
+          "input_tokens": 120,
+          "output_tokens": 12
+        }
+      },
+      "adaptation": "Synthetic request assembled from official OpenAPI property examples. Choice distribution uses matching synthetic options. Not a recorded vendor call."
+    },
+    {
+      "id": "typesafe-choice",
+      "provider": "typesafe",
+      "source": "https://api.typesafe.ai/openapi.json",
+      "source_section": "components.schemas.ChoiceQuestion/Answer",
+      "state": "Please help with this message.",
+      "local_questions": {
+        "choice_example": {
+          "type": "choice",
+          "instructions": "What is the tone of this message?",
+          "criteria": {
+            "angry": "An upset or hostile message",
+            "calm": "A neutral or polite message",
+            "excited": "An enthusiastic or eager message"
+          }
+        }
+      },
+      "documented_request": {
+        "model": "jev-1.13.0",
+        "state": "Please help with this message.",
+        "questions": {
+          "choice_example": {
+            "type": "choice",
+            "instructions": "What is the tone of this message?",
+            "criteria": {
+              "angry": "An upset or hostile message",
+              "calm": "A neutral or polite message",
+              "excited": "An enthusiastic or eager message"
+            }
+          }
+        }
+      },
+      "documented_response": {
+        "model": "jev-1.13.0",
+        "answers": {
+          "choice_example": {
+            "type": "choice",
+            "choice": "angry",
+            "probabilities": {
+              "angry": 1.0,
+              "calm": 0.0,
+              "excited": 0.0
+            },
+            "confidence": 1.0
+          }
+        },
+        "usage": {
+          "input_tokens": 120,
+          "output_tokens": 12
+        }
+      },
+      "adaptation": "Synthetic request assembled from official OpenAPI property examples. Choice distribution uses matching synthetic options. Not a recorded vendor call."
+    },
+    {
+      "id": "typesafe-score",
+      "provider": "typesafe",
+      "source": "https://api.typesafe.ai/openapi.json",
+      "source_section": "components.schemas.ScoreQuestion/Answer",
+      "state": "Please help with this message.",
+      "local_questions": {
+        "score_example": {
+          "type": "score",
+          "instructions": "How urgent is this message?",
+          "criteria": [
+            "Can wait",
+            "Needs attention this week",
+            "Needs attention today"
+          ]
+        }
+      },
+      "documented_request": {
+        "model": "jev-1.13.0",
+        "state": "Please help with this message.",
+        "questions": {
+          "score_example": {
+            "type": "score",
+            "instructions": "How urgent is this message?",
+            "criteria": [
+              "Can wait",
+              "Needs attention this week",
+              "Needs attention today"
+            ]
+          }
+        }
+      },
+      "documented_response": {
+        "model": "jev-1.13.0",
+        "answers": {
+          "score_example": {
+            "type": "score",
+            "score": 1.7,
+            "confidence": 0.9,
+            "legend": {
+              "0": "Can wait",
+              "1": "Needs attention this week",
+              "2": "Needs attention today"
+            },
+            "probabilities": {
+              "0": 0.1,
+              "1": 0.1,
+              "2": 0.8
+            }
+          }
+        },
+        "usage": {
+          "input_tokens": 120,
+          "output_tokens": 12
+        }
+      },
+      "adaptation": "Synthetic request assembled from official OpenAPI property examples. Choice distribution uses matching synthetic options. Not a recorded vendor call."
+    }
+  ]
+}

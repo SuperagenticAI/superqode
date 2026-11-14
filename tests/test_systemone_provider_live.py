@@ -5,7 +5,7 @@ import os
 import pytest
 
 from superqode.systemone.providers import get_provider
-from superqode.systemone.types import NoulQuestion
+from superqode.systemone.connectivity import check_connection
 from test_systemone_provider_apis import CLIENTS, MODELS
 
 
@@ -18,12 +18,10 @@ async def test_live_native_decision_endpoint(provider, model, tmp_path):
     key = os.environ.get(definition.api_key_env, "").strip()
     if not key:
         pytest.skip(f"{definition.api_key_env} is not configured")
-    result = await CLIENTS[provider](
-        api_key=key, model=model, timeout_ms=10000, record_dir=tmp_path / provider / model
-    ).evaluate(
-        {"message": "Please review the code change."},
-        {"review": NoulQuestion(instructions="Does the message request code review?")},
+    result = await check_connection(
+        CLIENTS[provider](
+            api_key=key, model=model, timeout_ms=10000, record_dir=tmp_path / provider / model
+        )
     )
-    assert result.metadata["provider"] == provider
-    assert 0 <= result.noul("review") <= 1
-    assert result.metadata["http_status"] == 200
+    assert result["provider"] == provider and result["status"] == "connected"
+    assert result["checked_primitives"] == ["noul", "choice", "score"]

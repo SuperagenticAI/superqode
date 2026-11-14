@@ -278,9 +278,13 @@ async def test_real_backend_gate_and_rubric_use_native_adapter(
 
 
 @pytest.mark.parametrize("provider", ["google", "openai"])
-async def test_mounted_tui_selects_provider_and_evaluates_pack(provider, monkeypatch, tmp_path):
+@pytest.mark.parametrize("pack_id", ["factory_route", "provider_check"])
+async def test_mounted_tui_selects_provider_and_evaluates_pack(
+    provider, pack_id, monkeypatch, tmp_path
+):
     from superqode.app_main import SuperQodeApp, SelectionAwareInput
     from superqode.app.widgets import ConversationLog
+    from superqode.systemone.pack import load_pack
 
     monkeypatch.chdir(tmp_path)
     monkeypatch.delenv("SUPERQODE_CONNECT", raising=False)
@@ -311,7 +315,7 @@ async def test_mounted_tui_selects_provider_and_evaluates_pack(provider, monkeyp
         await pilot.pause()
         assert app._pure_mode._harness_spec.systemone.provider == provider
         assert app._pure_mode._harness_spec.systemone.mode == "shadow"
-        entry.value = f":systemone connect factory_route --provider {provider}"
+        entry.value = f":systemone connect {pack_id} --provider {provider}"
         await pilot.press("enter")
         await pilot.pause()
         assert app._pure_mode.session.connected
@@ -322,6 +326,7 @@ async def test_mounted_tui_selects_provider_and_evaluates_pack(provider, monkeyp
             if client.calls and not app.is_busy:
                 break
         assert client.calls and settings_seen[-1].provider == provider
+        assert set(client.calls[-1][1]) == set(load_pack(pack_id).questions)
         text = "\n".join(line.text for line in log.lines)
         assert "review" in text and "Not connected." not in text
         await app._pure_mode.aclose()
