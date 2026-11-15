@@ -1,7 +1,7 @@
 {
   "schema_version": "1.7",
-  "generated_at": "2026-11-13T08:55:13.652970+00:00",
-  "count": 107,
+  "generated_at": "2026-11-15T11:06:41.060603+00:00",
+  "count": 108,
   "categories": [
     "SuperQode harnesses",
     "Coding agents",
@@ -1990,7 +1990,7 @@
       "continuity": "context-replay",
       "provider": "",
       "model": "",
-      "setup": "npm install -g @cline/cli",
+      "setup": "npm install -g cline",
       "warning": "",
       "project_path": "",
       "homepage": "https://cline.bot/",
@@ -2000,7 +2000,7 @@
       "last_verified": "",
       "aliases": [],
       "docs_url": "https://cline.bot/",
-      "install_command": "npm install -g @cline/cli",
+      "install_command": "npm install -g cline",
       "tui_commands": [
         ":connect acp cline",
         ":harness switch acp:cline",
@@ -2025,7 +2025,7 @@
       "setup_steps": [
         {
           "title": "Install Cline",
-          "command": "npm install -g @cline/cli",
+          "command": "npm install -g cline",
           "description": ""
         }
       ],
@@ -4741,6 +4741,75 @@
       "language": "Python",
       "language_confidence": "confirmed",
       "language_evidence": "The integrated Strands Python harness ships a pyproject.toml and Python SDK."
+    },
+    {
+      "id": "silicon",
+      "name": "Silicon Harness",
+      "description": "Focused local coding with bounded repository search and verification.",
+      "category": "Model and task presets",
+      "kind": "harness",
+      "runtime": "builtin",
+      "source": "built-in-template",
+      "readiness": "ready",
+      "integration_level": "preset",
+      "continuity": "context-replay",
+      "provider": "apple-foundation",
+      "model": "system-on-device",
+      "setup": "",
+      "warning": "",
+      "project_path": "",
+      "homepage": "",
+      "repository": "https://github.com/SuperagenticAI/superqode",
+      "interface": "",
+      "support_note": "",
+      "last_verified": "",
+      "aliases": [],
+      "docs_url": "",
+      "install_command": "",
+      "tui_commands": [
+        ":harness switch silicon",
+        ":harness show silicon",
+        ":harness status"
+      ],
+      "cli_commands": [
+        "superqode harness run silicon \"Describe your task\"",
+        "superqode harness show silicon"
+      ],
+      "eval_commands": [
+        "superqode harness test --spec harness.yaml",
+        "superqode harness eval --spec harness.yaml --tasks eval-tasks.yaml",
+        "superqode harness bench --manifest harnessbench.yaml"
+      ],
+      "optimize_commands": [
+        "superqode harness optimize-omni --spec harness.yaml --tasks eval-tasks.yaml",
+        "superqode harness optimize --spec harness.yaml --tasks eval-tasks.yaml",
+        "superqode harness promote stage"
+      ],
+      "tools": [
+        "read",
+        "search",
+        "edit",
+        "write"
+      ],
+      "policies": [
+        "Sandbox: local",
+        "Approvals: balanced",
+        "Shell: blocked",
+        "Network: blocked",
+        "Checks: not required"
+      ],
+      "capabilities": [
+        "single workflow",
+        "Structured run events"
+      ],
+      "based_on": "silicon",
+      "popularity_rank": 500,
+      "setup_steps": [],
+      "openness": "open",
+      "license": "Apache-2.0",
+      "language": "Python",
+      "language_confidence": "confirmed",
+      "language_evidence": "Runs in the SuperQode engine (SuperagenticAI/superqode, Python)."
     },
     {
       "id": "benchmark-coding",

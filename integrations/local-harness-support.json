@@ -1068,7 +1068,22 @@
         "https://developer.apple.com/documentation/foundationmodels"
       ],
       "advanced_adapter": "",
-      "notes": "Selected in Local AI → Quick Start via Use for development and available in local comparisons at context 4096 or less. Native session reuse is bounded to a worker; desktop turns replay native transcripts. No inferred support for images or Private Cloud Compute."
+      "notes": "Selected in Local AI → Quick Start via Use for development and available in local comparisons up to the context reported by the native helper. Native session reuse is bounded to a worker; desktop turns replay native transcripts. No inferred support for images or Private Cloud Compute."
+    },
+    {
+      "id": "harness:silicon",
+      "harness": "Silicon Harness",
+      "group": "First-party/optional harness",
+      "verdict": "Supported (documented)",
+      "mechanism": "Built-in focused coding profile for Apple Foundation Models and compatible local models.",
+      "tool_calling": "Bounded search, read, edit and write. Configured checks run in the local OS sandbox. Optional MCP uses search and execute.",
+      "version_requirement": "Apple system route needs an eligible Mac with macOS 26+ and Apple Intelligence ready.",
+      "source_urls": [
+        "https://github.com/SuperagenticAI/superqode/blob/main/src/superqode/harness/templates.py",
+        "https://developer.apple.com/documentation/foundationmodels"
+      ],
+      "advanced_adapter": "",
+      "notes": "Available from Local AI and Compare. Model and hardware quality vary."
     },
     {
       "id": "harness:rlm",
