@@ -7,6 +7,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+- Open ACP agent setup directly from Harness Hub and display the agent's actual
+  setup status and installation errors.
+- On Apple Silicon, install a verified Goose CLI release from ACP setup.
+  Configure Goose and Fast Agent in the project terminal, then recheck the
+  connection when setup completes.
+
 ## [2.31.19] - 2026-11-15
 
 - Surface exo and Swift MLX on the macOS Local AI Start screen, show Silicon

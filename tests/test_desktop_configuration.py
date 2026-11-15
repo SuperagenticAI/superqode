@@ -71,6 +71,62 @@ def test_mac_app_review_uses_owned_runtime_without_preparing_it(monkeypatch, tmp
     ]
 
 
+def test_mac_app_goose_installs_and_uses_reviewed_cli(monkeypatch, tmp_path, mac_app):
+    import shlex
+
+    from superqode.desktop_service import configuration, managed_toolchains
+    from superqode.desktop_service.connection_controls import agent_setup_plan
+    from superqode.desktop_service.routes import acp_routes
+
+    def install_goose(root, version):
+        assert root == mac_app
+        assert version == "1.59.1"
+        folder = root / "test-goose"
+        folder.mkdir(parents=True)
+        binary = folder / "goose"
+        binary.write_text("#!/bin/sh\n")
+        binary.chmod(0o700)
+        return folder
+
+    monkeypatch.setattr(managed_toolchains, "_install_goose", install_goose)
+    project = tmp_path / "project with spaces"
+    project.mkdir()
+    plan = configuration.install_plan(project, "acp:goose")
+    assert plan["requirements"] == []
+    assert plan["toolchain"]["language"] == "Goose CLI"
+    assert not mac_app.exists()
+    result = asyncio.run(
+        configuration.install_agent(
+            project, "acp:goose", lambda _: None, expected_digest=plan["digest"]
+        )
+    )
+    assert result["installed"]
+    route = next(row for row in acp_routes(project) if row["id"] == "acp:goose")
+    assert route["available"]
+    launcher, subcommand = shlex.split(route["command"])
+    assert subcommand == "acp"
+    assert Path(launcher).is_relative_to(mac_app)
+    assert agent_setup_plan(route)["argv"] == [launcher, "configure"]
+
+
+def test_fast_agent_setup_uses_its_project_cli_and_keeps_account_sign_in(tmp_path):
+    from superqode.desktop_service.connection_controls import agent_setup_plan
+
+    launcher = tmp_path / "fast-agent-acp"
+    cli = tmp_path / "venv/bin/fast-agent"
+    cli.parent.mkdir(parents=True)
+    cli.touch(mode=0o700)
+    route = {
+        "agent_id": "fast-agent",
+        "available": True,
+        "command_argv": [str(launcher)],
+        "toolchain": {"language": "Python"},
+    }
+    assert agent_setup_plan(route)["argv"] == [str(cli), "model", "setup"]
+    assert agent_setup_plan({**route, "subscription_vendor": "codex"}) is None
+    assert agent_setup_plan({**route, "available": False}) is None
+
+
 def test_mac_app_failed_agent_upgrade_keeps_verified_launch(monkeypatch, tmp_path, mac_app):
     import shlex
 

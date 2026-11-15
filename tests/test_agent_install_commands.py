@@ -94,6 +94,7 @@ def test_missing_command_is_reported_as_none():
         ("opencode", "opencode.ai", "npm install -g opencode-ai"),
         ("qwen", "qwenlm.github.io", "npm install -g @qwen-code/qwen-code"),
         ("fast-agent", "fastagent.ai", "uv tool install --python 3.13 -U fast-agent-mcp"),
+        ("goose", "goose.block.xyz", "brew install block-goose-cli"),
         ("pi", "pi.dev", "npm install -g @earendil-works/pi-coding-agent pi-acp"),
         ("omp", "omp.sh", "bun install -g @oh-my-pi/pi-coding-agent"),
         ("cline", "cline.bot", "npm install -g cline"),

@@ -121,19 +121,22 @@ struct TerminalLoginView: View {
   let arguments: [String]
   var environment: [String: String] = [:]
   var unsetEnvironment: [String] = []
+  var setupTitle: String? = nil
   let complete: () -> Void
   @State private var identity = "sign-in-" + UUID().uuidString
   @State private var failure = ""
   var body: some View {
     VStack(alignment: .leading, spacing: 16) {
       HStack {
-        Text("Sign in with your existing account").font(.title2.weight(.semibold))
+        Text(setupTitle ?? "Sign in with your existing account").font(.title2.weight(.semibold))
         Spacer()
         nativeButton("dialog.done", action: { dismiss() }, title: "Close") { Text("Close") }
       }
       Text(arguments.joined(separator: " ")).font(.caption.monospaced()).textSelection(.enabled)
       Text(
-        "Complete the vendor’s interactive sign-in here. Credentials remain in the vendor’s local store. Closing this window stops this sign-in process."
+        setupTitle == nil
+          ? "Complete the vendor’s interactive sign-in here. Credentials remain in the vendor’s local store. Closing this window stops this sign-in process."
+          : "Complete the agent’s setup here. Credentials remain with the agent. Closing this window stops setup."
       ).font(.callout).foregroundStyle(.secondary)
       if let terminal = terminals.view(identity) { ProjectTerminalHost(terminal: terminal) }
       if !failure.isEmpty { Text(failure).foregroundStyle(.orange) }
@@ -150,7 +153,9 @@ struct TerminalLoginView: View {
         }
         if !Task.isCancelled {
           if terminals.exitCodes[identity] == 0 { complete() }
-          else { failure = "Sign-in exited without success. Close this window and try again." }
+          else { failure = setupTitle == nil
+            ? "Sign-in exited without success. Close this window and try again."
+            : "Setup exited without success. Review the terminal output and try again." }
         }
       }.onDisappear { terminals.stop(identity) }
   }

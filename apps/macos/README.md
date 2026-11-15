@@ -19,6 +19,12 @@ SuperQode pins the direct agent packages. npm and uv resolve their dependencies
 during installation, and package installers can execute vendor code.
 Follow the agent's setup instructions for any model, API key or account it requires.
 
+Open an ACP card in **Harness Hub**, then choose **Open agent setup**.
+On Apple Silicon, SuperQode can install the official Goose CLI and verify its
+archive before using it. Use **Configure Goose** or **Configure Fast Agent** to
+open the agent's setup command in the project terminal. SuperQode checks the
+ACP session after setup exits successfully.
+
 [**Download the latest public beta**](https://superqode.dev/downloads/macos/latest/SuperQode-arm64.dmg)
 
 **Apple Silicon · macOS 14 or later · Signed and notarized · Python engine included**

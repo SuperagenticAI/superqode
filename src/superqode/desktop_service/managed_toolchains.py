@@ -28,6 +28,8 @@ _NODE = {
     },
 }
 _PYTHON = ("3.13", "3.12")
+_GOOSE_VERSION = "1.59.1"
+_GOOSE_SHA256 = "a71ccecdae36437d5529d3d52d8240e41568db375e7e5799b1ef4bd7540edc21"
 # Direct package releases reviewed with these toolchain versions. npm writes
 # package-lock.json and uv records the complete resolved Python environment.
 _PACKAGE_VERSIONS = {
@@ -132,19 +134,19 @@ def for_agent(project: Path, identity: str, recipe: InstallCommand | None) -> To
         or not recipe.managed
     ):
         return None
-    if recipe.argv[:3] == ["npm", "install", "-g"]:
+    if identity == "goose" and platform.machine() == "arm64":
+        language, versions, pinned = "Goose CLI", (_GOOSE_VERSION,), (f"goose {_GOOSE_VERSION}",)
+    elif recipe.argv[:3] == ["npm", "install", "-g"]:
         language, versions, packages = "Node.js", tuple(_NODE), recipe.argv[3:]
+        pinned = _pin_packages(packages, "@")
     elif recipe.argv[:3] == ["uv", "tool", "install"]:
         versions = ("3.14",) if identity == "deepagents-code" else _PYTHON
         language, packages = "Python", recipe.argv[-1:]
+        pinned = _pin_packages(packages, "==")
     else:
         return None
-    # Only packages with an app-owned entry point are pinned here. For example,
-    # Junie's vendor installer writes a secondary binary and shim in the home folder.
-    if not packages or any(package not in _PACKAGE_VERSIONS for package in packages):
+    if not pinned:
         return None
-    pin = "@" if language == "Node.js" else "=="
-    pinned = tuple(f"{package}{pin}{_PACKAGE_VERSIONS[package]}" for package in packages)
     if identity == "deepagents-code":
         # deepagents-acp 0.0.13 imports the audio_block helper removed in ACP 1.0.
         pinned += ("agent-client-protocol==0.12.1",)
@@ -157,6 +159,13 @@ def for_agent(project: Path, identity: str, recipe: InstallCommand | None) -> To
         pinned,
         recipe.executable,
     )
+
+
+def _pin_packages(packages, separator):
+    # Only packages with an app-owned entry point are pinned here.
+    if any(package not in _PACKAGE_VERSIONS for package in packages):
+        return ()
+    return tuple(f"{package}{separator}{_PACKAGE_VERSIONS[package]}" for package in packages)
 
 
 def bind_launch(toolchain: Toolchain, argv: list[str]) -> tuple[list[str], dict]:
@@ -204,16 +213,30 @@ def _install_archive(target: Path, url: str, sha256: str, member: str, executabl
         with archive.open("rb") as source:
             if hashlib.file_digest(source, "sha256").hexdigest() != sha256:
                 raise ValueError("The runtime download failed its integrity check.")
+        extracted = staging / "extracted"
+        extracted.mkdir()
         with tarfile.open(archive) as distribution:
-            distribution.extractall(staging, filter="data")
-        if not (staging / member / executable).is_file():
+            distribution.extractall(extracted, filter="data")
+        if not (extracted / member / executable).is_file():
             raise ValueError("The runtime download did not include its executable.")
         try:
-            (staging / member).rename(target)
+            (extracted / member).rename(target)
         except OSError:
             if not binary.is_file():
                 raise
     return binary
+
+
+def _install_goose(root: Path, version: str) -> Path:
+    if version != _GOOSE_VERSION:
+        raise ValueError("Choose the supported Goose CLI release.")
+    return _install_archive(
+        root / "goose" / f"{version}-arm64",
+        f"https://github.com/aaif-goose/goose/releases/download/v{version}/goose-aarch64-apple-darwin.tar.bz2",
+        _GOOSE_SHA256,
+        ".",
+        Path("goose"),
+    ).parent
 
 
 def _install_node(root: Path, version: str) -> Path:
@@ -257,7 +280,12 @@ async def install(toolchain: Toolchain, review: dict, status) -> dict:
     env["PATH"] = _SYSTEM_PATH
     published = False
     try:
-        if toolchain.language == "Node.js":
+        if toolchain.language == "Goose CLI":
+            status(f"Downloading and verifying Goose CLI {selection}…")
+            runtime = await asyncio.to_thread(_install_goose, toolchain.root, selection)
+            launch_bin = runtime
+            version = selection
+        elif toolchain.language == "Node.js":
             status(f"Preparing SuperQode Node.js {selection}…")
             runtime = await asyncio.to_thread(_install_node, toolchain.root, selection)
             env["PATH"] = f"{runtime}:{_SYSTEM_PATH}"

@@ -23,6 +23,7 @@ struct ACPSetupView: View {
   @State private var pendingTerminal: [String: Any]?
   @State private var recheck = false
   @State private var reviewingVersion = false
+  @State private var installFailure = ""
   @State private var failure = ""
   private var route: [String: Any] {
     app.harnesses.first { string($0, "id") == string(initialRoute, "id") } ?? initialRoute
@@ -38,6 +39,7 @@ struct ACPSetupView: View {
     return "The agent uses its own sign-in or model credentials."
   }
   private var vendorSetupTitle: String {
+    if string(knownLogin, "purpose") == "configure" { return string(knownLogin, "name") + "…" }
     if string(knownLogin, "vendor") == "qwen-code" { return "Configure Qwen Code…" }
     if knownLogin["interactive"] as? Bool == true { return "Configure in Terminal…" }
     return "Sign in to " + string(knownLogin, "name")
@@ -80,7 +82,12 @@ struct ACPSetupView: View {
         installReview
       } else if !install.isEmpty {
         DisclosureGroup("Manage installation") { installReview }
-      } else if !string(route, "setup_note").isEmpty {
+      } else if reviewingVersion {
+        ProgressView("Checking install options…")
+      } else if !installFailure.isEmpty && route["available"] as? Bool != true {
+        Text(installFailure).font(.callout).foregroundStyle(.secondary).textSelection(.enabled)
+      }
+      if install.isEmpty && !string(route, "setup_note").isEmpty {
         DisclosureGroup("Vendor setup instructions") {
           Text(string(route, "setup_note")).font(.callout).textSelection(.enabled).padding(.top, 8)
         }
@@ -98,11 +105,21 @@ struct ACPSetupView: View {
           .font(.callout).foregroundStyle(.secondary).textSelection(.enabled)
       }
       ForEach(metadata["auth_methods"] as? [[String: Any]] ?? [], id: \.projectRowID) { method in
-        if ["agent", "terminal"].contains(string(method, "type", "agent")) {
-          Button("Sign in · " + string(method, "name", string(method, "id"))) {
-            begin(string(method, "type") == "terminal" ? "acp-terminal" : "acp-auth",
-              extra: ["method": string(method, "id"), "expected_digest": string(route, "digest")])
-          }.disabled(route["available"] as? Bool != true || app.anyActive || app.busy)
+        let manualFastAgent = string(route, "agent_id") == "fast-agent"
+          && string(method, "id") == "fast-agent-ai-secrets"
+        if !manualFastAgent || knownLogin.isEmpty {
+          VStack(alignment: .leading, spacing: 4) {
+            if !manualFastAgent && ["agent", "terminal"].contains(string(method, "type", "agent")) {
+              Button(string(method, "name", "Continue with agent")) {
+                begin(string(method, "type") == "terminal" ? "acp-terminal" : "acp-auth",
+                  extra: ["method": string(method, "id"), "expected_digest": string(route, "digest")])
+              }.disabled(route["available"] as? Bool != true || app.anyActive || app.busy)
+            }
+            if !string(method, "description").isEmpty {
+              Text(string(method, "description")).font(.caption).foregroundStyle(.secondary)
+                .textSelection(.enabled)
+            }
+          }
         }
       }
       if !knownLogin.isEmpty {
@@ -128,7 +145,10 @@ struct ACPSetupView: View {
           operation = nil
           if result["argv"] != nil { pendingTerminal = result }
           else if result["installed"] as? Bool == true {
-            Task { try? await app.refreshDefinitions(); await loadInstall() }
+            Task {
+              do { try await app.refreshDefinitions(); await loadInstall() }
+              catch { failure = "Agent installed. Could not refresh its status: " + error.localizedDescription }
+            }
           } else {
             metadata = result
             if result["connected"] != nil && app.projectID == project {
@@ -160,9 +180,7 @@ struct ACPSetupView: View {
         )) {
           ForEach(versions, id: \.self) { Text($0).tag($0) }
         }.disabled(reviewingVersion || app.busy || app.anyActive)
-        Text(string(toolchain, "language") == "Python"
-          ? "uv downloads Python from Astral’s python-build-standalone. SuperQode installs the agent’s packages for this project."
-          : "SuperQode downloads Node.js from nodejs.org and installs the agent’s packages for this project.")
+        Text(toolchainDownloadGuidance(string(toolchain, "language")))
           .font(.caption).foregroundStyle(.secondary)
       } else {
         Text("This runs the reviewed package-manager command on your Mac.")
@@ -178,6 +196,17 @@ struct ACPSetupView: View {
         }
       }.buttonStyle(BrandButtonStyle()).disabled((install["requirements"] as? [[String: Any]] ?? []).contains(where: { $0["installed"] as? Bool != true }) || reviewingVersion || app.busy || app.anyActive)
     }.padding(16).brandSurface()
+  }
+
+  private func toolchainDownloadGuidance(_ language: String) -> String {
+    switch language {
+    case "Python":
+      return "uv downloads Python from Astral’s python-build-standalone. SuperQode installs the agent’s packages for this project."
+    case "Goose CLI":
+      return "SuperQode downloads and verifies the official Goose CLI for this project."
+    default:
+      return "SuperQode downloads Node.js from nodejs.org and installs the agent’s packages for this project."
+    }
   }
 
   private func begin(_ action: String, extra: [String: Any] = [:]) {
@@ -196,11 +225,12 @@ struct ACPSetupView: View {
   }
   private func loadInstallPlan(version: String = "") async {
     reviewingVersion = true
+    installFailure = ""
     defer { reviewingVersion = false }
     do {
       install = try await app.engine.call("connect.acp.install.plan", ["project": project, "reference": identity, "version": version]) as? [String: Any] ?? [:]
     } catch {
-      if version.isEmpty { install = [:] }
+      if version.isEmpty { install = [:]; installFailure = error.localizedDescription }
       else { failure = error.localizedDescription }
     }
   }
@@ -211,19 +241,22 @@ private struct ACPInteractiveSignIn: View {
   let plan: [String: Any]
   let complete: () -> Void
   @State private var started = false
+  private var configuring: Bool { string(plan, "purpose") == "configure" }
   var body: some View {
     if started {
       TerminalLoginView(terminals: app.terminals, arguments: plan["argv"] as? [String] ?? [],
-        environment: plan["env"] as? [String: String] ?? [:], unsetEnvironment: plan["unset_env"] as? [String] ?? [], complete: complete)
+        environment: plan["env"] as? [String: String] ?? [:], unsetEnvironment: plan["unset_env"] as? [String] ?? [],
+        setupTitle: configuring ? string(plan, "name") : nil, complete: complete)
     } else {
       VStack(alignment: .leading, spacing: 18) {
-        Text("Review terminal sign-in").font(.title2)
+        Text(configuring ? string(plan, "name") : "Review terminal sign-in").font(.title2)
         Text(string(plan, "instructions").isEmpty ? "The agent advertised these arguments and environment values. The configured agent executable owns this login process." : "Review the vendor setup command. The vendor CLI owns authentication and model access.").foregroundStyle(.secondary)
         if !string(plan, "instructions").isEmpty {
           Text(string(plan, "instructions")).font(.callout).textSelection(.enabled)
         }
         CodeBlock(text: pretty(["arguments": plan["argv"] ?? [], "environment": plan["env"] ?? [:]])).frame(height: 230)
-        Button("Start sign-in", action: { started = true }).buttonStyle(BrandButtonStyle())
+        Button(configuring ? "Open setup terminal" : "Start sign-in", action: { started = true })
+          .buttonStyle(BrandButtonStyle())
       }.padding(24).frame(width: 700)
     }
   }

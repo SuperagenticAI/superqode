@@ -2101,6 +2101,7 @@ class DesktopService:
                 self, params["project"], params["reference"], str(params.get("version") or "")
             )
         if method == "connect.acp.login.plan":
+            from .connection_controls import agent_setup_plan
             from .connect_workflow import profile_route
             from superqode.providers.subscription_env import resolve_vendor, subscription_child_env
             from superqode.providers.subscription_login import get_login_spec, login_command
@@ -2111,6 +2112,9 @@ class DesktopService:
                 if params["reference"].startswith("acp:")
                 else profile_route(root, params["reference"].removeprefix("connection:"))
             )
+            agent_setup = agent_setup_plan(route)
+            if agent_setup is not None:
+                return agent_setup
             if route.get("id") in {"qwen-code", "acp:qwen"} and route.get("agent_id") == "qwen":
                 import shutil
 

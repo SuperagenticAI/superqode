@@ -3023,8 +3023,10 @@ private func jobStamp(_ row: [String: Any]) -> Double {
     let previousHarness = harness
     let previousProvider = provider
     let previousModel = model
+    let previousConnectionPage = connectionStartPage
     defer {
       showConnection = false
+      connectionStartPage = previousConnectionPage
       chooseHarness(previousHarness)
       provider = previousProvider
       model = previousModel
@@ -3163,6 +3165,18 @@ private func jobStamp(_ row: [String: Any]) -> Double {
     sheet.cancelOperation(nil)
     dismissalPhase = "Connect Escape"
     try await assertClosed()
+    // Disconnect intentionally cleared cached verification earlier in this smoke test.
+    connectionMetadata["acp:desktop-ui-check"] = [
+      "connected": true, "route_digest": "ui-fixture", "message": "Verified UI fixture",
+    ]
+    openConnections("acp-detail:acp:desktop-ui-check")
+    _ = try await waitForSheet()
+    try await press("connect.use")
+    dismissalPhase = "Hub ACP setup link"
+    try await assertClosed()
+    guard harness == "acp:desktop-ui-check" else {
+      throw EngineError(message: "The direct ACP setup link did not open the selected agent")
+    }
     // Exercise the shared X against actual product dialog contents, not only Connect.
     let audit = DialogAuditState()
     let host = NSHostingView(rootView: DialogAuditHost(state: audit))

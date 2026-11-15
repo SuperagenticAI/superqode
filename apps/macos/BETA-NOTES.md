@@ -1,4 +1,11 @@
-# SuperQode for macOS public beta 0.4.12
+# SuperQode for macOS public beta 0.4.13
+
+Version 0.4.13 (build 39) bundles the Python 2.31.19 engine with the macOS ACP fixes.
+
+- ACP cards in **Harness Hub** open setup directly and show installation and connection status.
+- On Apple Silicon, SuperQode can install and verify the official Goose CLI. Configure Goose or Fast Agent from the setup screen. The app checks the ACP session after setup finishes.
+
+## 0.4.12 (build 38)
 
 Version 0.4.12 (build 38) bundles Python engine 2.31.19.
 

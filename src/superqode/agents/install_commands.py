@@ -177,6 +177,12 @@ def classify_install_command(raw: str) -> InstallCommand:
 # claiming an ``open-source`` tag. Each recipe below is reviewed and released
 # with SuperQode; its exact command is re-derived here at click time.
 _MANAGED_AGENT_INSTALLS: dict[str, tuple[str, str, str, str]] = {
+    "goose": (
+        "brew install block-goose-cli",
+        "https://github.com/aaif-goose/goose",
+        "Apache-2.0",
+        "goose",
+    ),
     "opencode": (
         "npm install -g opencode-ai",
         "https://github.com/anomalyco/opencode",
@@ -244,6 +250,7 @@ _MANAGED_AGENT_INSTALLS: dict[str, tuple[str, str, str, str]] = {
 }
 
 _MANAGED_AGENT_IDENTITIES = {
+    "goose": "goose.block.xyz",
     "opencode": "opencode.ai",
     "qwen": "qwenlm.github.io",
     "fast-agent": "fastagent.ai",

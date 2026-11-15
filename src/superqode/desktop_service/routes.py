@@ -72,6 +72,8 @@ def acp_routes(root: Path):
                 "available": installed,
                 "issue": ""
                 if installed
+                else "Install the Goose CLI, then configure its provider and model."
+                if agent_id == "goose" and install
                 else "Install this agent to download its released packages. A connection check does not download them."
                 if tool_ready is False
                 else item.issue or "Install and sign in to the agent before connecting.",

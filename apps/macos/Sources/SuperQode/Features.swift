@@ -8,17 +8,19 @@ struct HubView: View {
   @State private var filter = "All"
   @State private var selected: [String: Any]?
   @State private var spec: [String: Any] = [:]
+  @State private var pendingACPSetup: String?
   var rows: [[String: Any]] {
     app.hub.filter { row in
-      (search.isEmpty
+      let status = readiness(row, definition: definition(row)).0
+      return (search.isEmpty
         || ["name", "description", "runtime", "category"].map { string(row, $0) }.joined(
           separator: " "
         ).localizedCaseInsensitiveContains(search))
         && (filter == "All"
           || (filter == "Native"
             && ["native", "preset"].contains(string(row, "integration_level")))
-          || (filter == "Ready" && string(row, "readiness") == "ready")
-          || (filter == "Needs setup" && string(row, "readiness") == "setup-required"))
+          || (filter == "Ready" && ["ready", "Session ready"].contains(status))
+          || (filter == "Needs setup" && ["setup-required", "Setup required"].contains(status)))
     }
   }
   func definition(_ row: [String: Any]) -> [String: Any]? {
@@ -28,6 +30,19 @@ struct HubView: View {
         || (!string(row, "project_path").isEmpty
           && string($0, "path") == string(row, "project_path"))
     }
+  }
+  private func readiness(_ row: [String: Any], definition: [String: Any]?) -> (String, Color) {
+    if let definition, string(definition, "desktop_kind") == "acp" {
+      if verifiedACPConnection(
+        route: definition, metadata: app.connectionMetadata[string(definition, "id")] ?? [:])
+      {
+        return ("Session ready", .green)
+      }
+      return definition["available"] as? Bool == true
+        ? ("Launcher detected", .secondary) : ("Setup required", .orange)
+    }
+    let value = string(row, "readiness", "catalog")
+    return (value, value == "ready" ? .green : .secondary)
   }
   var body: some View {
     VStack(alignment: .leading, spacing: 24) {
@@ -60,10 +75,12 @@ struct HubView: View {
       ScrollView {
         LazyVGrid(columns: [GridItem(.adaptive(minimum: 255), spacing: 16)], spacing: 16) {
           ForEach(rows, id: \.projectRowID) { row in
+            let def = definition(row)
+            let (status, tint) = readiness(row, definition: def)
             Button {
               selected = row
               spec = [:]
-              if let def = definition(row) {
+              if let def, string(def, "desktop_kind") != "acp" {
                 app.perform {
                   spec =
                     try await app.engine.call(
@@ -77,9 +94,7 @@ struct HubView: View {
                 HStack {
                   HarnessIcon(identity: HarnessIdentity(row), size: 42)
                   Spacer()
-                  Pill(
-                    title: string(row, "readiness", "catalog"),
-                    color: string(row, "readiness") == "ready" ? .green : .secondary)
+                  Pill(title: status, color: tint)
                 }
                 Text(string(row, "name")).font(.system(size: 16, weight: .semibold)).lineLimit(1)
                 Text(string(row, "description")).font(.system(size: 12)).foregroundStyle(.secondary)
@@ -90,7 +105,7 @@ struct HubView: View {
                     .system(size: 11, design: .monospaced)
                   ).foregroundStyle(.secondary)
                   Spacer()
-                  Text(definition(row) == nil ? "CONNECTION" : "INSPECT →").font(
+                  Text(def == nil ? "CONNECTION" : "INSPECT →").font(
                     .system(size: 11, weight: .semibold, design: .monospaced)
                   ).foregroundStyle(Color.qAccent)
                 }
@@ -101,9 +116,17 @@ struct HubView: View {
         }.padding(.bottom, 20)
       }
     }.padding(30).centeredDialog(
-      isPresented: Binding(get: { selected != nil }, set: { if !$0 { selected = nil } })
+      isPresented: Binding(get: { selected != nil }, set: { if !$0 { selected = nil } }),
+      onDismiss: {
+        if let reference = pendingACPSetup {
+          pendingACPSetup = nil
+          app.openConnections("acp-detail:" + reference)
+        }
+      }
     ) {
       if let row = selected {
+        let def = definition(row)
+        let (status, tint) = readiness(row, definition: def)
         VStack(alignment: .leading, spacing: 18) {
           HStack {
             HarnessIcon(identity: HarnessIdentity(row), size: 42)
@@ -114,10 +137,20 @@ struct HubView: View {
           Text(string(row, "description")).foregroundStyle(.secondary)
           HStack {
             Pill(title: string(row, "runtime", "catalog"))
-            Pill(title: string(row, "readiness", "setup required"))
+            Pill(title: status, color: tint)
             Pill(title: string(row, "openness", "unknown"))
           }
-          if let def = definition(row) {
+          if let def, string(def, "desktop_kind") == "acp" {
+            if !string(def, "issue").isEmpty {
+              Text(string(def, "issue")).font(.callout).foregroundStyle(.secondary)
+            }
+            nativeButton("hub.acp.setup", action: {
+              pendingACPSetup = string(def, "id")
+              selected = nil
+            }, title: "Open agent setup") { Text("Open agent setup…") }
+              .disabled(app.projectID.isEmpty || app.busy || app.active)
+            Spacer(minLength: 0)
+          } else if let def {
             CodeBlock(text: pretty(spec))
             HStack {
               Button(string(def, "desktop_kind").isEmpty ? "Use harness" : "Use connection") {

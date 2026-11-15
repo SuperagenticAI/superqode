@@ -135,6 +135,7 @@ def installer_requirements(argv):
     binary = argv[0]
     name = Path(binary).name
     docs = {
+        "brew": ("Homebrew", "https://brew.sh/"),
         "npm": ("Node.js and npm", "https://nodejs.org/en/download"),
         "uv": ("uv", "https://docs.astral.sh/uv/getting-started/installation/"),
         "bun": ("Bun", "https://bun.sh/docs/installation"),
@@ -229,7 +230,11 @@ def install_plan(root: Path, reference: str, version: str = ""):
         review = toolchain.review(version)
         plan["toolchain"] = review
         packages = shlex.join(review["packages"])
-        plan["command"] = f"{packages} · SuperQode {review['language']} {review['version']}"
+        plan["command"] = (
+            f"{packages} · Official Goose release"
+            if review["language"] == "Goose CLI"
+            else f"{packages} · SuperQode {review['language']} {review['version']}"
+        )
     plan["digest"] = install_digest(plan)
     return plan
 

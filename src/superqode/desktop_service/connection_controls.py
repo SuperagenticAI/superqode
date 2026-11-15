@@ -6,6 +6,7 @@ import asyncio
 import os
 import shlex
 import shutil
+from pathlib import Path
 
 from .redaction import redact
 from superqode.vendor_command_help import (
@@ -16,6 +17,46 @@ from superqode.vendor_command_help import (
     command_rows,
     help_arguments,
 )
+
+
+def agent_setup_plan(route):
+    """Return a project terminal command for agents with reviewed setup CLIs."""
+    agent = route.get("agent_id")
+    if agent not in {"fast-agent", "goose"} or route.get("subscription_vendor"):
+        return None
+    if not route.get("available"):
+        return None
+    argv = route.get("command_argv") or shlex.split(route["command"])
+    if not argv:
+        return None
+    if agent == "fast-agent":
+        cli = (
+            Path(argv[0]).parent / "venv/bin/fast-agent"
+            if route.get("toolchain")
+            else shutil.which("fast-agent")
+        )
+        arguments = ["model", "setup"]
+        title = "Configure Fast Agent"
+        instructions = "Choose a provider and model in Fast Agent's setup. SuperQode will check the ACP connection after setup exits successfully."
+        unset = ["PYTHONPATH", "PYTHONHOME", "PYTHONUSERBASE", "VIRTUAL_ENV"]
+    else:
+        cli = argv[0] if route.get("toolchain") else shutil.which("goose")
+        arguments = ["configure"]
+        title = "Configure Goose"
+        instructions = "Choose a provider and model in Goose's setup. SuperQode will check the ACP connection after setup exits successfully."
+        unset = []
+    if not cli or not Path(cli).is_file() or not os.access(cli, os.X_OK):
+        return None
+    return {
+        "vendor": agent,
+        "name": title,
+        "purpose": "configure",
+        "interactive": True,
+        "argv": [str(cli), *arguments],
+        "env": {},
+        "unset_env": unset,
+        "instructions": instructions,
+    }
 
 
 def select_option(identity, name, values):

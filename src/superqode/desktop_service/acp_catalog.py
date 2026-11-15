@@ -338,10 +338,10 @@ def install_plan(service, project, reference, version=""):
     bundled = reference.removeprefix("connection:")
     try:
         plan = bundled_plan(root, bundled, version)
-    except InstallRecipeUnavailable:
+    except InstallRecipeUnavailable as exc:
         route = next((r for r in extra_routes(service, project) if r["id"] == reference), None)
         if not route:
-            raise ValueError("Choose an ACP agent from the catalog") from None
+            raise ValueError(str(exc)) from None
         argv = shlex.split(route.get("registry_install") or "")
         if (
             len(argv) != 4

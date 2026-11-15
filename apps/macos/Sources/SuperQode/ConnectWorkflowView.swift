@@ -94,7 +94,15 @@ struct ConnectionView: View {
   @State private var menu: [String: Any] = [:]
   @State private var menuCache: [String: [String: Any]] = [:]
   @State private var details: [String: [String: Any]] = [:]
-  private var selected: [String: Any] { details[page] ?? [:] }
+  private var isDetail: Bool { page.hasPrefix("leaf:") || page.hasPrefix("acp-detail:") }
+  private var selected: [String: Any] {
+    if page.hasPrefix("acp-detail:"),
+      let route = app.harnesses.first(where: { string($0, "id") == String(page.dropFirst(11)) })
+    {
+      return ["name": string(route, "name"), "description": string(route, "description"), "route": route]
+    }
+    return details[page] ?? [:]
+  }
   @State private var loading = false
   @State private var failure = ""
   @State private var search = ""
@@ -110,8 +118,10 @@ struct ConnectionView: View {
   @State private var terminalLogin: [String]?
   @State private var loginNotice = ""
   init(initialPage: String = "menu:root") {
-    _path = State(
-      initialValue: initialPage == "menu:root" ? ["menu:root"] : ["menu:root", initialPage])
+    let pages = initialPage.hasPrefix("acp-detail:")
+      ? ["menu:root", "acp", initialPage]
+      : initialPage == "menu:root" ? ["menu:root"] : ["menu:root", initialPage]
+    _path = State(initialValue: pages)
   }
   private var page: String { path.last ?? "menu:root" }
   private var needsProject: Bool { app.projectID.isEmpty && !["source:key", "source:local"].contains(page) }
@@ -202,7 +212,7 @@ struct ConnectionView: View {
               Text(catalogTitle).font(.title2.weight(.semibold)).accessibilityAddTraits(.isHeader)
               if !subtitle.isEmpty { Text(subtitle).font(.callout).foregroundStyle(.secondary) }
               if !failure.isEmpty { Text(failure).foregroundStyle(.orange).textSelection(.enabled) }
-              if page.hasPrefix("leaf:") {
+              if isDetail {
                 leaf
               } else if ["acp", "acp-clients"].contains(page) {
                 agentRows
@@ -401,7 +411,7 @@ struct ConnectionView: View {
     if page == "configure:rlm-routing" { return "A2A routing" }
     if page == "systemone" || page.hasPrefix("systemone:") { return "SystemOne" }
     if page.hasPrefix("vendor-key:") { return "Vendor API key" }
-    if page.hasPrefix("leaf:") { return string(selected, "name", "Connection") }
+    if isDetail { return string(selected, "name", "Connection") }
     if page == "builder" { return "Build your own harness" }
     if ["acp", "acp-clients"].contains(page) { return "ACP connections" }
     if page == "harnesses" { return "Choose an existing HarnessSpec" }
@@ -419,7 +429,7 @@ struct ConnectionView: View {
     if page == "configure:rlm-routing" { return "A2A routing" }
     if page == "systemone" || page.hasPrefix("systemone:") { return "SystemOne" }
     if page.hasPrefix("vendor-key:") { return "Vendor API key" }
-    if page.hasPrefix("leaf:") { return string(selected, "description") }
+    if isDetail { return string(selected, "description") }
     if ["acp", "acp-clients"].contains(page) {
       return "Choose a local coding agent. It keeps its own harness, model and sign-in."
     }
@@ -591,6 +601,9 @@ struct ConnectionView: View {
           dismiss()
         }, edit: { customEditing = route; push("custom-acp") },
           setupGuidance: string(selected, "setup_guidance"))
+      } else if page.hasPrefix("acp-detail:") {
+        Text("This agent is no longer in the current project’s catalog.")
+        Button("Back to ACP agents", action: back)
       } else {
         if let requirements = selected["requirements"] as? [[String: Any]], !requirements.isEmpty {
           ConnectionRequirementsView(requirements: requirements)
