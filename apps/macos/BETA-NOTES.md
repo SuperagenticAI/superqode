@@ -1,4 +1,12 @@
-# SuperQode for macOS public beta 0.4.10
+# SuperQode for macOS public beta 0.4.11
+
+Version 0.4.11 (build 37) bundles Python engine 2.31.18.
+
+- SuperQode installs managed Node.js and Python for supported ACP agents. **Manage installation** lets you choose a supported version for the current project.
+- **Local AI → Advanced → Swift MLX** runs cached Qwen3 text models on macOS 27 or later. Use the models for chat, Silicon Harness coding, and comparisons.
+- Silicon Harness can run selected Linux checks in Apple Container on macOS 26 or later. The [verification guide](../../docs/advanced/local-runtime-workspace.md#apple-container-verification) shows the image and file settings.
+
+## 0.4.10 (build 36)
 
 Version 0.4.10 (build 36) bundles Python engine 2.31.17.
 

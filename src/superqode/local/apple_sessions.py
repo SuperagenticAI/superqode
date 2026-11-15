@@ -1,8 +1,9 @@
-"""Two idle native helpers per event loop, private to a gateway instance.
+"""Two idle native helpers per event loop with caller-defined reuse keys.
 
 No listener, disk transcripts or shared daemon. Cancelled/failed requests destroy
-their helper. Native transcript caches expire after 30 seconds and never cross
-desktop worker processes. A helper is exclusively checked out for each request.
+their helper. Apple transcripts are private to their gateway instance. Swift MLX
+shares only weights within a worker. Idle helpers expire after 30 seconds and
+are exclusively checked out for each request.
 """
 
 import asyncio

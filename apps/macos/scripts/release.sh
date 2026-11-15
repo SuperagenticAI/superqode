@@ -67,7 +67,7 @@ fi
 python3 apps/macos/scripts/make-icon.py
 
 step "Building and signing SuperQode.app"
-SIGNING_IDENTITY="$SIGNING_IDENTITY" "$APP_DIR/scripts/build-app.sh"
+SIGNING_IDENTITY="$SIGNING_IDENTITY" SUPERQODE_INCLUDE_SWIFT_MLX="${SUPERQODE_INCLUDE_SWIFT_MLX:-1}" "$APP_DIR/scripts/build-app.sh"
 codesign --verify --deep --strict "$APP_DIR/release/SuperQode.app"
 
 step "Packaging the DMG"

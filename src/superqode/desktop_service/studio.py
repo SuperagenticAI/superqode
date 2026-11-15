@@ -174,6 +174,25 @@ def inspect(service, params):
     text = yaml.safe_dump(data, sort_keys=False)
     inspection = inspect_harness_backend(spec.runtime.backend, spec).to_dict()
     warnings = [item["message"] for item in inspection["issues"]]
+    apple_tools = None
+    if selected.get("provider") == "apple-foundation" and spec.model_policy.profile == "silicon":
+        from superqode.harness.backends.runtime import _tool_registry_for_spec
+        from superqode.harness.compiler import compile_to_headless_profile
+        from superqode.harness.model_policy import resolve_harness_model_policy
+        from superqode.local.apple_contract import tool_definitions
+        from superqode.providers.gateway.base import ToolDefinition
+
+        try:
+            policy = resolve_harness_model_policy(
+                spec, provider="apple-foundation", model=selected.get("model")
+            )
+            registry = _tool_registry_for_spec(spec, compile_to_headless_profile(spec), policy)
+            definitions = [
+                ToolDefinition(t.name, t.description, t.parameters) for t in registry.list()
+            ]
+            apple_tools = len(tool_definitions(definitions))
+        except ValueError as exc:
+            warnings.append(str(exc))
     if inspection["capabilities"]["availability"] != "available":
         warnings.append("Backend dependencies or configuration need setup before execution.")
     if not spec.model_policy.primary:
@@ -203,6 +222,7 @@ def inspect(service, params):
         "policy": data["execution_policy"],
         "tools": [tool for agent in spec.agents for tool in agent.tools],
         "warnings": warnings,
+        "apple_tool_count": apple_tools,
         "engine_version": __version__,
         "created": time.time(),
         "expected_file_digest": file_digest(target(root, spec.name)),

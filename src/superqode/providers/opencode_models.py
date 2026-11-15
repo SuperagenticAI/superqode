@@ -12,6 +12,8 @@ import re
 import shutil
 import subprocess
 from datetime import datetime, timedelta
+from functools import partial
+from pathlib import Path
 from typing import Dict, List, Optional
 
 logger = logging.getLogger(__name__)
@@ -21,9 +23,11 @@ _cache_time: Optional[datetime] = None
 CACHE_TTL_SECONDS = 300
 
 
-def _run_opencode(args: List[str], timeout: int = 15) -> subprocess.CompletedProcess:
-    """Run an OpenCode CLI command. PATH is the only locator."""
-    binary = shutil.which("opencode")
+def _run_opencode(
+    args: List[str], timeout: int = 15, *, executable: str = "", cwd: Optional[Path] = None
+) -> subprocess.CompletedProcess:
+    """Run the project-selected OpenCode CLI or the one from PATH."""
+    binary = executable or shutil.which("opencode")
     if not binary:
         raise FileNotFoundError("opencode")
     return subprocess.run(
@@ -32,17 +36,19 @@ def _run_opencode(args: List[str], timeout: int = 15) -> subprocess.CompletedPro
         text=True,
         timeout=timeout,
         check=False,
+        **({"cwd": cwd} if cwd is not None else {}),
     )
 
 
-def _cli_model_list() -> List[Dict]:
+def _cli_model_list(run=None) -> List[Dict]:
     """Models OpenCode currently prints (`opencode models`)."""
-    verbose = _run_opencode(["models", "--verbose"])
+    run = run or _run_opencode
+    verbose = run(["models", "--verbose"])
     if verbose.returncode == 0:
         parsed = _parse_opencode_models(verbose.stdout or "")
         if parsed:
             return parsed
-    plain = _run_opencode(["models"])
+    plain = run(["models"])
     if plain.returncode != 0:
         return []
     models: List[Dict] = []
@@ -189,27 +195,28 @@ def _opencode_default_model(reason: str = "") -> Dict:
     }
 
 
-def _discover_opencode_models() -> List[Dict]:
+def _discover_opencode_models(executable: str = "", cwd: Optional[Path] = None) -> List[Dict]:
     """CLI list + OpenCode's own cache. No hardcoded model names."""
-    if not shutil.which("opencode"):
+    if not executable and not shutil.which("opencode"):
         logger.warning("OpenCode not found in PATH")
         return []
+    run = partial(_run_opencode, executable=executable, cwd=cwd) if executable else _run_opencode
     try:
-        cli_models = _cli_model_list()
+        cli_models = _cli_model_list(run) if executable else _cli_model_list()
     except Exception as exc:  # noqa: BLE001
         logger.warning("opencode models failed: %s", exc)
         cli_models = []
     extra_providers: set[str] = set()
     cache_models: List[Dict] = []
     try:
-        paths = _run_opencode(["debug", "paths"])
+        paths = run(["debug", "paths"])
         cache_path = _cache_catalog_path(paths.stdout or "") if paths.returncode == 0 else None
         if cache_path:
             cache_models = _models_from_cache_file(cache_path)
     except Exception as exc:  # noqa: BLE001
         logger.debug("OpenCode models cache unavailable: %s", exc)
     try:
-        v2 = _run_opencode(["debug", "v2"])
+        v2 = run(["debug", "v2"])
         if v2.returncode == 0:
             extra_providers = _configured_provider_ids(v2.stdout or "")
     except Exception as exc:  # noqa: BLE001
@@ -224,9 +231,14 @@ def _discover_opencode_models() -> List[Dict]:
     return models
 
 
-async def get_opencode_models(force_refresh: bool = False) -> List[Dict]:
+async def get_opencode_models(
+    force_refresh: bool = False, *, executable: str = "", cwd: Optional[Path] = None
+) -> List[Dict]:
     """Dynamically fetch available models from OpenCode."""
     global _cached_models, _cache_time
+
+    if executable:
+        return await asyncio.to_thread(_discover_opencode_models, executable, cwd)
 
     if not force_refresh and _cached_models and _cache_time:
         if datetime.now() - _cache_time < timedelta(seconds=CACHE_TTL_SECONDS):

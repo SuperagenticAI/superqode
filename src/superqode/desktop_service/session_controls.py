@@ -88,7 +88,15 @@ def apply_controls(spec, request: dict):
         groups["agent"] = "allow"
         groups["network"] = "ask" if policy.allow_network else "deny"
     agents = spec.agents
+    runtime = spec.runtime
     if mode == "plan":
+        if spec.model_policy.profile == "silicon":
+            runtime = replace(
+                runtime,
+                config={
+                    key: value for key, value in runtime.config.items() if key != "silicon_mcp"
+                },
+            )
         groups = {**groups, "write": "deny", "shell": "deny", "network": "deny", "agent": "deny"}
         policy = replace(policy, allow_write=False, allow_shell=False, allow_network=False)
         if agents:
@@ -111,5 +119,7 @@ def apply_controls(spec, request: dict):
     return replace(
         spec,
         agents=agents,
+        runtime=runtime,
+        checks=replace(spec.checks, enabled=False) if mode == "plan" else spec.checks,
         execution_policy=replace(policy, config=config, approval_profile=approval),
     )

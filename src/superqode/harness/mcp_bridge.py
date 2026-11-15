@@ -22,15 +22,27 @@ class HarnessMCPRuntime:
     manager: MCPClientManager | None = None
     tools: list[ToolDefinition] = field(default_factory=list)
     errors: list[str] = field(default_factory=list)
+    silicon_allowlist: dict[str, frozenset[str]] = field(default_factory=dict)
+
+    def silicon_tools(self):
+        if self.manager is None:
+            return []
+        return [
+            tool
+            for tool in self.manager.list_all_tools()
+            if tool.name in self.silicon_allowlist.get(tool.server_id, ())
+        ]
 
     @property
     def available(self) -> bool:
         return bool(self.tools)
 
-    async def execute(self, server_id: str, tool_name: str, args: dict[str, Any]) -> ToolResult:
+    async def execute(
+        self, server_id: str, tool_name: str, args: dict[str, Any], *, timeout=None
+    ) -> ToolResult:
         if self.manager is None:
             return ToolResult(success=False, output="", error="MCP manager is not initialized")
-        result = await self.manager.execute_tool(server_id, tool_name, args)
+        result = await self.manager.execute_tool(server_id, tool_name, args, timeout=timeout)
         if result.is_error:
             return ToolResult(
                 success=False,
@@ -69,13 +81,40 @@ async def create_harness_mcp_runtime(
     spec: HarnessSpec, *, cwd: Path | None = None
 ) -> HarnessMCPRuntime:
     """Create connected MCP runtime support from ``spec.runtime.config``."""
-    resolution = resolve_mcp_config(spec.runtime.config, cwd=cwd)
-    servers = resolution.servers
+    config = spec.runtime.config
+    silicon = spec.model_policy.profile == "silicon"
+    allowlist = {}
+    if silicon:
+        values = config.get("silicon_mcp", {})
+        if not values:
+            return HarnessMCPRuntime()
+        if not isinstance(values, dict) or any(
+            not isinstance(names, (list, tuple))
+            or not names
+            or not all(isinstance(name, str) and name for name in names)
+            for names in values.values()
+        ):
+            raise ValueError("Silicon MCP requires a map of servers to allowed tools")
+        if not spec.execution_policy.allow_network:
+            raise ValueError("Enable network access explicitly to use Silicon MCP servers")
+        if "execute" not in (spec.agents[0].tools if spec.agents else ()):
+            raise ValueError("Add execute to the Silicon tool list to use MCP")
+        allowlist = {server: frozenset(names) for server, names in values.items()}
+    resolution = resolve_mcp_config(config, cwd=cwd)
+    servers = {
+        name: server
+        for name, server in resolution.servers.items()
+        if not silicon or name in allowlist
+    }
+    if silicon and set(allowlist) - servers.keys():
+        raise ValueError("Configure each server named in silicon_mcp before starting")
     if not servers:
         return HarnessMCPRuntime(errors=resolution.errors)
 
     manager = MCPClientManager()
-    runtime = HarnessMCPRuntime(manager=manager, errors=list(resolution.errors))
+    runtime = HarnessMCPRuntime(
+        manager=manager, errors=list(resolution.errors), silicon_allowlist=allowlist
+    )
     try:
         await manager.__aenter__()
         for server in servers.values():
@@ -84,14 +123,18 @@ async def create_harness_mcp_runtime(
         for server_id, ok in sorted(results.items()):
             if not ok:
                 runtime.errors.append(f"MCP server {server_id!r} did not connect")
-        runtime.tools = [
-            ToolDefinition(
-                name=f"mcp_{tool.server_id}_{tool.name}",
-                description=f"[MCP:{tool.server_id}] {tool.description}",
-                parameters=tool.input_schema or {"type": "object", "properties": {}},
-            )
-            for tool in manager.list_all_tools()
-        ]
+        runtime.tools = (
+            []
+            if silicon
+            else [
+                ToolDefinition(
+                    name=f"mcp_{tool.server_id}_{tool.name}",
+                    description=f"[MCP:{tool.server_id}] {tool.description}",
+                    parameters=tool.input_schema or {"type": "object", "properties": {}},
+                )
+                for tool in manager.list_all_tools()
+            ]
+        )
         return runtime
     except Exception as exc:
         runtime.errors.append(str(exc))

@@ -36,6 +36,26 @@ cp "$APP_DIR/resources/agent-icons-provenance.json" "$DEST/Contents/Resources/"
 cp "$APP_DIR/resources/PROVIDER-ICONS-LICENSE.txt" "$DEST/Contents/Resources/"
 cp "$APP_DIR/resources/provider-icons-provenance.json" "$DEST/Contents/Resources/"
 if [ -f "$APP_DIR/resources/icon.icns" ]; then cp "$APP_DIR/resources/icon.icns" "$DEST/Contents/Resources/icon.icns"; fi
+rm -rf "$DEST/Contents/Resources/swift-mlx"
+if [ "${SUPERQODE_INCLUDE_SWIFT_MLX:-0}" = "1" ]; then
+    MLX_SCRATCH="${SUPERQODE_SWIFT_MLX_SCRATCH:-$APP_DIR/.build/swift-mlx}"
+    MLX_HELPER="$(bash "$APP_DIR/SwiftMLX/build.sh" "$MLX_SCRATCH" "$CONFIGURATION")"
+    MLX_DEST="$DEST/Contents/Resources/swift-mlx"
+    mkdir -p "$MLX_DEST"
+    cp "$MLX_HELPER" "$(dirname "$MLX_HELPER")/mlx.metallib" "$MLX_DEST/"
+    for checkout in "$MLX_SCRATCH"/checkouts/*; do
+        for notice in "$checkout"/LICENSE* "$checkout"/NOTICE*; do
+            [ -f "$notice" ] || continue
+            cp "$notice" "$MLX_DEST/$(basename "$checkout")-$(basename "$notice")"
+        done
+    done
+    for dependency in mlx mlx-c metal-cpp fmt json; do
+        for notice in "$MLX_SCRATCH"/checkouts/mlx-swift/Source/Cmlx/"$dependency"/LICENSE*; do
+            [ -f "$notice" ] || continue
+            cp "$notice" "$MLX_DEST/$dependency-$(basename "$notice")"
+        done
+    done
+fi
 if [ -d "$APP_DIR/resources/Assets.xcassets" ]; then
     xcrun actool "$APP_DIR/resources/Assets.xcassets" --compile "$DEST/Contents/Resources" --platform macosx --minimum-deployment-target 14.0 --app-icon AppIcon --output-partial-info-plist "$APP_DIR/.build/AppIcon-Info.plist" --target-device mac
 fi

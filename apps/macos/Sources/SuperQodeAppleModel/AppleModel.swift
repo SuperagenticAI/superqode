@@ -21,16 +21,13 @@ import FoundationModels
     #if canImport(FoundationModels)
     if #available(macOS 26.0, *) {
       let model = SystemLanguageModel.default
-      #if compiler(>=6.3)
-      let context = model.contextSize
-      #else
-      let context = 4096 // Conservative cap for SDKs predating contextSize.
-      #endif
+      let (context, tokenCount) = contextCapabilities(model)
+
       switch model.availability {
       case .available:
         return ["available": true, "state": "ready", "guidance": "Apple's on-device model is ready for chat, summaries and lightweight tasks.",
                 "model": "system-on-device", "supports_tools": true, "on_device": true,
-                "context": context, "docs_url": guide, "supports_structured_output": true, "supports_images": false, "protocol": 2, "runtime_version": ProcessInfo.processInfo.operatingSystemVersionString,
+                "context": context, "supports_token_count": tokenCount, "docs_url": guide, "supports_structured_output": true, "supports_images": false, "protocol": 2, "runtime_version": ProcessInfo.processInfo.operatingSystemVersionString,
                 "current_locale_supported": model.supportsLocale()]
       case .unavailable(let reason):
         switch reason {
@@ -50,6 +47,19 @@ import FoundationModels
     #endif
     return unavailable("unsupported-system", "Apple on-device support needs macOS 26 or later and an app build containing the Foundation Models SDK. Other local runtimes remain available.")
   }
+
+  #if canImport(FoundationModels)
+  @available(macOS 26.0, *)
+  static func contextCapabilities(_ model: SystemLanguageModel) -> (Int, Bool) {
+    #if compiler(>=6.3)
+    if #available(macOS 26.4, *) {
+      let reported = model.contextSize
+      return ((512...262144).contains(reported) ? reported : 4096, true)
+    }
+    #endif
+    return (4096, false)
+  }
+  #endif
 
   static func main() async {
     if CommandLine.arguments.contains("--status") { emit(status()); return }

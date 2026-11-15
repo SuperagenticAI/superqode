@@ -37,9 +37,18 @@ def acp_routes(root: Path):
         command = declared.get("*") if isinstance(declared, dict) else declared
         parts = shlex.split(str(command or ""))
         from superqode.agents.install_commands import managed_agent_install
+        from .managed_toolchains import bind_launch, for_agent
 
         recipe = managed_agent_install(agent)
-        parts, tool_ready = prepare_tool_launch(parts, recipe.executable if recipe else "")
+        agent_id = str(agent.get("short_name") or "")
+        toolchain = for_agent(root, agent_id, recipe)
+        managed = {}
+        if toolchain:
+            parts, managed = bind_launch(toolchain, parts)
+        if managed:
+            tool_ready = True
+        else:
+            parts, tool_ready = prepare_tool_launch(parts, recipe.executable if recipe else "")
         # A uvx command is ready only when its installed program is on PATH.
         # uvx itself is not that program, and a check must not download it.
         if tool_ready is None:
@@ -69,11 +78,12 @@ def acp_routes(root: Path):
                 "digest": digest,
                 "path": None,
                 "desktop_kind": "acp",
-                "agent_id": str(agent.get("short_name") or ""),
+                "agent_id": agent_id,
                 "website": str(agent.get("url") or ""),
                 "registry_source": "Bundled catalog",
                 "auth": "subscription requested" if vendor else "agent-managed; unverified",
                 "install": install,
+                "toolchain": managed or None,
             }
         )
     return result

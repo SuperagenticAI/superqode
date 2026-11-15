@@ -169,6 +169,18 @@ async def task(request, directory):
             response = await session.approve_pending(0, always=False)
         else:
             response = await session.reject_pending(0, message="Denied in SuperQode Desktop")
+        if (
+            decision.get("allow") is True
+            and response.stopped_reason == "complete"
+            and not response.error
+        ):
+            from superqode.harness.silicon import render_checks, run_checks
+
+            checks = await run_checks(spec, Path(request["cwd"]))
+            for row in checks:
+                emit("harness_event", {"event": "check_result", "payload": row})
+            if checks:
+                response.content += render_checks(checks)
         if response.content:
             emit("answer", {"text": response.content})
         if response.stopped_reason in {"error", "cancelled"}:

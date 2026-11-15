@@ -437,9 +437,31 @@ def installed(service):
                 "server_installed": bool(engine.get("installed") or engine.get("running")),
             }
         )
+    if status.get("mlx", {}).get("running"):
+        try:
+            advertised = available("mlx")["models"]
+        except (OSError, ValueError):
+            advertised = []
+        for model in advertised:
+            if existing := next(
+                (row for row in models if row["engine"] == "mlx" and row["model"] == model), None
+            ):
+                existing["advertised"] = True
+                continue
+            models.append(
+                {
+                    "id": workbench.fingerprint(["mlx", model])[:24],
+                    "engine": "mlx",
+                    "model": model,
+                    "name": model,
+                    "advertised": True,
+                    "server_running": True,
+                    "server_installed": True,
+                }
+            )
     return {
         "models": models,
-        "engines": [status[name] for name in ("ollama", "lmstudio") if name in status],
+        "engines": [status[name] for name in ("mlx", "ollama", "lmstudio") if name in status],
     }
 
 

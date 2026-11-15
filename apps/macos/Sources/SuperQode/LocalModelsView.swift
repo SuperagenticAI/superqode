@@ -88,6 +88,7 @@ struct AdvancedLocalAIView: View {
       }.padding(.horizontal, 28).padding(.top, 16)
       Picker("Advanced Local AI", selection: $app.localAIAdvancedTab) {
         Text("Apple on-device").tag("apple")
+        Text("Swift MLX").tag("swift-mlx")
         Text("Engines & performance").tag("runtimes")
         Text("Model library").tag("models")
         Text("Compare").tag("comparisons")
@@ -95,6 +96,8 @@ struct AdvancedLocalAIView: View {
         Text("Harness compatibility").tag("compatibility")
       }.pickerStyle(.segmented).labelsHidden().padding(.horizontal, 28).padding(.top, 12)
       switch app.localAIAdvancedTab {
+      case "swift-mlx":
+        ScrollView { SwiftMLXPanel(active: active).padding(28).frame(maxWidth: 760) }
       case "runtimes":
         ScrollView { LocalRuntimeWorkspace(active: active, form: runtime).padding(28) }
       case "models":
@@ -112,6 +115,77 @@ struct AdvancedLocalAIView: View {
         }
       }
     }
+  }
+}
+
+private struct SwiftMLXPanel: View {
+  let active: Bool
+  @EnvironmentObject var app: Workspace
+  @State private var status: [String: Any] = [:]
+  @State private var model = ""
+  @State private var busy = false
+  @State private var showDownload = false
+  @State private var error = ""
+
+  private var models: [[String: Any]] { status["models"] as? [[String: Any]] ?? [] }
+  private var available: Bool { status["available"] as? Bool == true }
+
+  var body: some View {
+    VStack(alignment: .leading, spacing: 14) {
+      Text("Swift MLX").font(.title2)
+      if available {
+        if models.isEmpty {
+          Text("Download a Qwen3 text checkpoint to run it on this Mac.")
+        } else {
+          Picker("Cached model", selection: $model) {
+            ForEach(models, id: \.projectRowID) { row in
+              Text(string(row, "id")).tag(string(row, "id"))
+            }
+          }
+          HStack {
+            Button("Use with Silicon Harness") { connect(coding: true) }.buttonStyle(BrandButtonStyle())
+            Button("Use for chat") { connect(coding: false) }
+          }.disabled(model.isEmpty || app.projectID.isEmpty || app.anyActive || busy)
+        }
+        if !models.contains(where: { string($0, "id") == string(status, "starter") }) {
+          Button("Review starter download…") { showDownload = true }
+            .disabled(app.projectID.isEmpty || app.anyActive || busy)
+        }
+      } else if !status.isEmpty {
+        Text("Swift MLX requires Apple Silicon, macOS 27 or later, and a build with the native helper.")
+          .foregroundStyle(.secondary)
+      }
+      if !error.isEmpty { Text(error).foregroundStyle(.orange).textSelection(.enabled) }
+      Button(busy ? "Checking…" : "Refresh cached models") { Task { await refresh() } }
+        .disabled(busy || !app.connected)
+    }
+    .frame(maxWidth: .infinity, alignment: .leading)
+    .task(id: active && app.connected) { if active && app.connected { await refresh() } }
+    .centeredDialog(isPresented: $showDownload, title: "Swift MLX starter model", onDismiss: {
+      Task { await refresh() }
+    }) {
+      LocalModelActionView(request: ["action": "download", "model": string(status, "starter"),
+        "source": "hf", "format": "mlx", "engine": "mlx"]).environmentObject(app)
+    }
+  }
+
+  private func refresh() async {
+    busy = true
+    defer { busy = false }
+    do {
+      status = try await app.engine.call("local.swift-mlx.status") as? [String: Any] ?? [:]
+      if !models.contains(where: { string($0, "id") == model }) { model = string(models.first ?? [:], "id") }
+      error = ""
+    } catch {
+      self.error = error.localizedDescription
+    }
+  }
+
+  private func connect(coding: Bool) {
+    app.interactionMode = coding ? "code" : "chat"
+    app.chooseHarness(coding ? "silicon" : "no-tool", restoreRemembered: false)
+    app.chooseModelRoute("swift-mlx", model, preserveHarness: true)
+    app.section = "Workspace"
   }
 }
 
@@ -381,7 +455,7 @@ struct LocalModelActionView: View {
         Button("Refresh model files") { Task { await loadFiles() } }.disabled(busy)
         Text("All split-GGUF shards are included. LM Studio imports a link to cached weights.").font(.caption).foregroundStyle(.secondary)
       }
-      TextField(engine == "ds4" ? "Downloaded GGUF file" : "Model ID or downloaded path", text: $model).textFieldStyle(.roundedBorder).disabled(string(request, "action") != "serve")
+      TextField(engine == "ds4" ? "Downloaded GGUF file" : "Model ID or downloaded path", text: $model).textFieldStyle(.roundedBorder).disabled(string(request, "action") != "serve" && request["edit_model"] as? Bool != true)
       if string(request, "source") == "hf" {
         HStack {
           if let url = URL(string: "https://huggingface.co/" + model) { Link("Model card & access conditions", destination: url) }

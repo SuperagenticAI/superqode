@@ -34,21 +34,29 @@ def test_agent_install_explains_missing_node_and_blocks_subprocess(monkeypatch, 
     assert install_plan(tmp_path, "qwen-code")["requirements"][0]["installed"]
 
 
-def test_mac_app_install_uses_its_own_uv_and_python(monkeypatch, tmp_path):
+@pytest.fixture
+def mac_app(monkeypatch, tmp_path):
+    from superqode.desktop_service import managed_toolchains
+
+    monkeypatch.setenv("SUPERQODE_APP", "1")
+    monkeypatch.setenv("SUPERQODE_STATE_DIR", str(tmp_path / "app state"))
+    monkeypatch.setattr(managed_toolchains, "sys", type("MacOS", (), {"platform": "darwin"}))
+    monkeypatch.setattr(managed_toolchains.platform, "machine", lambda: "arm64")
+    return tmp_path / "app state" / "toolchains"
+
+
+def test_mac_app_review_uses_owned_runtime_without_preparing_it(monkeypatch, tmp_path, mac_app):
     from superqode.desktop_service.configuration import install_plan
 
-    uv = tmp_path / "bin" / "uv"
-    uv.parent.mkdir()
-    uv.write_text("", encoding="utf-8")
-    uv.chmod(0o755)
-    monkeypatch.setenv("SUPERQODE_APP", "1")
-    monkeypatch.setenv("SUPERQODE_STATE_DIR", str(tmp_path))
-    monkeypatch.setattr("superqode.desktop_service.app_setup.ensure_uv", lambda bin_dir: str(uv))
     plan = install_plan(tmp_path, "fast-agent")
-    assert plan["argv"][0] == str(uv)
-    assert plan["argv"][plan["argv"].index("--python") + 1] == __import__("sys").executable
-    assert "fast-agent-mcp" in plan["argv"]
-    assert plan["requirements"][0]["installed"] is True
+    assert plan["toolchain"]["language"] == "Python"
+    assert plan["toolchain"]["version"] == "3.13"
+    assert plan["toolchain"]["packages"][0].startswith("fast-agent-mcp==")
+    assert plan["requirements"] == []
+    assert install_plan(tmp_path, "fast-agent", "3.12")["digest"] != plan["digest"]
+    with pytest.raises(ValueError, match="supported Python version"):
+        install_plan(tmp_path, "fast-agent", "../../invalid")
+    assert not mac_app.exists()
 
     monkeypatch.delenv("SUPERQODE_APP")
     terminal = install_plan(tmp_path, "fast-agent")
@@ -61,6 +69,80 @@ def test_mac_app_install_uses_its_own_uv_and_python(monkeypatch, tmp_path):
         "-U",
         "fast-agent-mcp",
     ]
+
+
+def test_mac_app_failed_agent_upgrade_keeps_verified_launch(monkeypatch, tmp_path, mac_app):
+    import shlex
+
+    from superqode.desktop_service import configuration, managed_toolchains
+    from superqode.desktop_service.connection_controls import cli_plan
+    from superqode.desktop_service.routes import acp_routes
+
+    monkeypatch.setenv("PATH", "/usr/bin:/bin")
+    monkeypatch.setenv("OPENAI_API_KEY", "test-key")
+    runtime = mac_app / "node" / "bin"
+    runtime.mkdir(parents=True)
+    monkeypatch.setattr(managed_toolchains, "_install_node", lambda root, version: runtime)
+    fail = False
+
+    async def npm(argv, status, *, env, cwd):
+        assert argv[:3] == [str(runtime / "node"), str(runtime / "npm"), "install"]
+        assert env["PATH"].startswith(str(runtime) + ":")
+        assert "OPENAI_API_KEY" not in env
+        assert argv[-1].startswith("opencode-ai@")
+        if fail:
+            raise ValueError("npm failed")
+        executable = cwd / "node_modules" / ".bin" / "opencode"
+        executable.parent.mkdir(parents=True)
+        executable.write_text('#!/bin/sh\nprintf "%s\\n" "$@"\n')
+        executable.chmod(0o700)
+
+    monkeypatch.setattr(configuration, "run_install_command", npm)
+
+    def route(project):
+        return next(row for row in acp_routes(project) if row["id"] == "acp:opencode")
+
+    def install(version=""):
+        reviewed = configuration.install_plan(tmp_path, "opencode", version)
+        return asyncio.run(
+            configuration.install_agent(
+                tmp_path,
+                "opencode",
+                lambda _: None,
+                version=version,
+                expected_digest=reviewed["digest"],
+            )
+        )
+
+    assert not route(tmp_path)["available"]
+    plan = configuration.install_plan(tmp_path, "opencode")
+    versions = plan["toolchain"]["versions"]
+    with pytest.raises(ValueError, match="installation plan changed"):
+        asyncio.run(
+            configuration.install_agent(
+                tmp_path,
+                "opencode",
+                lambda _: None,
+                version=versions[1],
+                expected_digest=plan["digest"],
+            )
+        )
+    install(versions[0])
+    first = route(tmp_path)
+    assert first["available"]
+    argv = shlex.split(first["command"])
+    assert argv[1:] == ["acp"]
+    assert cli_plan(first)["argv"] == argv[:1]
+    fail = True
+    with pytest.raises(ValueError, match="npm failed"):
+        install(versions[1])
+    assert route(tmp_path)["digest"] == first["digest"]
+    fail = False
+    install(versions[1])
+    assert route(tmp_path)["digest"] != first["digest"]
+    assert Path(argv[0]).exists()
+    assert configuration.install_plan(tmp_path, "opencode")["toolchain"]["version"] == versions[1]
+    assert not route(tmp_path / "another project")["available"]
 
 
 def test_guided_wizard_uses_shared_builder_and_no_tool_boundaries(tmp_path):

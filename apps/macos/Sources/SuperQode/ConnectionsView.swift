@@ -861,7 +861,7 @@ struct InstalledLocalModelPicker: View {
   }
 
   private func modelCaption(_ row: [String: Any]) -> String {
-    let engine = string(row, "engine") == "lmstudio" ? "LM Studio" : "Ollama"
+    let engine = engineName(string(row, "engine"))
     var summary = [engine]
     if let size = row["size_gb"] as? Double, size > 0 {
       summary.append(String(format: "%.1f GB", size))
@@ -1057,9 +1057,12 @@ struct InstalledLocalModelPicker: View {
   private func bringOnline(_ row: [String: Any]) async throws -> [String: Any] {
     if row["advertised"] as? Bool == true { return row }
     let engine = string(row, "engine")
-    let name = engine == "lmstudio" ? "LM Studio" : "Ollama"
+    let name = engineName(engine)
     guard engineReady(engine) else {
       throw EngineError(message: "Install \(name) to use this model.")
+    }
+    if engine == "mlx" && row["server_running"] as? Bool == true {
+      throw EngineError(message: "Stop the current MLX server before switching models.")
     }
     if row["server_running"] as? Bool != true {
       progress = "Starting \(name)…"
@@ -1077,6 +1080,11 @@ struct InstalledLocalModelPicker: View {
   }
 
   private func startServer(_ engine: String, model: String) async throws {
+    if engine == "mlx" {
+      guard !model.isEmpty else { throw EngineError(message: "Choose a downloaded MLX model first.") }
+      try await runLocal(["action": "serve", "engine": engine, "kv_cache": "auto", "context": 8192, "model": model])
+      return
+    }
     if engine == "lmstudio" || model.isEmpty {
       try await runLocal(["action": "serve", "engine": engine, "kv_cache": "auto", "context": 8192, "model": ""])
       return
@@ -1152,7 +1160,7 @@ extension InstalledLocalModelPicker {
   private var mainEngines: [[String: Any]] {
     let catalogRows = form.catalog["engines"] as? [[String: Any]] ?? []
     var rows: [[String: Any]] = []
-    for id in ["ollama", "lmstudio"] {
+    for id in ["mlx", "ollama", "lmstudio"] {
       if let row = engines.first(where: { string($0, "id") == id }) ?? catalogRows.first(where: { string($0, "id") == id }) {
         rows.append(row)
       }
@@ -1372,7 +1380,7 @@ extension InstalledLocalModelPicker {
         if mainEngines.isEmpty {
           HStack(spacing: 8) {
             ProgressView().controlSize(.small)
-            Text("Looking for Ollama and LM Studio…").foregroundStyle(.secondary)
+            Text("Looking for local engines…").foregroundStyle(.secondary)
             Spacer()
           }.padding(14)
         }
@@ -1426,7 +1434,16 @@ extension InstalledLocalModelPicker {
         Text(engineStatus(row)).font(.caption).foregroundStyle(.secondary)
       }
       Spacer()
-      if id == "lmstudio" && !cli && !running {
+      if id == "mlx" && !installed && !running {
+        Button("Install MLX…") { serverRequest = ["action": "install", "engine": "mlx"] }
+          .disabled(busy)
+      } else if id == "mlx" {
+        Button("Download MLX model…") {
+          serverRequest = ["action": "download", "engine": "mlx", "format": "mlx",
+                           "source": "hf", "model": "mlx-community/Qwen3-4B-Instruct-2507-4bit",
+                           "edit_model": true]
+        }.disabled(busy)
+      } else if id == "lmstudio" && !cli && !running {
         Button(installed ? "Set up LM Studio" : "Install LM Studio") {
           serverRequest = ["action": "install", "engine": "lmstudio"]
         }.disabled(busy)
@@ -1544,7 +1561,7 @@ extension InstalledLocalModelPicker {
     } else if !startStarter.isEmpty && startStarter["installed"] as? Bool != true {
       starterCard
     } else {
-      Text("No Ollama or LM Studio models yet. Download a model to get started.").foregroundStyle(.secondary)
+      Text("Download a model to get started.").foregroundStyle(.secondary)
         .frame(maxWidth: .infinity, alignment: .leading).padding(10)
     }
   }
@@ -1731,10 +1748,10 @@ extension InstalledLocalModelPicker {
     let workspace = app
     workspace.selectJob("", restoreConnection: false)
     workspace.checkingConnection = false
-    workspace.chooseAppleModel(development: true)
+    workspace.chooseAppleModel(development: true, codingHarness: "silicon")
     workspace.showWelcome = false
     workspace.notice = "Connected Apple's on-device model. Type your request, then press Send."
-    LocalAISetupMemory.save(engine: "apple", model: "system-on-device", name: "Apple on-device model", harness: "apple-local")
+    LocalAISetupMemory.save(engine: "apple", model: "system-on-device", name: "Apple on-device model", harness: "silicon")
     if dismissOnUse { dismiss() }
   }
 

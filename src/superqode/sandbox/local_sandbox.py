@@ -64,7 +64,9 @@ def _seatbelt_profile(cwd: Path, *, allow_network: bool, writable: list[Path]) -
     """Build a Seatbelt (SBPL) profile: read all, write only to allowed roots."""
     write_rules = []
     for path in writable:
-        write_rules.append(f'  (subpath "{path}")')
+        import json
+
+        write_rules.append(f"  (subpath {json.dumps(str(path), ensure_ascii=False)})")
     write_block = "\n".join(write_rules)
     lines = [
         "(version 1)",
@@ -98,9 +100,13 @@ def build_sandboxed_command(command: str, cwd: Path, mode: str | None = None) ->
     ``danger-full-access``, or no backend) the argv runs the command via the
     shell unchanged.
     """
-    mode = (mode or current_mode()).lower()
-    shell_argv = ["/bin/sh", "-c", command]
+    return build_sandboxed_argv(["/bin/sh", "-c", command], cwd, mode)
 
+
+def build_sandboxed_argv(
+    shell_argv: list[str], cwd: Path, mode: str | None = None, *, allow_network: bool | None = None
+) -> SandboxPlan:
+    mode = (mode or current_mode()).lower()
     if mode in (MODE_OFF, MODE_DANGER):
         return SandboxPlan(argv=shell_argv, applied=False, backend="none", reason="disabled")
 
@@ -110,7 +116,8 @@ def build_sandboxed_command(command: str, cwd: Path, mode: str | None = None) ->
             argv=shell_argv, applied=False, backend="none", reason="no sandbox backend available"
         )
 
-    allow_network = mode == MODE_WORKSPACE_WRITE
+    if allow_network is None:
+        allow_network = mode == MODE_WORKSPACE_WRITE
     cwd = Path(cwd)
 
     if backend == "seatbelt":

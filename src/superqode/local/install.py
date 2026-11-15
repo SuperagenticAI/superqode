@@ -55,6 +55,7 @@ def runtime_python(engine: str) -> Path:
     return Path.home() / ".superqode" / "runtimes" / engine / "bin" / "python"
 
 
+MANAGED_MLX_REQUIREMENT = "mlx-lm==0.32.2"
 _MLX_PROBES: dict[str, tuple[float, bool]] = {}
 
 
@@ -162,19 +163,17 @@ def install_plan(engine: str) -> InstallPlan:
         guidance = "Installs the official headless LM Studio daemon and lms CLI. The desktop app is optional."
     elif engine == "mlx":
         if system == "darwin" and platform.machine() == "arm64":
-            from .servers import MLX_REQUIREMENT
-
             target = runtime_python("mlx")
             uv = shutil.which(runtime_executable("uv"))
             if uv:
                 steps = (
                     (uv, "venv", "--python", "3.12", "--allow-existing", str(target.parent.parent)),
-                    (uv, "pip", "install", "--python", str(target), MLX_REQUIREMENT),
+                    (uv, "pip", "install", "--python", str(target), MANAGED_MLX_REQUIREMENT),
                 )
             else:
                 steps = (
                     (sys.executable, "-m", "venv", "--symlinks", str(target.parent.parent)),
-                    (str(target), "-I", "-m", "pip", "install", MLX_REQUIREMENT),
+                    (str(target), "-I", "-m", "pip", "install", MANAGED_MLX_REQUIREMENT),
                 )
             guidance = (
                 "Installs MLX in its own environment under ~/.superqode/runtimes/mlx. "

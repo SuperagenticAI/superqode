@@ -10,6 +10,13 @@ Opening an existing thread restores its recorded connection where supported.
 Live agent activity shows the current command or file target across supported
 runtime event shapes.
 
+For supported bundled ACP agents, choose **Install agent** in connection setup.
+SuperQode downloads the selected Node.js or Python runtime and the reviewed
+agent packages on first install. The app reuses the runtime across projects
+and keeps agent packages private to each project. Open **Manage installation**
+to change the runtime version. After switching, run **Check connection** again.
+Follow the agent's setup instructions for any model, API key or account it requires.
+
 [**Download the latest public beta**](https://superqode.dev/downloads/macos/latest/SuperQode-arm64.dmg)
 
 **Apple Silicon · macOS 14 or later · Signed and notarized · Python engine included**
@@ -366,5 +373,7 @@ SIGNING_IDENTITY="Developer ID Application: Name (TEAMID)" apps/macos/scripts/re
 ```
 
 It needs a Developer ID Application certificate in Keychain and a notary profile created once with `xcrun notarytool store-credentials superqode-notary --apple-id YOU --team-id TEAMID`. Set `UPLOAD=1` to also publish to superqode.dev, or `SKIP_ENGINE=1` to reuse the existing engine payload.
+
+The release build includes the [Swift MLX helper](SwiftMLX/README.md). Building it needs the macOS 27 SDK and the Xcode Metal Toolchain component. Set `SUPERQODE_INCLUDE_SWIFT_MLX=1` to include it in a development app build. On Apple Silicon with macOS 27 or later, open **Local AI → Advanced → Swift MLX** to use a cached Qwen3 model or review a starter download.
 
 For development, `swift build --package-path apps/macos` builds the executable. The packaging script selects full Xcode when available and places compiler caches inside `.build`. `CONFIGURATION=debug apps/macos/scripts/build-app.sh` packages a debug build. Open `Package.swift` in Xcode to work on the native sources.

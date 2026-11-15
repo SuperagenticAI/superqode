@@ -1104,10 +1104,10 @@ private func jobStamp(_ row: [String: Any]) -> Double {
     }
     throw EngineError(message: "The model is still warming up. Your first question may take longer.")
   }
-  func chooseModelRoute(_ provider: String, _ model: String) {
-    if provider == "apple-foundation" {
+  func chooseModelRoute(_ provider: String, _ model: String, preserveHarness: Bool = false) {
+    if !preserveHarness && provider == "apple-foundation" {
       chooseHarness(interactionMode == "chat" ? "no-tool" : "apple-local", restoreRemembered: false)
-    } else if isManaged || connectionDisconnected || harness.hasPrefix("local-harness:") {
+    } else if !preserveHarness && (isManaged || connectionDisconnected || harness.hasPrefix("local-harness:")) {
       chooseHarness(
         harnesses.first(where: { string($0, "id") == "core" })?.projectRowID
           ?? harnesses.first(where: { string($0, "desktop_kind").isEmpty })?.projectRowID ?? "core")
@@ -1116,9 +1116,12 @@ private func jobStamp(_ row: [String: Any]) -> Double {
     self.model = model
     savePreferences()
   }
-  func chooseAppleModel(development: Bool) {
+  func chooseAppleModel(development: Bool, codingHarness: String = "apple-local") {
     interactionMode = development ? "code" : "chat"
-    chooseModelRoute("apple-foundation", "system-on-device")
+    chooseHarness(development ? codingHarness : "no-tool", restoreRemembered: false)
+    provider = "apple-foundation"
+    model = "system-on-device"
+    savePreferences()
     section = "Workspace"
   }
   func clearLocalModelBinding() async throws {

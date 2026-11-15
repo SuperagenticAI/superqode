@@ -306,6 +306,19 @@ def test_opencode_offers_its_default_when_the_cli_lists_nothing(monkeypatch):
     assert models[0]["catalog_unavailable"] is True
 
 
+@pytest.mark.asyncio
+async def test_opencode_model_lookup_uses_project_managed_executable(monkeypatch, tmp_path):
+    from superqode.providers.opencode_models import get_opencode_models
+
+    monkeypatch.setenv("PATH", "/usr/bin:/bin")
+    binary = tmp_path / "managed opencode"
+    (tmp_path / "catalog").write_text("opencode/project-model\n")
+    binary.write_text('#!/bin/sh\n[ "$1" = models ] && exec /bin/cat catalog\n')
+    binary.chmod(0o700)
+    models = await get_opencode_models(executable=str(binary), cwd=tmp_path)
+    assert [model["id"] for model in models] == ["opencode/project-model"]
+
+
 def test_opencode_picker_keeps_paid_rows_when_nothing_reads_as_free(monkeypatch):
     """Free detection relies on pricing metadata that some rows never carry."""
 

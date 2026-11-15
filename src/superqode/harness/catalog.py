@@ -279,14 +279,14 @@ def builtin_harnesses() -> tuple[HarnessDefinition, ...]:
         presets.append(
             HarnessDefinition(
                 id=template_id,
-                display_name=template_id,
+                display_name="Silicon Harness" if template_id == "silicon" else template_id,
                 description=spec.description,
                 runtime=spec.runtime.backend,
                 source="built-in-template",
                 spec=spec,
                 loop_policy=(
                     core_loop_policy()
-                    if spec.flavor.value == "no_tool"
+                    if spec.flavor.value == "no_tool" or template_id == "silicon"
                     else workbench_loop_policy()
                 ),
                 aliases=(template_id.replace("-", "_"),),

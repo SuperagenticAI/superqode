@@ -13,6 +13,7 @@ import subprocess
 from superqode.providers.gateway.base import StreamChunk
 
 MODEL = "system-on-device"
+DEFAULT_CONTEXT = 4096
 GUIDE = "https://support.apple.com/en-us/121115"
 
 
@@ -61,6 +62,19 @@ def status():
         }
 
 
+def context_capacity(capabilities):
+    value = capabilities.get("context")
+    return value if type(value) is int and 512 <= value <= 262144 else DEFAULT_CONTEXT
+
+
+def context_limit(capabilities):
+    from .context_contract import _launch_contract_value
+
+    capacity = context_capacity(capabilities)
+    requested = _launch_contract_value("apple-foundation", MODEL, "context", 512, 262144)
+    return min(capacity, requested) if requested is not None else capacity
+
+
 def child_environment():
     # Native Foundation Models needs no provider tokens or shell credentials.
     allowed = {"PATH", "HOME", "TMPDIR", "LANG", "LC_ALL", "__CF_USER_TEXT_ENCODING"}
@@ -76,6 +90,7 @@ async def stream(
     temperature=None,
     response_format=None,
     session_id=None,
+    requested_context=None,
 ):
     if model != MODEL:
         raise ValueError(
@@ -90,7 +105,10 @@ async def stream(
     raw, definitions, output_schema = request(
         messages, tools, max_tokens, temperature, response_format
     )
-    context = _launch_contract_value("apple-foundation", model, "context", 512, 4096) or 4096
+    capabilities = await asyncio.to_thread(status)
+    context = context_limit(capabilities)
+    if type(requested_context) is int and 512 <= requested_context < context:
+        context = requested_context
     output = min(max_tokens or 512, 2048)
     cap = _launch_contract_value("apple-foundation", model, "max_tokens", 1, 2048)
     if cap:
@@ -98,14 +116,16 @@ async def stream(
     framing = list(definitions)
     if output_schema:
         framing.append({"response_schema": output_schema})
-    kept, output = guard_request(raw, framing or None, context, output)
-    if len(kept) != len(raw):
-        raise ValueError(
-            "Apple's conversation context is full. Start a new thread or shorten the history explicitly; nothing was sent or silently removed"
-        )
-    annotate(context=context, context_source="conservative on-device cap", output_limit=output)
+    if capabilities.get("supports_token_count") is not True:
+        kept, output = guard_request(raw, framing or None, context, output)
+        if len(kept) != len(raw):
+            raise ValueError(
+                "Apple's conversation context is full. Start a new thread or shorten the history explicitly; nothing was sent or silently removed"
+            )
+    annotate(context=context, context_source="on-device context", output_limit=output)
     payload = {
-        "messages": [raw[i] for i in kept],
+        "messages": raw,
+        "context": context,
         "max_tokens": output,
         "temperature": normalized_temperature(temperature),
         "tools": definitions,

@@ -2516,6 +2516,24 @@ class LiteLLMGateway(GatewayInterface):
                     temperature=temperature,
                     response_format=kwargs.get("response_format"),
                     session_id=session_id,
+                    requested_context=kwargs.get("apple_context_limit"),
+                )
+            elif provider == "swift-mlx":
+                from superqode.local.swift_mlx import stream as source
+
+                if kwargs.get("reasoning_effort") not in (None, "off", "none"):
+                    raise InvalidRequestError(
+                        "Swift MLX runs the supported models with thinking disabled",
+                        provider=provider,
+                    )
+                chunks = source(
+                    messages,
+                    model,
+                    tools=tools,
+                    max_tokens=max_tokens,
+                    temperature=temperature,
+                    response_format=kwargs.get("response_format"),
+                    requested_context=kwargs.get("swift_mlx_context_limit"),
                 )
             else:
                 from superqode.local.runtimes import selected_runtime, stream as source
@@ -2598,7 +2616,7 @@ class LiteLLMGateway(GatewayInterface):
         if task_budget is not None:
             task_budget.check()
 
-        if provider in {"local-openai", "apple-foundation"}:
+        if provider in {"local-openai", "apple-foundation", "swift-mlx"}:
             content, thinking, calls, usage, finish = [], [], None, None, None
             async for chunk in self._native_local_stream(
                 messages, model, provider, temperature, max_tokens, tools, tool_choice, **kwargs
@@ -2906,11 +2924,16 @@ class LiteLLMGateway(GatewayInterface):
         if task_budget is not None:
             task_budget.check()
 
-        if provider in {"local-openai", "apple-foundation"}:
-            async for chunk in self._native_local_stream(
-                messages, model, provider, temperature, max_tokens, tools, tool_choice, **kwargs
-            ):
-                yield chunk
+        if provider in {"local-openai", "apple-foundation", "swift-mlx"}:
+            from contextlib import aclosing
+
+            async with aclosing(
+                self._native_local_stream(
+                    messages, model, provider, temperature, max_tokens, tools, tool_choice, **kwargs
+                )
+            ) as stream:
+                async for chunk in stream:
+                    yield chunk
             return
 
         # Special handling for MLX - use direct client instead of LiteLLM

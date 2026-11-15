@@ -805,6 +805,18 @@ PROVIDERS: Dict[str, ProviderDef] = {
         deployment_mode="local",
         notes="Apple Intelligence on-device text, guided output and permission-controlled tools. No API key or cloud fallback.",
     ),
+    "swift-mlx": ProviderDef(
+        id="swift-mlx",
+        name="Swift MLX",
+        tier=ProviderTier.LOCAL,
+        category=ProviderCategory.LOCAL,
+        env_vars=[],
+        litellm_prefix="",
+        docs_url="https://github.com/ml-explore/mlx-swift-lm",
+        example_models=["mlx-community/Qwen3-0.6B-4bit"],
+        deployment_mode="local",
+        notes="Native cached Qwen3 text inference on Apple Silicon with macOS 27 or later.",
+    ),
     "ollama": ProviderDef(
         id="ollama",
         name="Ollama",

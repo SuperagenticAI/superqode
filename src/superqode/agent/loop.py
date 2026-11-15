@@ -1273,7 +1273,12 @@ class AgentLoop:
         """
         run_pre_init_once(self.config.provider, self.config.model)
         profile = resolve_model_profile(self.config.provider, self.config.model)
-        return profile.resolve_kwargs()
+        kwargs = profile.resolve_kwargs()
+        if self.config.provider == "apple-foundation" and self.config.context_window > 0:
+            kwargs["apple_context_limit"] = self.config.context_window
+        if self.config.provider == "swift-mlx" and self.config.context_window > 0:
+            kwargs["swift_mlx_context_limit"] = self.config.context_window
+        return kwargs
 
     def _compute_tool_definitions(self) -> List[ToolDefinition]:
         """Compute tool definitions for the current registry state.
@@ -1524,6 +1529,12 @@ class AgentLoop:
             )
 
     async def _prepare_host_context(self, messages):
+        if self.config.tool_contract_version == "silicon-v1":
+            from ..harness.silicon import project_context
+
+            return project_context(
+                messages, self._get_tool_definitions(), self._effective_context_window()
+            )
         from ..harness.core_context import prepare_core_context
 
         return await prepare_core_context(self, messages)
@@ -2101,6 +2112,7 @@ class AgentLoop:
         {
             "ollama",
             "local-openai",
+            "apple-foundation",
             "lmstudio",
             "lm-studio",
             "lm_studio",
@@ -2406,7 +2418,7 @@ class AgentLoop:
            token-budgeted tail of recent turns intact.
         4. If compaction fails, fall back to mechanical prune-from-front.
         """
-        if not self._compaction_active():
+        if self.config.tool_contract_version == "silicon-v1" or not self._compaction_active():
             return messages
 
         msg_dicts = [
@@ -3574,6 +3586,7 @@ class AgentLoop:
             "total_cost": 0.0,
         }
         self.last_stream_error = ""
+        self.last_stream_completed = False
 
         fast_chat = self._use_fast_chat_path(user_message)
         # Resolve the real (loaded, for local) context window once so adaptive
@@ -4011,7 +4024,9 @@ class AgentLoop:
                 if full_content:
                     # Content was already yielded during streaming
                     pass
-                # Done - return (final response was already streamed)
+                self.last_stream_completed = stream_finish_reason != "length" and bool(
+                    full_content.strip()
+                )
                 return
 
         # Hit max iterations (unless cancelled)
@@ -4019,6 +4034,8 @@ class AgentLoop:
             if self.on_thinking:
                 await self.on_thinking(f"Reached maximum iterations ({self.config.max_iterations})")
             yield f"\n\n[Reached maximum iterations ({self.config.max_iterations})]"
+            if self.config.tool_contract_version == "silicon-v1":
+                yield "\nReview this turn’s changes, use Undo, or continue with another local model."
 
     def cancel(self):
         """Cancel the current agent operation."""

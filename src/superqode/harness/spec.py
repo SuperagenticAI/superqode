@@ -159,6 +159,14 @@ class ContextSpec:
 
 
 @dataclass(frozen=True)
+class AppleContainerCheckSpec:
+    """Image and project files approved for an isolated Linux check."""
+
+    image: str
+    files: tuple[str, ...]
+
+
+@dataclass(frozen=True)
 class CheckStepSpec:
     """Project checks step."""
 
@@ -166,6 +174,7 @@ class CheckStepSpec:
     command: str
     enabled: bool = True
     timeout: int = 300
+    apple_container: AppleContainerCheckSpec | None = None
 
 
 @dataclass(frozen=True)

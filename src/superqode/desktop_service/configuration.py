@@ -151,6 +151,10 @@ def installer_requirements(argv):
     ]
 
 
+class InstallRecipeUnavailable(ValueError):
+    """The bundled catalog has no reviewed installer for this reference."""
+
+
 def bind_app_install(argv: list[str]) -> list[str]:
     """Point a reviewed uv install at the uv and Python shipped with the Mac app."""
     import os
@@ -193,7 +197,7 @@ def bind_app_install(argv: list[str]) -> list[str]:
     return bound
 
 
-def install_plan(root: Path, reference: str):
+def _agent_recipe(reference: str):
     from superqode.providers.connection_profiles import get_connection_profile
     from superqode.providers.acp_registry import get_bundled_acp_catalog
     from superqode.agents.install_commands import managed_agent_install
@@ -203,24 +207,52 @@ def install_plan(root: Path, reference: str):
     agent = next((a for a in get_bundled_acp_catalog() if a.get("short_name") == target), None)
     plan = managed_agent_install(agent) if agent else None
     if not plan or not plan.runnable or not plan.managed:
-        raise ValueError(
+        raise InstallRecipeUnavailable(
             "This agent has no reviewed native install recipe. Use the vendor's setup instructions."
         )
-    argv = bind_app_install(plan.argv)
-    return {
+    return target, plan
+
+
+def install_plan(root: Path, reference: str, version: str = ""):
+    from .managed_toolchains import for_agent
+
+    target, recipe = _agent_recipe(reference)
+    toolchain = for_agent(root, target, recipe)
+    argv = list(recipe.argv)
+    plan = {
         "reference": reference,
         "command": shlex.join(argv),
         "argv": argv,
-        "requirements": installer_requirements(argv),
+        "requirements": [] if toolchain else installer_requirements(argv),
     }
+    if toolchain:
+        review = toolchain.review(version)
+        plan["toolchain"] = review
+        packages = shlex.join(review["packages"])
+        plan["command"] = f"{packages} · SuperQode {review['language']} {review['version']}"
+    plan["digest"] = install_digest(plan)
+    return plan
 
 
-async def install_agent(root: Path, reference: str, status):
-    plan = install_plan(root, reference)
+def install_digest(plan) -> str:
+    return hashlib.sha256(
+        json.dumps([plan["argv"], plan.get("toolchain")], sort_keys=True).encode()
+    ).hexdigest()
+
+
+async def install_agent(root: Path, reference: str, status, *, version="", expected_digest=None):
+    from .managed_toolchains import for_agent, install
+
+    plan = install_plan(root, reference, version)
+    if expected_digest is not None and plan["digest"] != expected_digest:
+        raise ValueError("The installation plan changed. Review it again before installing.")
+    if plan.get("toolchain"):
+        target, recipe = _agent_recipe(reference)
+        return await install(for_agent(root, target, recipe), plan["toolchain"], status)
     return await run_install_command(plan["argv"], status)
 
 
-async def run_install_command(argv, status):
+async def run_install_command(argv, status, *, env=None, cwd=None):
     import asyncio
     import os
     import signal
@@ -230,6 +262,8 @@ async def run_install_command(argv, status):
         raise ValueError(" ".join(r["instruction"] + " " + r["docs_url"] for r in missing))
     process = await asyncio.create_subprocess_exec(
         *argv,
+        env=env,
+        cwd=cwd,
         stdout=asyncio.subprocess.PIPE,
         stderr=asyncio.subprocess.STDOUT,
         start_new_session=True,

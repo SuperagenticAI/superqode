@@ -144,6 +144,16 @@ class BuiltinRuntime:
                     yield HarnessEvent(type="model_delta", data={"text": chunk})
             while pending:
                 yield pending.pop(0)
+            if self._loop.config.tool_contract_version == "silicon-v1":
+                yield HarnessEvent(
+                    type="model_result",
+                    data={
+                        "stopped_reason": "complete"
+                        if self._loop.last_stream_completed
+                        else "incomplete",
+                        "error": self._loop.last_stream_error,
+                    },
+                )
         finally:
             self._loop.on_tool_call = previous_tool_call
             self._loop.on_tool_result = previous_tool_result

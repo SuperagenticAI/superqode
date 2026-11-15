@@ -96,7 +96,7 @@ def test_missing_command_is_reported_as_none():
         ("fast-agent", "fastagent.ai", "uv tool install --python 3.13 -U fast-agent-mcp"),
         ("pi", "pi.dev", "npm install -g @earendil-works/pi-coding-agent pi-acp"),
         ("omp", "omp.sh", "bun install -g @oh-my-pi/pi-coding-agent"),
-        ("cline", "cline.bot", "npm install -g @cline/cli"),
+        ("cline", "cline.bot", "npm install -g cline"),
         ("mistral-vibe", "mistral-vibe.mistral.ai", "uv tool install --python 3.13 mistral-vibe"),
         (
             "hermes",

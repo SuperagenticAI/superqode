@@ -160,7 +160,7 @@ def test_cloud_tags_are_not_local_and_mlx_plan_is_isolated(tmp_path, monkeypatch
     monkeypatch.setattr(workbench.ServerManager, "is_running", lambda *args: False)
     plan = workbench.prepare({"action": "install", "engine": "mlx"}, tmp_path)
     assert str(tmp_path / ".superqode/runtimes/mlx") in plan["command"]
-    assert plan["steps"][-1][-1] == "mlx-lm>=0.31.0,<0.32.0"
+    assert plan["steps"][-1][-1] == "mlx-lm==0.32.2"
     assert "not modified" in plan["guidance"]
 
 

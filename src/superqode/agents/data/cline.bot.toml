@@ -20,7 +20,7 @@ AI coding assistant for the terminal.
 ## Installation
 
 ```bash
-npm install -g @cline/cli
+npm install -g cline
 ```
 
 For ACP mode:
@@ -33,5 +33,5 @@ See https://cline.bot/ for details.
 '''
 
 [actions."*".install]
-command = "npm install -g @cline/cli"
+command = "npm install -g cline"
 description = "Install Cline CLI"

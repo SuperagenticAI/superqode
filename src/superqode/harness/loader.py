@@ -11,6 +11,7 @@ import yaml
 
 from .spec import (
     AgentSpec,
+    AppleContainerCheckSpec,
     ContextSpec,
     ExecutionPolicySpec,
     HarnessFlavor,
@@ -336,6 +337,16 @@ def harness_spec_to_dict(spec: HarnessSpec) -> dict[str, Any]:
                     "command": step.command,
                     "enabled": step.enabled,
                     "timeout": step.timeout,
+                    **(
+                        {
+                            "apple_container": {
+                                "image": step.apple_container.image,
+                                "files": list(step.apple_container.files),
+                            }
+                        }
+                        if step.apple_container is not None
+                        else {}
+                    ),
                 }
                 for step in spec.checks.custom_steps
             ],
@@ -620,6 +631,20 @@ def harness_spec_json_schema() -> dict[str, Any]:
                                 "command": {"type": "string"},
                                 "enabled": {"type": "boolean"},
                                 "timeout": {"type": "integer"},
+                                "apple_container": {
+                                    "type": "object",
+                                    "additionalProperties": False,
+                                    "required": ["image", "files"],
+                                    "properties": {
+                                        "image": {"type": "string"},
+                                        "files": {
+                                            "type": "array",
+                                            "minItems": 1,
+                                            "uniqueItems": True,
+                                            "items": {"type": "string"},
+                                        },
+                                    },
+                                },
                             },
                         },
                     },
@@ -959,12 +984,29 @@ def _checks(value: Any) -> ChecksSpec:
     for index, item in enumerate(data.get("custom_steps") or ()):
         if not isinstance(item, dict):
             raise ValueError(f"Checks step at index {index} must be a mapping")
+        container = None
+        if "apple_container" in item:
+            raw = item["apple_container"]
+            if (
+                not isinstance(raw, dict)
+                or set(raw) != {"image", "files"}
+                or not isinstance(raw["image"], str)
+                or not isinstance(raw["files"], list)
+                or not raw["files"]
+                or any(not isinstance(path, str) or not path for path in raw["files"])
+                or len(set(raw["files"])) != len(raw["files"])
+            ):
+                raise ValueError(
+                    "Apple Container checks require an image and distinct project files"
+                )
+            container = AppleContainerCheckSpec(raw["image"], tuple(raw["files"]))
         steps.append(
             CheckStepSpec(
                 name=str(item.get("name") or f"step-{index + 1}"),
                 command=str(item.get("command") or ""),
                 enabled=bool(item.get("enabled", True)),
                 timeout=int(item.get("timeout", data.get("timeout_seconds", 300)) or 0),
+                apple_container=container,
             )
         )
     return ChecksSpec(

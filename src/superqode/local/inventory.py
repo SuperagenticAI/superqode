@@ -404,6 +404,56 @@ def lmstudio_disk_models(limit: int = 200) -> List[dict]:
     return rows
 
 
+def mlx_disk_models() -> List[dict]:
+    """Find complete cached MLX text snapshots without contacting the Hub."""
+    from huggingface_hub import scan_cache_dir
+    from huggingface_hub.errors import CacheNotFound
+
+    try:
+        cache = scan_cache_dir(_hf_cache_root())
+    except (CacheNotFound, OSError):
+        return []
+    rows = []
+    for repo in sorted(cache.repos, key=lambda entry: entry.repo_id):
+        if repo.repo_type != "model" or not _chat_model(repo.repo_id):
+            continue
+        for revision in sorted(repo.revisions, key=lambda entry: entry.last_modified, reverse=True):
+            root = revision.snapshot_path
+            try:
+                config = json.loads((root / "config.json").read_text())
+                names = {file.file_name for file in revision.files}
+                if (
+                    not isinstance(config, dict)
+                    or not config.get("model_type")
+                    or config.get("auto_map")
+                ):
+                    continue
+                if config.get("vision_config") or "tokenizer.json" not in names:
+                    continue
+                if "model.safetensors.index.json" in names:
+                    index = json.loads((root / "model.safetensors.index.json").read_text())
+                    required = set(index.get("weight_map", {}).values())
+                    if not required or not required <= names:
+                        continue
+                elif "model.safetensors" not in names:
+                    continue
+            except (OSError, ValueError, AttributeError, TypeError):
+                continue
+            rows.append(
+                {
+                    "engine": "mlx",
+                    "model": str(root),
+                    "name": repo.repo_id,
+                    "advertised": False,
+                    "publisher": repo.repo_id.partition("/")[0],
+                    "revision": revision.commit_hash,
+                    "metadata": {**config, "size_bytes": revision.size_on_disk},
+                }
+            )
+            break
+    return rows
+
+
 def installed_chat_models() -> List[dict]:
     """Ollama and LM Studio chat models already on this Mac.
 
@@ -420,6 +470,7 @@ def installed_chat_models() -> List[dict]:
         + ollama_disk_models()
         + lmstudio_advertised_models()
         + lmstudio_disk_models()
+        + mlx_disk_models()
     ):
         identity = (row["engine"], row["model"])
         if identity in seen:

@@ -29,6 +29,13 @@ class RuntimeSpec:
 
 TEMPLATES = (
     RuntimeSpec(
+        "exo",
+        "exo cluster",
+        "http://127.0.0.1:52415/v1",
+        docs_url="https://github.com/exo-explore/exo/blob/main/docs/api.md",
+        include_usage=False,
+    ),
+    RuntimeSpec(
         "vllm-metal",
         "vLLM Metal",
         "http://127.0.0.1:8000/v1",
@@ -127,6 +134,61 @@ def selected_runtime():
     return validate(json.loads(raw))
 
 
+async def exo_cluster(spec, key=None, *, transport=None):
+    """Inspect a configured exo node. Inference may run across its network."""
+    if spec.template != "exo" or not spec.endpoint.endswith("/v1"):
+        raise ValueError("Choose an exo loopback base URL ending in /v1")
+    headers = {"Authorization": f"Bearer {key}"} if key else {}
+    async with httpx.AsyncClient(
+        trust_env=False, follow_redirects=False, transport=transport, timeout=3
+    ) as client:
+        async with client.stream(
+            "GET", spec.endpoint.removesuffix("/v1") + "/state", headers=headers
+        ) as response:
+            response.raise_for_status()
+            payload = bytearray()
+            async for chunk in response.aiter_bytes():
+                payload.extend(chunk)
+                if len(payload) > 4_000_000:
+                    raise ValueError("exo cluster state is too large")
+    state = json.loads(payload)
+    if not isinstance(state, dict) or not isinstance(state.get("instances"), dict):
+        raise ValueError("The endpoint did not return exo cluster state")
+    memory = state.get("nodeMemory", state.get("node_memory", {}))
+    identities = state.get("nodeIdentities", state.get("node_identities", {}))
+    if not isinstance(memory, dict) or not isinstance(identities, dict):
+        raise ValueError("exo returned invalid node information")
+    nodes = set(memory) | set(identities)
+    totals = []
+    for row in memory.values():
+        if not isinstance(row, dict):
+            continue
+        total = row.get("ram_total", row.get("ramTotal", {}))
+        if isinstance(total, dict):
+            total = total.get("in_bytes", total.get("inBytes"))
+        if type(total) is int and total > 0:
+            totals.append(total)
+    deployed = set()
+    for row in state["instances"].values():
+        if not isinstance(row, dict):
+            continue
+        # exo's instances are represented by tagged transport models.
+        if len(row) == 1 and isinstance(next(iter(row.values())), dict):
+            row = next(iter(row.values()))
+        shards = row.get("shard_assignments", row.get("shardAssignments", {}))
+        if not isinstance(shards, dict):
+            continue
+        model = shards.get("model_id", shards.get("modelId"))
+        if isinstance(model, str) and model:
+            deployed.add(model)
+    return {
+        "node_count": len(nodes),
+        "installed_memory_bytes": sum(totals) if totals else None,
+        "deployed_models": sorted(deployed),
+        "location": "On your network",
+    }
+
+
 async def models(spec, key=None, *, transport=None):
     headers = {"Authorization": f"Bearer {key}"} if key else {}
     async with httpx.AsyncClient(
@@ -143,16 +205,22 @@ async def models(spec, key=None, *, transport=None):
             )
         response.raise_for_status()
         data = response.json()
+    active = None
+    if spec.template == "exo":
+        cluster = await exo_cluster(spec, key, transport=transport)
+        active = set(cluster["deployed_models"])
     rows = []
     for row in data.get("data", []):
         if not isinstance(row, dict) or not isinstance(row.get("id"), str):
             continue
         identity = row["id"]
+        if active is not None and identity not in active:
+            continue
         if not 0 < len(identity) <= 4096 or any(
             w in identity.lower() for w in ("embedding", "reranker")
         ):
             continue
-        maximum = row.get("max_model_len") or row.get("context_length")
+        maximum = row.get("max_model_len") or row.get("context_length") or row.get("contextLength")
         rows.append(
             {
                 "id": identity,

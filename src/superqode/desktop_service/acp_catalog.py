@@ -330,14 +330,15 @@ def remove_custom_agent(service, params):
     return {"ok": True}
 
 
-def install_plan(service, project, reference):
+def install_plan(service, project, reference, version=""):
     from .configuration import install_plan as bundled_plan
-    from .configuration import installer_requirements
+    from .configuration import InstallRecipeUnavailable, install_digest, installer_requirements
 
     root = service.project(project)
+    bundled = reference.removeprefix("connection:")
     try:
-        plan = bundled_plan(root, reference.removeprefix("connection:"))
-    except ValueError:
+        plan = bundled_plan(root, bundled, version)
+    except InstallRecipeUnavailable:
         route = next((r for r in extra_routes(service, project) if r["id"] == reference), None)
         if not route:
             raise ValueError("Choose an ACP agent from the catalog") from None
@@ -351,25 +352,43 @@ def install_plan(service, project, reference):
             )
         ):
             raise ValueError("This agent needs the vendor's manual installation workflow") from None
-        plan = {"reference": reference, "argv": argv, "command": shlex.join(argv)}
-    from .configuration import bind_app_install
-
-    plan["argv"] = bind_app_install(plan["argv"])
-    plan["command"] = shlex.join(plan["argv"])
+        plan = {
+            "argv": argv,
+            "command": shlex.join(argv),
+            "requirements": installer_requirements(argv),
+        }
+        if (
+            argv[0] == "uv"
+            and os.environ.get("SUPERQODE_APP") == "1"
+            and os.environ.get("SUPERQODE_STATE_DIR")
+        ):
+            # The legacy registry path can prepare uv during the reviewed install.
+            plan["requirements"] = []
+        plan["digest"] = install_digest(plan)
     plan["reference"] = reference
-    plan["requirements"] = installer_requirements(plan["argv"])
-    plan["digest"] = hashlib.sha256(json.dumps(plan["argv"]).encode()).hexdigest()
     return plan
 
 
-async def install_agent(service, project, reference, expected_digest, status):
-    from .configuration import run_install_command
+async def install_agent(service, project, reference, expected_digest, status, version=""):
+    from .configuration import (
+        bind_app_install,
+        install_agent as install_bundled,
+        run_install_command,
+    )
 
-    plan = install_plan(service, project, reference)
+    plan = install_plan(service, project, reference, version)
     if plan["digest"] != expected_digest:
         raise ValueError("The installation plan changed. Review it again before installing.")
+    if plan.get("toolchain"):
+        return await install_bundled(
+            service.project(project),
+            reference.removeprefix("connection:"),
+            status,
+            version=plan["toolchain"]["version"],
+            expected_digest=expected_digest,
+        )
     reviewed_route = next((r for r in extra_routes(service, project) if r["id"] == reference), None)
-    result = await run_install_command(plan["argv"], status)
+    result = await run_install_command(bind_app_install(plan["argv"]), status)
     route = next((r for r in extra_routes(service, project) if r["id"] == reference), None)
     if route and reviewed_route and route["digest"] == reviewed_route["digest"]:
         service._write(

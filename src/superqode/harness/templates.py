@@ -2,6 +2,8 @@
 
 from __future__ import annotations
 
+from dataclasses import replace
+
 from .spec import (
     AgentSpec,
     ExecutionPolicySpec,
@@ -63,7 +65,6 @@ def apple_local_template() -> HarnessSpec:
         model_policy=ModelPolicySpec(
             primary="apple-foundation/system-on-device",
             profile="apple-local",
-            context_window=4096,
             config={
                 "system_level": "minimal",
                 "tool_profile": "apple-local",
@@ -90,6 +91,33 @@ def apple_local_template() -> HarnessSpec:
         ),
         checks=ChecksSpec(enabled=False),
         metadata={"template": "apple-local", "builtin_harness": True},
+    )
+
+
+def silicon_template() -> HarnessSpec:
+    """Small, editable repository coding harness for local models."""
+    base = apple_local_template()
+    return replace(
+        base,
+        name="silicon",
+        description="Focused local coding with bounded repository search and verification.",
+        model_policy=replace(
+            base.model_policy,
+            profile="silicon",
+            config={**base.model_policy.config, "tool_profile": "silicon"},
+        ),
+        agents=(
+            replace(
+                base.agents[0],
+                tools=("read", "search", "edit", "write"),
+                system_prompt=(
+                    "Complete one focused repository task. Search for relevant code and read short "
+                    "ranges. Make the smallest correct change. Report changes and any checks "
+                    "observed. Never claim a check passed without its result."
+                ),
+            ),
+        ),
+        metadata={"template": "silicon", "builtin_harness": True},
     )
 
 
@@ -1099,6 +1127,7 @@ def strands_template() -> HarnessSpec:
 
 
 BUILTIN_TEMPLATES = {
+    "silicon": silicon_template,
     "strands": strands_template,
     "core": core_template,
     "systemone": systemone_template,

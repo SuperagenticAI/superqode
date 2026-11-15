@@ -11,7 +11,7 @@ from __future__ import annotations
 import json
 import os
 import subprocess
-import sys
+from pathlib import Path
 import threading
 from dataclasses import dataclass, field
 from typing import Any, Callable, Dict, List, Optional
@@ -31,11 +31,12 @@ class MlxResult:
 class MlxEngine:
     """Owns a long-lived worker process that runs mlx_lm generation."""
 
-    _WORKER_MODULE = "superqode.providers.local._mlx_worker"
+    _WORKER_SCRIPT = Path(__file__).with_name("_mlx_worker.py")
 
     def __init__(self, python_executable: Optional[str] = None) -> None:
-        # Use the interpreter SuperQode runs under (the uv .venv with mlx-lm).
-        self._python = python_executable or sys.executable
+        from ...local.install import mlx_python
+
+        self._python = python_executable or mlx_python()
         self._proc: Optional[subprocess.Popen[str]] = None
         self._lock = threading.Lock()
 
@@ -48,7 +49,7 @@ class MlxEngine:
         env.setdefault("PYTHONUNBUFFERED", "1")
         try:
             self._proc = subprocess.Popen(
-                [self._python, "-m", self._WORKER_MODULE],
+                [self._python, "-I", str(self._WORKER_SCRIPT)],
                 stdin=subprocess.PIPE,
                 stdout=subprocess.PIPE,
                 stderr=subprocess.DEVNULL,

@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import asyncio
 import os
+import shlex
 import shutil
 
 from .redaction import redact
@@ -179,7 +180,10 @@ def cli_plan(route):
             "droid": "droid",
         }
         name = binaries.get(route.get("agent_id")) or binaries.get(route.get("runtime"))
-        binary = shutil.which(name) if name else None
+        if name and route.get("toolchain"):
+            binary = shlex.split(route["command"])[0]
+        else:
+            binary = shutil.which(name) if name else None
     if not binary:
         return None
     from superqode.providers.subscription_env import subscription_child_env

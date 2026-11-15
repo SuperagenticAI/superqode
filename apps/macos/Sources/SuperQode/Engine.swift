@@ -154,6 +154,11 @@ final class EngineFrames {
     if let executable = Bundle.main.executableURL {
       env["SUPERQODE_APPLE_HELPER"] = executable.deletingLastPathComponent().appendingPathComponent("SuperQodeAppleModel").path
     }
+    if let helper = Bundle.main.resourceURL?.appendingPathComponent("swift-mlx/SuperQodeSwiftMLX"),
+      FileManager.default.isExecutableFile(atPath: helper.path)
+    {
+      env["SUPERQODE_SWIFT_MLX_HELPER"] = helper.path
+    }
     env["PYTHONUNBUFFERED"] = "1"
     env["PYTHONDONTWRITEBYTECODE"] = "1"
     env["LITELLM_LOCAL_MODEL_COST_MAP"] = "True"

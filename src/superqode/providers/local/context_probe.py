@@ -204,6 +204,18 @@ async def resolve_local_context_window(
 
     Returns ``(window, endpoint)`` or ``None`` if nothing answered.
     """
+    if provider == "apple-foundation":
+        from superqode.local.apple import context_limit, status
+
+        capabilities = await asyncio.to_thread(status)
+        return context_limit(capabilities), "native-stdio"
+    if provider == "swift-mlx":
+        from superqode.local import swift_mlx
+
+        try:
+            return await asyncio.to_thread(swift_mlx.context_limit, model), "swift-mlx-stdio"
+        except (OSError, ValueError):
+            return None
     for base in candidate_base_urls(provider):
         result = await probe_base_url(base, model, timeout, provider=provider)
         if result:

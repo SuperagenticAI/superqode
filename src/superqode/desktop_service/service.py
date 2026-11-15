@@ -7,6 +7,7 @@ import difflib
 import json
 import os
 from pathlib import Path
+import shlex
 import signal
 import sqlite3
 import subprocess
@@ -1369,6 +1370,18 @@ class DesktopService:
             if method == "providers.models":
                 return list_workspace_models(credentials, params, base_url=endpoints.get(provider))
             if method == "providers.check":
+                if provider == "swift-mlx":
+                    from superqode.local.swift_mlx import status
+
+                    current = status()
+                    ready = any(row["id"] == params.get("model") for row in current["models"])
+                    return {
+                        "ready": ready,
+                        "state": "swift-mlx",
+                        "message": "Cached Swift MLX checkpoint is available."
+                        if ready
+                        else "Check Swift MLX setup and cached weights in Local AI.",
+                    }
                 if params.get("provider") == "apple-foundation":
                     from superqode.local.apple import status
 
@@ -1547,6 +1560,10 @@ class DesktopService:
             from superqode.local.execution import snapshot, configure
 
             return snapshot() if method.endswith("status") else configure(params.get("concurrency"))
+        if method == "local.swift-mlx.status":
+            from superqode.local.swift_mlx import status
+
+            return status()
         if method in {"local.apple.status", "local.apple.utility"}:
             from superqode.local.apple import status
 
@@ -2080,7 +2097,9 @@ class DesktopService:
         if method == "connect.acp.install.plan":
             from .acp_catalog import install_plan
 
-            return install_plan(self, params["project"], params["reference"])
+            return install_plan(
+                self, params["project"], params["reference"], str(params.get("version") or "")
+            )
         if method == "connect.acp.login.plan":
             from .connect_workflow import profile_route
             from superqode.providers.subscription_env import resolve_vendor, subscription_child_env
@@ -2095,7 +2114,11 @@ class DesktopService:
             if route.get("id") in {"qwen-code", "acp:qwen"} and route.get("agent_id") == "qwen":
                 import shutil
 
-                binary = shutil.which("qwen")
+                binary = (
+                    shlex.split(route["command"])[0]
+                    if route.get("toolchain")
+                    else shutil.which("qwen")
+                )
                 if not binary:
                     raise ValueError(
                         "Install Qwen Code with npm install -g @qwen-code/qwen-code, then check installation again. https://qwenlm.github.io/qwen-code-docs/"
@@ -2210,6 +2233,7 @@ class DesktopService:
                         params["reference"],
                         params["expected_digest"],
                         status,
+                        str(params.get("version") or ""),
                     )
                 )
             if action in {"probe", "acp-auth", "acp-terminal"}:
@@ -2244,7 +2268,12 @@ class DesktopService:
                 root = self.project(params["project"])
 
                 async def install(status):
-                    return await install_agent(root, str(params["reference"]), status)
+                    return await install_agent(
+                        root,
+                        str(params["reference"]),
+                        status,
+                        expected_digest=params.get("expected_digest"),
+                    )
 
                 return self.authentication.start(install)
             if action == "subscription":

@@ -124,7 +124,12 @@ async def probe_route(root: Path, route: dict, status, method_id=None, terminal_
                 from superqode.providers.opencode_models import get_opencode_models
 
                 try:
-                    catalog = await asyncio.wait_for(get_opencode_models(), timeout=12)
+                    lookup = (
+                        get_opencode_models(executable=command[0], cwd=root)
+                        if route.get("toolchain")
+                        else get_opencode_models()
+                    )
+                    catalog = await asyncio.wait_for(lookup, timeout=12)
                 except Exception:
                     catalog = []
                 metadata = {m["id"]: m for m in catalog if not m.get("catalog_unavailable")}

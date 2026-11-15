@@ -36,7 +36,7 @@ def catalog(service, project):
     def add(
         engine, model, name, detail, installed, *, preset="running", context=None, metadata=None
     ):
-        if engine not in {e["id"] for e in engines} or engine not in {"ollama", "lmstudio"}:
+        if engine not in {e["id"] for e in engines} or engine not in {"ollama", "lmstudio", "mlx"}:
             return
         if any(word in model.lower() for word in ("embed", "rerank", "cloud")):
             return
@@ -89,7 +89,7 @@ def catalog(service, project):
         from superqode.local.inventory import installed_chat_models
 
         for row in installed_chat_models():
-            label = "Ollama" if row["engine"] == "ollama" else "LM Studio"
+            label = {"ollama": "Ollama", "lmstudio": "LM Studio", "mlx": "MLX"}[row["engine"]]
             add(
                 row["engine"],
                 row["model"],
@@ -144,8 +144,8 @@ def catalog(service, project):
         "selected": saved.get("choice", ""),
         "memory_gb": memory,
         "hardware": asdict(hardware),
-        "engines": [e for e in engines if e["id"] in {"ollama", "lmstudio"}],
-        "other_engines": [e for e in engines if e["id"] not in {"ollama", "lmstudio"}],
+        "engines": [e for e in engines if e["id"] in {"ollama", "lmstudio", "mlx"}],
+        "other_engines": [e for e in engines if e["id"] not in {"ollama", "lmstudio", "mlx"}],
         "guardrails": build_guardrails(hardware).to_dict(),
         "note": "Starting suggestions, not measured coding-quality guarantees. Context and other apps also need memory.",
     }
@@ -282,8 +282,6 @@ def prepare(service, params):
         step = "install"
     elif not status["running"]:
         # Reuse existing model-specific configuration for single-model engines.
-        if engine not in {"ollama", "lmstudio"}:
-            raise ValueError("Start this model from Advanced setup, then check again")
         step = "serve"
         options["context"] = choice.get("suggested_context") or 8192
         if engine == "lmstudio":

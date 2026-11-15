@@ -913,7 +913,34 @@ async def _run_checks_steps(
             "checks.step.started",
             {"name": step.name, "command": step.command, "timeout": step.timeout},
         )
-        result = await asyncio.to_thread(_run_checks_command, step.command, cwd, step.timeout)
+        if step.apple_container is not None:
+            from ..sandbox.apple_container import run_check
+
+            try:
+                argv = shlex.split(step.command)
+                if not argv:
+                    raise ValueError("Empty check command")
+                code, detail = await run_check(
+                    argv,
+                    cwd,
+                    min(step.timeout, checks.timeout_seconds),
+                    image=step.apple_container.image,
+                    files=step.apple_container.files,
+                )
+            except (OSError, ValueError, TimeoutError) as exc:
+                code, detail = (
+                    None,
+                    "Check timed out" if isinstance(exc, TimeoutError) else str(exc),
+                )
+            result = {
+                "status": "passed" if code == 0 else "failed",
+                "returncode": code,
+                "stdout": detail if code == 0 else "",
+                "stderr": detail if code != 0 else "",
+                "backend": "apple-container",
+            }
+        else:
+            result = await asyncio.to_thread(_run_checks_command, step.command, cwd, step.timeout)
         step_result = {
             "name": step.name,
             "command": step.command,

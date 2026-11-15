@@ -481,6 +481,13 @@ class ToolRegistry:
     def for_profile(cls, profile: str = "coding") -> "ToolRegistry":
         """Create a registry for a named tool profile."""
         normalized = (profile or "coding").strip().lower()
+        if normalized == "silicon":
+            from .silicon import SiliconExecute, SiliconSearch
+
+            registry = cls.core()
+            registry.register(SiliconSearch())
+            registry.register(SiliconExecute())
+            return registry
         if normalized == "apple-local":
             return cls.core().filtered(["read", "write", "edit"])
         if normalized in ("core", "minimal-core", "minimal_core"):

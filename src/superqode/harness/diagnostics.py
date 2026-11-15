@@ -1809,7 +1809,12 @@ def _checks_check(spec: HarnessSpec, root: Path) -> dict[str, Any]:
             parts = []
             malformed.append(step.name)
         executable = parts[0] if parts else ""
-        if executable and not shutil.which(executable) and not (root / executable).exists():
+        if (
+            step.apple_container is None
+            and executable
+            and not shutil.which(executable)
+            and not (root / executable).exists()
+        ):
             missing.append(step.name)
         elif not executable:
             malformed.append(step.name)

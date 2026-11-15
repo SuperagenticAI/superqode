@@ -22,6 +22,7 @@ struct ACPSetupView: View {
   @State private var terminalPlan: [String: Any]?
   @State private var pendingTerminal: [String: Any]?
   @State private var recheck = false
+  @State private var reviewingVersion = false
   @State private var failure = ""
   private var route: [String: Any] {
     app.harnesses.first { string($0, "id") == string(initialRoute, "id") } ?? initialRoute
@@ -58,6 +59,10 @@ struct ACPSetupView: View {
       }
       Text("Launch command").font(.headline)
       Text(string(route, "command")).font(.system(.callout, design: .monospaced)).textSelection(.enabled)
+      if let toolchain = route["toolchain"] as? [String: Any] {
+        Text("SuperQode " + string(toolchain, "language") + " " + string(toolchain, "version"))
+          .font(.caption).foregroundStyle(.secondary)
+      }
       if let url = URL(string: string(route, "website")), url.scheme == "https", url.user == nil, url.password == nil {
         Link("Vendor setup documentation", destination: url)
       }
@@ -74,7 +79,7 @@ struct ACPSetupView: View {
       if !install.isEmpty && route["available"] as? Bool != true {
         installReview
       } else if !install.isEmpty {
-        DisclosureGroup("Reinstall agent") { installReview }
+        DisclosureGroup("Manage installation") { installReview }
       } else if !string(route, "setup_note").isEmpty {
         DisclosureGroup("Vendor setup instructions") {
           Text(string(route, "setup_note")).font(.callout).textSelection(.enabled).padding(.top, 8)
@@ -146,16 +151,30 @@ struct ACPSetupView: View {
     VStack(alignment: .leading, spacing: 12) {
       Text("Install dependencies").font(.headline)
       Text(string(install, "command")).font(.system(.callout, design: .monospaced)).textSelection(.enabled)
-      Text("This downloads the current release and its dependencies with the uv and Python included with SuperQode. SuperQode asks before it installs.")
-        .font(.caption).foregroundStyle(.secondary)
+      if let toolchain = install["toolchain"] as? [String: Any],
+        let versions = toolchain["versions"] as? [String]
+      {
+        Picker(string(toolchain, "language") + " version", selection: Binding(
+          get: { string(toolchain, "version") },
+          set: { version in Task { await loadInstallPlan(version: version) } }
+        )) {
+          ForEach(versions, id: \.self) { Text($0).tag($0) }
+        }.disabled(reviewingVersion || app.busy || app.anyActive)
+        Text("SuperQode downloads the runtime and installs the agent’s packages for this project.")
+          .font(.caption).foregroundStyle(.secondary)
+      } else {
+        Text("This runs the reviewed package-manager command on your Mac.")
+          .font(.caption).foregroundStyle(.secondary)
+      }
       if let requirements = install["requirements"] as? [[String: Any]], !requirements.isEmpty {
         ConnectionRequirementsView(requirements: requirements)
       }
       Button("Install agent…") {
         if app.confirm("Install this coding agent?", string(install, "command"), button: "Install") {
-          begin("acp-install", extra: ["expected_digest": string(install, "digest")])
+          let toolchain = install["toolchain"] as? [String: Any] ?? [:]
+          begin("acp-install", extra: ["expected_digest": string(install, "digest"), "version": string(toolchain, "version")])
         }
-      }.buttonStyle(BrandButtonStyle()).disabled((install["requirements"] as? [[String: Any]] ?? []).contains(where: { $0["installed"] as? Bool != true }) || app.busy || app.anyActive)
+      }.buttonStyle(BrandButtonStyle()).disabled((install["requirements"] as? [[String: Any]] ?? []).contains(where: { $0["installed"] as? Bool != true }) || reviewingVersion || app.busy || app.anyActive)
     }.padding(16).brandSurface()
   }
 
@@ -171,9 +190,17 @@ struct ACPSetupView: View {
   }
   private func loadInstall() async {
     knownLogin = (try? await app.engine.call("connect.acp.login.plan", ["project": project, "reference": identity])) as? [String: Any] ?? [:]
+    await loadInstallPlan()
+  }
+  private func loadInstallPlan(version: String = "") async {
+    reviewingVersion = true
+    defer { reviewingVersion = false }
     do {
-      install = try await app.engine.call("connect.acp.install.plan", ["project": project, "reference": identity]) as? [String: Any] ?? [:]
-    } catch { install = [:] }
+      install = try await app.engine.call("connect.acp.install.plan", ["project": project, "reference": identity, "version": version]) as? [String: Any] ?? [:]
+    } catch {
+      if version.isEmpty { install = [:] }
+      else { failure = error.localizedDescription }
+    }
   }
 }
 

@@ -278,7 +278,11 @@ enum AppleConversation {
         let model = SystemLanguageModel.default
         var count = try await model.tokenCount(for: Array(session.transcript) + [current])
         if let schema { count += try await model.tokenCount(for: AppleSchema.make(schema)) }
-        guard count + limit + 128 <= min(4096, model.contextSize) else { throw BridgeInput.contextFull }
+        let capacity = AppleModelBridge.contextCapabilities(model).0
+        let requested = request["context"] as? Int ?? capacity
+        guard requested >= 512, count + limit + 128 <= min(capacity, requested) else {
+          throw BridgeInput.contextFull
+        }
         metadata["sdk_prompt_tokens"] = count
       }
       #endif

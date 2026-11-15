@@ -218,11 +218,10 @@ def _publish_cli(root: Path, home: Path) -> None:
     shim = bin_dir / "superqode"
     extras = shlex.quote(str((Path(root) / "python-extras").resolve()))
     pythonpath = shlex.quote(os.environ.get("PYTHONPATH", ""))
-    native_helper = os.environ.get("SUPERQODE_APPLE_HELPER")
-    native_environment = (
-        f"export SUPERQODE_APPLE_HELPER={shlex.quote(native_helper)}\n"
-        if native_helper and Path(native_helper).is_file()
-        else ""
+    native_environment = "".join(
+        f"export {name}={shlex.quote(path)}\n"
+        for name in ("SUPERQODE_APPLE_HELPER", "SUPERQODE_SWIFT_MLX_HELPER")
+        if (path := os.environ.get(name)) and Path(path).is_file()
     )
     shim.write_text(
         "#!/bin/sh\n"

@@ -201,6 +201,9 @@ struct HarnessStudioView: View {
             let selected = library.review["route"] as? [String: Any] ?? [:]
             if !string(selected, "endpoint").isEmpty { Text(string(selected, "endpoint")).font(.caption.monospaced()).textSelection(.enabled) }
             Text("Tools: " + (library.review["tools"] as? [String] ?? []).joined(separator: ", ")).font(.caption)
+            if let count = library.review["apple_tool_count"] as? Int {
+              Text("Apple tool budget · \(count) of 5").font(.caption).foregroundStyle(.secondary)
+            }
             DisclosureGroup("Execution policy") { CodeBlock(text: pretty(library.review["policy"] ?? [:])) }
             ForEach(library.review["warnings"] as? [String] ?? [], id: \.self) { Text($0).font(.caption).foregroundStyle(.orange) }
             Text("Definition digest: " + String(string(library.review, "digest").prefix(12))).font(.caption2.monospaced())
@@ -291,7 +294,11 @@ struct HarnessStudioView: View {
         app.harnesses = definitions + app.harnesses.filter { !string($0, "desktop_kind").isEmpty }
         app.chooseHarness(string(result, "reference"))
         let route = result["route"] as? [String: Any] ?? [:]
-        if !string(route, "provider").isEmpty && !string(route, "model").isEmpty { app.chooseModelRoute(string(route, "provider"), string(route, "model")) }
+        let provider = string(route, "provider")
+        let model = string(route, "model")
+        if !provider.isEmpty && !model.isEmpty {
+          app.chooseModelRoute(provider, model, preserveHarness: provider == "apple-foundation")
+        }
         app.section = evaluate ? "Evaluations" : "Workspace"
         app.notice = "Saved revision selected. No prompt has been sent."
       } catch { if library.project == project, library.editVersion == editVersion { library.failure = error.localizedDescription } }

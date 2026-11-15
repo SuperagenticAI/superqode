@@ -7,6 +7,21 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [2.31.18] - 2026-11-15
+
+### Added
+
+- Swift MLX streams cached Qwen3 text models on Apple Silicon with macOS 27 or later. Use it for chat, Silicon Harness coding, or local model comparisons.
+- Silicon Harness uses Apple Foundation Models for scoped repository edits and configured checks. Local AI can start a managed MLX server and hand off completed Apple turns to a configured exo runtime.
+- Silicon verification can run selected Linux checks in Apple Container on Apple Silicon with macOS 26 or later. Each check uses a cached image pinned by digest and a disposable copy of the files listed in its HarnessSpec. Monty remains available for scoped Python and permission-checked tool calls.
+- The macOS app installs its own Node.js or Python for supported bundled ACP agents. Agent packages are isolated per project, and users can select a supported runtime version in agent setup. A failed reinstall keeps the previous working installation.
+
+### Fixed
+
+- Cline setup installs the official `cline` npm package and checks its ACP entry point.
+- Silicon reports a failed run when a configured check fails and `fail_on_error` is enabled.
+- macOS 0.4.11 (build 37) bundles Python engine 2.31.18.
+
 ## [2.31.17] - 2026-11-14
 
 ### Added

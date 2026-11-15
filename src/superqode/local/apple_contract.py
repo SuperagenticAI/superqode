@@ -74,10 +74,7 @@ def normalized_temperature(value):
     return min(1.0, max(0.0, value))
 
 
-def request(messages, tools, max_tokens, temperature, response_format):
-    if max_tokens is not None and (type(max_tokens) is not int or max_tokens <= 0):
-        raise ValueError("Apple output limit must be a positive integer")
-    normalized_temperature(temperature)
+def tool_definitions(tools):
     definitions = [asdict(t) for t in tools or []]
     if len(definitions) > 5 or len({t["name"] for t in definitions}) != len(definitions):
         raise ValueError(
@@ -89,6 +86,14 @@ def request(messages, tools, max_tokens, temperature, response_format):
         schema(tool["parameters"])
         if tool["parameters"]["type"] != "object":
             raise ValueError("Apple tool arguments must have an object schema")
+    return definitions
+
+
+def request(messages, tools, max_tokens, temperature, response_format):
+    if max_tokens is not None and (type(max_tokens) is not int or max_tokens <= 0):
+        raise ValueError("Apple output limit must be a positive integer")
+    normalized_temperature(temperature)
+    definitions = tool_definitions(tools)
     output_schema = None
     if response_format not in (None, {"type": "text"}):
         if not isinstance(response_format, dict) or response_format.get("type") != "json_schema":

@@ -130,6 +130,10 @@ struct LocalRuntimeWorkspace: View {
     nonmutating set { form.harness = newValue }
   }
   @State private var harnesses: [[String: Any]] = []
+  @State private var cluster: [String: Any] = [:]
+  @State private var handoff: [String: Any] = [:]
+  @State private var handoffText = ""
+  @State private var showHandoff = false
   @State private var busy = false
   @State private var message = ""
   @State private var setup: [String: Any] = [:]
@@ -187,6 +191,21 @@ struct LocalRuntimeWorkspace: View {
             .disabled(setup["automatic"] as? Bool != true || busy || app.anyActive)
         }
       }.padding(24).frame(width: 650)
+    }
+    .centeredDialog(isPresented: $showHandoff, title: "Review exo handoff") {
+      VStack(alignment: .leading, spacing: 12) {
+        Text("Send to " + string(handoff, "model") + " · On your network").font(.headline)
+        Text(string(handoff, "endpoint")).font(.caption.monospaced())
+        Text("Review the objective and patch. Future tool results can also go to the cluster when the run uses them.")
+          .font(.caption).foregroundStyle(.secondary)
+        TextEditor(text: $handoffText).font(.system(.body, design: .monospaced)).frame(minHeight: 290)
+        HStack {
+          Button("Cancel") { showHandoff = false }.keyboardShortcut(.cancelAction)
+          Spacer()
+          Button("Send to exo") { startHandoff() }.buttonStyle(BrandButtonStyle())
+            .disabled(busy || app.anyActive || handoffText.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty)
+        }
+      }.padding(24).frame(width: 700)
     }
     .centeredDialog(isPresented: $benchmark, title: "Local benchmarks") {
       ToolsView(workflow: "local bench").environmentObject(app).frame(width: 920, height: 680)
@@ -252,6 +271,7 @@ struct LocalRuntimeWorkspace: View {
       }
       HStack {
         CatalogPopup(label: "Setup template", options: [
+          CatalogPopupOption(id: "exo", title: "exo cluster"),
           CatalogPopupOption(id: "vllm-metal", title: "vLLM Metal"),
           CatalogPopupOption(id: "omlx", title: "oMLX"),
           CatalogPopupOption(id: "jan", title: "Jan"),
@@ -262,7 +282,8 @@ struct LocalRuntimeWorkspace: View {
           if restoringProfile { restoringProfile = false; return }
           if let row = library.templates.first(where: { string($0, "id") == next }) {
             identity = UUID().uuidString.lowercased(); name = string(row, "name"); endpoint = string(row, "endpoint")
-            capability = next == "gpt4all" ? "no" : "unknown"; apiKey = ""; rememberKey = false; models = []; model = ""; setup = [:]
+            capability = next == "gpt4all" ? "no" : "unknown"; apiKey = ""; rememberKey = false; models = []; model = ""; setup = [:]; cluster = [:]
+            includeUsage = row["include_usage"] as? Bool ?? true
           }
         }
         TextField("Profile name", text: $form.name).textFieldStyle(.roundedBorder)
@@ -303,6 +324,15 @@ struct LocalRuntimeWorkspace: View {
         Button("Installation & setup…") { reviewInstall() }.disabled(busy || !savedReady || app.anyActive)
         if let guide = guideURL { Link("Vendor guide", destination: guide) }
       }
+      if template == "exo" {
+        if cluster.isEmpty {
+          Text("On your network · Start exo on this Mac and join your cluster before checking the server.")
+            .font(.caption).foregroundStyle(.secondary)
+        } else {
+          Text("On your network · \(cluster["node_count"] as? Int ?? 0) nodes · \(localBytes(cluster["installed_memory_bytes"])) installed memory")
+            .font(.caption).foregroundStyle(.secondary)
+        }
+      }
       if !models.isEmpty {
         Divider()
         CatalogPopup(label: "Advertised model", options: models.map {
@@ -322,6 +352,10 @@ struct LocalRuntimeWorkspace: View {
           Button("Warm model") { startWarmup() }.disabled(busy || !savedReady || !projectReady || model.isEmpty || app.anyActive)
           Button("Run tool check") { startCheck() }.disabled(busy || !savedReady || !projectReady || model.isEmpty || app.anyActive || capability == "no")
           Spacer()
+          if template == "exo" && !app.selectedJob.isEmpty {
+            Button("Review Apple handoff…") { prepareHandoff() }
+              .disabled(!savedReady || !projectReady || model.isEmpty || app.anyActive || !toolCheckPassed)
+          }
           Button(coding ? "Use for coding" : "Use for chat") { connect() }.buttonStyle(BrandButtonStyle())
             .disabled(busy || !savedReady || !projectReady || model.isEmpty || app.anyActive || (coding && !toolCheckPassed))
         }
@@ -459,7 +493,38 @@ struct LocalRuntimeWorkspace: View {
     action {
       let result = try await app.engine.call("local.runtimes.probe", ["id": identity]) as? [String: Any] ?? [:]
       models = result["models"] as? [[String: Any]] ?? []; model = models.first.map { string($0, "id") } ?? ""
+      cluster = result["cluster"] as? [String: Any] ?? [:]
       message = models.isEmpty ? "Server answered but advertised no chat models. Load a model in the vendor app, then check again." : "Server models found. No model prompt was sent."
+    }
+  }
+  private func prepareHandoff() {
+    action {
+      let project = app.projectID
+      let result = try await app.engine.call("local.runtimes.handoff.preview", [
+        "id": identity, "project": project, "job": app.selectedJob, "model": model,
+      ]) as? [String: Any] ?? [:]
+      guard project == app.projectID, !string(result, "prompt").isEmpty else { return }
+      handoff = result
+      handoff["id"] = identity
+      handoff["project"] = project
+      handoffText = string(result, "prompt")
+      showHandoff = true
+    }
+  }
+  private func startHandoff() {
+    action {
+      let project = string(handoff, "project")
+      guard project == app.projectID, !app.anyActive else { return }
+      let result = try await app.engine.call("local.runtimes.handoff.start", [
+        "id": string(handoff, "id"), "project": project, "model": string(handoff, "model"),
+        "digest": string(handoff, "digest"), "prompt": handoffText, "command_id": UUID().uuidString,
+      ]) as? [String: Any] ?? [:]
+      guard !string(result, "id").isEmpty else { throw EngineError(message: "The cluster run did not start.") }
+      showHandoff = false
+      await app.refreshJobs()
+      guard project == app.projectID else { return }
+      app.selectJob(string(result, "id"))
+      app.section = "Workspace"
     }
   }
   private func connect() {

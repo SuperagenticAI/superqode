@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 from collections.abc import AsyncIterator
+from dataclasses import replace
 from pathlib import Path
 
 from ...agent.loop import AgentConfig
@@ -17,6 +18,7 @@ from ..events import HarnessEvent
 from ..mcp_bridge import HarnessMCPRuntime, create_harness_mcp_runtime
 from ..model_policy import EffectiveModelPolicy, resolve_harness_model_policy
 from ..sandbox import apply_backend_permissions
+from ..silicon import check_failure, render_checks, run_checks
 from ..spec import HarnessFlavor, HarnessSpec
 from .base import HarnessBackendCapabilities, HarnessBackendRequest, HarnessBackendResult
 
@@ -57,6 +59,16 @@ class RuntimeHarnessBackend:
             response = await runtime_obj.run(
                 request.prompt, **({"images": request.images} if request.images else {})
             )
+            if response.stopped_reason == "complete" and not response.error:
+                checks = await run_checks(request.spec, request.working_directory)
+                if checks:
+                    runtime_events.extend(
+                        HarnessEvent(type="check_result", data=row) for row in checks
+                    )
+                    response.content += render_checks(checks)
+                    if failure := check_failure(request.spec, checks):
+                        response.stopped_reason = "error"
+                        response.error = failure
             runtime_events.append(
                 HarnessEvent(
                     type="model_result",
@@ -110,17 +122,31 @@ class RuntimeHarnessBackend:
                     session_id=request.session_id,
                     run_id=event.run_id,
                 )
+            completed = False
+            final_result = None
             if hasattr(runtime_obj, "run_harness_events"):
                 async for event in runtime_obj.run_harness_events(
                     request.prompt, **({"images": request.images} if request.images else {})
                 ):
-                    yield HarnessEvent(
+                    if event.type == "model_result":
+                        completed = event.data.get(
+                            "stopped_reason"
+                        ) == "complete" and not event.data.get("error")
+                    normalized = HarnessEvent(
                         type=event.type,
                         data=event.data,
                         timestamp=event.timestamp,
                         session_id=request.session_id,
                         run_id=event.run_id,
                     )
+                    if (
+                        event.type == "model_result"
+                        and completed
+                        and request.spec.checks.fail_on_error
+                    ):
+                        final_result = normalized
+                    else:
+                        yield normalized
             else:
                 async for chunk in runtime_obj.run_streaming(
                     request.prompt, **({"images": request.images} if request.images else {})
@@ -143,6 +169,29 @@ class RuntimeHarnessBackend:
                         "pending_runtime": runtime_obj,
                     },
                     session_id=request.session_id,
+                )
+            checks = []
+            if completed and not pending_approvals:
+                checks = await run_checks(request.spec, request.working_directory)
+                if checks:
+                    for row in checks:
+                        yield HarnessEvent(
+                            type="check_result", data=row, session_id=request.session_id
+                        )
+                    yield HarnessEvent(
+                        type="model_delta",
+                        data={"text": render_checks(checks)},
+                        session_id=request.session_id,
+                    )
+            if final_result:
+                failure = check_failure(request.spec, checks)
+                yield (
+                    replace(
+                        final_result,
+                        data={**final_result.data, "stopped_reason": "error", "error": failure},
+                    )
+                    if failure
+                    else final_result
                 )
             yield HarnessEvent(
                 type="end",
@@ -363,7 +412,7 @@ def _create_runtime_for_request(
     runtime_name = request.runtime or default_runtime_name
     from ...agent.loop_policy import core_loop_policy, workbench_loop_policy
 
-    is_core = model_policy.profile in {"core", "apple-local"}
+    is_core = model_policy.profile in {"core", "apple-local", "silicon"}
     session_storage = Path(request.spec.context.session_storage).expanduser()
     if not session_storage.is_absolute():
         session_storage = request.working_directory / session_storage
@@ -399,7 +448,13 @@ def _create_runtime_for_request(
         harness_id=request.spec.name,
         harness_source=str(request.metadata.get("harness_source") or "spec"),
         harness_digest=str(request.metadata.get("harness_digest") or ""),
-        tool_contract_version="core-tools-v1" if is_core else "workbench-v1",
+        tool_contract_version=(
+            "silicon-v1"
+            if model_policy.profile == "silicon"
+            else "core-tools-v1"
+            if is_core
+            else "workbench-v1"
+        ),
     )
     callbacks = {}
     hook_kwargs = {}
@@ -421,11 +476,32 @@ def _create_runtime_for_request(
         )
         hook_kwargs = {"hooks": registry}
 
+    tools = _tool_registry_for_request(request, profile, model_policy)
+    if model_policy.profile == "silicon" and mcp_runtime and mcp_runtime.silicon_allowlist:
+        from ...tools.silicon import SiliconCodeExecute, SiliconExecute, SiliconSearch
+
+        if tools.get("search"):
+            tools.register(SiliconSearch(mcp_runtime))
+        if tools.get("execute"):
+            execute = (
+                SiliconCodeExecute
+                if request.spec.runtime.config.get("silicon_mcp_code") is True
+                else SiliconExecute
+            )
+            tools.register(execute(mcp_runtime))
+    if request.provider in {"apple-foundation", "swift-mlx"}:
+        from ...local.apple_contract import tool_definitions
+        from ...providers.gateway.base import ToolDefinition
+
+        tool_definitions(
+            [ToolDefinition(tool.name, tool.description, tool.parameters) for tool in tools.list()]
+            + (mcp_runtime.tools if mcp_runtime else [])
+        )
     gateway = _gateway_for_request(request.provider, request.model)
     return runtime_name, create_runtime(
         runtime_name,
         gateway=gateway,
-        tools=_tool_registry_for_request(request, profile, model_policy),
+        tools=tools,
         config=config,
         harness_spec=request.spec,
         parallel_tools=(
@@ -537,6 +613,11 @@ def _tool_registry_for_spec(
     if spec.flavor == HarnessFlavor.NO_TOOL:
         return ToolRegistry.empty()
     registry = ToolRegistry.for_profile(model_policy.tool_profile or "coding")
+    if model_policy.profile == "silicon":
+        selected = spec.agents[0].tools if spec.agents else ()
+        if missing := [name for name in selected if registry.get(name) is None]:
+            raise ValueError("Unknown Silicon tools: " + ", ".join(missing))
+        return registry.filtered(list(selected))
     if profile.tools is not None:
         return registry.filtered(profile.tools)
     return registry

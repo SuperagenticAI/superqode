@@ -158,6 +158,14 @@ def dispatch(service, action, params):
             current["last_operation_job"] = job["id"]
             save(service, current)
         return job
+    if action == "handoff.preview":
+        from .silicon_handoff import preview
+
+        return preview(service, spec, profile, params)
+    if action == "handoff.start":
+        from .silicon_handoff import start
+
+        return start(service, spec, profile, params)
     if action == "probe":
         try:
             models = asyncio.run(runtimes.models(spec, key(service, identity)))
@@ -167,7 +175,10 @@ def dispatch(service, action, params):
             raise ValueError(
                 "Local server did not answer. Start it with the vendor guide, verify the port, then retry."
             ) from None
-        return {"models": models, "endpoint": spec.endpoint, "runtime": spec.id}
+        result = {"models": models, "endpoint": spec.endpoint, "runtime": spec.id}
+        if spec.template == "exo":
+            result["cluster"] = asyncio.run(runtimes.exo_cluster(spec, key(service, identity)))
+        return result
     if action in {"test", "warm"}:
         project = str(params.get("project") or "")
         service.project(project)

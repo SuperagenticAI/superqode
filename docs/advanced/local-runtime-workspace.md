@@ -219,3 +219,124 @@ client-timed throughput with server kernel timings as if they were identical.
 High swap, oversized context, cold loads, reasoning and competing applications
 can each cause a different kind of slowdown. The panel links to the existing
 local benchmarks and harness evaluation workflows for controlled comparisons.
+
+## Silicon Harness
+
+Use **Local AI → Start → Apple on-device model** to start a Silicon coding
+turn. Silicon offers bounded repository search, ranged reads, targeted edits,
+and file creation. The Apple route reads the window reported by the operating
+system and falls back to 4,096 tokens when the SDK provides no usable size.
+Compare can run Silicon and Apple on-device on the same model and repository
+suite to measure whether the extra tools improve task completion.
+
+Create a Project Harness in Harness Studio or use a harness file to override
+the tools, prompt, and checks. The `agents` list replaces the inherited list.
+For example, this project runs a named check after a completed coding turn:
+
+```yaml
+name: project-silicon
+inherits: silicon
+checks:
+  enabled: true
+  custom_steps:
+    - name: unit tests
+      command: python -m pytest -q
+      timeout: 60
+```
+
+The host runs the check with the local OS sandbox, a reduced environment, and
+network access denied. The result appears alongside the coding response.
+Checkpoints and the turn's Changes view let you review and undo its edits.
+
+### Apple Container verification
+
+On Apple Silicon with macOS 26 or later, prepare Apple Container with Apple's
+signed installer, a running service, its Linux kernel, and a locally cached
+ARM64 image. Add `apple_container` to a check that can run in Linux.
+
+```yaml
+name: project-silicon
+inherits: silicon
+checks:
+  enabled: true
+  fail_on_error: true
+  custom_steps:
+    - name: linux verification
+      command: python3 verify.py
+      timeout: 60
+      apple_container:
+        image: docker.io/library/python@sha256:218ad6ba54faeb7f1089f391c597a80c9d69ca88e561f71ebd77fb452d39249b
+        files:
+          - verify.py
+```
+
+List the exact files the check needs. SuperQode copies the current files into
+a disposable workspace, rejects symlinks, and discards guest changes. The guest
+uses a read-only root filesystem, a temporary directory, and loopback-only
+networking. Prepare tool dependencies in the pinned image ahead of time.
+An unavailable service or missing image fails the check. Checks without this
+setting still use the local OS sandbox in Silicon, including commands that
+need macOS or Xcode.
+
+### Official MLX in Quick Start
+
+Install **MLX** on the Start tab, then choose **Download MLX model**. Review
+the publisher, pinned revision, transfer size, and estimated fit before
+starting the download. Choose the downloaded snapshot to start coding. The
+managed server uses Apple's `mlx-lm` in its own environment and serves over
+loopback. Use a supported text model for this route.
+
+### Optional MCP
+
+Silicon can keep one search and one execution interface even when several
+MCP servers are connected. In a derived harness, add `execute` to the agent's
+tool list, allow network access explicitly, and list the configured server IDs
+and tools you want to expose. Standard project MCP settings supply the server
+connections. The execution policy still controls each resolved capability.
+
+```yaml
+name: silicon-docs
+inherits: silicon
+agents:
+  - id: coder
+    role: focused development
+    tools: [read, search, edit, write, execute]
+    system_prompt: Use repository search for code and MCP search for private documentation.
+runtime:
+  config:
+    silicon_mcp:
+      docs_local: [lookup]
+execution_policy:
+  allow_network: true
+  permission_rules:
+    - tool: execute
+      action: allow
+    - tool: mcp_docs_local_lookup
+      action: allow
+```
+
+The model uses `search(query, scope: "mcp")`, then calls
+`execute(capability, arguments_json)` with the exact discovered capability.
+The host validates arguments against the current server schema. Apple requests
+are preflighted against the bridge's five-tool and schema limits.
+
+Set `runtime.config.silicon_mcp_code: true` on an MCP-enabled Silicon
+harness to try the experimental Monty variant. It uses the same two tools.
+The execute schema accepts a short Python snippet, with one permitted MCP
+call per snippet through `tool_call("server/tool", {"argument": "value"})`.
+Install the optional Monty runtime before selecting this variant. Use Compare
+to evaluate it separately from the direct call mode.
+
+### exo cluster handoff
+
+Start exo on the Mac running SuperQode and join the cluster in exo. In
+**Local AI → Advanced → Runtimes**, save an **exo cluster** profile using
+`http://127.0.0.1:52415/v1` or its configured loopback endpoint. **Check
+server & models** reads cluster state and lists models with a deployment.
+Run the tool check for the model you want to use.
+
+Select a finished Apple coding turn, then choose **Review Apple handoff** in
+the exo runtime profile. Review and edit the proposed objective, response
+excerpt, and patch. **Send to exo** starts a new Silicon run bound to the
+chosen model. Inference runs **On your network** and tool effects are handled
+by SuperQode on this Mac.

@@ -127,7 +127,17 @@ def catalog(service, project):
     from . import local_models
     from concurrent.futures import ThreadPoolExecutor
 
-    service.project(project)
+    root = service.project(project)
+    from superqode.harness.catalog import list_harnesses
+
+    native_definitions = [
+        row
+        for row in list_harnesses(root)
+        if row.available
+        and row.spec.runtime.backend == "builtin"
+        and row.spec.model_policy.profile in {"apple-local", "silicon"}
+    ]
+    native_harnesses = [row.id for row in native_definitions]
 
     def managed(engine):
         try:
@@ -151,7 +161,7 @@ def catalog(service, project):
     with ThreadPoolExecutor(max_workers=2) as pool:
         groups = list(pool.map(managed, ("ollama", "lmstudio")))
     routes = [row for group in groups for row in group] + asyncio.run(_catalog_profiles(service))
-    from superqode.local.apple import status
+    from superqode.local.apple import context_capacity, status
 
     apple = status()
     if apple.get("available") is True and apple.get("supports_tools") is True:
@@ -161,11 +171,26 @@ def catalog(service, project):
                 "model": "system-on-device",
                 "runtime": "apple-foundation",
                 "name": "Apple · on-device system model",
-                "context": min(4096, apple.get("context") or 4096),
+                "context": context_capacity(apple),
                 "endpoint": "native-stdio",
-                "allowed_harnesses": ["apple-local"],
+                "allowed_harnesses": native_harnesses,
             }
         )
+    from superqode.local import swift_mlx
+
+    routes.extend(
+        {
+            "provider": swift_mlx.PROVIDER,
+            "model": model["id"],
+            "runtime": swift_mlx.PROVIDER,
+            "name": "Swift MLX · " + model["id"],
+            "context": model["context"],
+            "revision": model["revision"],
+            "endpoint": "swift-mlx-stdio",
+            "allowed_harnesses": native_harnesses,
+        }
+        for model in swift_mlx.status()["models"]
+    )
     for row in routes:
         row["id"] = fingerprint([row["provider"], row["runtime"], row["model"]])[:24]
     harnesses = [
@@ -173,10 +198,16 @@ def catalog(service, project):
         for r in local_models.harnesses(service, project)
         if r["selectable"] and r["backend"] in {"builtin", "pipy", "rlm"}
     ]
+    selectable = {row["id"] for row in harnesses}
+    harnesses.extend(
+        {"id": row.id, "name": row.display_name, "backend": "builtin", "selectable": True}
+        for row in native_definitions
+        if row.id not in selectable
+    )
     return {
         "routes": routes,
         "harnesses": harnesses,
-        "note": "Available local endpoints only. Load missing models in their runtime first; discovery makes no generation requests.",
+        "note": "Choose an available runtime or cached Swift MLX checkpoint. Discovery makes no generation requests.",
     }
 
 
@@ -208,6 +239,10 @@ def prepare(service, params):
                 "A selected model or compatible harness is unavailable; refresh choices"
             )
         if route.get("allowed_harnesses") and harness["id"] not in route["allowed_harnesses"]:
+            if route["provider"] == "swift-mlx":
+                raise ValueError(
+                    "Choose Silicon Harness or Apple On-Device for this Swift MLX model"
+                )
             raise ValueError(
                 "Choose the Apple on-device configuration for this model; it keeps tools and instructions within the system model's context"
             )
@@ -332,6 +367,12 @@ def start(service, params):
                 raise ValueError(
                     "Apple's model is no longer available. Check Apple Intelligence and review the comparison again"
                 )
+        if route["provider"] == "swift-mlx":
+            from superqode.local import swift_mlx
+
+            current = swift_mlx.model_metadata(route["model"])
+            if not swift_mlx.helper_path() or current["revision"] != route["revision"]:
+                raise ValueError("Swift MLX checkpoint changed. Review the comparison again.")
         if route["provider"] == "local-openai":
             current = local_runtimes.read(service, route["runtime"])
             if (
@@ -405,7 +446,7 @@ async def observe_identity(route, key):
     import httpx
 
     if route["provider"] == "apple-foundation":
-        from superqode.local.apple import status
+        from superqode.local.apple import context_capacity, status
 
         current = await asyncio.to_thread(status)
         if current.get("available") is not True:
@@ -414,9 +455,20 @@ async def observe_identity(route, key):
             "model": route["model"],
             "artifact": None,
             "runtime_version": current.get("runtime_version"),
-            "loaded_context": min(current.get("context") or 4096, 4096),
+            "loaded_context": context_capacity(current),
             "residency": None,
             "note": "System-managed model; no immutable weight revision, quantization or cache hit is exposed by this bridge.",
+        }
+    if route["provider"] == "swift-mlx":
+        from superqode.local import swift_mlx
+
+        current = await asyncio.to_thread(swift_mlx.model_metadata, route["model"])
+        return {
+            "model": route["model"],
+            "artifact": {"revision": current["revision"], "size_bytes": current["size_bytes"]},
+            "runtime_version": None,
+            "loaded_context": current["context"],
+            "residency": None,
         }
 
     root = route["endpoint"].removesuffix("/v1")

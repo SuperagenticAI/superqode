@@ -969,7 +969,7 @@ HARNESS_CATALOG: Tuple[HarnessCatalogEntry, ...] = (
             "cline-key",
             "acp-attach",
             detect=_acp_probe("cline"),
-            unavailable_hint="run `npm install -g @cline/cli`, then `cline --acp` must be runnable",
+            unavailable_hint="run `npm install -g cline`, then `cline --acp` must be runnable",
             byok_providers=None,
             local_providers=None,
         ),

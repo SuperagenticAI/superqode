@@ -210,7 +210,7 @@ _MANAGED_AGENT_INSTALLS: dict[str, tuple[str, str, str, str]] = {
         "omp",
     ),
     "cline": (
-        "npm install -g @cline/cli",
+        "npm install -g cline",
         "https://github.com/cline/cline",
         "Apache-2.0",
         "cline",
