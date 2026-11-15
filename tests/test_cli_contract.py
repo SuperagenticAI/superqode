@@ -181,11 +181,13 @@ EXPECTED_COMMAND_COUNT = 334
 # root and connect help pages. Both renderers still expose 331 routes.
 # SystemOne adds decision, decision-providers and serve decisions (331 -> 334).
 # Help fixtures were regenerated without invoking callbacks or running tests.
-EXPECTED_HELP_TREE_SHA256 = "de7e8197b076c282b4ac30c712c0a24abb34124816d0c9d9a2465b6dc68a761b"
+# Silicon adds one choice to `harness init --template`. Both renders still
+# expose 334 routes, and only that choice list changed.
+EXPECTED_HELP_TREE_SHA256 = "e917cfca67c397e4e86e56abb8f7b4b5557ee584ec89feb59de3e2049c8c6594"
 # Click 8.5 renders optional group commands as [COMMAND] and case-insensitive
 # choices in lower case. Both verified renders expose the same command tree.
 EXPECTED_MODERN_CLICK_HELP_TREE_SHA256 = (
-    "9fef4f9be5895f6024116bb4c23f732a23b41253ba4586d07a380ea6e61db136"
+    "ec614f6e206294d0e579540363dd684a8de699dc257aaabc4b68c3c2286cb14a"
 )
 
 
