@@ -55,7 +55,7 @@ def runtime_python(engine: str) -> Path:
     return Path.home() / ".superqode" / "runtimes" / engine / "bin" / "python"
 
 
-MANAGED_MLX_REQUIREMENT = "mlx-lm==0.32.2"
+MLX_REQUIREMENT = "mlx-lm==0.32.2"
 _MLX_PROBES: dict[str, tuple[float, bool]] = {}
 
 
@@ -168,12 +168,12 @@ def install_plan(engine: str) -> InstallPlan:
             if uv:
                 steps = (
                     (uv, "venv", "--python", "3.12", "--allow-existing", str(target.parent.parent)),
-                    (uv, "pip", "install", "--python", str(target), MANAGED_MLX_REQUIREMENT),
+                    (uv, "pip", "install", "--python", str(target), MLX_REQUIREMENT),
                 )
             else:
                 steps = (
                     (sys.executable, "-m", "venv", "--symlinks", str(target.parent.parent)),
-                    (str(target), "-I", "-m", "pip", "install", MANAGED_MLX_REQUIREMENT),
+                    (str(target), "-I", "-m", "pip", "install", MLX_REQUIREMENT),
                 )
             guidance = (
                 "Installs MLX in its own environment under ~/.superqode/runtimes/mlx. "

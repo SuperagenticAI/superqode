@@ -208,9 +208,12 @@ def harnesses(service, project):
 
     rows = []
     for definition in list_harnesses(root=service.project(project)):
-        if definition.id == "no-tool" or definition.source == "built-in-template":
-            continue
-        if definition.category == "model-preset":
+        # Silicon defaults to Apple Foundation but supports explicit local model bindings.
+        if definition.id != "silicon" and (
+            definition.id == "no-tool"
+            or definition.source == "built-in-template"
+            or definition.category == "model-preset"
+        ):
             continue
         backend = definition.spec.runtime.backend
         if backend not in _LOCAL_MODEL_BACKENDS:

@@ -15,7 +15,7 @@ struct LocalAIStartView: View {
   var preferredHarness = ""
   var form: InstalledLocalDraft?
   var openProject: (() -> Void)?
-  var openAdvanced: (() -> Void)?
+  var openAdvanced: ((String) -> Void)?
 
   var body: some View {
     InstalledLocalModelPicker(

@@ -160,7 +160,9 @@ struct ACPSetupView: View {
         )) {
           ForEach(versions, id: \.self) { Text($0).tag($0) }
         }.disabled(reviewingVersion || app.busy || app.anyActive)
-        Text("SuperQode downloads the runtime and installs the agent’s packages for this project.")
+        Text(string(toolchain, "language") == "Python"
+          ? "uv downloads Python from Astral’s python-build-standalone. SuperQode installs the agent’s packages for this project."
+          : "SuperQode downloads Node.js from nodejs.org and installs the agent’s packages for this project.")
           .font(.caption).foregroundStyle(.secondary)
       } else {
         Text("This runs the reviewed package-manager command on your Mac.")

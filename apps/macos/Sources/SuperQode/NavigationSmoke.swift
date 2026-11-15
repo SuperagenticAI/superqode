@@ -48,23 +48,28 @@ import Foundation
       field.delegate?.controlTextDidChange?(Notification(name: NSControl.textDidChangeNotification, object: field))
     }
     @MainActor func checkRuntimeDraft() async throws -> Bool {
-      @MainActor func runtimeButton(in view: NSView) -> NSButton? {
-        if let button = view as? NSButton, button.identifier?.rawValue == "local.runtimes.show" { return button }
-        return view.subviews.lazy.compactMap { runtimeButton(in: $0) }.first
+      @MainActor func runtimeButton(_ id: String, in view: NSView) -> NSButton? {
+        if let button = view as? NSButton, button.identifier?.rawValue == id { return button }
+        return view.subviews.lazy.compactMap { runtimeButton(id, in: $0) }.first
       }
-      @MainActor func openForm() async throws -> NSTextField {
-        // The runtime form lives on Advanced. Start from the Start tab so its
-        // Advanced Local AI link (local.runtimes.show) is what opens it.
+      @MainActor func pressStartButton(_ id: String) async throws {
         localAITab = "start"
-        var opened = false
         for _ in 0..<100 {
           try await Task.sleep(for: .milliseconds(30))
           if let content = NSApp.windows.first(where: { $0.title == "SuperQode" })?.contentView,
-            let button = runtimeButton(in: content), button.isEnabled {
-            button.performClick(nil); opened = true; break
+            let button = runtimeButton(id, in: content), button.isEnabled {
+            button.performClick(nil)
+            for _ in 0..<100 {
+              try await Task.sleep(for: .milliseconds(30))
+              if localAITab == "advanced" { return }
+            }
+            throw EngineError(message: "Local AI Start button did not navigate: " + id)
           }
         }
-        guard opened else { throw EngineError(message: "Local runtime navigation button did not become available") }
+        throw EngineError(message: "Local AI Start button did not become available: " + id)
+      }
+      @MainActor func openForm(_ id: String = "local.runtimes.show") async throws -> NSTextField {
+        try await pressStartButton(id)
         var endpoint: NSTextField?
         for _ in 0..<100 {
           try await Task.sleep(for: .milliseconds(30))
@@ -76,6 +81,14 @@ import Foundation
       let previous = section
       section = "Models"
       defer { section = previous }
+      try await pressStartButton("local.start.swiftMLX")
+      guard localAIAdvancedTab == "swift-mlx" else {
+        throw EngineError(message: "Swift MLX shortcut did not open its page")
+      }
+      let exo = try await openForm("local.start.exo")
+      guard localAIAdvancedTab == "exo", exo.stringValue == "http://127.0.0.1:52415/v1" else {
+        throw EngineError(message: "exo shortcut did not open a prefilled exo profile")
+      }
       let endpoint = try await openForm()
       let original = endpoint.stringValue
       let unsaved = "http://127.0.0.1:49321/v1"

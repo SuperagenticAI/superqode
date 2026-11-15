@@ -2,6 +2,7 @@
 
 import json
 import time
+import tomllib
 from pathlib import Path
 from types import SimpleNamespace
 
@@ -37,6 +38,15 @@ def test_mlx_install_never_targets_app_packages(home, monkeypatch, uv):
     if not uv:
         assert plan.steps[0][:4] == (install.sys.executable, "-m", "venv", "--symlinks")
         assert plan.steps[1][1:4] == ("-I", "-m", "pip")
+
+
+def test_mlx_text_extra_matches_the_installer_without_vision():
+    path = Path(__file__).resolve().parents[1] / "pyproject.toml"
+    extras = tomllib.loads(path.read_text())["project"]["optional-dependencies"]
+    assert [requirement.partition(";")[0] for requirement in extras["mlx"]] == [
+        servers.MLX_REQUIREMENT
+    ]
+    assert extras["mlx-vlm"][0].startswith("mlx-vlm")
 
 
 def test_mlx_server_uses_verified_managed_interpreter(home, monkeypatch, tmp_path):

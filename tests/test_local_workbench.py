@@ -200,6 +200,9 @@ def test_local_endpoint_selection_requires_advertised_model_and_eligible_harness
     )
     rows = service.dispatch("local.models.harnesses", {"project": project["id"]})
     assert next(row for row in rows if row["id"] == "core")["selectable"]
+    silicon = next(row for row in rows if row["id"] == "silicon")
+    assert silicon["name"] == "Silicon Harness"
+    assert silicon["selectable"]
     params = {
         "project": project["id"],
         "engine": "ollama",
@@ -208,6 +211,8 @@ def test_local_endpoint_selection_requires_advertised_model_and_eligible_harness
     }
     route = service.dispatch("local.models.use", params)
     assert route["endpoint"].startswith("http://127.0.0.1:")
+    route = service.dispatch("local.models.use", {**params, "harness": "silicon"})
+    assert route["harness"] == "silicon"
     assert not service.dispatch("jobs.list", {})
     for replacement in [
         {"model": "not-advertised"},
@@ -217,7 +222,7 @@ def test_local_endpoint_selection_requires_advertised_model_and_eligible_harness
         with pytest.raises(ValueError):
             service.dispatch("local.models.use", {**params, **replacement})
     bindings = service._all("SELECT * FROM local_model_bindings")
-    assert {row["harness"] for row in bindings} == {"core", "no-tool"}
+    assert {row["harness"] for row in bindings} == {"core", "no-tool", "silicon"}
 
 
 def test_unknown_size_and_memory_are_not_a_fit_guarantee(monkeypatch):

@@ -638,9 +638,9 @@ class DesktopService:
                 and params.get("provider") == "apple-foundation"
                 and params.get("interaction_mode") != "chat"
             ):
-                from superqode.local.apple import status
+                from superqode.local.apple import capabilities_for_generation
 
-                available = status()
+                available = capabilities_for_generation()
                 if available.get("available") is not True:
                     raise ValueError(
                         available.get("guidance")

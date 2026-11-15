@@ -1,6 +1,6 @@
 [project]
 name = "superqode"
-version = "2.31.18"
+version = "2.31.19"
 description = "The harness layer for coding agents"
 readme = "README.md"
 license = "Apache-2.0"
@@ -57,7 +57,9 @@ hf = [
     "huggingface_hub[hf_xet]>=1.0.0",
 ]
 mlx = [
-    "mlx-lm>=0.31.0,<0.32.0; python_version < '3.14'",
+    "mlx-lm==0.32.2; python_version < '3.14'",
+]
+mlx-vlm = [
     "mlx-vlm>=0.5.0,<0.6.0; python_version < '3.14'",
 ]
 monty = [

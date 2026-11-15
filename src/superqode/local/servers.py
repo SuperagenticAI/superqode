@@ -49,7 +49,12 @@ from urllib.error import HTTPError, URLError
 from urllib.request import Request, urlopen
 
 from superqode.providers.local_order import local_provider_sort_key
-from superqode.local.install import runtime_executable, managed_mlx_installed, mlx_python
+from superqode.local.install import (
+    MLX_REQUIREMENT,
+    managed_mlx_installed,
+    mlx_python,
+    runtime_executable,
+)
 
 from .laguna import (
     LAGUNA_DS4_REF,
@@ -175,9 +180,6 @@ INSTALL_GUIDES: Dict[str, List[str]] = {
 
 def install_guide(engine: str) -> List[str]:
     return INSTALL_GUIDES.get(engine, [f"No install guide available for {engine}."])
-
-
-MLX_REQUIREMENT = "mlx-lm>=0.31.0,<0.32.0"
 
 
 def mlx_install_command(python: Optional[str] = None) -> str:

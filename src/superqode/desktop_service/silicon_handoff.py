@@ -62,7 +62,7 @@ def preview(service, spec, profile, params):
     if response:
         lines.append(f"Previous model response: {response}")
     for row in checks[-10:]:
-        lines.append(f"Observed check: {row.get('name', 'check')} — {row.get('status', 'unknown')}")
+        lines.append(f"Observed check: {row.get('name', 'check')} ({row.get('status', 'unknown')})")
     from .checkpoints import manager_for
 
     task = (

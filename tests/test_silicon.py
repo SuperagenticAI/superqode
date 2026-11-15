@@ -29,6 +29,23 @@ def test_apple_context_limit_uses_the_reported_capacity(monkeypatch):
     assert apple.context_limit({"context": 0}) == 4096
 
 
+def test_apple_generation_reuses_status_but_explicit_refresh_checks_again(monkeypatch):
+    calls = []
+    monkeypatch.setattr(apple, "_capabilities_snapshot", None)
+    monkeypatch.setattr(apple.platform, "system", lambda: "Darwin")
+    monkeypatch.setattr(apple, "helper_path", lambda: "/test/AppleModel")
+    monkeypatch.setattr(
+        apple.subprocess,
+        "run",
+        lambda args, **kwargs: calls.append(args) or SimpleNamespace(stdout='{"available": true}'),
+    )
+    apple.status()
+    assert apple.capabilities_for_generation()["available"]
+    assert len(calls) == 1
+    apple.status()
+    assert len(calls) == 2
+
+
 def test_silicon_default_tools_fit_and_roll_over_completed_tool_results():
     spec = silicon_template()
     registry = _tool_registry_for_spec(
@@ -239,6 +256,23 @@ async def test_exo_discovery_filters_model_catalog_to_deployed_instances():
     assert cluster["installed_memory_bytes"] == 96 * 1024**3
     assert cluster["node_count"] == 2
     assert [row["id"] for row in await runtimes.models(spec, transport=transport)] == ["deployed"]
+
+
+@pytest.mark.asyncio
+async def test_exo_catalog_still_shows_advertised_models_when_cluster_state_is_unavailable():
+    def answer(request):
+        if request.url.path == "/state":
+            return httpx.Response(503)
+        return httpx.Response(200, json={"data": [{"id": "advertised"}]})
+
+    transport = httpx.MockTransport(answer)
+    spec = runtimes.TEMPLATES[0]
+    catalog = await runtimes.model_catalog(spec, transport=transport)
+    assert [row["id"] for row in catalog["models"]] == ["advertised"]
+    assert catalog["cluster"] is None
+    assert "cluster state is unavailable" in catalog["cluster_error"]
+    with pytest.raises(ValueError, match="cluster state is unavailable"):
+        await runtimes.models(spec, transport=transport)
 
 
 def test_exo_handoff_starts_a_new_bound_silicon_run(monkeypatch):

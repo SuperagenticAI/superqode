@@ -5,3 +5,8 @@ certifi==2026.10.19 --hash=sha256:42d35340cc5b9ba78e818ddbff0c5b1c2b779de448a340
 authlib==1.9.1 --hash=sha256:8b9be8b1e5174dcbf5520e984f1a22dc2edae5b6e40a61d4cedbf86b97e9e69b
 opentelemetry-api==1.45.1 --hash=sha256:b31553efa588ae44bc306f863c785c5333a9ecc091248c6ee68b4b6c87fdedfb
 filelock==4.2.1 --hash=sha256:7be2662e9e826b9bba28afc0f843a123280d799a2ea44bb5d35ccec67905ae44
+
+# Monty 1.x for Silicon code mode. The native hashes are for the arm64 Mac app's Python 3.13.
+pydantic-monty==1.0.0 --hash=sha256:8146c699ec66e619013780d05193bf097ea6508dcaaca2a2dd19f8a382a0a286
+pydantic-monty-client==1.0.0 --hash=sha256:65ab53d4d54d9c645402d24835ed1e6afa17b0304c8cf30b0d6c13f8f351617b
+pydantic-monty-runtime==1.0.0 --hash=sha256:0eb6ad7aef7a8e6e0b00082476ef9c969a9592ef706760cbb499bab654424977

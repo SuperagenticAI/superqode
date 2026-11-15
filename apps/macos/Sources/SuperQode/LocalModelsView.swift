@@ -53,10 +53,10 @@ struct ModelsView: View {
       }.pickerStyle(.segmented).frame(maxWidth: 320).padding(.horizontal, 28).padding(.top, 20)
       if active {
         if app.localAITab == "advanced" {
-          AdvancedLocalAIView(active: active, runtime: localDraft.runtime)
+          AdvancedLocalAIView(active: active, runtime: localDraft.runtime, exo: localDraft.exo)
         } else {
           LocalAIStartView(project: app.projectID, active: active, form: localDraft.installed,
-            openAdvanced: { app.openLocalAIAdvanced("runtimes") })
+            openAdvanced: { app.openLocalAIAdvanced($0) })
         }
       }
     }
@@ -68,6 +68,7 @@ struct AdvancedLocalAIView: View {
   @EnvironmentObject var app: Workspace
   var active = true
   var runtime: LocalRuntimeDraft?
+  var exo: LocalRuntimeDraft?
   var body: some View {
     VStack(alignment: .leading, spacing: 0) {
       HStack(alignment: .center, spacing: 12) {
@@ -89,6 +90,7 @@ struct AdvancedLocalAIView: View {
       Picker("Advanced Local AI", selection: $app.localAIAdvancedTab) {
         Text("Apple on-device").tag("apple")
         Text("Swift MLX").tag("swift-mlx")
+        Text("exo cluster").tag("exo")
         Text("Engines & performance").tag("runtimes")
         Text("Model library").tag("models")
         Text("Compare").tag("comparisons")
@@ -100,6 +102,8 @@ struct AdvancedLocalAIView: View {
         ScrollView { SwiftMLXPanel(active: active).padding(28).frame(maxWidth: 760) }
       case "runtimes":
         ScrollView { LocalRuntimeWorkspace(active: active, form: runtime).padding(28) }
+      case "exo":
+        ScrollView { LocalRuntimeWorkspace(active: active, form: exo, exoOnly: true).padding(28) }
       case "models":
         LocalModelWorkbenchView(active: active)
       case "comparisons":
@@ -135,7 +139,7 @@ private struct SwiftMLXPanel: View {
       Text("Swift MLX").font(.title2)
       if available {
         if models.isEmpty {
-          Text("Download a Qwen3 text checkpoint to run it on this Mac.")
+          Text("Download a Qwen3 model to run it on this Mac.")
         } else {
           Picker("Cached model", selection: $model) {
             ForEach(models, id: \.projectRowID) { row in
@@ -146,10 +150,14 @@ private struct SwiftMLXPanel: View {
             Button("Use with Silicon Harness") { connect(coding: true) }.buttonStyle(BrandButtonStyle())
             Button("Use for chat") { connect(coding: false) }
           }.disabled(model.isEmpty || app.projectID.isEmpty || app.anyActive || busy)
+          if app.projectID.isEmpty {
+            Text("Open a project to use this model for chat or coding.")
+              .foregroundStyle(.secondary)
+          }
         }
         if !models.contains(where: { string($0, "id") == string(status, "starter") }) {
-          Button("Review starter download…") { showDownload = true }
-            .disabled(app.projectID.isEmpty || app.anyActive || busy)
+          Button("Download starter model…") { showDownload = true }
+            .disabled(!app.connected || busy)
         }
       } else if !status.isEmpty {
         Text("Swift MLX requires Apple Silicon, macOS 27 or later, and a build with the native helper.")
@@ -424,6 +432,7 @@ struct LocalModelActionView: View {
   @State private var failure = ""
   @State private var closed = false
   @State private var commandID = UUID().uuidString
+  @State private var operationJob = ""
   private var signature: String { [engine, model, filename, String(context), cache, check, ds4Binary, ds4KVDirectory, String(ds4DiskMB)].joined(separator: "\n") }
   private var parameters: [String: Any] {
     var values: [String: Any] = ["engine": engine, "model": model, "filename": filename, "context": context, "kv_cache": cache, "check": check]
@@ -431,6 +440,19 @@ struct LocalModelActionView: View {
     return request.merging(values) { _, value in value }
   }
   var body: some View {
+    Group {
+      if operationJob.isEmpty {
+        configurationForm
+      } else {
+        VStack(alignment: .trailing, spacing: 0) {
+          LocalModelOperationView(job: operationJob)
+          Button("Close") { dismiss() }.padding([.bottom, .trailing], 24)
+        }
+      }
+    }.onDisappear { closed = true }
+  }
+
+  private var configurationForm: some View {
     VStack(alignment: .leading, spacing: 14) {
       Text(string(request, "action") == "download" ? "Choose weights to download" : string(request, "action") == "verify" ? "Check model readiness" : "Configure your local runtime").font(.title2)
       if engine == "ds4" && string(request, "action") == "serve" {
@@ -455,7 +477,9 @@ struct LocalModelActionView: View {
         Button("Refresh model files") { Task { await loadFiles() } }.disabled(busy)
         Text("All split-GGUF shards are included. LM Studio imports a link to cached weights.").font(.caption).foregroundStyle(.secondary)
       }
-      TextField(engine == "ds4" ? "Downloaded GGUF file" : "Model ID or downloaded path", text: $model).textFieldStyle(.roundedBorder).disabled(string(request, "action") != "serve" && request["edit_model"] as? Bool != true)
+      if string(request, "action") != "install" {
+        TextField(engine == "ds4" ? "Downloaded GGUF file" : "Model ID or downloaded path", text: $model).textFieldStyle(.roundedBorder).disabled(string(request, "action") != "serve" && request["edit_model"] as? Bool != true)
+      }
       if string(request, "source") == "hf" {
         HStack {
           if let url = URL(string: "https://huggingface.co/" + model) { Link("Model card & access conditions", destination: url) }
@@ -537,7 +561,6 @@ struct LocalModelActionView: View {
       }
       .onChange(of: signature) { _, _ in plan = [:]; commandID = UUID().uuidString }
       .onChange(of: hubSetup) { _, _ in reviewGeneration += 1; plan = [:] }
-      .onDisappear { closed = true }
       .centeredDialog(isPresented: $hubSetup, title: "Hugging Face access", onDismiss: {
         plan = [:]
         if string(request, "format") != "mlx" { Task { await loadFiles() } }
@@ -575,8 +598,17 @@ struct LocalModelActionView: View {
     Task {
       defer { busy = false }
       do {
-        _ = try await app.engine.call("local.models.start", ["plan": string(plan, "id"), "expected_digest": string(plan, "digest"), "command_id": commandID])
-        guard !closed else { return }; dismiss()
+        let result = try await app.engine.call("local.models.start", [
+          "plan": string(plan, "id"), "expected_digest": string(plan, "digest"), "command_id": commandID,
+        ]) as? [String: Any] ?? [:]
+        guard !closed else { return }
+        let job = string(result, "id")
+        guard !job.isEmpty else { throw EngineError(message: "The local operation did not return a job.") }
+        if ["install", "download"].contains(string(request, "action")) {
+          operationJob = job
+        } else {
+          dismiss()
+        }
       } catch { failure = error.localizedDescription }
     }
   }
@@ -678,12 +710,15 @@ struct LocalModelOperationView: View {
   var body: some View {
     VStack(alignment: .leading, spacing: 14) {
       Text(string(detail, "title", "Local model operation")).font(.title2)
-      Text(string(detail, "status")).foregroundStyle(.secondary)
-      if string(detail, "status") == "running" { LocalDownloadProgress(value: progress) }
+      Text(string(detail, "status", "Queued").capitalized).foregroundStyle(.secondary)
+      if ["", "queued", "running"].contains(string(detail, "status")) { LocalDownloadProgress(value: progress) }
       ScrollView { Text(lines).font(.caption.monospaced()).textSelection(.enabled).frame(maxWidth: .infinity, alignment: .leading) }
+      if let result = detail["result"] as? [String: Any], let error = result["error"] as? String {
+        Text(error).foregroundStyle(.orange).textSelection(.enabled)
+      }
       if !failure.isEmpty { Text(failure).foregroundStyle(.orange) }
       HStack {
-        Text("Cache entries are reused on retry. Cancellation is not a pause/resume guarantee.").font(.caption).foregroundStyle(.secondary); Spacer()
+        Spacer()
         Button("Cancel operation") { app.perform { _ = try await app.engine.call("jobs.cancel", ["id": job]) } }
           .disabled(!["running", "queued", "needs_approval"].contains(string(detail, "status")))
       }

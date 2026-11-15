@@ -539,7 +539,7 @@ struct InstalledLocalModelPicker: View {
   var layout: LocalPickerLayout = .classic
   /// The Connect sheet uses a shorter header.
   var compact = false
-  var openAdvanced: (() -> Void)?
+  var openAdvanced: ((String) -> Void)?
   @State private var form: InstalledLocalDraft
   @State private var learnMore = false
   @State private var confirmLarge = false
@@ -549,7 +549,7 @@ struct InstalledLocalModelPicker: View {
     showsPrompt: Bool = false, form: InstalledLocalDraft? = nil,
     openProject: (() -> Void)? = nil, browseModels: (() -> Void)? = nil,
     modelFit: [[String: Any]] = [], layout: LocalPickerLayout = .classic, compact: Bool = false,
-    openAdvanced: (() -> Void)? = nil) {
+    openAdvanced: ((String) -> Void)? = nil) {
     self.project = project; self.dismissOnUse = dismissOnUse; self.active = active
     self.preferredHarness = preferredHarness; self.showsPrompt = showsPrompt
     self.openProject = openProject; self.browseModels = browseModels; self.modelFit = modelFit
@@ -1254,6 +1254,16 @@ extension InstalledLocalModelPicker {
             startHeader
             if let saved = continueSetup { continueCard(saved) }
             appleCard
+            if let openAdvanced {
+              HStack(spacing: 12) {
+                nativeButton("local.start.swiftMLX", action: { openAdvanced("swift-mlx") }, title: "Swift MLX") {
+                  Text("Swift MLX")
+                }
+                nativeButton("local.start.exo", action: { openAdvanced("exo") }, title: "Set up exo cluster") {
+                  Text("Set up exo cluster")
+                }
+              }
+            }
             enginesSection
             macSection
             modelsSection
@@ -1283,7 +1293,7 @@ extension InstalledLocalModelPicker {
         }
         Spacer()
         Button("Refresh") { Task { await load(); await loadStart() } }.disabled(busy)
-        nativeButton("local.runtimes.show", action: { openAdvanced?() }, title: "Advanced Local AI") {
+        nativeButton("local.runtimes.show", action: { openAdvanced?("runtimes") }, title: "Advanced Local AI") {
           Label("Advanced Local AI…", systemImage: "slider.horizontal.3")
         }.disabled(openAdvanced == nil)
       }
@@ -1337,10 +1347,11 @@ extension InstalledLocalModelPicker {
         Image(systemName: "apple.logo").font(.system(size: 26)).frame(width: 34).accessibilityHidden(true)
         VStack(alignment: .leading, spacing: 3) {
           Text("Apple on-device model").font(.headline)
-          Text("Built into every Mac with Apple Intelligence, no download needed")
+          Text("Use Silicon Harness with Apple Intelligence’s built-in model.")
             .font(.callout).foregroundStyle(.secondary)
           Text(appleStatusLine).font(.caption).foregroundStyle(appleReady ? Color.green : Color.secondary)
             .accessibilityIdentifier("local.start.appleStatus")
+          AppleContextLabel(status: form.apple)
         }
         Spacer(minLength: 8)
         appleAction
@@ -1351,7 +1362,7 @@ extension InstalledLocalModelPicker {
   @ViewBuilder private var appleAction: some View {
     switch appleState {
     case "ready":
-      Button("Use Apple model") {
+      Button("Use Silicon Harness") {
         form.appleSelected = true
         startSelected()
       }.buttonStyle(BrandButtonStyle()).disabled(busy || agentBusy || project.isEmpty)
@@ -1398,7 +1409,7 @@ extension InstalledLocalModelPicker {
           Text("Also found: " + otherEngines.map { string($0, "name", string($0, "id")) }.joined(separator: ", "))
             .font(.caption).foregroundStyle(.secondary)
           if openAdvanced != nil {
-            Button("Open in Advanced") { openAdvanced?() }.buttonStyle(.link).font(.caption)
+            Button("Open in Advanced") { openAdvanced?("runtimes") }.buttonStyle(.link).font(.caption)
           }
         }
       }
@@ -1435,7 +1446,7 @@ extension InstalledLocalModelPicker {
       }
       Spacer()
       if id == "mlx" && !installed && !running {
-        Button("Install MLX…") { serverRequest = ["action": "install", "engine": "mlx"] }
+        Button("Install Python MLX…") { serverRequest = ["action": "install", "engine": "mlx"] }
           .disabled(busy)
       } else if id == "mlx" {
         Button("Download MLX model…") {
@@ -1662,7 +1673,7 @@ extension InstalledLocalModelPicker {
   private var startFooter: some View {
     HStack(spacing: 12) {
       if form.appleSelected {
-        Label("Harness: Apple on-device", systemImage: "apple.logo").font(.callout).foregroundStyle(.secondary)
+        Label("Harness: Silicon Harness", systemImage: "apple.logo").font(.callout).foregroundStyle(.secondary)
       } else if !harnesses.isEmpty {
         Picker("Harness:", selection: $form.harness) {
           ForEach(harnesses, id: \.projectRowID) { row in

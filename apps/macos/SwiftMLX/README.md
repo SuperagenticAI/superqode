@@ -1,7 +1,7 @@
 # Swift MLX
 
 Swift MLX runs cached Qwen3 text checkpoints on Apple Silicon with macOS 27 or
-later. In the Mac app, open **Local AI → Advanced → Swift MLX**. Use an existing
+later. In the Mac app, open **Local AI → Start → Swift MLX**. Use an existing
 checkpoint from the shared Hugging Face cache or review the starter download.
 Choose **Use for chat** or **Use with Silicon Harness**.
 Cached models also appear in **Local AI → Advanced → Compare**. Each
@@ -31,7 +31,8 @@ superqode harness run silicon --provider swift-mlx \
 ```
 
 SwiftPM fetches the source dependencies recorded in `Package.resolved` during
-the first build. The app bundles the executable and its Metal library. Inference
+the first build. Apple's MLX runs inference and Hugging Face's Swift Transformers
+loads the tokenizer. The app bundles the executable and its Metal library. Inference
 uses the cached tokenizer and weights with no Python inference packages or
 model server. This route supports text and tools. The Apple on-device model
 remains available for requests that need guided structured output.

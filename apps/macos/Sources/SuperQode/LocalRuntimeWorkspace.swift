@@ -70,9 +70,11 @@ struct LocalRuntimeEndpointField: NSViewRepresentable {
 struct LocalRuntimeWorkspace: View {
   @EnvironmentObject var app: Workspace
   var active = true
+  let exoOnly: Bool
   @State private var form: LocalRuntimeDraft
-  init(active: Bool = true, form: LocalRuntimeDraft? = nil) {
+  init(active: Bool = true, form: LocalRuntimeDraft? = nil, exoOnly: Bool = false) {
     self.active = active
+    self.exoOnly = exoOnly
     _form = State(initialValue: form ?? LocalRuntimeDraft())
   }
   @StateObject private var library = LocalRuntimeLibrary()
@@ -146,16 +148,28 @@ struct LocalRuntimeWorkspace: View {
   @State private var operationAfter = 0
   @State private var pollingOperation = false
 
-  private var selected: [String: Any] { library.profiles.first { string($0, "id") == identity } ?? [:] }
+  private var profiles: [[String: Any]] {
+    exoOnly ? library.profiles.filter { string($0, "template") == "exo" } : library.profiles
+  }
+  private var selected: [String: Any] { profiles.first { string($0, "id") == identity } ?? [:] }
   private var jobRunning: Bool { ["queued", "running", "cancelling", "needs_approval"].contains(string(operationDetail, "status")) }
   private var projectReady: Bool { !app.projectID.isEmpty && !app.openingProject }
+  private var modelVerified: Bool { template != "exo" || !cluster.isEmpty }
 
   var body: some View {
     content
     .task(id: String(active) + "\n" + String(app.connected)) {
       guard active, app.connected else { return }
       await library.load(app.engine)
-      await refreshServers()
+      guard !Task.isCancelled else { return }
+      if exoOnly {
+        if template != "exo" {
+          if let profile = profiles.first { select(profile) }
+          else { configureTemplate("exo") }
+        }
+      } else {
+        await refreshServers()
+      }
       if projectReady { await loadHarnesses() }
       await restoreOperation()
       while !Task.isCancelled {
@@ -216,24 +230,26 @@ struct LocalRuntimeWorkspace: View {
   private var content: some View {
     VStack(alignment: .leading, spacing: 16) {
       HStack {
-        Text("Runtimes & performance").font(.title2.weight(.semibold))
+        Text(exoOnly ? "exo cluster" : "Runtimes & performance").font(.title2.weight(.semibold))
         Spacer()
-        Button("Refresh runtimes") { Task { await refreshServers() } }
+        if !exoOnly { Button("Refresh runtimes") { Task { await refreshServers() } } }
       }
-      LocalExecutionPanel(value: library.performance) { limit in
-        app.perform {
-          _ = try await app.engine.call("local.execution.configure", ["concurrency": limit])
-          await library.refreshPerformance(app.engine)
+      if !exoOnly {
+        LocalExecutionPanel(value: library.performance) { limit in
+          app.perform {
+            _ = try await app.engine.call("local.execution.configure", ["concurrency": limit])
+            await library.refreshPerformance(app.engine)
+          }
+        }
+        LazyVGrid(columns: [GridItem(.adaptive(minimum: 230), spacing: 10)], spacing: 10) {
+          ForEach(servers, id: \.projectRowID) { row in
+            LocalServerCard(row: row, onOperation: { serverAction = $0 }, onConnect: { serverConnection = $0 })
+          }
         }
       }
-      LazyVGrid(columns: [GridItem(.adaptive(minimum: 230), spacing: 10)], spacing: 10) {
-        ForEach(servers, id: \.projectRowID) { row in
-          LocalServerCard(row: row, onOperation: { serverAction = $0 }, onConnect: { serverConnection = $0 })
-        }
-      }
-      runtimePanel
+      if !exoOnly || template == "exo" { runtimePanel }
+      else if library.failure.isEmpty { ProgressView("Loading exo setup…") }
       if !operation.isEmpty { operationPanel }
-      if !message.isEmpty { Text(message).font(.callout).foregroundStyle(.secondary).textSelection(.enabled) }
       if !library.failure.isEmpty { Text(library.failure).foregroundStyle(.orange).textSelection(.enabled) }
       HStack {
         Button("Harness evaluations") { app.section = "Evaluations" }.disabled(!projectReady)
@@ -252,16 +268,19 @@ struct LocalRuntimeWorkspace: View {
   private var runtimePanel: some View {
     VStack(alignment: .leading, spacing: 14) {
       HStack {
-        Text("Other local inference servers").font(.title3.weight(.semibold))
+        Text(exoOnly ? "Connect to exo on this Mac" : "Other local inference servers").font(.title3.weight(.semibold))
         Spacer()
-        Button("New profile") { reset() }.disabled(busy || form.saving)
+        Button("New profile") {
+          if exoOnly { configureTemplate("exo") }
+          else { reset() }
+        }.disabled(busy || form.saving)
       }
       Text("Keep your existing server. Profiles connect only to this Mac's loopback addresses; redirects and remote hosts are refused.")
         .font(.caption).foregroundStyle(.secondary)
-      if !library.profiles.isEmpty {
+      if !profiles.isEmpty {
         ScrollView(.horizontal) {
           HStack {
-            ForEach(library.profiles, id: \.projectRowID) { row in
+            ForEach(profiles, id: \.projectRowID) { row in
               Button(string(row, "name")) { select(row) }.buttonStyle(.bordered)
                 .tint(identity == string(row, "id") ? Color.qAccent : .secondary)
                 .disabled(form.saving)
@@ -270,7 +289,7 @@ struct LocalRuntimeWorkspace: View {
         }
       }
       HStack {
-        CatalogPopup(label: "Setup template", options: [
+        if !exoOnly { CatalogPopup(label: "Setup template", options: [
           CatalogPopupOption(id: "exo", title: "exo cluster"),
           CatalogPopupOption(id: "vllm-metal", title: "vLLM Metal"),
           CatalogPopupOption(id: "omlx", title: "oMLX"),
@@ -280,12 +299,8 @@ struct LocalRuntimeWorkspace: View {
         ], selection: $form.template, placeholder: "Choose a setup template")
         .onChange(of: template) { _, next in
           if restoringProfile { restoringProfile = false; return }
-          if let row = library.templates.first(where: { string($0, "id") == next }) {
-            identity = UUID().uuidString.lowercased(); name = string(row, "name"); endpoint = string(row, "endpoint")
-            capability = next == "gpt4all" ? "no" : "unknown"; apiKey = ""; rememberKey = false; models = []; model = ""; setup = [:]; cluster = [:]
-            includeUsage = row["include_usage"] as? Bool ?? true
-          }
-        }
+          configureTemplate(next)
+        } }
         TextField("Profile name", text: $form.name).textFieldStyle(.roundedBorder)
       }
       LocalRuntimeEndpointField(value: $form.endpoint).frame(maxWidth: .infinity).frame(height: 24)
@@ -349,18 +364,19 @@ struct LocalRuntimeWorkspace: View {
           Text("Run the read-only tool check first. It inspects generated-data arguments without executing tools or reading project files.").font(.caption).foregroundStyle(.secondary)
         }
         HStack {
-          Button("Warm model") { startWarmup() }.disabled(busy || !savedReady || !projectReady || model.isEmpty || app.anyActive)
-          Button("Run tool check") { startCheck() }.disabled(busy || !savedReady || !projectReady || model.isEmpty || app.anyActive || capability == "no")
+          Button("Warm model") { startWarmup() }.disabled(busy || !savedReady || !projectReady || model.isEmpty || !modelVerified || app.anyActive)
+          Button("Run tool check") { startCheck() }.disabled(busy || !savedReady || !projectReady || model.isEmpty || !modelVerified || app.anyActive || capability == "no")
           Spacer()
           if template == "exo" && !app.selectedJob.isEmpty {
             Button("Review Apple handoff…") { prepareHandoff() }
-              .disabled(!savedReady || !projectReady || model.isEmpty || app.anyActive || !toolCheckPassed)
+              .disabled(!savedReady || !projectReady || model.isEmpty || !modelVerified || app.anyActive || !toolCheckPassed)
           }
           Button(coding ? "Use for coding" : "Use for chat") { connect() }.buttonStyle(BrandButtonStyle())
-            .disabled(busy || !savedReady || !projectReady || model.isEmpty || app.anyActive || (coding && !toolCheckPassed))
+            .disabled(busy || !savedReady || !projectReady || model.isEmpty || !modelVerified || app.anyActive || (coding && !toolCheckPassed))
         }
         if !projectReady { Text("Open a project to run a check or start a conversation.").font(.caption).foregroundStyle(.secondary) }
       }
+      if !message.isEmpty { Text(message).font(.callout).foregroundStyle(.secondary).textSelection(.enabled) }
       if busy { ProgressView("Working with local runtime…").controlSize(.small) }
     }.padding(18).brandSurface().disabled(busy || form.saving)
   }
@@ -400,11 +416,27 @@ struct LocalRuntimeWorkspace: View {
     busy = true; library.failure = ""
     Task { defer { busy = false }; do { try await work() } catch { library.failure = error.localizedDescription } }
   }
+  private func configureTemplate(_ next: String) {
+    guard let row = library.templates.first(where: { string($0, "id") == next }) else { return }
+    restoringProfile = template != next
+    template = next
+    identity = UUID().uuidString.lowercased()
+    name = string(row, "name")
+    endpoint = string(row, "endpoint")
+    context = 8192
+    capability = next == "gpt4all" ? "no" : "unknown"
+    apiKey = ""; rememberKey = false; models = []; model = ""; setup = [:]; cluster = [:]
+    includeUsage = row["include_usage"] as? Bool ?? true
+    coding = false
+    message = ""
+    setOperation("")
+  }
+
   private func reset() {
     guard !form.saving else { return }
     identity = UUID().uuidString.lowercased(); name = "Local server"; template = "custom"
     endpoint = "http://127.0.0.1:8000/v1"; context = 8192; capability = "unknown"
-    apiKey = ""; rememberKey = false; includeUsage = true; models = []; model = ""; coding = false; setup = [:]
+    apiKey = ""; rememberKey = false; includeUsage = true; models = []; model = ""; coding = false; setup = [:]; cluster = [:]
     setOperation("")
   }
   private func select(_ row: [String: Any]) {
@@ -414,7 +446,7 @@ struct LocalRuntimeWorkspace: View {
     identity = string(row, "id"); name = string(row, "name"); endpoint = string(row, "endpoint")
     context = row["context"] as? Int ?? 8192; includeUsage = row["include_usage"] as? Bool ?? true; rememberKey = row["remember_key"] as? Bool == true
     capability = row["tools"] as? Bool == true ? "yes" : row["tools"] as? Bool == false ? "no" : "unknown"
-    models = []; model = ""; apiKey = ""; setup = [:]
+    models = []; model = ""; apiKey = ""; setup = [:]; cluster = [:]
     Task { await restoreOperation() }
   }
   private var savedReady: Bool {
@@ -490,10 +522,12 @@ struct LocalRuntimeWorkspace: View {
     }
   }
   private func probe() {
+    cluster = [:]
     action {
       let result = try await app.engine.call("local.runtimes.probe", ["id": identity]) as? [String: Any] ?? [:]
       models = result["models"] as? [[String: Any]] ?? []; model = models.first.map { string($0, "id") } ?? ""
       cluster = result["cluster"] as? [String: Any] ?? [:]
+      if let error = result["cluster_error"] as? String { message = error; return }
       message = models.isEmpty ? "Server answered but advertised no chat models. Load a model in the vendor app, then check again." : "Server models found. No model prompt was sent."
     }
   }
@@ -605,6 +639,17 @@ struct LocalRuntimeWorkspace: View {
   }
 }
 
+struct AppleContextLabel: View {
+  let status: [String: Any]
+
+  var body: some View {
+    if let context = status["context"] as? Int, let source = status["context_source"] as? String {
+      Text("Context: \(context.formatted()) tokens · " + source)
+        .font(.caption).foregroundStyle(.secondary)
+    }
+  }
+}
+
 struct AppleLocalModelPanel: View {
   @EnvironmentObject var app: Workspace
   let project: String
@@ -638,6 +683,7 @@ struct AppleLocalModelPanel: View {
       }
       Text(string(status, "guidance", "Requires macOS 26 or later and Apple Intelligence on a supported Mac."))
         .font(.callout).foregroundStyle(.secondary)
+      AppleContextLabel(status: status)
       if !checkedNote.isEmpty {
         Text(checkedNote).font(.callout).textSelection(.enabled)
           .accessibilityIdentifier("local.appleStatus")
@@ -649,11 +695,11 @@ struct AppleLocalModelPanel: View {
         }
         Spacer()
         Button("Use for chat") { use(development: false) }.disabled(checking)
-        Button("Use for development") { use(development: true) }
+        Button("Use with Silicon Harness") { use(development: true) }
           .buttonStyle(BrandButtonStyle()).disabled(checking)
       }
       DisclosureGroup("Apple model settings") {
-        Text("Development uses the Apple on-device harness and your project’s file permissions. Use it for small read, write and edit tasks.")
+        Text("Silicon Harness uses your project’s file permissions for focused repository edits and checks.")
           .font(.caption).foregroundStyle(.secondary)
         Toggle("Use for optional summaries and utility tasks", isOn: Binding(get: { utility }, set: { enabled in
           app.perform {
@@ -674,7 +720,7 @@ struct AppleLocalModelPanel: View {
       failure = reason
       return
     }
-    app.chooseAppleModel(development: development)
+    app.chooseAppleModel(development: development, codingHarness: "silicon")
     app.notice = development
       ? "Using Apple's on-device model for development."
       : "Using Apple's on-device model for chat."
@@ -727,7 +773,7 @@ struct AppleLocalModelPanel: View {
       announceResult = false
       let time = Date.now.formatted(date: .omitted, time: .standard)
       checkedNote = flag(result, "available")
-        ? "Checked at \(time). Apple's on-device model is ready. Choose Use for chat or Use for development."
+        ? "Checked at \(time). Apple's on-device model is ready."
         : "Checked at \(time). " + string(result, "guidance", "Apple's on-device model is not available on this Mac.")
     } catch {
       if !Task.isCancelled {

@@ -168,17 +168,14 @@ def dispatch(service, action, params):
         return start(service, spec, profile, params)
     if action == "probe":
         try:
-            models = asyncio.run(runtimes.models(spec, key(service, identity)))
+            catalog = asyncio.run(runtimes.model_catalog(spec, key(service, identity)))
         except ValueError:
             raise
         except Exception:
             raise ValueError(
                 "Local server did not answer. Start it with the vendor guide, verify the port, then retry."
             ) from None
-        result = {"models": models, "endpoint": spec.endpoint, "runtime": spec.id}
-        if spec.template == "exo":
-            result["cluster"] = asyncio.run(runtimes.exo_cluster(spec, key(service, identity)))
-        return result
+        return {**catalog, "endpoint": spec.endpoint, "runtime": spec.id}
     if action in {"test", "warm"}:
         project = str(params.get("project") or "")
         service.project(project)

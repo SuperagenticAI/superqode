@@ -19,6 +19,7 @@ import Observation
   var command: String = UUID().uuidString
   var showSetup: Bool = false
   let runtime = LocalRuntimeDraft()
+  let exo = LocalRuntimeDraft()
   let installed = InstalledLocalDraft()
 }
 

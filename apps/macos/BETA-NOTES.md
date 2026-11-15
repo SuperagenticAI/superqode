@@ -1,4 +1,12 @@
-# SuperQode for macOS public beta 0.4.11
+# SuperQode for macOS public beta 0.4.12
+
+Version 0.4.12 (build 38) bundles Python engine 2.31.19.
+
+- **Local AI → Start → Set up exo cluster** opens the exo setup directly. **Swift MLX** opens the native model page, and the Apple model card names Silicon Harness.
+- Local installs and downloads show their progress and errors in the same dialog.
+- The app bundles Monty for opt-in Silicon Code Mode and identifies Astral's python-build-standalone when installing managed Python for ACP agents.
+
+## 0.4.11 (build 37)
 
 Version 0.4.11 (build 37) bundles Python engine 2.31.18.
 

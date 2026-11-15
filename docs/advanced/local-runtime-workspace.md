@@ -86,9 +86,8 @@ subscription, API key, Python SDK or inference server is used. Images and reason
 controls are not supported by this route. Downloaded Qwen, GLM, DeepSeek and Gemma
 weights use their own runtimes rather than Apple's system model.
 
-**Use for development** selects **Apple on-device** (`apple-local`), a configuration
-of the existing native harness engine. Its three tools are `read`, `write` and
-`edit`. They use SuperQode's normal project path checks, Ask/Auto-edit/Full controls
+**Use with Silicon Harness** selects `silicon`. Its four default tools are
+`read`, `search`, `write` and `edit`. They use SuperQode's normal project path checks, Ask/Auto-edit/Full controls
 and file tracking. Shell and network tools remain disabled even in Full mode.
 Native Apple tools only request an action: they hand validated arguments back to
 the host executor before any file operation. The framework's tool loop ends at
@@ -222,8 +221,9 @@ local benchmarks and harness evaluation workflows for controlled comparisons.
 
 ## Silicon Harness
 
-Use **Local AI → Start → Apple on-device model** to start a Silicon coding
-turn. Silicon offers bounded repository search, ranged reads, targeted edits,
+In **Local AI → Start**, choose **Use Silicon Harness** on the Apple on-device
+model card. Silicon also appears in the harness picker for compatible local
+models. Silicon offers bounded repository search, ranged reads, targeted edits,
 and file creation. The Apple route reads the window reported by the operating
 system and falls back to 4,096 tokens when the SDK provides no usable size.
 Compare can run Silicon and Apple on-device on the same model and repository
@@ -324,15 +324,16 @@ Set `runtime.config.silicon_mcp_code: true` on an MCP-enabled Silicon
 harness to try the experimental Monty variant. It uses the same two tools.
 The execute schema accepts a short Python snippet, with one permitted MCP
 call per snippet through `tool_call("server/tool", {"argument": "value"})`.
-Install the optional Monty runtime before selecting this variant. Use Compare
-to evaluate it separately from the direct call mode.
+The macOS app bundles Monty. For the standalone CLI, install
+`superqode[monty]` before selecting this variant. Use Compare to evaluate it
+separately from the direct call mode.
 
 ### exo cluster handoff
 
-Start exo on the Mac running SuperQode and join the cluster in exo. In
-**Local AI → Advanced → Runtimes**, save an **exo cluster** profile using
-`http://127.0.0.1:52415/v1` or its configured loopback endpoint. **Check
-server & models** reads cluster state and lists models with a deployment.
+Start exo on the Mac running SuperQode and join the cluster in exo. Open
+**Local AI → Start → Set up exo cluster**. Save
+the profile using `http://127.0.0.1:52415/v1` or its configured loopback
+endpoint. **Check server & models** reads cluster state and lists models with a deployment.
 Run the tool check for the model you want to use.
 
 Choose **Use for chat** to start directly on exo. To start a coding run,

@@ -189,7 +189,7 @@ async def exo_cluster(spec, key=None, *, transport=None):
     }
 
 
-async def models(spec, key=None, *, transport=None):
+async def model_catalog(spec, key=None, *, transport=None):
     headers = {"Authorization": f"Bearer {key}"} if key else {}
     async with httpx.AsyncClient(
         trust_env=False, follow_redirects=False, transport=transport, timeout=3
@@ -206,9 +206,14 @@ async def models(spec, key=None, *, transport=None):
         response.raise_for_status()
         data = response.json()
     active = None
+    cluster = None
+    cluster_error = None
     if spec.template == "exo":
-        cluster = await exo_cluster(spec, key, transport=transport)
-        active = set(cluster["deployed_models"])
+        try:
+            cluster = await exo_cluster(spec, key, transport=transport)
+            active = set(cluster["deployed_models"])
+        except (httpx.HTTPError, ValueError):
+            cluster_error = "exo advertised these models, but cluster state is unavailable. Check the cluster again before using a model."
     rows = []
     for row in data.get("data", []):
         if not isinstance(row, dict) or not isinstance(row.get("id"), str):
@@ -233,7 +238,14 @@ async def models(spec, key=None, *, transport=None):
                 "tools": spec.tools,
             }
         )
-    return rows
+    return {"models": rows, "cluster": cluster, "cluster_error": cluster_error}
+
+
+async def models(spec, key=None, *, transport=None):
+    catalog = await model_catalog(spec, key, transport=transport)
+    if catalog["cluster_error"]:
+        raise ValueError(catalog["cluster_error"])
+    return catalog["models"]
 
 
 async def stream(

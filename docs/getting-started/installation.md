@@ -247,7 +247,7 @@ For direct package installs such as MLX, SuperQode targets the running interpret
 explicitly:
 
 ```bash
-uv pip install --python /path/to/superqode/python "mlx-lm>=0.31.0,<0.32.0"
+uv pip install --python /path/to/superqode/python "mlx-lm==0.32.2"
 ```
 
 ---
@@ -337,7 +337,8 @@ uv tool install --python 3.13 "superqode[<extra>]"
 | Extra | Capability |
 | --- | --- |
 | `hf` | Hugging Face Hub search, downloads, and accelerated transfers |
-| `mlx` | MLX and MLX-VLM local inference |
+| `mlx` | MLX text inference with mlx-lm |
+| `mlx-vlm` | Optional MLX vision-language tooling |
 | `monty` | Sandboxed Monty Python REPL |
 | `semantic` | CocoIndex semantic code search |
 | `extras` | Optional Exa Python client for external search integrations |

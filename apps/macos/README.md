@@ -11,10 +11,12 @@ Live agent activity shows the current command or file target across supported
 runtime event shapes.
 
 For supported bundled ACP agents, choose **Install agent** in connection setup.
-SuperQode downloads the selected Node.js or Python runtime and the reviewed
-agent packages on first install. The app reuses the runtime across projects
+SuperQode downloads Node.js from nodejs.org or uses uv to download Astral's
+python-build-standalone. The app reuses the runtime across projects
 and keeps agent packages private to each project. Open **Manage installation**
 to change the runtime version. After switching, run **Check connection** again.
+SuperQode pins the direct agent packages. npm and uv resolve their dependencies
+during installation, and package installers can execute vendor code.
 Follow the agent's setup instructions for any model, API key or account it requires.
 
 [**Download the latest public beta**](https://superqode.dev/downloads/macos/latest/SuperQode-arm64.dmg)
@@ -58,7 +60,7 @@ missing from the worktree stay with its source draft. Review before pressing Sen
 layout. Review the proposal, save a revision with a reason, then explicitly enable
 it if a provider and model are bound. Generated harnesses use builtin tools with
 recursion off. The optional Monty check only prints a next-prompt template; it does
-not launch agents or install a plugin. Monty is not bundled in this macOS release.
+not launch agents or install a plugin. The Mac app bundles Monty 1.x.
 
 ## Start with a local model
 

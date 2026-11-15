@@ -7,13 +7,27 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [2.31.19] - 2026-11-15
+
+- Surface exo and Swift MLX on the macOS Local AI Start screen, show Silicon
+  Harness by name, and show installation and download progress in the dialog.
+- Align the Python MLX installer and text extra on `mlx-lm==0.32.2`. Vision
+  support is available in the separate `mlx-vlm` extra.
+- Bundle Monty 1.x in the Mac app for opt-in Silicon Code Mode. Standalone
+  installations use the optional `monty` extra.
+- Identify Astral's python-build-standalone as the source of macOS managed ACP
+  Python installations.
+- Label the source of the Apple model's context limit, and show exo's
+  advertised models if cluster status is temporarily unavailable.
+- macOS 0.4.12 (build 38) bundles Python engine 2.31.19.
+
 ## [2.31.18] - 2026-11-15
 
 ### Added
 
 - Swift MLX streams cached Qwen3 text models on Apple Silicon with macOS 27 or later. Use it for chat, Silicon Harness coding, or local model comparisons.
 - Silicon Harness uses Apple Foundation Models for scoped repository edits and configured checks. Local AI can start a managed MLX server and hand off completed Apple turns to a configured exo runtime.
-- Silicon verification can run selected Linux checks in Apple Container on Apple Silicon with macOS 26 or later. Each check uses a cached image pinned by digest and a disposable copy of the files listed in its HarnessSpec. Monty remains available for scoped Python and permission-checked tool calls.
+- Silicon verification can run selected Linux checks in Apple Container on Apple Silicon with macOS 26 or later. Each check uses a cached image pinned by digest and a disposable copy of the files listed in its HarnessSpec. The optional Monty runtime supports scoped Python and permission-checked tool calls.
 - The macOS app installs its own Node.js or Python for supported bundled ACP agents. Agent packages are isolated per project, and users can select a supported runtime version in agent setup. A failed reinstall keeps the previous working installation.
 
 ### Fixed

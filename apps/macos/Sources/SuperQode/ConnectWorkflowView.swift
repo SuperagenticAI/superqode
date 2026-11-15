@@ -165,9 +165,9 @@ struct ConnectionView: View {
           LocalAIStartView(project: app.projectID, compact: true, dismissOnConnect: true,
             preferredHarness: pendingHarness, openProject: {
               app.chooseProject { path in openThreadProject(path) }
-            }, openAdvanced: {
+            }, openAdvanced: { tab in
               dismiss()
-              app.openLocalAIAdvanced("runtimes")
+              app.openLocalAIAdvanced(tab)
             })
         } else if page == "source:key" {
           ProviderConnectionView()

@@ -21,13 +21,13 @@ import FoundationModels
     #if canImport(FoundationModels)
     if #available(macOS 26.0, *) {
       let model = SystemLanguageModel.default
-      let (context, tokenCount) = contextCapabilities(model)
+      let (context, tokenCount, source) = contextCapabilities(model)
 
       switch model.availability {
       case .available:
         return ["available": true, "state": "ready", "guidance": "Apple's on-device model is ready for chat, summaries and lightweight tasks.",
                 "model": "system-on-device", "supports_tools": true, "on_device": true,
-                "context": context, "supports_token_count": tokenCount, "docs_url": guide, "supports_structured_output": true, "supports_images": false, "protocol": 2, "runtime_version": ProcessInfo.processInfo.operatingSystemVersionString,
+                "context": context, "context_source": source, "supports_token_count": tokenCount, "docs_url": guide, "supports_structured_output": true, "supports_images": false, "protocol": 2, "runtime_version": ProcessInfo.processInfo.operatingSystemVersionString,
                 "current_locale_supported": model.supportsLocale()]
       case .unavailable(let reason):
         switch reason {
@@ -50,14 +50,14 @@ import FoundationModels
 
   #if canImport(FoundationModels)
   @available(macOS 26.0, *)
-  static func contextCapabilities(_ model: SystemLanguageModel) -> (Int, Bool) {
+  static func contextCapabilities(_ model: SystemLanguageModel) -> (Int, Bool, String) {
     #if compiler(>=6.3)
     if #available(macOS 26.4, *) {
       let reported = model.contextSize
-      return ((512...262144).contains(reported) ? reported : 4096, true)
+      return (512...262144).contains(reported) ? (reported, true, "macOS") : (4096, true, "Fallback")
     }
     #endif
-    return (4096, false)
+    return (4096, false, "Fallback")
   }
   #endif
 

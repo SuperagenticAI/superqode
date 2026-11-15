@@ -71,6 +71,20 @@ find "$DEST/Contents/Resources/runtime" -type d -name __pycache__ -prune -exec r
 RUNTIME_PYTHON="$DEST/Contents/Resources/runtime/python/bin/python3"
 RUNTIME_SITE="$("$RUNTIME_PYTHON" -c 'import sysconfig; print(sysconfig.get_path("purelib"))')"
 uv pip install --python "$RUNTIME_PYTHON" --target "$RUNTIME_SITE" --require-hashes --no-deps -r "$APP_DIR/runtime-requirements.txt"
+# uv --target installs wheel scripts under site-packages/bin. Monty searches
+# the bundled interpreter's scripts directory for its signed worker.
+"$RUNTIME_PYTHON" - <<'PY'
+import os
+from pathlib import Path
+import sysconfig
+
+worker = Path(sysconfig.get_path("purelib")) / "bin" / "monty"
+launcher = Path(sysconfig.get_path("scripts")) / "monty"
+if not worker.is_file():
+    raise SystemExit("The bundled Monty worker is missing.")
+launcher.unlink(missing_ok=True)
+launcher.symlink_to(os.path.relpath(worker, launcher.parent))
+PY
 "$RUNTIME_PYTHON" "$APP_DIR/scripts/check-runtime-dependencies.py"
 # Source and distribution metadata must agree even with an older base payload.
 python3 "$APP_DIR/scripts/refresh-engine-metadata.py" "$DEST/Contents/Resources/runtime"
@@ -78,4 +92,11 @@ python3 "$APP_DIR/scripts/stamp-runtime.py" "$DEST/Contents/Resources/runtime"
 python3 "$APP_DIR/scripts/collect-runtime-notices.py" "$DEST/Contents/Resources/runtime"
 IDENTITY="${SIGNING_IDENTITY:--}"
 python3 "$APP_DIR/scripts/sign-bundle.py" "$DEST" --identity "$IDENTITY"
+"$RUNTIME_PYTHON" - <<'PY'
+from pydantic_monty import Monty
+
+with Monty() as pool, pool.checkout() as session:
+    if session.feed_run("20 + 22") != 42:
+        raise SystemExit("The bundled Monty worker did not execute the smoke check.")
+PY
 echo "$DEST"

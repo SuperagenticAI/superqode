@@ -9,12 +9,14 @@ from pathlib import Path
 import platform
 import shutil
 import subprocess
+import time
 
 from superqode.providers.gateway.base import StreamChunk
 
 MODEL = "system-on-device"
 DEFAULT_CONTEXT = 4096
 GUIDE = "https://support.apple.com/en-us/121115"
+_capabilities_snapshot = None
 
 
 def helper_path():
@@ -27,6 +29,7 @@ def helper_path():
 
 
 def status():
+    global _capabilities_snapshot
     if platform.system() != "Darwin":
         return {
             "available": False,
@@ -37,8 +40,9 @@ def status():
             "supports_tools": False,
         }
     try:
+        path = helper_path()
         result = subprocess.run(
-            [helper_path(), "--status"],
+            [path, "--status"],
             capture_output=True,
             text=True,
             timeout=10,
@@ -50,8 +54,10 @@ def status():
         data = json.loads(result.stdout)
         if not isinstance(data, dict) or type(data.get("available")) is not bool:
             raise ValueError("Invalid Apple bridge status")
+        _capabilities_snapshot = (path, time.monotonic() + 20, data.copy())
         return data
     except Exception:
+        _capabilities_snapshot = None
         return {
             "available": False,
             "state": "bridge-unavailable",
@@ -65,6 +71,18 @@ def status():
 def context_capacity(capabilities):
     value = capabilities.get("context")
     return value if type(value) is int and 512 <= value <= 262144 else DEFAULT_CONTEXT
+
+
+def capabilities_for_generation(path=None):
+    if path is None:
+        try:
+            path = helper_path()
+        except ValueError:
+            return status()
+    snapshot = _capabilities_snapshot
+    if snapshot and snapshot[0] == path and time.monotonic() < snapshot[1]:
+        return snapshot[2]
+    return status()
 
 
 def context_limit(capabilities):
@@ -105,7 +123,8 @@ async def stream(
     raw, definitions, output_schema = request(
         messages, tools, max_tokens, temperature, response_format
     )
-    capabilities = await asyncio.to_thread(status)
+    path = helper_path()
+    capabilities = await asyncio.to_thread(capabilities_for_generation, path)
     context = context_limit(capabilities)
     if type(requested_context) is int and 512 <= requested_context < context:
         context = requested_context
@@ -122,7 +141,11 @@ async def stream(
             raise ValueError(
                 "Apple's conversation context is full. Start a new thread or shorten the history explicitly; nothing was sent or silently removed"
             )
-    annotate(context=context, context_source="on-device context", output_limit=output)
+    annotate(
+        context=context,
+        context_source=capabilities.get("context_source") or "Apple bridge",
+        output_limit=output,
+    )
     payload = {
         "messages": raw,
         "context": context,
@@ -135,7 +158,6 @@ async def stream(
     encoded = (json.dumps(payload, ensure_ascii=False) + "\n").encode()
     if len(encoded) > 524288:
         raise ValueError("Apple model conversation is too large; start a new thread")
-    path = helper_path()
     key = (path, session_id) if session_id else None
 
     async def spawn():
@@ -163,10 +185,7 @@ async def stream(
             if kind == "metadata":
                 reusable = event.get("protocol") == 2
                 if type(event.get("sdk_prompt_tokens")) is int:
-                    annotate(
-                        sdk_prompt_tokens=event["sdk_prompt_tokens"],
-                        context_source="Apple SDK transcript token count; bounded context",
-                    )
+                    annotate(sdk_prompt_tokens=event["sdk_prompt_tokens"])
             elif kind == "text":
                 text = event.get("text")
                 if not isinstance(text, str) or handoff:
