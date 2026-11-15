@@ -285,6 +285,7 @@ alone does not open a log file or enable provider SDK request dumps.
 | `SUPERQODE_LOCAL_COMPARISON_TRACE` | internal request label | unset | Worker-scoped comparison/candidate identifier for matching prompt-free timing records. Contains no model input or credentials. |
 | `LOCAL_RUNTIME_API_KEY` | token | unset | Session-only key passed to the selected local runtime worker; app persistence uses Mac Keychain. Never embedded in profiles or prompts. |
 | `SUPERQODE_APPLE_HELPER` | executable path | bundled helper | Native on-device model bridge. Set by the macOS bundle; source builds can point to their compiled `SuperQodeAppleModel`. No HTTP listener is created. |
+| `SUPERQODE_SWIFT_MLX_HELPER` | executable path | bundled helper or `SuperQodeSwiftMLX` on `PATH` | Native Swift MLX helper on Apple Silicon with macOS 27 or later. Source builds can point to their compiled `SuperQodeSwiftMLX`. |
 
 The Mac app coordinates local inference using its state directory. One generation
 at a time is the default across projects; the Local AI performance panel can

@@ -980,7 +980,7 @@ def test_missing_mlx_prompt_targets_an_isolated_environment(monkeypatch):
             "install",
             "--python",
             "/tmp/managed-mlx/bin/python",
-            "mlx-lm>=0.31.0,<0.32.0",
+            "mlx-lm==0.32.2",
         ),
     )
     assert pending["command"] in text
@@ -1101,8 +1101,10 @@ def test_connect_local_picker_lists_ds4():
     provider_ids = [provider_id for provider_id, _ in app._local_provider_list]
     assert provider_ids[:6] == ["ollama", "lmstudio", "llamacpp", "sglang", "vllm", "mlx"]
     assert provider_ids.index("ds4") >= 6
+    assert "swift-mlx" in provider_ids
+    assert "Swift MLX" in text
     assert "Number Jump" in text
-    assert len(text.splitlines()) <= 23
+    assert len(text.splitlines()) <= 24
 
 
 def test_advanced_local_server_guidance_matches_vendor_cli_shapes():

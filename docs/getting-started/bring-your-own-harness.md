@@ -103,6 +103,7 @@ superqode harness init my-coder -t qwen-coding
 | Template | Starting point |
 | --- | --- |
 | `core` | Lean native harness with read, write, edit, and shell tools |
+| `silicon` | Scoped repository edits and configured checks using Apple Foundation Models or a compatible local model. See the [Silicon Harness guide](../advanced/local-runtime-workspace.md#silicon-harness). |
 | `strands` | AWS Strands with governed SuperQode tools and a separately installed runtime; see the [setup guide](../advanced/strands-harness.md) |
 | `workbench` | Complete native coding workbench |
 | `codegem` | Six-tool coding harness optimized for Google's Gemma and Gemini models |

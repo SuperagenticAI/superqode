@@ -627,6 +627,7 @@ infrastructure.
 | Ollama Cloud | `ollama-cloud` | Ollama-hosted model route |
 | LM Studio | `lmstudio` | Desktop model serving |
 | MLX | `mlx` | Apple Silicon inference |
+| Swift MLX | `swift-mlx` | Cached Qwen3 text checkpoints through the native helper on Apple Silicon with macOS 27 or later |
 | vLLM | `vllm` | High-throughput model serving |
 | DwarfStar | `ds4` | Laguna S 2.1 and DeepSeek V4 Flash |
 | SGLang | `sglang` | Structured and high-throughput serving |
