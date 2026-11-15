@@ -335,6 +335,11 @@ Start exo on the Mac running SuperQode and join the cluster in exo. In
 server & models** reads cluster state and lists models with a deployment.
 Run the tool check for the model you want to use.
 
+Choose **Use for chat** to start directly on exo. To start a coding run,
+enable **Use a coding harness**, select a harness, and choose **Use for
+coding** after the tool check passes. Deployed models from the saved profile
+also appear in **Compare** when the profile allows tools.
+
 Select a finished Apple coding turn, then choose **Review Apple handoff** in
 the exo runtime profile. Review and edit the proposed objective, response
 excerpt, and patch. **Send to exo** starts a new Silicon run bound to the
