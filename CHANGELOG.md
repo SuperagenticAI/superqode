@@ -7,6 +7,13 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [2.31.20] - 2026-11-16
+
+- Fall back to indentation-tolerant matching when an edit's search text differs
+  from the file only in leading whitespace, so small local models can apply
+  one-line fixes.
+- Raise the local runtime tool check budget to 512 completion tokens, so models
+  that think before calling a tool (for example Qwen3.6-35B-A3B on exo) pass.
 - Fix exo model discovery and add reviewed handoffs (macOS 0.4.16). For exo
   profiles, `local.runtimes.probe` returns `exo_models` with `running`,
   `downloaded` or `downloading` status, nodes, progress, size and context read
@@ -22,6 +29,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   otherwise. They replace `local.runtimes.handoff.preview` and
   `local.runtimes.handoff.start`, which accepted only Apple turns. The Mac app
   adds a **Send to…** menu next to **Switch harness…** and in the run header.
+- macOS 0.4.17 (build 43) bundles Python engine 2.31.20.
 - Make project harnesses easy to find and switch in the Mac app (macOS 0.4.15).
   `harnesses.list` and `local.models.harnesses` rows now include `profile`,
   `source` (`project`, `user`, `built-in`, or `studio` for a saved Harness

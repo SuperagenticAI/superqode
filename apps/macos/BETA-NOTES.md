@@ -1,4 +1,11 @@
-# SuperQode for macOS public beta 0.4.16
+# SuperQode for macOS public beta 0.4.17
+
+Version 0.4.17 (build 43) bundles Python engine 2.31.20.
+
+- Edits from small local models now apply when they differ from the file only in indentation, so the Apple on-device model can fix a one-line bug and pass the project check.
+- The local model tool check allows more tokens, so models that think before calling a tool, such as Qwen3.6-35B-A3B on an exo cluster, pass the check and become available in **Send to…**.
+
+## 0.4.16 (build 42)
 
 Version 0.4.16 (build 42) fixes the exo model list and adds **Send to…** for finished coding turns.
 
