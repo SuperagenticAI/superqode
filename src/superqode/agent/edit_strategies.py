@@ -323,6 +323,40 @@ REPLACERS = [
 ]
 
 
+def _leading_whitespace(line: str) -> str:
+    return line[: len(line) - len(line.lstrip(" \t"))]
+
+
+def _rebase_replacement(search: str, old_string: str, new_string: str) -> str:
+    """Apply new_string at the indentation actually found in the file.
+
+    Whitespace-tolerant fallbacks can match an old_string whose leading indent
+    differs from the file. A small model often copies the space after read_file's
+    "N: " prefix, so old_string and new_string both carry one extra space. If the
+    replacement is written verbatim it silently changes indentation, so shift it
+    onto the matched line's indent. An explicit indent change (old and new differ)
+    is left alone.
+    """
+    stripped_old = "\n".join(_LINE_NUMBER_PREFIX.sub("", ln) for ln in old_string.split("\n"))
+    search_lines = search.split("\n")
+    old_lines = stripped_old.split("\n")
+    new_lines = new_string.split("\n")
+    if not search_lines or not old_lines or not new_lines:
+        return new_string
+    found_indent = _leading_whitespace(search_lines[0])
+    old_indent = _leading_whitespace(old_lines[0])
+    new_indent = _leading_whitespace(new_lines[0])
+    if found_indent == old_indent or old_indent != new_indent:
+        return new_string
+    rebased = []
+    for line in new_lines:
+        if line.strip() and line.startswith(old_indent):
+            rebased.append(found_indent + line[len(old_indent) :])
+        else:
+            rebased.append(line)
+    return "\n".join(rebased)
+
+
 def replace_with_strategies(
     content: str, old_string: str, new_string: str, replace_all: bool = False
 ) -> Tuple[str, int]:
@@ -345,9 +379,10 @@ def replace_with_strategies(
             idx = content.find(search)
             if idx == -1:
                 continue
+            replacement = _rebase_replacement(search, old_string, new_string)
             if replace_all:
                 count = content.count(search)
-                new_content = content.replace(search, new_string)
+                new_content = content.replace(search, replacement)
                 return (new_content, count)
             last_idx = content.rfind(search)
             if idx != last_idx:
@@ -356,6 +391,6 @@ def replace_with_strategies(
                     f"Found {count} occurrences of old_string. Provide more surrounding "
                     "lines in old_string to identify the correct match, or use replace_all=true."
                 )
-            new_content = content[:idx] + new_string + content[idx + len(search) :]
+            new_content = content[:idx] + replacement + content[idx + len(search) :]
             return (new_content, 1)
     raise ValueError("old_string not found in content")

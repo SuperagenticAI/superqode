@@ -151,6 +151,12 @@ def test_saved_runtime_probe_chat_and_check_use_the_selected_key(desktop, server
     completed = wait(service, check["id"])
     assert completed["status"] == "completed", completed
     assert completed["result"]["verification"]["tool_call_success"] is True
+    probe = next(
+        row["body"]
+        for row in server["requests"]
+        if any(tool["function"]["name"] == "read_probe" for tool in row["body"].get("tools", []))
+    )
+    assert probe["max_tokens"] >= 512
     assert not (root / "generated-fixture.txt").exists()
     profile = local_runtimes.read(service, "my-local")
     assert local_runtimes.checked(profile, "fixture")

@@ -306,7 +306,7 @@ async def verify(profile, model, token):
             model,
             key=token,
             tools=[schema],
-            max_tokens=128,
+            max_tokens=512,
         ):
             calls.extend(chunk.tool_calls or [])
             turn.observe(
