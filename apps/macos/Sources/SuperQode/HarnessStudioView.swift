@@ -92,6 +92,7 @@ struct HarnessStudioView: View {
   @State private var preset = "core"
   @State private var reason = ""
   @State private var checkSheet = false
+  @State private var siliconSheet = false
   @State private var output: String?
   @State private var availableModels: [String] = []
   @State private var serverFailure = ""
@@ -115,6 +116,7 @@ struct HarnessStudioView: View {
       .onChange(of: active) { _, visible in
         if !visible {
           if checkSheet { checkSheet = false }
+          if siliconSheet { siliconSheet = false }
           if output != nil { output = nil }
         }
       }
@@ -127,6 +129,12 @@ struct HarnessStudioView: View {
       }
       .centeredDialog(isPresented: $checkSheet, title: "Review harness check", onDismiss: { Task { await library.refresh(engine: app.engine) } }) {
         HarnessStudioCheckView(project: library.project, review: library.review).environmentObject(app)
+      }
+      .centeredDialog(isPresented: $siliconSheet, title: "Silicon options") {
+        SiliconOptionsView(project: library.project, name: library.name, yaml: library.text, onApply: { edited in
+          library.text = edited
+          library.message = "Silicon options applied to the draft. Validate and save a revision to keep them."
+        }).environmentObject(app)
       }
       .centeredDialog(isPresented: Binding(get: { output != nil }, set: { if !$0 { output = nil } }), title: "Harness check evidence", onDismiss: { Task { await library.refresh(engine: app.engine) } }) {
         if let output { HarnessStudioEvidenceView(job: output).environmentObject(app) }
@@ -190,6 +198,14 @@ struct HarnessStudioView: View {
           } else if library.source == "agent" {
             Text("Configure the agent’s model through its connection and advertised controls.").font(.callout).foregroundStyle(.secondary)
             Button("Open agent connections") { app.openConnections() }
+          }
+          if isSiliconDraft(library.text) {
+            Divider(); Text("Silicon options").font(.headline)
+            Text("Turn on MCP, Monty Code Mode or Apple Container checks without editing the YAML by hand.")
+              .font(.caption).foregroundStyle(.secondary)
+            Button("Silicon options…") { siliconSheet = true }
+              .disabled(library.busy || library.text.isEmpty)
+              .help("Edit Silicon settings in this draft. You review the changes before they are applied.")
           }
           if !library.review.isEmpty {
             Divider(); Text("Validation & routes").font(.headline)

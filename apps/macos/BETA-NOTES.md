@@ -1,4 +1,12 @@
-# SuperQode for macOS public beta 0.4.13
+# SuperQode for macOS public beta 0.4.14
+
+Version 0.4.14 (build 40) adds Silicon options to Harness Studio.
+
+- In **Harness Studio**, load a Silicon-based draft and choose **Silicon options…** to turn on MCP servers, Monty Code Mode, or Apple Container checks without editing YAML. Preview the YAML changes, apply them to the draft, then validate and save as usual.
+- MCP stays off by default. The sheet shows the Apple tool count and warns before the harness would exceed five tools.
+- Monty Code Mode is available only when MCP is on and Monty is installed. Apple Container checks need macOS 26 or later and Apple's `container` tool.
+
+## 0.4.13 (build 39)
 
 Version 0.4.13 (build 39) bundles the Python 2.31.19 engine with the macOS ACP fixes.
 

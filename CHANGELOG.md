@@ -7,6 +7,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+- Add Silicon options to Harness Studio (macOS 0.4.14). New `studio.silicon.options`
+  and `studio.silicon.apply` desktop service routes read and edit Silicon MCP,
+  Monty Code Mode, Apple Container check and `fail_on_error` settings in the draft
+  YAML and return a diff for review. Saving still goes through Studio validation.
 - Open ACP agent setup directly from Harness Hub and display the agent's actual
   setup status and installation errors.
 - On Apple Silicon, install a verified Goose CLI release from ACP setup.

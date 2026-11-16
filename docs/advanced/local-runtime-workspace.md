@@ -244,6 +244,29 @@ checks:
       timeout: 60
 ```
 
+### Silicon options in Harness Studio
+
+You can set the options below without editing YAML. Open **Harness Studio**,
+choose **Silicon Harness** in **Start from**, then choose **Load**. In the
+right column, choose **Silicon options…**:
+
+- **Use MCP servers** adds `execute` to the tool list, writes the
+  `runtime.config.silicon_mcp` allowlist for the servers and tool names you
+  pick, sets `allow_network: true`, and adds an allow rule for `execute` and
+  each `mcp_<server>_<tool>`. It is off by default and needs at least one
+  server in the project's MCP configuration.
+- **Monty Code Mode** sets `runtime.config.silicon_mcp_code: true`. It is
+  available only when MCP is on and Monty is installed.
+- **Run in Apple Container** adds `apple_container` to a check step, with a
+  local image pinned by digest and the project files to copy. It is available
+  on macOS 26 or later when Apple's `container` tool is installed.
+- **Fail the run when a check fails** sets `checks.fail_on_error`, and
+  **Add a check** appends a check step.
+
+The sheet shows the Apple tool count and warns when the tools would exceed
+five. Choose **Preview changes** to see the YAML diff, then **Apply to draft**.
+The draft stays the source of truth: validate it and save a revision as usual.
+
 The host runs the check with the local OS sandbox, a reduced environment, and
 network access denied. The result appears alongside the coding response.
 Checkpoints and the turn's Changes view let you review and undo its edits.

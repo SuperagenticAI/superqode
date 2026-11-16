@@ -23,6 +23,15 @@ import Foundation
     guard rejected, before.count == after.count, versions.count == 1,
       versions[0]["intact"] as? Bool == true, string(plan, "source_digest") == string(studio.review, "digest")
     else { throw EngineError(message: "Studio revision, source identity or no-call review boundary failed.") }
-    return "passed; native draft validation, immutable snapshot, revision history and digest-bound repeated-check review without model calls"
+    let silicon = try await engine.call("studio.open", ["project": projectID, "reference": "silicon"]) as? [String: Any] ?? [:]
+    let siliconText = string(silicon, "yaml")
+    let options = try await engine.call("studio.silicon.options", ["project": projectID, "yaml": siliconText]) as? [String: Any] ?? [:]
+    let added: [String: Any] = ["name": "Verify", "command": "python3 verify.py", "timeout": 60]
+    let edited = try await engine.call("studio.silicon.apply", ["project": projectID, "name": "native-silicon-fixture", "yaml": siliconText,
+      "options": ["checks": ["add": [added]]] as [String: Any]]) as? [String: Any] ?? [:]
+    guard isSiliconDraft(siliconText), options["tool_count"] as? Int == 4, (options["mcp"] as? [String: Any])?["enabled"] as? Bool == false,
+      edited["changed"] as? Bool == true, string(edited, "diff").contains("python3 verify.py")
+    else { throw EngineError(message: "Silicon options did not read or edit the draft as expected.") }
+    return "passed; native draft validation, immutable snapshot, revision history, Silicon option draft edits and digest-bound repeated-check review without model calls"
   }
 }

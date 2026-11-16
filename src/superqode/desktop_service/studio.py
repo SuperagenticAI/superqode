@@ -683,6 +683,14 @@ def handle(service, method, params):
         return save(service, params)
     if method == "studio.list":
         return catalog(service, params["project"])
+    if method == "studio.silicon.options":
+        from .silicon_options import read
+
+        return read(service, params)
+    if method == "studio.silicon.apply":
+        from .silicon_options import apply
+
+        return apply(service, params)
     if method == "studio.revisions":
         return revisions(service, params["project"], name(params.get("name")))
     raise ValueError("Unknown Harness Studio operation")
