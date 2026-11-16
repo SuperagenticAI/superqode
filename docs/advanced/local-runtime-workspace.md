@@ -372,21 +372,57 @@ The macOS app bundles Monty. For the standalone CLI, install
 `superqode[monty]` before selecting this variant. Use Compare to evaluate it
 separately from the direct call mode.
 
-### exo cluster handoff
+### exo cluster and Send to…
 
 Start exo on the Mac running SuperQode and join the cluster in exo. Open
-**Local AI → Start → Set up exo cluster**. Save
-the profile using `http://127.0.0.1:52415/v1` or its configured loopback
-endpoint. **Check server & models** reads cluster state and lists models with a deployment.
-Run the tool check for the model you want to use.
+**Local AI → Start → Set up exo cluster**. Save the profile using
+`http://127.0.0.1:52415/v1` or its configured loopback endpoint, then choose
+**Check server & models**.
 
-Choose **Use for chat** to start directly on exo. To start a coding run,
-enable **Use a coding harness**, select a harness, and choose **Use for
-coding** after the tool check passes. Deployed models from the saved profile
-also appear in **Compare** when the profile allows tools.
+SuperQode reads exo's cluster state (`GET /state`) and shows:
 
-Select a finished Apple coding turn, then choose **Review Apple handoff** in
-the exo runtime profile. Review and edit the proposed objective, response
-excerpt, and patch. **Send to exo** starts a new Silicon run bound to the
-chosen model. Inference runs **On your network** and tool effects are handled
-by SuperQode on this Mac.
+- each node with its name, chip, and installed and available memory;
+- **Models on your cluster**: every model exo reports on a node, marked
+  **Running**, **Downloaded** or **Downloading** with progress, plus its size,
+  context cap and the nodes that hold it.
+
+exo's `GET /v1/models` lists its whole catalogue, so SuperQode uses it only for
+context and size details. Older exo builds without downloads in their state are
+read with `GET /v1/models?status=downloaded`. If the cluster state cannot be
+read, SuperQode shows the error and lists no models.
+
+**Start** on a downloaded model asks for confirmation, then starts it with
+exo's own API: `GET /instance/previews` to find a placement that fits,
+`POST /place_instance`, and `GET /instance/await` for up to 300 seconds. The
+start runs as a job that you can stop. Stopping ends the wait; exo may keep
+loading the model, and you stop a running model in exo. If a node chosen for
+the placement is missing part of the model, exo downloads it first.
+
+Only running models appear in the **Running model** picker, because only those
+can answer requests. Run the tool check for the model you want to use. Choose
+**Use for chat** to start directly on exo. To code with exo, enable **Use a
+coding harness**, pick a harness such as Silicon Harness, Core or a project
+harness, and choose **Use for coding** after the tool check passes. Running
+models from the saved profile also appear in **Compare** when the profile
+allows tools.
+
+To continue a finished coding turn on exo, open **Send to…**. It sits next to
+**Switch harness…** under the composer, and in the run header of a finished
+coding turn. The menu lists one item per saved exo profile, for example
+**exo cluster (localhost:52415)…**. An item is disabled, with the reason, when
+exo does not answer, no model is running, or no running model has passed the
+tool check. The whole menu is disabled, with the reason, when no finished
+coding turn is selected, the turn is a chat turn, the turn belongs to another
+project, or a run is active.
+
+Picking a target opens a preview. Review and edit the objective, response
+excerpt, checks and patch, choose the model, and check the harness the run will
+use. SuperQode keeps the turn's harness when it can run on a local model, so a
+project harness such as silicon-demo keeps its checks. Otherwise it uses Core.
+**Send** starts a new run with permission prompts on. Inference runs **On your
+network** and tool effects are handled by SuperQode on this Mac.
+
+The engine routes are `handoff.targets`, `handoff.preview` and `handoff.start`.
+Targets have an id such as `exo:<profile id>`, a kind, a title, whether they are
+available and why not, and the models they offer. exo is the only target kind
+today.

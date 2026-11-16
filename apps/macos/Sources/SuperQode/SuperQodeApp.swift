@@ -266,6 +266,7 @@ struct RootView: View {
     // workspace layout; its own guards keep it inactive outside the workspace.
     .background { WorkspaceKeyMonitor(app: app).frame(width: 0, height: 0) }
     .background { SendToThreadSheetHost() }
+    .background { HandoffSheetHost() }
     .alert(
       "SuperQode",
       isPresented: Binding(get: { app.error != nil }, set: { if !$0 { app.error = nil } })
@@ -636,6 +637,9 @@ struct CodingView: View {
         else {
           ThreadStatusIndicator(status: string(app.detail, "status"))
           Text(ThreadStatusIndicator.title(string(app.detail, "status"))).font(.caption).foregroundStyle(.secondary)
+          if HandoffMenuRules.isFinishedCodingTurn(app.detail) {
+            HandoffMenu(store: app.handoffTargets, identifier: "workbench.sendTo")
+          }
         }
       }
       Spacer(minLength: 0)
@@ -873,6 +877,10 @@ struct CodingComposer: View {
             .disabled(app.connectionPickerDisabled)
             .help("Applies from your next message.")
             .accessibilityIdentifier("composer.switchHarness")
+        }
+        if app.connected && !app.projectID.isEmpty {
+          HandoffMenu(store: app.handoffTargets, identifier: "composer.sendTo")
+            .font(.system(size: 12))
         }
         Spacer(minLength: 0)
         if awaitingConnection {

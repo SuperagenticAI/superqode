@@ -306,6 +306,10 @@ private func jobStamp(_ row: [String: Any]) -> Double {
   private var pendingPaletteAction: WorkspaceCommandAction?
   @Published var learningTopic = "Start coding"
   @Published var sendToThreadRequest: SendToThreadRequest?
+  /// The reviewed handoff opened from a Send to… menu.
+  @Published var handoffRequest: HandoffRequest?
+  /// Send to… targets, shared by the composer and run header menus.
+  let handoffTargets = HandoffTargetStore()
   @Published var showConnection = false
   @Published var showConnectionInspector = false
   @Published var connectionStartPage = "menu:root"

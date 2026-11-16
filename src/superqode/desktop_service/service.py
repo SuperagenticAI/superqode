@@ -801,6 +801,8 @@ class DesktopService:
                     "local": params.get("local_plan", {}).get("title", "Local model setup"),
                     "local-runtime": "Install local runtime"
                     if params.get("runtime_setup")
+                    else "Start exo model"
+                    if params.get("runtime_action") == "exo-start"
                     else "Warm local model"
                     if params.get("runtime_action") == "warm"
                     else "Local runtime tool check",
@@ -1552,6 +1554,10 @@ class DesktopService:
                     (params["project"],),
                 )
             raise ValueError("Unknown local comparison action")
+        if method.startswith("handoff."):
+            from .handoffs import dispatch as handoff
+
+            return handoff(self, method.removeprefix("handoff."), params)
         if method.startswith("local.runtimes."):
             from .local_runtimes import dispatch
 

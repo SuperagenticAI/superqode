@@ -134,63 +134,245 @@ def selected_runtime():
     return validate(json.loads(raw))
 
 
-async def exo_cluster(spec, key=None, *, transport=None):
-    """Inspect a configured exo node. Inference may run across its network."""
+def _exo_field(row, name):
+    """Read an exo field in its camelCase wire form, or the snake_case model name."""
+    if not isinstance(row, dict):
+        return None
+    head, *rest = name.split("_")
+    camel = head + "".join(part.title() for part in rest)
+    return row.get(camel, row.get(name))
+
+
+def _exo_tagged(row):
+    """exo serializes union members as {"ClassName": {...}}; return both parts."""
+    if isinstance(row, dict) and len(row) == 1:
+        tag, inner = next(iter(row.items()))
+        if isinstance(inner, dict):
+            return tag, inner
+    return "", row if isinstance(row, dict) else {}
+
+
+def _exo_bytes(value):
+    if isinstance(value, dict):
+        value = _exo_field(value, "in_bytes")
+    return value if type(value) is int and value >= 0 else None
+
+
+def _exo_headers(key):
+    return {"Authorization": f"Bearer {key}"} if key else {}
+
+
+def _exo_base(spec):
     if spec.template != "exo" or not spec.endpoint.endswith("/v1"):
         raise ValueError("Choose an exo loopback base URL ending in /v1")
-    headers = {"Authorization": f"Bearer {key}"} if key else {}
+    return spec.endpoint.removesuffix("/v1")
+
+
+async def _exo_state(spec, key=None, *, transport=None):
     async with httpx.AsyncClient(
         trust_env=False, follow_redirects=False, transport=transport, timeout=3
     ) as client:
         async with client.stream(
-            "GET", spec.endpoint.removesuffix("/v1") + "/state", headers=headers
+            "GET", _exo_base(spec) + "/state", headers=_exo_headers(key)
         ) as response:
             response.raise_for_status()
             payload = bytearray()
             async for chunk in response.aiter_bytes():
                 payload.extend(chunk)
-                if len(payload) > 4_000_000:
+                if len(payload) > 8_000_000:
                     raise ValueError("exo cluster state is too large")
     state = json.loads(payload)
     if not isinstance(state, dict) or not isinstance(state.get("instances"), dict):
         raise ValueError("The endpoint did not return exo cluster state")
-    memory = state.get("nodeMemory", state.get("node_memory", {}))
-    identities = state.get("nodeIdentities", state.get("node_identities", {}))
+    return state
+
+
+def _exo_downloads(state, names):
+    """Per model: downloaded on any node wins over a download still in progress."""
+    downloads = _exo_field(state, "downloads")
+    if not isinstance(downloads, dict):
+        return None
+    found = {}
+    for node, rows in downloads.items():
+        if not isinstance(rows, list):
+            continue
+        for item in rows:
+            tag, row = _exo_tagged(item)
+            _, shard = _exo_tagged(_exo_field(row, "shard_metadata"))
+            card = _exo_field(shard, "model_card")
+            model = _exo_field(card, "model_id")
+            if not isinstance(model, str) or not model:
+                continue
+            if tag == "DownloadCompleted":
+                status = "downloaded"
+            elif tag == "DownloadOngoing" or (
+                tag == "DownloadPending" and (_exo_bytes(_exo_field(row, "downloaded")) or 0) > 0
+            ):
+                status = "downloading"
+            else:
+                continue
+            entry = found.setdefault(
+                model,
+                {
+                    "status": status,
+                    "nodes": [],
+                    "progress": None,
+                    "size_bytes": _exo_bytes(_exo_field(card, "storage_size")),
+                },
+            )
+            if status == "downloaded" and entry["status"] != "downloaded":
+                entry.update(status="downloaded", nodes=[], progress=None)
+            if status != entry["status"]:
+                continue
+            entry["nodes"].append(names.get(node, node))
+            if status == "downloading":
+                progress = _exo_field(row, "download_progress") or row
+                done = _exo_bytes(_exo_field(progress, "downloaded"))
+                total = _exo_bytes(_exo_field(progress, "total"))
+                if done is not None and total:
+                    entry["progress"] = min(1.0, done / total)
+    for entry in found.values():
+        entry["nodes"] = sorted(set(entry["nodes"]))
+    return found
+
+
+async def exo_cluster(spec, key=None, *, transport=None):
+    """Inspect a configured exo node. Inference may run across its network."""
+    _exo_base(spec)
+    state = await _exo_state(spec, key, transport=transport)
+    memory = _exo_field(state, "node_memory") or {}
+    identities = _exo_field(state, "node_identities") or {}
     if not isinstance(memory, dict) or not isinstance(identities, dict):
         raise ValueError("exo returned invalid node information")
-    nodes = set(memory) | set(identities)
-    totals = []
-    for row in memory.values():
-        if not isinstance(row, dict):
-            continue
-        total = row.get("ram_total", row.get("ramTotal", {}))
-        if isinstance(total, dict):
-            total = total.get("in_bytes", total.get("inBytes"))
-        if type(total) is int and total > 0:
-            totals.append(total)
+    topology = _exo_field(state, "topology")
+    listed = topology.get("nodes") if isinstance(topology, dict) else None
+    if isinstance(listed, list) and listed and all(isinstance(node, str) for node in listed):
+        node_ids = list(dict.fromkeys(listed))
+    else:
+        node_ids = sorted(set(memory) | set(identities))
+    nodes = []
+    names = {}
+    for node in node_ids:
+        identity = identities.get(node) if isinstance(identities.get(node), dict) else {}
+        usage = memory.get(node) if isinstance(memory.get(node), dict) else {}
+        name = _exo_field(identity, "friendly_name")
+        name = name if isinstance(name, str) and name and name != "Unknown" else node
+        chip = _exo_field(identity, "chip_id")
+        names[node] = name
+        nodes.append(
+            {
+                "id": node,
+                "name": name,
+                "chip": chip if isinstance(chip, str) and chip != "Unknown" else "",
+                "ram_total_bytes": _exo_bytes(_exo_field(usage, "ram_total")),
+                "ram_available_bytes": _exo_bytes(_exo_field(usage, "ram_available")),
+            }
+        )
+    nodes.sort(key=lambda row: (row["name"].lower(), row["id"]))
+    totals = [row["ram_total_bytes"] for row in nodes if row["ram_total_bytes"]]
+    available = [row["ram_available_bytes"] for row in nodes if row["ram_available_bytes"]]
     deployed = set()
-    for row in state["instances"].values():
-        if not isinstance(row, dict):
-            continue
-        # exo's instances are represented by tagged transport models.
-        if len(row) == 1 and isinstance(next(iter(row.values())), dict):
-            row = next(iter(row.values()))
-        shards = row.get("shard_assignments", row.get("shardAssignments", {}))
-        if not isinstance(shards, dict):
-            continue
-        model = shards.get("model_id", shards.get("modelId"))
+    for item in state["instances"].values():
+        _, row = _exo_tagged(item)
+        model = _exo_field(_exo_field(row, "shard_assignments"), "model_id")
         if isinstance(model, str) and model:
             deployed.add(model)
     return {
         "node_count": len(nodes),
+        "nodes": nodes,
         "installed_memory_bytes": sum(totals) if totals else None,
+        "available_memory_bytes": sum(available) if available else None,
         "deployed_models": sorted(deployed),
+        "downloads": _exo_downloads(state, names),
         "location": "On your network",
     }
 
 
+_EXO_ORDER = {"running": 0, "downloaded": 1, "downloading": 2}
+
+
+def _context(spec, row):
+    maximum = row.get("max_model_len") or row.get("context_length") or row.get("contextLength")
+    known = type(maximum) is int and maximum >= 512
+    return {
+        "context": min(spec.context, maximum) if known else spec.context,
+        "context_source": "server and configured cap"
+        if known
+        else "configured cap; loaded context unknown",
+    }
+
+
+def _chat_model(identity, row):
+    if not 0 < len(identity) <= 4096 or any(
+        w in identity.lower() for w in ("embedding", "reranker")
+    ):
+        return False
+    tasks = row.get("tasks")
+    return not isinstance(tasks, list) or not tasks or "TextGeneration" in tasks
+
+
+async def _exo_catalog(spec, key, data, client, transport):
+    try:
+        cluster = await exo_cluster(spec, key, transport=transport)
+    except (httpx.HTTPError, ValueError):
+        # Never fall back to exo's whole catalogue: it lists models that are not on any node.
+        return {
+            "models": [],
+            "exo_models": [],
+            "cluster": None,
+            "cluster_error": "exo answered, but its cluster state is unavailable. "
+            "Start exo, join your cluster, then check again.",
+        }
+    downloads = cluster.pop("downloads")
+    if downloads is None:
+        # Older exo builds: ask exo for the models it has downloaded.
+        response = await client.get(
+            spec.endpoint + "/models", params={"status": "downloaded"}, headers=_exo_headers(key)
+        )
+        response.raise_for_status()
+        downloads = {
+            row["id"]: {"status": "downloaded", "nodes": [], "progress": None, "size_bytes": None}
+            for row in response.json().get("data", [])
+            if isinstance(row, dict) and isinstance(row.get("id"), str)
+        }
+    catalog = {
+        row["id"]: row
+        for row in data.get("data", [])
+        if isinstance(row, dict) and isinstance(row.get("id"), str)
+    }
+    rows = []
+    for identity in set(downloads) | set(cluster["deployed_models"]):
+        info = catalog.get(identity, {})
+        if not _chat_model(identity, info):
+            continue
+        entry = downloads.get(identity) or {"nodes": [], "progress": None, "size_bytes": None}
+        size = entry.get("size_bytes")
+        megabytes = info.get("storage_size_megabytes")
+        if size is None and type(megabytes) is int and megabytes > 0:
+            size = megabytes * 1024 * 1024
+        running = identity in cluster["deployed_models"]
+        rows.append(
+            {
+                "id": identity,
+                "status": "running" if running else entry["status"],
+                "nodes": entry.get("nodes", []),
+                "progress": None if running else entry.get("progress"),
+                "size_bytes": size,
+                **_context(spec, info),
+                "tools": spec.tools,
+            }
+        )
+    rows.sort(key=lambda row: (_EXO_ORDER[row["status"]], row["id"].lower()))
+    return {
+        "models": [row for row in rows if row["status"] == "running"],
+        "exo_models": rows,
+        "cluster": cluster,
+        "cluster_error": None,
+    }
+
+
 async def model_catalog(spec, key=None, *, transport=None):
-    headers = {"Authorization": f"Bearer {key}"} if key else {}
+    headers = _exo_headers(key)
     async with httpx.AsyncClient(
         trust_env=False, follow_redirects=False, transport=transport, timeout=3
     ) as client:
@@ -205,43 +387,99 @@ async def model_catalog(spec, key=None, *, transport=None):
             )
         response.raise_for_status()
         data = response.json()
-    active = None
-    cluster = None
-    cluster_error = None
-    if spec.template == "exo":
-        try:
-            cluster = await exo_cluster(spec, key, transport=transport)
-            active = set(cluster["deployed_models"])
-        except (httpx.HTTPError, ValueError):
-            cluster_error = "exo advertised these models, but cluster state is unavailable. Check the cluster again before using a model."
+        if spec.template == "exo":
+            return await _exo_catalog(spec, key, data, client, transport)
     rows = []
     for row in data.get("data", []):
         if not isinstance(row, dict) or not isinstance(row.get("id"), str):
             continue
         identity = row["id"]
-        if active is not None and identity not in active:
+        if not _chat_model(identity, {}):
             continue
-        if not 0 < len(identity) <= 4096 or any(
-            w in identity.lower() for w in ("embedding", "reranker")
-        ):
-            continue
-        maximum = row.get("max_model_len") or row.get("context_length") or row.get("contextLength")
-        rows.append(
-            {
-                "id": identity,
-                "context": min(spec.context, maximum)
-                if type(maximum) is int and maximum >= 512
-                else spec.context,
-                "context_source": "server and configured cap"
-                if type(maximum) is int and maximum >= 512
-                else "configured cap; loaded context unknown",
-                "tools": spec.tools,
-            }
+        rows.append({"id": identity, **_context(spec, row), "tools": spec.tools})
+    return {"models": rows, "cluster": None, "cluster_error": None}
+
+
+async def exo_start(spec, model, key=None, *, transport=None, timeout=300, progress=None):
+    """Start a downloaded model with exo's own placement API, then wait until it runs."""
+    base = _exo_base(spec)
+    if not isinstance(model, str) or not model or len(model) > 4096:
+        raise ValueError("Choose a model downloaded in exo")
+    if type(timeout) not in {int, float} or not 1 <= timeout <= 300:
+        raise ValueError("Choose an exo start timeout up to 300 seconds")
+    headers = _exo_headers(key)
+    note = progress or (lambda _message: None)
+    async with httpx.AsyncClient(
+        trust_env=False,
+        follow_redirects=False,
+        transport=transport,
+        timeout=httpx.Timeout(60, connect=5),
+    ) as client:
+        note("Asking exo where this model fits on your cluster")
+        response = await client.get(
+            base + "/instance/previews", params={"model_id": model}, headers=headers
         )
-    return {"models": rows, "cluster": cluster, "cluster_error": cluster_error}
+        response.raise_for_status()
+        previews = response.json().get("previews")
+        previews = (
+            [row for row in previews if isinstance(row, dict)] if isinstance(previews, list) else []
+        )
+        chosen = next(
+            (row for row in previews if not row.get("error") and row.get("instance")), None
+        )
+        if chosen is None:
+            reason = next(
+                (row["error"] for row in previews if isinstance(row.get("error"), str)), ""
+            )
+            raise ValueError(
+                "exo found no placement for this model on your cluster"
+                + (": " + reason if reason else ". Check free memory on your nodes.")
+            )
+        nodes = len(chosen.get("memory_delta_by_node") or {}) or 1
+        note(f"Starting the model on {nodes} node" + ("" if nodes == 1 else "s"))
+        response = await client.post(
+            base + "/place_instance",
+            json={
+                "model_id": model,
+                "sharding": chosen.get("sharding", "Pipeline"),
+                "instance_meta": chosen.get("instance_meta", "MlxRing"),
+                "min_nodes": nodes,
+            },
+            headers=headers,
+        )
+        if response.status_code >= 400:
+            try:
+                detail = response.json().get("detail")
+            except ValueError:
+                detail = None
+            raise ValueError(
+                "exo did not start the model"
+                + (": " + detail if isinstance(detail, str) and detail else ".")
+            )
+        note("Waiting for exo to load the model")
+        async with client.stream(
+            "GET",
+            base + "/instance/await",
+            params={"model_id": model, "timeout_seconds": timeout},
+            headers=headers,
+            timeout=httpx.Timeout(timeout + 30, connect=5),
+        ) as stream:
+            stream.raise_for_status()
+            async for line in stream.aiter_lines():
+                if not line.startswith("data:"):
+                    continue
+                message = json.loads(line.removeprefix("data:").strip() or "{}")
+                if message.get("type") == "ready":
+                    return {"model": model, "nodes": nodes}
+                if message.get("type") == "timeout":
+                    raise ValueError(
+                        "exo is still loading the model. Check the server again in a moment."
+                    )
+    raise ValueError("exo stopped answering before the model was ready")
 
 
 async def models(spec, key=None, *, transport=None):
+    """Models that can answer a request now. For exo that means a running instance."""
     catalog = await model_catalog(spec, key, transport=transport)
     if catalog["cluster_error"]:
         raise ValueError(catalog["cluster_error"])

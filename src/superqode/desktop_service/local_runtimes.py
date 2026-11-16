@@ -158,14 +158,43 @@ def dispatch(service, action, params):
             current["last_operation_job"] = job["id"]
             save(service, current)
         return job
-    if action == "handoff.preview":
-        from .silicon_handoff import preview
-
-        return preview(service, spec, profile, params)
-    if action == "handoff.start":
-        from .silicon_handoff import start
-
-        return start(service, spec, profile, params)
+    if action == "exo.start":
+        project = str(params.get("project") or "")
+        service.project(project)
+        model = str(params.get("model") or "")
+        if spec.template != "exo":
+            raise ValueError("Choose a saved exo cluster profile")
+        try:
+            catalog = asyncio.run(runtimes.model_catalog(spec, key(service, identity)))
+        except ValueError:
+            raise
+        except Exception:
+            raise ValueError("exo did not answer. Start exo on this Mac, then retry.") from None
+        if catalog["cluster_error"]:
+            raise ValueError(catalog["cluster_error"])
+        row = next((r for r in catalog.get("exo_models", []) if r["id"] == model), None)
+        if row is None or row["status"] == "downloading":
+            raise ValueError("Choose a model that has finished downloading in exo")
+        if row["status"] == "running":
+            raise ValueError("This model is already running in exo")
+        job = service.start(
+            project,
+            "local-runtime",
+            {
+                "provider": "local-openai",
+                "model": model,
+                "harness": "no-tool",
+                "runtime_profile": profile,
+                "runtime_digest": validation_digest(profile),
+                "runtime_action": "exo-start",
+                "command_id": params.get("command_id") or uuid4().hex,
+            },
+        )
+        with service.lock:
+            current = read(service, identity)
+            current["last_operation_job"] = job["id"]
+            save(service, current)
+        return job
     if action == "probe":
         try:
             catalog = asyncio.run(runtimes.model_catalog(spec, key(service, identity)))
@@ -318,6 +347,8 @@ def accept_result(service, result):
 async def worker(request, emit):
     import os
 
+    import httpx
+
     if request.get("runtime_setup"):
         from superqode.local.runtime_setup import run
 
@@ -325,6 +356,30 @@ async def worker(request, emit):
         return
 
     profile = request["runtime_profile"]
+    if request.get("runtime_action") == "exo-start":
+        spec = runtimes.validate(profile)
+        try:
+            started = await runtimes.exo_start(
+                spec,
+                request["model"],
+                os.environ.get("LOCAL_RUNTIME_API_KEY"),
+                progress=lambda text: emit("stage", {"message": text}),
+            )
+        except httpx.HTTPError:
+            raise ValueError(
+                "exo stopped answering while starting the model. Check exo, then retry."
+            ) from None
+        emit(
+            "result",
+            {
+                "status": "completed",
+                "runtime": profile["id"],
+                "model": request["model"],
+                "exo_started": started,
+                "message": "exo is running this model. Run the tool check before coding with it.",
+            },
+        )
+        return
     if request.get("runtime_action") == "warm":
         from superqode.providers.gateway.base import Message
         from superqode.local.execution import LocalTurn

@@ -133,9 +133,11 @@ struct LocalRuntimeWorkspace: View {
   }
   @State private var harnesses: [[String: Any]] = []
   @State private var cluster: [String: Any] = [:]
-  @State private var handoff: [String: Any] = [:]
-  @State private var handoffText = ""
-  @State private var showHandoff = false
+  /// Every exo model on a node: running, downloaded or still downloading.
+  @State private var exoModels: [[String: Any]] = []
+  /// The downloaded exo model waiting for the Start confirmation.
+  @State private var startCandidate = ""
+  @State private var confirmStart = false
   @State private var busy = false
   @State private var message = ""
   @State private var setup: [String: Any] = [:]
@@ -206,20 +208,11 @@ struct LocalRuntimeWorkspace: View {
         }
       }.padding(24).frame(width: 650)
     }
-    .centeredDialog(isPresented: $showHandoff, title: "Review exo handoff") {
-      VStack(alignment: .leading, spacing: 12) {
-        Text("Send to " + string(handoff, "model") + " · On your network").font(.headline)
-        Text(string(handoff, "endpoint")).font(.caption.monospaced())
-        Text("Review the objective and patch. Future tool results can also go to the cluster when the run uses them.")
-          .font(.caption).foregroundStyle(.secondary)
-        TextEditor(text: $handoffText).font(.system(.body, design: .monospaced)).frame(minHeight: 290)
-        HStack {
-          Button("Cancel") { showHandoff = false }.keyboardShortcut(.cancelAction)
-          Spacer()
-          Button("Send to exo") { startHandoff() }.buttonStyle(BrandButtonStyle())
-            .disabled(busy || app.anyActive || handoffText.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty)
-        }
-      }.padding(24).frame(width: 700)
+    .alert("Start this model in exo?", isPresented: $confirmStart) {
+      Button("Start model") { startExoModel(startCandidate) }
+      Button("Cancel", role: .cancel) {}
+    } message: {
+      Text("exo places \(startCandidate) on your cluster with its own placement and loads it. It uses memory on your nodes until you stop it in exo. If a node it uses is missing part of the model, exo downloads that part first. Stopping here stops waiting; exo may keep loading.")
     }
     .centeredDialog(isPresented: $benchmark, title: "Local benchmarks") {
       ToolsView(workflow: "local bench").environmentObject(app).frame(width: 920, height: 680)
@@ -344,13 +337,13 @@ struct LocalRuntimeWorkspace: View {
           Text("On your network · Start exo on this Mac and join your cluster before checking the server.")
             .font(.caption).foregroundStyle(.secondary)
         } else {
-          Text("On your network · \(cluster["node_count"] as? Int ?? 0) nodes · \(localBytes(cluster["installed_memory_bytes"])) installed memory")
-            .font(.caption).foregroundStyle(.secondary)
+          exoClusterSummary
         }
+        if !exoModels.isEmpty { exoModelList }
       }
       if !models.isEmpty {
         Divider()
-        CatalogPopup(label: "Advertised model", options: models.map {
+        CatalogPopup(label: template == "exo" ? "Running model" : "Advertised model", options: models.map {
           CatalogPopupOption(id: string($0, "id"), title: string($0, "id"))
         }, selection: $form.model, placeholder: "Choose a model")
         if let row = models.first(where: { string($0, "id") == model }) {
@@ -367,14 +360,14 @@ struct LocalRuntimeWorkspace: View {
           Button("Warm model") { startWarmup() }.disabled(busy || !savedReady || !projectReady || model.isEmpty || !modelVerified || app.anyActive)
           Button("Run tool check") { startCheck() }.disabled(busy || !savedReady || !projectReady || model.isEmpty || !modelVerified || app.anyActive || capability == "no")
           Spacer()
-          if template == "exo" && !app.selectedJob.isEmpty {
-            Button("Review Apple handoff…") { prepareHandoff() }
-              .disabled(!savedReady || !projectReady || model.isEmpty || !modelVerified || app.anyActive || !toolCheckPassed)
-          }
           Button(coding ? "Use for coding" : "Use for chat") { connect() }.buttonStyle(BrandButtonStyle())
             .disabled(busy || !savedReady || !projectReady || model.isEmpty || !modelVerified || app.anyActive || (coding && !toolCheckPassed))
         }
         if !projectReady { Text("Open a project to run a check or start a conversation.").font(.caption).foregroundStyle(.secondary) }
+        if template == "exo" {
+          Text("To send a finished coding turn to exo, use Send to… in the conversation. It lists running models that passed the tool check.")
+            .font(.caption).foregroundStyle(.secondary)
+        }
       }
       if !message.isEmpty { Text(message).font(.callout).foregroundStyle(.secondary).textSelection(.enabled) }
       if busy { ProgressView("Working with local runtime…").controlSize(.small) }
@@ -399,6 +392,9 @@ struct LocalRuntimeWorkspace: View {
         if jobRunning { Button("Stop") { app.perform { _ = try await app.engine.call("jobs.cancel", ["id": operation]) } } }
       }
       let result = operationDetail["result"] as? [String: Any] ?? [:]
+      if result["exo_started"] != nil {
+        Text(string(result, "message", "exo is running this model.")).font(.callout)
+      }
       if let check = result["verification"] as? [String: Any] {
         Text(check["tool_call_success"] as? Bool == true ? "Tool shape check passed. Coding quality still needs evaluation." : "The model did not produce the expected tool call. Use chat or review its parser/model setup.")
           .font(.callout)
@@ -425,7 +421,7 @@ struct LocalRuntimeWorkspace: View {
     endpoint = string(row, "endpoint")
     context = 8192
     capability = next == "gpt4all" ? "no" : "unknown"
-    apiKey = ""; rememberKey = false; models = []; model = ""; setup = [:]; cluster = [:]
+    apiKey = ""; rememberKey = false; models = []; model = ""; setup = [:]; cluster = [:]; exoModels = []
     includeUsage = row["include_usage"] as? Bool ?? true
     coding = false
     message = ""
@@ -436,7 +432,7 @@ struct LocalRuntimeWorkspace: View {
     guard !form.saving else { return }
     identity = UUID().uuidString.lowercased(); name = "Local server"; template = "custom"
     endpoint = "http://127.0.0.1:8000/v1"; context = 8192; capability = "unknown"
-    apiKey = ""; rememberKey = false; includeUsage = true; models = []; model = ""; coding = false; setup = [:]; cluster = [:]
+    apiKey = ""; rememberKey = false; includeUsage = true; models = []; model = ""; coding = false; setup = [:]; cluster = [:]; exoModels = []
     setOperation("")
   }
   private func select(_ row: [String: Any]) {
@@ -446,7 +442,7 @@ struct LocalRuntimeWorkspace: View {
     identity = string(row, "id"); name = string(row, "name"); endpoint = string(row, "endpoint")
     context = row["context"] as? Int ?? 8192; includeUsage = row["include_usage"] as? Bool ?? true; rememberKey = row["remember_key"] as? Bool == true
     capability = row["tools"] as? Bool == true ? "yes" : row["tools"] as? Bool == false ? "no" : "unknown"
-    models = []; model = ""; apiKey = ""; setup = [:]; cluster = [:]
+    models = []; model = ""; apiKey = ""; setup = [:]; cluster = [:]; exoModels = []
     Task { await restoreOperation() }
   }
   private var savedReady: Bool {
@@ -522,43 +518,59 @@ struct LocalRuntimeWorkspace: View {
     }
   }
   private func probe() {
-    cluster = [:]
+    cluster = [:]; exoModels = []
     action {
       let result = try await app.engine.call("local.runtimes.probe", ["id": identity]) as? [String: Any] ?? [:]
-      models = result["models"] as? [[String: Any]] ?? []; model = models.first.map { string($0, "id") } ?? ""
+      let previous = model
+      models = result["models"] as? [[String: Any]] ?? []
+      model = models.contains(where: { string($0, "id") == previous }) ? previous : models.first.map { string($0, "id") } ?? ""
       cluster = result["cluster"] as? [String: Any] ?? [:]
+      exoModels = result["exo_models"] as? [[String: Any]] ?? []
       if let error = result["cluster_error"] as? String { message = error; return }
+      if template == "exo" {
+        message = ExoModelRows.message(running: models.count, all: exoModels)
+        return
+      }
       message = models.isEmpty ? "Server answered but advertised no chat models. Load a model in the vendor app, then check again." : "Server models found. No model prompt was sent."
     }
   }
-  private func prepareHandoff() {
-    action {
-      let project = app.projectID
-      let result = try await app.engine.call("local.runtimes.handoff.preview", [
-        "id": identity, "project": project, "job": app.selectedJob, "model": model,
-      ]) as? [String: Any] ?? [:]
-      guard project == app.projectID, !string(result, "prompt").isEmpty else { return }
-      handoff = result
-      handoff["id"] = identity
-      handoff["project"] = project
-      handoffText = string(result, "prompt")
-      showHandoff = true
+  private var exoClusterSummary: some View {
+    VStack(alignment: .leading, spacing: 4) {
+      Text(ExoModelRows.clusterLine(cluster)).font(.caption).foregroundStyle(.secondary)
+      ForEach(cluster["nodes"] as? [[String: Any]] ?? [], id: \.projectRowID) { node in
+        Text(ExoModelRows.nodeLine(node)).font(.caption).foregroundStyle(.secondary)
+          .accessibilityIdentifier("local.exo.node")
+      }
     }
   }
-  private func startHandoff() {
+  private var exoModelList: some View {
+    VStack(alignment: .leading, spacing: 6) {
+      Text("Models on your cluster").font(.headline)
+      ForEach(exoModels, id: \.projectRowID) { row in
+        HStack(spacing: 10) {
+          VStack(alignment: .leading, spacing: 2) {
+            Text(string(row, "id")).font(.callout.monospaced()).lineLimit(1).truncationMode(.middle)
+            Text(ExoModelRows.detail(row)).font(.caption).foregroundStyle(.secondary).lineLimit(1)
+          }
+          Spacer(minLength: 8)
+          Text(ExoModelRows.status(row)).font(.caption.weight(.semibold))
+            .foregroundStyle(string(row, "status") == "running" ? Color.qAccent : Color.secondary)
+          if string(row, "status") == "downloaded" {
+            Button("Start") { startCandidate = string(row, "id"); confirmStart = true }
+              .disabled(busy || jobRunning || !savedReady || !projectReady || app.anyActive)
+              .help(projectReady ? "Ask exo to load this model on your cluster" : "Open a project first")
+          }
+        }.accessibilityIdentifier("local.exo.model")
+      }
+      Text("Only running models can be checked and used. The list shows what exo reports in its cluster state.")
+        .font(.caption2).foregroundStyle(.secondary)
+    }.padding(.top, 4)
+  }
+  private func startExoModel(_ candidate: String) {
+    guard !candidate.isEmpty else { return }
     action {
-      let project = string(handoff, "project")
-      guard project == app.projectID, !app.anyActive else { return }
-      let result = try await app.engine.call("local.runtimes.handoff.start", [
-        "id": string(handoff, "id"), "project": project, "model": string(handoff, "model"),
-        "digest": string(handoff, "digest"), "prompt": handoffText, "command_id": UUID().uuidString,
-      ]) as? [String: Any] ?? [:]
-      guard !string(result, "id").isEmpty else { throw EngineError(message: "The cluster run did not start.") }
-      showHandoff = false
-      await app.refreshJobs()
-      guard project == app.projectID else { return }
-      app.selectJob(string(result, "id"))
-      app.section = "Workspace"
+      let job = try await app.engine.call("local.runtimes.exo.start", ["id": identity, "project": app.projectID, "model": candidate, "command_id": UUID().uuidString]) as? [String: Any] ?? [:]
+      setOperation(string(job, "id")); await pollOperation()
     }
   }
   private func connect() {
@@ -632,10 +644,73 @@ struct LocalRuntimeWorkspace: View {
       operationAfter = page.nextSequence
       let previous = operationDetail["events"] as? [[String: Any]] ?? []
       next["events"] = Array((previous + page.events).suffix(40))
+      let wasRunning = !operationDetail.isEmpty && jobRunning
       let finished = (operationDetail.isEmpty || jobRunning) && !["queued", "running", "cancelling", "needs_approval"].contains(string(next, "status"))
       if !NSDictionary(dictionary: operationDetail).isEqual(to: next) { operationDetail = next }
       if finished { await library.load(app.engine) }
+      // A model exo just started appears in the running list after a fresh check.
+      if finished && wasRunning && template == "exo"
+        && (next["result"] as? [String: Any])?["exo_started"] != nil && !busy { probe() }
     } catch { if !Task.isCancelled { library.failure = error.localizedDescription } }
+  }
+}
+
+/// Text for the exo panel, kept pure so the wording can be tested.
+enum ExoModelRows {
+  static func clusterLine(_ cluster: [String: Any]) -> String {
+    let count = cluster["node_count"] as? Int ?? 0
+    var line = "On your network · \(count) " + (count == 1 ? "node" : "nodes")
+    if cluster["installed_memory_bytes"] is NSNumber {
+      line += " · " + localBytes(cluster["installed_memory_bytes"]) + " installed"
+    }
+    if cluster["available_memory_bytes"] is NSNumber {
+      line += " · " + localBytes(cluster["available_memory_bytes"]) + " available"
+    }
+    return line
+  }
+
+  static func nodeLine(_ node: [String: Any]) -> String {
+    var parts = [string(node, "name", string(node, "id"))]
+    if !string(node, "chip").isEmpty { parts.append(string(node, "chip")) }
+    if node["ram_total_bytes"] is NSNumber {
+      var memory = localBytes(node["ram_total_bytes"]) + " memory"
+      if node["ram_available_bytes"] is NSNumber {
+        memory += ", " + localBytes(node["ram_available_bytes"]) + " available"
+      }
+      parts.append(memory)
+    }
+    return parts.joined(separator: " · ")
+  }
+
+  static func status(_ row: [String: Any]) -> String {
+    switch string(row, "status") {
+    case "running": return "Running"
+    case "downloaded": return "Downloaded"
+    case "downloading":
+      if let progress = row["progress"] as? NSNumber {
+        return "Downloading \(Int((progress.doubleValue * 100).rounded()))%"
+      }
+      return "Downloading"
+    default: return string(row, "status")
+    }
+  }
+
+  static func detail(_ row: [String: Any]) -> String {
+    var parts: [String] = []
+    if row["size_bytes"] is NSNumber { parts.append(localBytes(row["size_bytes"])) }
+    if let context = row["context"] as? Int { parts.append("context cap \(context.formatted())") }
+    let nodes = row["nodes"] as? [String] ?? []
+    if !nodes.isEmpty { parts.append("on " + nodes.joined(separator: ", ")) }
+    return parts.joined(separator: " · ")
+  }
+
+  static func message(running: Int, all: [[String: Any]]) -> String {
+    if running > 0 { return "exo models found. Choose a running model, then run the tool check. No model prompt was sent." }
+    if all.contains(where: { string($0, "status") == "downloaded" }) {
+      return "No model is running in exo. Start a downloaded model below, then run the tool check."
+    }
+    if all.isEmpty { return "exo has no downloaded models yet. Download one in exo, then check again." }
+    return "exo is still downloading. Check again when a download finishes."
   }
 }
 

@@ -1,4 +1,13 @@
-# SuperQode for macOS public beta 0.4.15
+# SuperQode for macOS public beta 0.4.16
+
+Version 0.4.16 (build 42) fixes the exo model list and adds **Send to…** for finished coding turns.
+
+- **Local AI → Start → Set up exo cluster → Check server & models** now lists the models exo has on your nodes, read from exo's cluster state: **Running**, **Downloaded** or **Downloading** with progress, plus size, context cap and the nodes that hold each one. Each node shows its name, chip, and installed and available memory. Models that are only in exo's catalogue are no longer listed, and if exo's cluster state is unavailable you see that error instead of the whole catalogue.
+- **Start** on a downloaded model asks for confirmation, then asks exo to place and load it with exo's own placement API. The start runs as a job you can stop, and it waits up to 300 seconds for the model. The model picker lists running models only, because only those can be checked and used.
+- **Send to…** sits next to **Switch harness…** under the composer and in the run header of a finished coding turn. Its menu lists each saved exo profile, for example **exo cluster (localhost:52415)…**. A target that is not ready shows why, such as no running model or no passed tool check. Picking a target opens an editable preview with the objective and patch, a model picker and the harness the new run will use. **Send** starts a new run with permission prompts on. The turn's own harness is kept when it can run on a local model, so a project harness like silicon-demo keeps its checks; otherwise Core is used.
+- **Send to…** replaces **Review Apple handoff…**, and it works for finished coding turns from any harness, not only Apple's on-device model.
+
+## 0.4.15 (build 41)
 
 Version 0.4.15 (build 41) makes project harnesses easy to find and switch.
 

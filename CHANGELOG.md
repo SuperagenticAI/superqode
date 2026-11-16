@@ -7,6 +7,21 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+- Fix exo model discovery and add reviewed handoffs (macOS 0.4.16). For exo
+  profiles, `local.runtimes.probe` returns `exo_models` with `running`,
+  `downloaded` or `downloading` status, nodes, progress, size and context read
+  from exo's `GET /state` (falling back to `GET /v1/models?status=downloaded`),
+  and the cluster includes per-node name, chip and memory. `models` stays
+  limited to running models, and a failed `/state` no longer falls back to the
+  whole exo catalogue. New `local.runtimes.exo.start` starts a downloaded model
+  as a cancellable job through exo's `GET /instance/previews`,
+  `POST /place_instance` and `GET /instance/await` (timeout up to 300 seconds).
+  New `handoff.targets`, `handoff.preview` and `handoff.start` routes hand a
+  finished coding turn from any harness to a target id such as `exo:<profile>`,
+  keeping the turn's harness when it can run on a local model and using Core
+  otherwise. They replace `local.runtimes.handoff.preview` and
+  `local.runtimes.handoff.start`, which accepted only Apple turns. The Mac app
+  adds a **Send to…** menu next to **Switch harness…** and in the run header.
 - Make project harnesses easy to find and switch in the Mac app (macOS 0.4.15).
   `harnesses.list` and `local.models.harnesses` rows now include `profile`,
   `source` (`project`, `user`, `built-in`, or `studio` for a saved Harness
