@@ -244,6 +244,27 @@ checks:
       timeout: 60
 ```
 
+### Use a project harness
+
+SuperQode lists harness files from this repository, such as `harness.yaml` at
+the project root and files in `.superqode/harnesses/`, in a **This project**
+section. There are two ways to choose one:
+
+- **Start a new thread:** in **Local AI → Start**, the Apple on-device model card
+  shows a **Harness:** menu when the project has a harness based on Silicon.
+  Choose it, then choose **Use Silicon Harness**. SuperQode remembers the choice
+  for the project.
+- **Switch during a conversation:** choose **Switch harness…** next to the
+  connection chip under the composer. The harness chooser lists **This project**
+  first, then **Built-in**, then **Agents and other harnesses**. Choose a harness
+  that fits the current model to return to the same conversation. The change
+  applies from your next message.
+
+A harness card shows **Based on Silicon Harness** when its file inherits
+`silicon`. If a harness cannot use the current model, its card says **Needs a
+different model**, and choosing it continues to model setup. The composer chip
+names the active harness, for example **Apple on-device · project-silicon**.
+
 ### Silicon options in Harness Studio
 
 You can set the options below without editing YAML. Open **Harness Studio**,

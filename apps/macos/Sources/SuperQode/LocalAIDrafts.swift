@@ -40,6 +40,8 @@ import Observation
   var apple: [String: Any] = [:]
   var appleSelected = false
   var preselected = false
+  /// Harness for Apple's on-device model: the Silicon Harness or an Apple-compatible project harness.
+  var appleHarness: String = ""
 }
 
 /// The last local setup that connected, so returning users can continue in one tap.
@@ -53,6 +55,15 @@ enum LocalAISetupMemory {
     guard !engine.isEmpty else { return }
     UserDefaults.standard.set(
       ["engine": engine, "model": model, "name": name, "harness": harness], forKey: key)
+  }
+  /// The harness last used with Apple's on-device model in a project.
+  static func appleHarness(project: String) -> String {
+    guard !project.isEmpty else { return "" }
+    return UserDefaults.standard.string(forKey: "localAI.appleHarness:" + project) ?? ""
+  }
+  static func saveAppleHarness(_ harness: String, project: String) {
+    guard !project.isEmpty else { return }
+    UserDefaults.standard.set(harness, forKey: "localAI.appleHarness:" + project)
   }
 }
 

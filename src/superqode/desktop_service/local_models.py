@@ -206,8 +206,13 @@ def harnesses(service, project):
     from superqode.harness.catalog import list_harnesses
     from superqode.harness.backends.registry import backend_capabilities
 
+    from .harness_rows import display_names, picker_fields
+
     rows = []
-    for definition in list_harnesses(root=service.project(project)):
+    root = service.project(project)
+    definitions = list_harnesses(root=root)
+    names = display_names(definitions)
+    for definition in definitions:
         # Silicon defaults to Apple Foundation but supports explicit local model bindings.
         if definition.id != "silicon" and (
             definition.id == "no-tool"
@@ -234,6 +239,7 @@ def harnesses(service, project):
                 "selectable": supported,
                 "recommended": definition.id == "core",
                 "install_extra": extra,
+                **picker_fields(definition, root, names),
                 "note": (
                     "Runs this model on your Mac."
                     if supported

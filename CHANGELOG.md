@@ -7,6 +7,13 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+- Make project harnesses easy to find and switch in the Mac app (macOS 0.4.15).
+  `harnesses.list` and `local.models.harnesses` rows now include `profile`,
+  `source` (`project`, `user`, `built-in`, or `studio` for a saved Harness
+  Studio revision), `based_on`, `based_on_name`, `apple_compatible` and `path`.
+  The composer gains **Switch harness…**, the harness chooser lists **This
+  project** first, the Apple card on Local AI Start offers project harnesses
+  based on Silicon, and the composer chip names the active harness.
 - Add Silicon options to Harness Studio (macOS 0.4.14). New `studio.silicon.options`
   and `studio.silicon.apply` desktop service routes read and edit Silicon MCP,
   Monty Code Mode, Apple Container check and `fail_on_error` settings in the draft

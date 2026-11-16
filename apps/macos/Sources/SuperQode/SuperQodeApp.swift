@@ -275,7 +275,8 @@ struct RootView: View {
       Text(app.error ?? "")
     }
     .sheet(isPresented: $app.showConnection) {
-      ConnectionView(initialPage: app.connectionStartPage).environmentObject(app)
+      ConnectionView(initialPage: app.connectionStartPage, switchingHarness: app.connectionSwitchesHarness)
+        .environmentObject(app)
     }
     .centeredDialog(isPresented: $app.showConnectionInspector, title: "Connection details") {
       ConnectionInspectorView().environmentObject(app)
@@ -866,6 +867,13 @@ struct CodingComposer: View {
         }.menuStyle(.borderlessButton).fixedSize(horizontal: false, vertical: true)
           .help(app.connectionDisconnected ? "No agent connected. Choose a connection for this new thread." : "Connection for your next message. Compatible sessions resume; other routes receive bounded thread context.")
           .popover(isPresented: $showOptions, arrowEdge: .top) { connectionOptions }
+        if !app.connectionDisconnected {
+          Button("Switch harness…") { app.openHarnessSwitcher() }
+            .buttonStyle(.borderless).font(.system(size: 12))
+            .disabled(app.connectionPickerDisabled)
+            .help("Applies from your next message.")
+            .accessibilityIdentifier("composer.switchHarness")
+        }
         Spacer(minLength: 0)
         if awaitingConnection {
           Text("Choose a connection above to start.").font(.caption).foregroundStyle(.secondary)

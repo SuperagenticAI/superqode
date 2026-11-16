@@ -1352,11 +1352,27 @@ extension InstalledLocalModelPicker {
           Text(appleStatusLine).font(.caption).foregroundStyle(appleReady ? Color.green : Color.secondary)
             .accessibilityIdentifier("local.start.appleStatus")
           AppleContextLabel(status: form.apple)
+          if !app.appleProjectHarnesses.isEmpty && appleState == "ready" { appleHarnessPicker }
         }
         Spacer(minLength: 8)
         appleAction
       }.padding(14).frame(maxWidth: .infinity, alignment: .leading).brandSurface()
     }.accessibilityElement(children: .contain).accessibilityIdentifier("local.start.apple")
+  }
+
+  /// The Apple harness for this project. Falls back to the Silicon Harness.
+  private var appleHarness: String { app.appleHarnessChoice(form.appleHarness) }
+
+  /// Shown only when the project has Apple-compatible harness files.
+  private var appleHarnessPicker: some View {
+    Picker("Harness:", selection: Binding(get: { appleHarness }, set: { form.appleHarness = $0 })) {
+      Text("Silicon Harness").tag("silicon")
+      ForEach(app.appleProjectHarnesses, id: \.projectRowID) { row in
+        Text(string(row, "name", string(row, "id")) + " · This project").tag(string(row, "id"))
+      }
+    }
+    .pickerStyle(.menu).fixedSize().disabled(busy)
+    .accessibilityIdentifier("local.appleHarnessPicker")
   }
 
   @ViewBuilder private var appleAction: some View {
@@ -1673,7 +1689,8 @@ extension InstalledLocalModelPicker {
   private var startFooter: some View {
     HStack(spacing: 12) {
       if form.appleSelected {
-        Label("Harness: Silicon Harness", systemImage: "apple.logo").font(.callout).foregroundStyle(.secondary)
+        Label("Harness: " + (appleHarness == "silicon" ? "Silicon Harness" : string(app.harnessRow(appleHarness) ?? [:], "name", appleHarness)),
+          systemImage: "apple.logo").font(.callout).foregroundStyle(.secondary)
       } else if !harnesses.isEmpty {
         Picker("Harness:", selection: $form.harness) {
           ForEach(harnesses, id: \.projectRowID) { row in
@@ -1710,6 +1727,7 @@ extension InstalledLocalModelPicker {
   private func continueWith(_ saved: [String: String]) {
     if saved["engine"] == "apple" {
       form.appleSelected = true
+      if let remembered = saved["harness"], !remembered.isEmpty { form.appleHarness = remembered }
       startSelected()
       return
     }
@@ -1759,10 +1777,12 @@ extension InstalledLocalModelPicker {
     let workspace = app
     workspace.selectJob("", restoreConnection: false)
     workspace.checkingConnection = false
-    workspace.chooseAppleModel(development: true, codingHarness: "silicon")
+    let chosen = appleHarness
+    workspace.chooseAppleModel(development: true, codingHarness: chosen)
     workspace.showWelcome = false
     workspace.notice = "Connected Apple's on-device model. Type your request, then press Send."
-    LocalAISetupMemory.save(engine: "apple", model: "system-on-device", name: "Apple on-device model", harness: "silicon")
+    LocalAISetupMemory.save(engine: "apple", model: "system-on-device", name: "Apple on-device model", harness: chosen)
+    LocalAISetupMemory.saveAppleHarness(chosen, project: project)
     if dismissOnUse { dismiss() }
   }
 
@@ -1822,6 +1842,11 @@ extension InstalledLocalModelPicker {
   /// Model: the remembered one, then the first that Fits, then Apple when nothing else is installed.
   private func preselect() {
     let saved = LocalAISetupMemory.load()
+    if form.appleHarness.isEmpty {
+      // The harness chosen first in Connect, then the one last used with Apple in this project.
+      form.appleHarness = app.appleHarnessChoice(preferredHarness) != "silicon"
+        ? preferredHarness : LocalAISetupMemory.appleHarness(project: project)
+    }
     let ids = harnesses.map { string($0, "id") }
     if harness.isEmpty || !ids.contains(harness) || (!form.preselected && ids.contains(preferredHarness)) {
       if ids.contains(preferredHarness) {
@@ -1860,7 +1885,10 @@ struct RouteReadiness: View {
       Text(string(app.routeStatus, "message", "Choose a model to get started.")).font(.caption)
         .foregroundStyle(.secondary)
       Spacer()
-      Button("Choose connection…") { app.showConnection = true }.font(.caption)
+      Button("Choose connection…") {
+        app.connectionSwitchesHarness = false
+        app.showConnection = true
+      }.font(.caption)
     }.task(id: app.provider + "\n" + app.model + "\n" + app.harness) {
       try? await Task.sleep(for: .milliseconds(350))
       guard !Task.isCancelled else { return }

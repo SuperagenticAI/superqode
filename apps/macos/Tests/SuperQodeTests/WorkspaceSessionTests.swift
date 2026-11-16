@@ -105,6 +105,57 @@ final class WorkspaceSessionTests: XCTestCase {
     XCTAssertEqual(app.model, "system-on-device")
   }
 
+  @MainActor func testProjectSiliconHarnessKeepsAppleAndNamesTheComposerChip() {
+    let app = workspace()
+    app.harnesses += [
+      ["id": "apple-local", "name": "Apple on-device", "runtime": "builtin", "apple_compatible": true, "source": "built-in"],
+      ["id": "silicon", "name": "Silicon Harness", "runtime": "builtin", "apple_compatible": true, "source": "built-in"],
+      ["id": "silicon-demo", "name": "silicon-demo", "runtime": "builtin", "apple_compatible": true,
+        "source": "project", "available": true, "based_on": "silicon", "based_on_name": "Silicon Harness"],
+      ["id": "repo-core", "name": "repo-core", "runtime": "builtin", "apple_compatible": false,
+        "source": "project", "available": true],
+      ["id": "core", "name": "Core", "runtime": "builtin", "source": "built-in"],
+      ["id": "acp:repo", "name": "Repo agent", "desktop_kind": "acp", "source": "project"],
+    ]
+    app.resetThreadConnection()
+    XCTAssertEqual(app.projectHarnesses.map { string($0, "id") }, ["silicon-demo", "repo-core"])
+    XCTAssertEqual(app.appleProjectHarnesses.map { string($0, "id") }, ["silicon-demo"])
+    XCTAssertEqual(app.appleHarnessChoice("silicon-demo"), "silicon-demo")
+    XCTAssertEqual(app.appleHarnessChoice("repo-core"), "silicon")
+    XCTAssertEqual(app.appleHarnessChoice(""), "silicon")
+    XCTAssertFalse(app.harnessFitsCurrentRoute("silicon-demo"), "A new thread has no model to keep")
+
+    app.chooseAppleModel(development: true, codingHarness: "silicon-demo")
+    XCTAssertEqual(app.harness, "silicon-demo")
+    XCTAssertEqual(app.provider, "apple-foundation")
+    XCTAssertEqual(app.model, "system-on-device")
+    XCTAssertEqual(app.connectionDisplayName, "Apple on-device · silicon-demo")
+    // Choosing Apple's model again keeps a Silicon-based harness instead of resetting to apple-local.
+    app.chooseModelRoute("apple-foundation", "system-on-device")
+    XCTAssertEqual(app.harness, "silicon-demo")
+    XCTAssertTrue(app.harnessFitsCurrentRoute("silicon"))
+    XCTAssertFalse(app.harnessFitsCurrentRoute("repo-core"))
+    XCTAssertFalse(app.harnessFitsCurrentRoute("core"))
+
+    app.switchHarnessKeepingModel("silicon")
+    XCTAssertEqual(app.harness, "silicon")
+    XCTAssertEqual(app.provider, "apple-foundation")
+    XCTAssertEqual(app.model, "system-on-device")
+    XCTAssertEqual(app.connectionDisplayName, "Apple on-device · Silicon Harness")
+
+    app.harness = "core"
+    app.provider = "openai"
+    app.model = "gpt-5.4"
+    XCTAssertTrue(app.harnessFitsCurrentRoute("repo-core"))
+    XCTAssertFalse(app.harnessFitsCurrentRoute("silicon-demo"), "Silicon needs Apple's model")
+    XCTAssertFalse(app.harnessFitsCurrentRoute("acp:repo"))
+    app.switchHarnessKeepingModel("repo-core")
+    XCTAssertEqual(app.harness, "repo-core")
+    XCTAssertEqual(app.provider, "openai")
+    XCTAssertEqual(app.model, "gpt-5.4")
+    XCTAssertEqual(app.engine.pendingRequestCount, 0, "Switching the harness must not make a generation request")
+  }
+
   @MainActor func testNewThreadDropsConnectionWithoutStoppingOtherWork() {
     let app = workspace()
     app.selectJob("a")

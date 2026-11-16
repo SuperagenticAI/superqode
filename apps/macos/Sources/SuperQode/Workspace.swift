@@ -309,9 +309,19 @@ private func jobStamp(_ row: [String: Any]) -> Double {
   @Published var showConnection = false
   @Published var showConnectionInspector = false
   @Published var connectionStartPage = "menu:root"
+  /// The Connect sheet was opened from the composer's Switch harness… button.
+  @Published var connectionSwitchesHarness = false
 
   func openConnections(_ page: String = "menu:root") {
     connectionStartPage = page
+    connectionSwitchesHarness = false
+    showConnection = true
+  }
+  /// Open the existing harness chooser for the current conversation.
+  /// A harness that fits the current model returns straight to this thread.
+  func openHarnessSwitcher() {
+    connectionStartPage = "menu:harness"
+    connectionSwitchesHarness = true
     showConnection = true
   }
   /// Local AI keeps a simple Start tab and a separate Advanced tab.
@@ -1105,7 +1115,10 @@ private func jobStamp(_ row: [String: Any]) -> Double {
     throw EngineError(message: "The model is still warming up. Your first question may take longer.")
   }
   func chooseModelRoute(_ provider: String, _ model: String, preserveHarness: Bool = false) {
-    if !preserveHarness && provider == "apple-foundation" {
+    // A Silicon-based coding harness, such as a project harness that inherits silicon, keeps Apple.
+    let keepsAppleHarness = provider == "apple-foundation" && interactionMode != "chat"
+      && harnessIsAppleCompatible(harness)
+    if !preserveHarness && provider == "apple-foundation" && !keepsAppleHarness {
       chooseHarness(interactionMode == "chat" ? "no-tool" : "apple-local", restoreRemembered: false)
     } else if !preserveHarness && (isManaged || connectionDisconnected || harness.hasPrefix("local-harness:")) {
       chooseHarness(

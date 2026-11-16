@@ -117,7 +117,12 @@ struct ConnectionView: View {
   @State private var terminalError = ""
   @State private var terminalLogin: [String]?
   @State private var loginNotice = ""
-  init(initialPage: String = "menu:root") {
+  /// Opened from the composer's Switch harness… button for the current conversation.
+  private let switchingHarness: Bool
+  /// Rows on the harness menu that open longer catalogs rather than one harness.
+  private static let moreHarnessRows: Set<String> = ["harness-presets", "harness-repo"]
+  init(initialPage: String = "menu:root", switchingHarness: Bool = false) {
+    self.switchingHarness = switchingHarness
     let pages = initialPage.hasPrefix("acp-detail:")
       ? ["menu:root", "acp", initialPage]
       : initialPage == "menu:root" ? ["menu:root"] : ["menu:root", initialPage]
@@ -331,8 +336,12 @@ struct ConnectionView: View {
   }
 
   private var connectionCatalog: some View {
-    let rows = (page == "harnesses" ? app.harnesses.filter { string($0, "desktop_kind").isEmpty } : connectionRows)
+    let allRows = (page == "harnesses" ? app.harnesses.filter { string($0, "desktop_kind").isEmpty } : connectionRows)
       .filter(matchesSearch)
+    let harnessMenu = page == "menu:harness"
+    let rows = harnessMenu ? allRows.filter { !Self.moreHarnessRows.contains(string($0, "id")) } : allRows
+    let moreRows = harnessMenu ? allRows.filter { Self.moreHarnessRows.contains(string($0, "id")) } : []
+    let projectRows = harnessMenu ? app.projectHarnesses.filter(matchesSearch) : []
     return VStack(alignment: .leading, spacing: 0) {
       VStack(alignment: .leading, spacing: 10) {
         Text(catalogTitle).font(.title2.weight(.semibold)).accessibilityAddTraits(.isHeader)
@@ -344,8 +353,12 @@ struct ConnectionView: View {
         LazyVStack(alignment: .leading, spacing: 14) {
           if loading { ProgressView("Loading connections…").controlSize(.small) }
           if !failure.isEmpty { Text(failure).foregroundStyle(.orange).textSelection(.enabled) }
-          if !loading && rows.isEmpty && !search.isEmpty {
+          if !loading && allRows.isEmpty && projectRows.isEmpty && !search.isEmpty {
             Text("No matches. Try another search.").foregroundStyle(.secondary)
+          }
+          if harnessMenu {
+            projectHarnessSection(projectRows)
+            if !rows.isEmpty { harnessSectionTitle("Built-in") }
           }
           LazyVGrid(columns: [GridItem(.adaptive(minimum: 220), spacing: 8)], spacing: 8) {
             ForEach(rows, id: \.projectRowID) { row in
@@ -355,12 +368,89 @@ struct ConnectionView: View {
               }
             }
           }
+          if harnessMenu { moreHarnessSection(moreRows) }
           if page == "menu:root" && search.isEmpty {
             detectedConnections
             Button("Browse all agent runtimes…") { push("runtimes") }
           }
         }.padding(24).frame(maxWidth: .infinity, alignment: .topLeading)
       }.defaultScrollAnchor(.top).id(page)
+    }
+  }
+
+  private func harnessSectionTitle(_ text: String) -> some View {
+    Text(text).font(.headline).accessibilityAddTraits(.isHeader)
+  }
+
+  /// Harness files in this repository, listed before the built-in harnesses.
+  @ViewBuilder private func projectHarnessSection(_ rows: [[String: Any]]) -> some View {
+    if !rows.isEmpty {
+      harnessSectionTitle("This project")
+      Text("Harness files in this repository.").font(.caption).foregroundStyle(.secondary)
+      LazyVGrid(columns: [GridItem(.adaptive(minimum: 220), spacing: 8)], spacing: 8) {
+        ForEach(rows, id: \.projectRowID) { row in
+          projectHarnessCard(row)
+        }
+      }
+    }
+  }
+
+  private func projectHarnessCard(_ row: [String: Any]) -> some View {
+    let id = string(row, "id")
+    let basedOn = string(row, "based_on_name", string(row, "based_on"))
+    let note = projectHarnessNote(row)
+    let status = [basedOn.isEmpty ? "" : "Based on " + basedOn, note].filter { !$0.isEmpty }
+    return nativeButton("connect.project." + id, action: { useHarness(id) }, padded: false,
+      title: string(row, "name", id)) {
+      ConnectionCardLabel(title: string(row, "name", id), subtitle: string(row, "description"),
+        status: status.joined(separator: " · ")) {
+        Image(systemName: "doc.text").font(.title2).foregroundStyle(Color.qAccent).frame(width: 30)
+      }.modifier(ConnectionCardSurface())
+    }
+    .disabled(row["available"] as? Bool == false || app.connectionPickerDisabled)
+    .help(string(row, "issue").isEmpty ? string(row, "path") : string(row, "issue"))
+  }
+
+  /// A short note when choosing this harness cannot keep the current model.
+  private func projectHarnessNote(_ row: [String: Any]) -> String {
+    let id = string(row, "id")
+    if row["available"] as? Bool == false { return string(row, "issue", "Unavailable") }
+    if id == app.harness && !app.connectionDisconnected { return "In use" }
+    if !switchingHarness || app.harnessFitsCurrentRoute(id) { return "" }
+    return "Needs a different model"
+  }
+
+  @ViewBuilder private func moreHarnessSection(_ rows: [[String: Any]]) -> some View {
+    let showLinks = search.isEmpty
+    if !rows.isEmpty || showLinks {
+      harnessSectionTitle("Agents and other harnesses")
+      LazyVGrid(columns: [GridItem(.adaptive(minimum: 220), spacing: 8)], spacing: 8) {
+        ForEach(rows, id: \.projectRowID) { row in
+          choice(row) { activate(row) }
+        }
+        if showLinks {
+          choice(["id": "harness-more-acp", "name": "ACP agents",
+            "description": "Coding agents on this Mac that keep their own harness, model and sign-in."]) { push("acp") }
+          choice(["id": "harness-more-open", "name": "Open harnesses",
+            "description": "Open-source harnesses with your API key or a local model."]) { push("menu:open-harnesses") }
+        }
+      }
+    }
+  }
+
+  /// When switching, keep the current model if the harness fits it. Otherwise continue to model setup.
+  private func useHarness(_ id: String) {
+    guard switchingHarness else {
+      selectHarness(id)
+      return
+    }
+    if id == app.harness && !app.connectionDisconnected {
+      dismiss()
+    } else if app.harnessFitsCurrentRoute(id) {
+      app.switchHarnessKeepingModel(id)
+      dismiss()
+    } else {
+      selectHarness(id)
     }
   }
 
@@ -424,6 +514,9 @@ struct ConnectionView: View {
     return string(menu, "title", "Connect")
   }
   private var subtitle: String {
+    if switchingHarness && page == "menu:harness" {
+      return "Applies from your next message. A harness that fits your current model keeps it."
+    }
     if page == "configure:wizard" { return "Harness wizard" }
     if page == "configure:rlm" { return "RLM profile" }
     if page == "configure:rlm-routing" { return "A2A routing" }
@@ -514,7 +607,8 @@ struct ConnectionView: View {
   private func connectionSymbol(_ id: String) -> String {
     switch id {
     case "subscriptions", "plan": "person.crop.circle"
-    case "acp", "protocols": "link"
+    case "acp", "protocols", "harness-more-acp": "link"
+    case "harness-more-open": "shippingbox"
     case "byok": "key"
     case "local": "desktopcomputer"
     case "build": "hammer"
@@ -731,7 +825,7 @@ struct ConnectionView: View {
     case "a2a-picker": push("protocol:a2a")
     case "uhp-picker": push("protocol:uhp")
     case "harness-use":
-      selectHarness(string(row, "runtime"))
+      useHarness(string(row, "runtime"))
     case "local": push("source:local")
     case "byok": push("source:key")
     case "harness-catalog", "harness-picker": push("harnesses")

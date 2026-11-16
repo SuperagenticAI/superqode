@@ -23,7 +23,10 @@ extension HarnessIdentity {
   var connectionDisplayName: String {
     if connectionDisconnected { return "Not connected" }
     if provider == "apple-foundation" {
-      return "Apple on-device · " + (interactionMode == "chat" ? "chat" : "development")
+      if interactionMode == "chat" { return "Apple on-device · chat" }
+      // Name the active harness when it is not the default Apple development harness.
+      if harness.isEmpty || harness == "apple-local" { return "Apple on-device · development" }
+      return "Apple on-device · " + string(harnessRow(harness) ?? [:], "name", harness)
     }
     let route = harnesses.first { string($0, "id") == harness } ?? [:]
     let name = string(route, "name", harness)

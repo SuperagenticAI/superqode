@@ -648,9 +648,13 @@ def selection(service, project):
             return []
         definition = resolve_harness(version["reference"], root=service.project(project))
         from .session_controls import enforces_session_controls
+        from .harness_rows import picker_fields
 
         return [
             {
+                **picker_fields(definition, service.project(project)),
+                # A saved Studio revision, not a harness file in the repository.
+                "source": "studio",
                 "id": version["reference"],
                 "name": record["name"] + " · " + record["digest"][:8],
                 "description": "Saved Harness Studio revision",

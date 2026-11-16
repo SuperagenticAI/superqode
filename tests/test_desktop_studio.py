@@ -186,10 +186,13 @@ def test_revision_selection_uses_digest_bound_route_and_survives_catalog_refresh
     )
     assert selected["route"]["provider"] == "lmstudio"
     assert selected["route"]["endpoint"] == "http://127.0.0.1:1234/v1"
-    assert any(
-        row["id"] == saved["reference"]
+    studio_row = next(
+        row
         for row in service.dispatch("harnesses.list", {"project": project["id"]})
+        if row["id"] == saved["reference"]
     )
+    # A saved Studio revision is grouped apart from repository harness files.
+    assert studio_row["source"] == "studio"
     bindings = local_models.binding(
         service, project["id"], saved["reference"], "lmstudio", "fixture-model"
     )

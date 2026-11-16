@@ -1,4 +1,13 @@
-# SuperQode for macOS public beta 0.4.14
+# SuperQode for macOS public beta 0.4.15
+
+Version 0.4.15 (build 41) makes project harnesses easy to find and switch.
+
+- **Switch harness…** beside the composer's connection chip opens the harness chooser for the current conversation. A harness that fits the current model returns you to the same conversation and applies from your next message.
+- The harness chooser lists harness files from the repository first, under **This project**, with **Based on** for harnesses that inherit another one. **Built-in** and **Agents and other harnesses** follow. A card that cannot use the current model says **Needs a different model** and continues to model setup.
+- On **Local AI → Start**, the Apple on-device model card shows a **Harness:** menu when the project has a harness based on Silicon. SuperQode remembers the choice for the project.
+- The composer chip names the active harness, for example **Apple on-device · silicon-demo**. Choosing Apple's model again keeps a harness based on Silicon instead of resetting to the default Apple harness.
+
+## 0.4.14 (build 40)
 
 Version 0.4.14 (build 40) adds Silicon options to Harness Studio.
 

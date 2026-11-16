@@ -297,6 +297,11 @@ without changing the selected thread. Expand a panel to focus on editing, then
 restore the conversation. Shells and queued work still require explicit start.
 The composer's route chip controls the next message; its menu contains connection
 management. An offline engine disables Send and keeps the unsent draft.
+**Switch harness…** beside the chip opens the harness chooser for the current
+conversation. Harness files from the repository appear first under **This
+project**. A harness that fits the current model returns you to the same
+conversation and applies from your next message. Other harnesses continue to
+model setup.
 
 The sidebar is dedicated to project threads. Search by title or harness, or filter
 **All**, **Working**, **Needs you** and **Pinned**. Threads show recorded harness

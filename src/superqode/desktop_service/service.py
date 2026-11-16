@@ -2425,7 +2425,11 @@ class DesktopService:
             from .session_controls import enforces_session_controls
             from .studio import selection
             from .local_harnesses import selections as local_selections
+            from .harness_rows import display_names, picker_fields
 
+            root = self.project(params["project"])
+            definitions = list_harnesses(root)
+            names = display_names(definitions)
             return (
                 [
                     {
@@ -2438,8 +2442,9 @@ class DesktopService:
                         "digest": h.digest,
                         "path": str(h.path) if h.path else None,
                         "enforces_session_controls": enforces_session_controls(h.runtime),
+                        **picker_fields(h, root, names),
                     }
-                    for h in list_harnesses(self.project(params["project"]))
+                    for h in definitions
                 ]
                 + selection(self, params["project"])
                 + local_selections(self, params["project"])

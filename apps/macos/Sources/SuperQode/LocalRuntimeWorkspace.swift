@@ -661,6 +661,7 @@ struct AppleLocalModelPanel: View {
   @State private var checkedNote = ""
   /// A click during an in-flight check still reports when that check finishes.
   @State private var announceResult = false
+  @State private var appleHarness = ""
 
   private var available: Bool { flag(status, "available") }
   private var utility: Bool { flag(status, "utility_enabled") }
@@ -689,6 +690,16 @@ struct AppleLocalModelPanel: View {
           .accessibilityIdentifier("local.appleStatus")
       }
       if !failure.isEmpty { Text(failure).font(.caption).foregroundStyle(.orange).textSelection(.enabled) }
+      if !app.appleProjectHarnesses.isEmpty {
+        Picker("Harness:", selection: Binding(get: { app.appleHarnessChoice(appleHarness) }, set: { appleHarness = $0 })) {
+          Text("Silicon Harness").tag("silicon")
+          ForEach(app.appleProjectHarnesses, id: \.projectRowID) { row in
+            Text(string(row, "name", string(row, "id")) + " · This project").tag(string(row, "id"))
+          }
+        }
+        .pickerStyle(.menu).fixedSize().disabled(checking)
+        .accessibilityIdentifier("local.apple.harnessPicker")
+      }
       HStack {
         if let url = URL(string: string(status, "docs_url")), url.scheme == "https" {
           Link("Apple setup guide", destination: url).font(.caption)
@@ -711,6 +722,7 @@ struct AppleLocalModelPanel: View {
     }.padding(16).brandSurface()
       .accessibilityIdentifier("local.appleModel")
       .task(id: String(active) + "\n" + String(app.connected)) {
+        if appleHarness.isEmpty { appleHarness = LocalAISetupMemory.appleHarness(project: project) }
         if active && app.connected { await refresh(announce: false) }
       }
   }
@@ -720,7 +732,9 @@ struct AppleLocalModelPanel: View {
       failure = reason
       return
     }
-    app.chooseAppleModel(development: development, codingHarness: "silicon")
+    let chosen = app.appleHarnessChoice(appleHarness)
+    app.chooseAppleModel(development: development, codingHarness: chosen)
+    if development { LocalAISetupMemory.saveAppleHarness(chosen, project: project) }
     app.notice = development
       ? "Using Apple's on-device model for development."
       : "Using Apple's on-device model for chat."
