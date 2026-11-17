@@ -1,4 +1,12 @@
-# SuperQode for macOS public beta 0.4.17
+# SuperQode for macOS public beta 0.4.18
+
+Version 0.4.18 (build 44) bundles Python engine 2.31.21.
+
+- The **Start building** card opens a project from anywhere on the card. **Local model** and **API key** stay separate. With no project open, the sidebar project row is the same full-width control.
+- **Connections** leads with Qwen4-Max for a Singapore Model Studio API key. International and China list `qwen4-max` first. Thinking starts at low, and a short reply cap is raised so thinking does not erase the answer.
+- Token Plan is its own connection. A key that starts with `sk-sp-` switches to Token Plan instead of being saved as pay-as-you-go. Headless runs and batch jobs refuse that key. Coding Plan stays on Qwen Code.
+
+## 0.4.17 (build 43)
 
 Version 0.4.17 (build 43) bundles Python engine 2.31.20.
 

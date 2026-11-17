@@ -200,13 +200,13 @@ def test_newcomer_shows_only_primary_engines_with_installed_models_first(desktop
     monkeypatch.setattr("superqode.local.inventory.installed_chat_models", lambda: [])
     result = local_quickstart.catalog(service, project["id"])
     rows = result["choices"]
-    assert {row["engine"] for row in rows} == {"ollama", "lmstudio"}
-    assert {row["id"] for row in result["engines"]} == {"ollama", "lmstudio"}
-    assert {row["id"] for row in result["other_engines"]} == {"mlx", "llama.cpp", "ds4"}
-    assert all(row["installed"] for row in rows[:2])
-    assert all(not row["installed"] for row in rows[2:])
-    assert {row["engine"] for row in rows[:2]} == {"ollama", "lmstudio"}
-    assert all(row["preset"] == "suggested" and row["fit"]["rating"] == "Fits" for row in rows[2:])
+    assert {row["engine"] for row in rows} == {"ollama", "lmstudio", "mlx"}
+    assert {row["id"] for row in result["engines"]} == {"ollama", "lmstudio", "mlx"}
+    assert {row["id"] for row in result["other_engines"]} == {"llama.cpp", "ds4"}
+    assert all(row["installed"] for row in rows[:3])
+    assert all(not row["installed"] for row in rows[3:])
+    assert {row["engine"] for row in rows[:3]} == {"ollama", "lmstudio", "mlx"}
+    assert all(row["preset"] == "suggested" and row["fit"]["rating"] == "Fits" for row in rows[3:])
     # Advanced server controls still expose all configured engines and running states.
     advanced = local_models.servers(service)
     assert {row["id"] for row in advanced} == set(engines)

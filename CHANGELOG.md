@@ -7,6 +7,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [2.31.21] - 2026-11-17
+
 - The macOS welcome Start building card opens a project from anywhere on the
   card. Local model and API key stay separate actions. With no project open,
   the sidebar project row is the same full-width control.
@@ -18,6 +20,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   `sk-sp-` keys). Headless runs and batch jobs refuse that key. Pasting a plan
   key on International switches to Token Plan. Coding Plan remains Qwen Code
   `/auth`.
+- macOS 0.4.18 (build 44) bundles Python engine 2.31.21.
 
 ## [2.31.20] - 2026-11-16
 
