@@ -6,9 +6,12 @@ from superqode.providers.credentials import provider_api_key
 from superqode.providers.dynamic import connect_provider_ids, resolve_base_url, resolve_provider_def
 from superqode.providers.model_studio import (
     METERED_PROVIDERS,
+    TOKEN_PLAN_BASE,
+    TOKEN_PLAN_PROVIDER,
     is_plan_model,
     thinking_policy,
     validate_metered_route,
+    validate_token_plan_route,
     validate_workspace_endpoint,
 )
 from superqode.providers.models import catalog_examples
@@ -23,7 +26,7 @@ def _accepts_key(definition) -> bool:
         not definition
         or not definition.env_vars
         or definition.harness_only
-        or definition.auth_mode != "byok"
+        or (definition.auth_mode != "byok" and definition.id != TOKEN_PLAN_PROVIDER)
         or (definition.tier == ProviderTier.LOCAL and definition.deployment_mode != "cloud")
         or definition.id in ADVANCED_AUTH
         or (definition.id not in PROVIDERS and len(definition.env_vars) != 1)
@@ -59,6 +62,8 @@ def install(credentials: dict[str, str], params: dict, base_url: str | None = No
     else:
         if definition.id in METERED_PROVIDERS:
             validate_metered_route(base_url or resolve_base_url(definition) or "", value)
+        elif definition.id == TOKEN_PLAN_PROVIDER:
+            validate_token_plan_route(TOKEN_PLAN_BASE, value)
         credentials[definition.id] = value.strip()
     return {"ok": True}
 

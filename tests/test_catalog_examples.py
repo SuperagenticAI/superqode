@@ -77,13 +77,13 @@ def test_hosted_catalog_is_every_chat_model_newest_first(monkeypatch):
     ]
     assert [model_id for model_id, _label in catalog_examples("xai")] == ["grok-4.7", "grok-4.5"]
     assert [model_id for model_id, _label in catalog_examples("qwen-cn")] == [
-        "qwen4-max-preview",
+        "qwen4-max",
         "qwen3.8-flash",
         "qwen-plus",
     ]
-    assert catalog_examples("qwen-cn")[0][1] == "Qwen 4 Max Preview · Token Plan"
+    assert catalog_examples("qwen-cn")[0][1] == "2026-11-16 · qwen4-max"
     assert [model_id for model_id, _label in catalog_examples("qwen-intl")] == [
-        "qwen4-max-preview",
+        "qwen4-max",
         "qwen3.8-max",
         "qwen-max",
     ]
@@ -107,10 +107,25 @@ def test_catalogued_qwen4_preview_is_not_duplicated(monkeypatch):
     monkeypatch.setattr("superqode.providers.models_dev.get_models_dev", lambda: client)
     listed = catalog_examples("qwen-cn")
     assert [model_id for model_id, _label in listed] == [
-        "qwen4-max-preview",
+        "qwen4-max",
         "qwen3.8-flash",
     ]
-    assert listed[0][1] == "2026-11-11 · qwen4-max-preview"
+    assert listed[0][1] == "2026-11-16 · qwen4-max"
+    assert "qwen4-max-preview" not in [model_id for model_id, _label in listed]
+
+
+def test_token_plan_catalog_keeps_preview_only_while_the_window_is_open(monkeypatch):
+    monkeypatch.setattr("superqode.providers.models_dev.get_models_dev", lambda: _client({}))
+
+    monkeypatch.setattr("superqode.providers.model_studio.preview_open", lambda now=None: True)
+    open_ids = [model_id for model_id, _label in catalog_examples("alibaba-token-plan")]
+    assert open_ids[0] == "qwen4-max"
+    assert "qwen4-max-preview" in open_ids
+
+    monkeypatch.setattr("superqode.providers.model_studio.preview_open", lambda now=None: False)
+    closed_ids = [model_id for model_id, _label in catalog_examples("alibaba-token-plan")]
+    assert closed_ids[0] == "qwen4-max"
+    assert "qwen4-max-preview" not in closed_ids
 
 
 def test_google_and_local_catalogs_stay_curated(monkeypatch):

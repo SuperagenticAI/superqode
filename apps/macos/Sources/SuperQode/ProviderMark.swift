@@ -42,6 +42,7 @@ enum ProviderMarks {
     "qwen-cn": Mark(asset: "Provider-qwen", keepsColour: true),
     "qwen-intl": Mark(asset: "Provider-qwen", keepsColour: true),
     "alibaba": Mark(asset: "Provider-alibaba", keepsColour: true),
+    "alibaba-token-plan": Mark(asset: "Provider-alibaba", keepsColour: true),
     "moonshot": Mark(asset: "Provider-moonshot", keepsColour: false),
     "zai": Mark(asset: "Provider-zai", keepsColour: false),
     "zhipu": Mark(asset: "Provider-zhipu", keepsColour: true),

@@ -7,6 +7,18 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+- The macOS welcome Start building card opens a project from anywhere on the
+  card. Local model and API key stay separate actions. With no project open,
+  the sidebar project row is the same full-width control.
+- Connect Qwen4-Max on Alibaba Model Studio. International and China catalogs
+  lead with `qwen4-max`, unset thinking stays at low, and a short output cap
+  is raised so thinking does not erase the answer. `qwen4-max-preview` stays
+  on Token Plan until 25 November 2026 and is refused on pay-as-you-go.
+- Add an interactive Alibaba Token Plan connection (`alibaba-token-plan`,
+  `sk-sp-` keys). Headless runs and batch jobs refuse that key. Pasting a plan
+  key on International switches to Token Plan. Coding Plan remains Qwen Code
+  `/auth`.
+
 ## [2.31.20] - 2026-11-16
 
 - Fall back to indentation-tolerant matching when an edit's search text differs

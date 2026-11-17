@@ -323,6 +323,19 @@ def check(request, directory):
     emit("result", result)
 
 
+_NONINTERACTIVE_JOBS = frozenset(
+    {
+        "compaction",
+        "evaluation",
+        "tuning",
+        "optimization",
+        "check",
+        "studio",
+        "local-comparison",
+    }
+)
+
+
 def main():
     try:
         raw = sys.stdin.readline(1_000_001)
@@ -353,67 +366,78 @@ def main():
                 else "Starting execution on this Mac"
             },
         )
-        if request["kind"] == "task":
-            capture = None
-            if not remote and request.get("interaction_mode") != "chat":
-                try:
-                    from .checkpoints import begin_task
-
-                    capture = begin_task(request["cwd"], request["prompt"])
-                    emit("checkpoint", {"id": capture[2], "phase": "baseline"})
-                except (ValueError, OSError) as exc:
-                    emit("checkpoint", {"available": False, "reason": str(exc)})
-            try:
-                asyncio.run(run_async_job(task(request, directory)))
-            finally:
-                if capture:
+        kind = request["kind"]
+        prior_noninteractive = os.environ.get("SUPERQODE_NONINTERACTIVE")
+        if kind in _NONINTERACTIVE_JOBS:
+            os.environ["SUPERQODE_NONINTERACTIVE"] = "1"
+        try:
+            if request["kind"] == "task":
+                capture = None
+                if not remote and request.get("interaction_mode") != "chat":
                     try:
-                        from .checkpoints import finish_task
+                        from .checkpoints import begin_task
 
-                        emit("checkpoint", {"id": finish_task(capture), "phase": "sealed"})
+                        capture = begin_task(request["cwd"], request["prompt"])
+                        emit("checkpoint", {"id": capture[2], "phase": "baseline"})
                     except (ValueError, OSError) as exc:
                         emit("checkpoint", {"available": False, "reason": str(exc)})
-        elif request["kind"] == "compaction":
-            from .compaction import compact
+                try:
+                    asyncio.run(run_async_job(task(request, directory)))
+                finally:
+                    if capture:
+                        try:
+                            from .checkpoints import finish_task
 
-            asyncio.run(run_async_job(compact(request, emit)))
-        elif request["kind"] == "evaluation":
-            asyncio.run(run_async_job(evaluate(request, directory)))
-        elif request["kind"] == "tuning":
-            from .tuning import run
+                            emit("checkpoint", {"id": finish_task(capture), "phase": "sealed"})
+                        except (ValueError, OSError) as exc:
+                            emit("checkpoint", {"available": False, "reason": str(exc)})
+            elif request["kind"] == "compaction":
+                from .compaction import compact
 
-            run(request, emit)
-        elif request["kind"] == "optimization":
-            optimize(request, directory)
-        elif request["kind"] == "check":
-            check(request, directory)
-        elif request["kind"] == "tool":
-            from .tools import run_tool
+                asyncio.run(run_async_job(compact(request, emit)))
+            elif request["kind"] == "evaluation":
+                asyncio.run(run_async_job(evaluate(request, directory)))
+            elif request["kind"] == "tuning":
+                from .tuning import run
 
-            run_tool(request, emit)
-        elif request["kind"] == "studio":
-            from superqode.harness.verification import run
+                run(request, emit)
+            elif request["kind"] == "optimization":
+                optimize(request, directory)
+            elif request["kind"] == "check":
+                check(request, directory)
+            elif request["kind"] == "tool":
+                from .tools import run_tool
 
-            run(request["studio_plan"], directory, emit)
-        elif request["kind"] == "local-runtime":
-            from .local_runtimes import worker
+                run_tool(request, emit)
+            elif request["kind"] == "studio":
+                from superqode.harness.verification import run
 
-            asyncio.run(run_async_job(worker(request, emit)))
-        elif request["kind"] == "local-comparison":
-            from .local_comparisons import run
+                run(request["studio_plan"], directory, emit)
+            elif request["kind"] == "local-runtime":
+                from .local_runtimes import worker
 
-            asyncio.run(run_async_job(run(request, directory, emit, SECRETS)))
-        elif request["kind"] == "local":
-            from superqode.local.workbench import run
+                asyncio.run(run_async_job(worker(request, emit)))
+            elif request["kind"] == "local-comparison":
+                from .local_comparisons import run
 
-            run(
-                request["local_plan"],
-                Path(request["state_root"]) / "model-servers",
-                emit,
-                owner_job=request["job_id"],
-            )
-        else:
-            raise ValueError("Unknown job kind")
+                asyncio.run(run_async_job(run(request, directory, emit, SECRETS)))
+            elif request["kind"] == "local":
+                from superqode.local.workbench import run
+
+                run(
+                    request["local_plan"],
+                    Path(request["state_root"]) / "model-servers",
+                    emit,
+                    owner_job=request["job_id"],
+                )
+            else:
+                raise ValueError("Unknown job kind")
+        finally:
+            if kind in _NONINTERACTIVE_JOBS:
+                if prior_noninteractive is None:
+                    os.environ.pop("SUPERQODE_NONINTERACTIVE", None)
+                else:
+                    os.environ["SUPERQODE_NONINTERACTIVE"] = prior_noninteractive
     except Exception as exc:
         emit("error", {"message": str(exc), "type": type(exc).__name__})
         raise SystemExit(1) from None

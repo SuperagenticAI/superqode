@@ -62,6 +62,42 @@ struct WelcomeView: View {
       }
   }
   private var startCard: some View {
+    ZStack(alignment: .topLeading) {
+      Button(action: app.chooseProject) {
+        startColumn
+          .padding(28)
+          .frame(maxWidth: .infinity, minHeight: 280, alignment: .topLeading)
+          .background(Color.qPanel)
+          .contentShape(Rectangle())
+      }
+      .buttonStyle(.plain)
+      .disabled(!app.connected || app.openingProject)
+      .accessibilityIdentifier("welcome.openProject")
+      .accessibilityLabel(app.openingProject ? "Opening project" : "Open project")
+      VStack(alignment: .leading, spacing: 20) {
+        startIntro.hidden()
+        openProjectRow.hidden()
+        welcomeActions
+        startFootnote.hidden()
+      }
+      .padding(28)
+    }
+    .clipShape(RoundedRectangle(cornerRadius: 20))
+    .overlay(
+      RoundedRectangle(cornerRadius: 20).strokeBorder(.primary.opacity(0.08))
+        .allowsHitTesting(false))
+  }
+
+  private var startColumn: some View {
+    VStack(alignment: .leading, spacing: 20) {
+      startIntro
+      openProjectRow
+      welcomeActions.hidden().accessibilityHidden(true)
+      startFootnote
+    }
+  }
+
+  private var startIntro: some View {
     VStack(alignment: .leading, spacing: 20) {
       Label("Start building", systemImage: "chevron.left.forwardslash.chevron.right")
         .font(.headline)
@@ -69,35 +105,40 @@ struct WelcomeView: View {
         "Open a project, connect the agent or model you already use, then describe your first change."
       )
       .font(.callout).foregroundStyle(.secondary).fixedSize(horizontal: false, vertical: true)
-      Button(action: app.chooseProject) {
-        HStack {
-          Label(
-            app.openingProject ? "Opening project…" : "Open project…",
-            systemImage: "folder.badge.plus")
-          Spacer()
-          Text("⌘O").opacity(0.65)
-        }
-      }.buttonStyle(BrandButtonStyle()).disabled(!app.connected || app.openingProject)
-      HStack(spacing: 12) {
-        Button {
-          app.openConnections("source:local")
-        } label: {
-          Label("Local model", systemImage: "desktopcomputer")
-        }.accessibilityIdentifier("welcome.localModel")
-        Button {
-          app.openConnections("source:key")
-        } label: {
-          Label("API key", systemImage: "key")
-        }.accessibilityIdentifier("welcome.apiKey")
-      }.buttonStyle(.bordered).disabled(app.connectionPickerDisabled)
-      Text("Your project stays on your Mac. Your chosen agent or provider handles model requests.")
-        .font(.caption).foregroundStyle(.secondary).fixedSize(horizontal: false, vertical: true)
-    }.padding(28).frame(maxWidth: .infinity, minHeight: 280, alignment: .topLeading)
-      .background(
-        Color.qPanel,
-        in: RoundedRectangle(cornerRadius: 20)
-      )
-      .overlay(RoundedRectangle(cornerRadius: 20).strokeBorder(.primary.opacity(0.08)))
+    }
+  }
+
+  private var openProjectRow: some View {
+    HStack {
+      Label(
+        app.openingProject ? "Opening project…" : "Open project…",
+        systemImage: "folder.badge.plus")
+      Spacer()
+      Text("⌘O").opacity(0.65)
+    }
+    .font(.body.weight(.semibold))
+    .padding(.horizontal, 10).padding(.vertical, 7)
+    .outlinedSurface(radius: 7)
+  }
+
+  private var welcomeActions: some View {
+    HStack(spacing: 12) {
+      Button {
+        app.openConnections("source:local")
+      } label: {
+        Label("Local model", systemImage: "desktopcomputer")
+      }.accessibilityIdentifier("welcome.localModel")
+      Button {
+        app.openConnections("source:key")
+      } label: {
+        Label("API key", systemImage: "key")
+      }.accessibilityIdentifier("welcome.apiKey")
+    }.buttonStyle(.bordered).disabled(app.connectionPickerDisabled)
+  }
+
+  private var startFootnote: some View {
+    Text("Your project stays on your Mac. Your chosen agent or provider handles model requests.")
+      .font(.caption).foregroundStyle(.secondary).fixedSize(horizontal: false, vertical: true)
   }
   private var recentCard: some View {
     VStack(alignment: .leading, spacing: 16) {

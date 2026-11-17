@@ -308,6 +308,9 @@ providers:
 | `zai` | `ZAI_API_KEY` ([setup](zai.md)) |
 | `zhipu` | `ZHIPU_API_KEY` |
 | `alibaba` | `ALIBABA_API_KEY` |
+| `qwen-intl` | `QWEN_INTL_API_KEY` ([Model Studio](qwen-code.md)) |
+| `qwen-cn` | `QWEN_CN_API_KEY` |
+| `alibaba-token-plan` | `ALIBABA_TOKEN_PLAN_API_KEY` |
 
 ### Model Hosts
 

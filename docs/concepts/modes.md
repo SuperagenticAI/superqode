@@ -449,7 +449,7 @@ that matches the account, runtime, and harness ownership required for the task.
 | Z.AI GLM | Z.AI BYOK, GLM Coding Plan ACP | `:connect byok zai <model>`, `:connect glm-cli`, `:connect acp glm` |
 | Poolside | Pool CLI ACP, Laguna S 2.1 through DwarfStar or llama.cpp | `:connect acp poolside`, `:connect local ds4 laguna-s-2.1` |
 | Moonshot AI Kimi | Kimi Code ACP, Moonshot BYOK | `:connect kimi-code`, `:connect byok moonshot kimi-k3` |
-| Alibaba Qwen | Qwen Code ACP, DashScope BYOK, local Qwen models | `:connect qwen-code`, `:connect byok alibaba <model>`, `:connect local ollama qwen3:8b` |
+| Alibaba Qwen | Qwen Code ACP, Model Studio International and China, Token Plan, older DashScope, local Qwen models | `:connect qwen-code`, `:connect byok qwen-intl qwen4-max`, `:connect byok alibaba-token-plan qwen4-max`, `:connect byok alibaba <model>`, `:connect local ollama qwen3:8b` |
 | LangChain [DeepAgents](../providers/deepagents.md) | Deep Agents Code ACP, DeepAgents SDK runtime, bare Deep Agent ACP | `:connect deepagents-code`, `superqode harness run deepagents "..."`, `:connect acp deepagents` |
 | DeepSeek | DeepSeek BYOK, local DeepSeek and DS4 model paths | `:connect byok deepseek <model>`, `:connect local ds4 <model>` |
 | Mistral AI | Mistral Vibe ACP, Mistral BYOK, local Mistral models | `:connect acp mistral-vibe`, `:connect byok mistral <model>` |
@@ -571,6 +571,7 @@ The built-in provider registry contains these hosted routes:
 | DeepSeek | `deepseek` | Z.AI general API | `zai` |
 | Zhipu AI | `zhipu` | Alibaba DashScope | `alibaba` |
 | Qwen China API | `qwen-cn` | Qwen International API | `qwen-intl` |
+| Alibaba Token Plan | `alibaba-token-plan` | | |
 | MiniMax | `minimax` | Moonshot AI | `moonshot` |
 | SiliconFlow | `siliconflow` | Baidu | `baidu` |
 | ByteDance Doubao | `doubao` | OpenRouter | `openrouter` |

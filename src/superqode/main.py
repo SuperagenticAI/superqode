@@ -913,6 +913,10 @@ def cli_main(
     headless_intent = bool(
         print_mode or output_mode in {"json", "jsonl"} or _headless_messages or ctx.args
     )
+    # Token Plan keys are refused outside an interactive session. Set the flag
+    # before any provider call in this process.
+    if headless_intent:
+        _os.environ["SUPERQODE_NONINTERACTIVE"] = "1"
 
     # Runtime precedence: CLI flag > superqode.yaml > env > default. We resolve
     # the YAML value here (best-effort: ignore failures so a broken config

@@ -402,6 +402,110 @@ async def test_model_studio_rejects_token_plan_inference_before_transport(monkey
         )
 
 
+@pytest.mark.asyncio
+async def test_qwen_intl_sends_image_parts_and_qwen4_output_floor(monkeypatch):
+    import httpx
+    from openai import AsyncOpenAI
+
+    base = "https://dashscope-intl.aliyuncs.com/compatible-mode/v1"
+    monkeypatch.setenv("QWEN_INTL_API_KEY", "sk-intl-demo")
+    calls = []
+
+    def respond(request):
+        calls.append(json.loads(request.content))
+        return httpx.Response(
+            200,
+            json={
+                "id": "chatcmpl-demo",
+                "created": 1794400000,
+                "model": "qwen4-max",
+                "object": "chat.completion",
+                "usage": {"prompt_tokens": 20, "completion_tokens": 5, "total_tokens": 25},
+                "choices": [
+                    {
+                        "index": 0,
+                        "message": {"role": "assistant", "content": "seen"},
+                        "finish_reason": "stop",
+                    }
+                ],
+            },
+        )
+
+    gateway = LiteLLMGateway()
+    system = "S" * 4000
+    async with httpx.AsyncClient(transport=httpx.MockTransport(respond)) as http:
+        client = AsyncOpenAI(api_key="sk-intl-demo", base_url=base, http_client=http)
+        completion = gateway._acompletion_with_retry
+
+        async def routed(params):
+            assert params["api_base"] == base and params["api_key"] == "sk-intl-demo"
+            return await completion(params)
+
+        monkeypatch.setattr(gateway, "_acompletion_with_retry", routed)
+        response = await gateway.chat_completion(
+            [
+                Message(role="system", content=system),
+                Message(
+                    role="user",
+                    content=[
+                        {"type": "text", "text": "look"},
+                        {
+                            "type": "image_url",
+                            "image_url": {"url": "data:image/png;base64,aaaa"},
+                        },
+                    ],
+                ),
+            ],
+            "qwen4-max",
+            provider="qwen-intl",
+            max_tokens=768,
+            client=client,
+        )
+
+    assert response.content == "seen"
+    [body] = calls
+    image = body["messages"][1]["content"][1]
+    assert image["type"] == "image_url"
+    assert image["image_url"]["url"] == "data:image/png;base64,aaaa"
+    assert body["max_completion_tokens"] == 32768
+    assert "max_tokens" not in body
+    assert body["reasoning_effort"] == "low" and body["enable_thinking"] is True
+    assert body["messages"][0]["content"][0]["prompt_cache_breakpoint"] == {"mode": "explicit"}
+    assert body["prompt_cache_options"] == {"mode": "explicit", "ttl": "5m"}
+
+
+@pytest.mark.asyncio
+async def test_token_plan_refuses_headless_and_paygo_keys(monkeypatch):
+    monkeypatch.setenv("ALIBABA_TOKEN_PLAN_API_KEY", "sk-sp-plan-test")
+    monkeypatch.setenv("SUPERQODE_NONINTERACTIVE", "1")
+    gateway = LiteLLMGateway()
+    monkeypatch.setattr(gateway, "_get_litellm", lambda: object())
+
+    async def unexpected(_):
+        pytest.fail("Token Plan reached the gateway transport")
+
+    monkeypatch.setattr(gateway, "_acompletion_with_retry", unexpected)
+    with pytest.raises(ValueError, match="interactive"):
+        await gateway.chat_completion(
+            [Message(role="user", content="hello")], "qwen4-max", provider="alibaba-token-plan"
+        )
+
+
+def test_qwen4_cache_respects_the_disable_flag(monkeypatch):
+    monkeypatch.setenv("SUPERQODE_DISABLE_PROMPT_CACHE", "1")
+    monkeypatch.setenv("QWEN_INTL_API_KEY", "sk-intl")
+    gateway = LiteLLMGateway()
+    kwargs = {
+        "api_key": "sk-intl",
+        "api_base": "https://dashscope-intl.aliyuncs.com/compatible-mode/v1",
+        "messages": [{"role": "system", "content": "S" * 4000}],
+    }
+    gateway._apply_model_studio_options("qwen-intl", "qwen4-max", "off", kwargs)
+    assert "prompt_cache_options" not in (kwargs.get("extra_body") or {})
+    assert kwargs["messages"][0]["content"] == "S" * 4000
+    assert kwargs["extra_body"]["enable_thinking"] is False
+
+
 def test_ds4_thinking_default_omits_field(monkeypatch):
     """Unset env returns None so DS4's own default thinking regime applies."""
     monkeypatch.delenv("SUPERQODE_DS4_THINKING", raising=False)

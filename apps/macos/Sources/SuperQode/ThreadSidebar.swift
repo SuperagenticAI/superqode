@@ -88,22 +88,35 @@ struct SidebarView: View {
     VStack(alignment: .leading, spacing: 0) {
       VStack(alignment: .leading, spacing: 14) {
         BrandWordmark().padding(.top, 8)
-        HStack(spacing: 8) {
-          Menu {
-            Button("Open project…", action: app.chooseProject)
-            Divider()
-            ForEach(app.projects, id: \.projectRowID) { row in
-              Button(string(row, "name", URL(fileURLWithPath: string(row, "path")).lastPathComponent)) {
-                app.openProjectInAgentSpace(string(row, "path"))
-              }
-            }
-          } label: {
-            Label(string(app.project, "name", "Open project"), systemImage: "folder")
+        if app.project.isEmpty {
+          Button(action: app.chooseProject) {
+            Label("Open project", systemImage: "folder")
               .font(.system(size: 12, weight: .semibold)).lineLimit(1)
-          }.menuStyle(.borderlessButton)
-          Spacer(minLength: 0)
-          Button(action: app.chooseProject) { Image(systemName: "folder.badge.plus") }
-            .buttonStyle(.plain).help("Open another project").accessibilityLabel("Open another project")
+              .frame(maxWidth: .infinity, alignment: .leading)
+              .contentShape(Rectangle())
+          }
+          .buttonStyle(.plain)
+          .disabled(!app.connected || app.openingProject)
+          .accessibilityIdentifier("sidebar.openProject")
+          .accessibilityLabel("Open project")
+        } else {
+          HStack(spacing: 8) {
+            Menu {
+              Button("Open project…", action: app.chooseProject)
+              Divider()
+              ForEach(app.projects, id: \.projectRowID) { row in
+                Button(string(row, "name", URL(fileURLWithPath: string(row, "path")).lastPathComponent)) {
+                  app.openProjectInAgentSpace(string(row, "path"))
+                }
+              }
+            } label: {
+              Label(string(app.project, "name", "Open project"), systemImage: "folder")
+                .font(.system(size: 12, weight: .semibold)).lineLimit(1)
+            }.menuStyle(.borderlessButton)
+            Spacer(minLength: 0)
+            Button(action: app.chooseProject) { Image(systemName: "folder.badge.plus") }
+              .buttonStyle(.plain).help("Open another project").accessibilityLabel("Open another project")
+          }
         }
         HStack {
           Text("THREADS").font(.system(size: 10, weight: .bold)).tracking(1.4).foregroundStyle(.secondary)

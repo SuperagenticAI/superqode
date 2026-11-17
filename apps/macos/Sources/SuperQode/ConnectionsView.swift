@@ -37,10 +37,12 @@ struct ProviderConnectionView: View {
     var releaseDate: String? = nil
   }
 
-  private static let alibabaRoutes = ["qwen-intl", "qwen-cn", "alibaba"]
+  private static let alibabaRoutes = ["qwen-intl", "qwen-cn", "alibaba-token-plan", "alibaba"]
   private static let groupedRoutes = ["alibaba": alibabaRoutes, "zai": ["zai", "zhipu"]]
   private static let groupedNames = ["alibaba": "Alibaba Model Studio", "zai": "Z.AI"]
-  private static let hiddenGroupMembers: Set<String> = ["qwen-intl", "qwen-cn", "zhipu"]
+  private static let hiddenGroupMembers: Set<String> = [
+    "qwen-intl", "qwen-cn", "alibaba-token-plan", "zhipu",
+  ]
   private static let chinaOrder = [
     "deepseek", "moonshot", "zai", "minimax", "doubao", "baidu", "siliconflow",
   ]
@@ -64,8 +66,9 @@ struct ProviderConnectionView: View {
     return app.providers.filter { row in
       let id = string(row, "id")
       // The catalog also lists subscription plans that authenticate with keys.
+      let namedPlan = id.split(separator: "-").contains("plan") && id != "alibaba-token-plan"
       return row["local"] as? Bool != true && row["key_supported"] as? Bool == true
-        && id != "alibaba-cn" && !id.split(separator: "-").contains("plan")
+        && id != "alibaba-cn" && !namedPlan
         && (allowed?.contains(id) ?? true)
     }
   }
@@ -78,12 +81,38 @@ struct ProviderConnectionView: View {
   private var working: Bool { saving || restoringKey }
   private var modelID: String { selectedModel.trimmingCharacters(in: .whitespacesAndNewlines) }
   private var suppliedKey: String { key.trimmingCharacters(in: .whitespacesAndNewlines) }
+  private var meteredRoute: Bool {
+    route == "qwen-intl" || route == "qwen-cn" || route == "alibaba"
+  }
   private func requiresPlan(_ id: String, for route: String) -> Bool {
-    Self.alibabaRoutes.contains(route) && id.lowercased() == "qwen4-max-preview"
+    (route == "qwen-intl" || route == "qwen-cn" || route == "alibaba")
+      && id.lowercased() == "qwen4-max-preview"
+  }
+  private var keyMismatch: Bool {
+    guard !suppliedKey.isEmpty else { return false }
+    if route == "alibaba-token-plan" { return !suppliedKey.hasPrefix("sk-sp-") }
+    if meteredRoute { return suppliedKey.hasPrefix("sk-sp-") }
+    return false
   }
   private var canConnect: Bool {
-    !working && !modelID.isEmpty && !requiresPlan(modelID, for: route)
+    !working && !modelID.isEmpty && !requiresPlan(modelID, for: route) && !keyMismatch
       && (configured || !suppliedKey.isEmpty)
+  }
+  private var studioGuidance: String? {
+    switch route {
+    case "qwen-intl" where modelID.isEmpty || modelID == "qwen4-max":
+      return "Singapore pay-as-you-go. qwen4-max is $1.50 in and $4.50 out per million tokens. Cache reads are $0.075. New accounts get 1 million free tokens for 90 days. Thinking counts toward that quota. In the console, turn on Free quota only so the account does not auto-bill when the grant ends."
+    case "qwen-intl":
+      return "Use a Model Studio API key issued for the international region."
+    case "qwen-cn":
+      return "China pay-as-you-go key. It does not use the Singapore free quota. qwen4-max is available here. A Token Plan key belongs on Token Plan."
+    case "alibaba-token-plan":
+      return "Token Plan key (sk-sp-) for interactive coding. The endpoint is fixed. Headless and batch jobs are refused. Coding Plan is a different host and does not include qwen4-max. Use Qwen Code and /auth for Coding Plan. qwen4-max-preview stays on this plan through 25 November 2026."
+    case "alibaba":
+      return "Older DashScope API for earlier Qwen ids. Qwen4-Max uses International."
+    default:
+      return Self.apiKeyNotes[route] ?? provider["notes"] as? String
+    }
   }
 
   var body: some View {
@@ -158,7 +187,7 @@ struct ProviderConnectionView: View {
             }
           } else {
             if let featured {
-              providerButton(featured, subtitle: "Connect Qwen and other models with a Model Studio API key.")
+              providerButton(featured, subtitle: "Connect Qwen4-Max with a Singapore Model Studio API key.")
             }
             providerSection("China Labs", rows: curated, category: "China Labs", order: Self.chinaOrder)
             providerSection("US Labs", rows: curated, category: "US Labs", order: Self.usOrder)
@@ -238,7 +267,27 @@ struct ProviderConnectionView: View {
           Link(destination: url) { Label("Provider docs", systemImage: "arrow.up.right.square") }
         }
       }.padding(.horizontal, 24).padding(.vertical, 14)
-      if choice.routes.count > 1 {
+      if choice.routes.contains("qwen-intl") {
+        let shown = choice.routes.filter { $0 != "alibaba" }
+        if route == "alibaba" {
+          VStack(alignment: .leading, spacing: 8) {
+            Text("DashScope is the older API. Qwen4-Max uses International.")
+              .font(.callout).foregroundStyle(.secondary)
+            Button("Use International") { chooseRoute("qwen-intl", keepKey: true) }
+          }
+          .padding(.horizontal, 24).padding(.bottom, 14)
+        } else if !shown.isEmpty {
+          Picker("API route", selection: Binding(
+            get: { route },
+            set: { chooseRoute($0, keepKey: true) }
+          )) {
+            ForEach(shown, id: \.self) { id in Text(routeTitle(id)).tag(id) }
+          }
+          .pickerStyle(.segmented)
+          .disabled(working)
+          .padding(.horizontal, 24).padding(.bottom, 14)
+        }
+      } else if choice.routes.count > 1 {
         Picker("API route", selection: Binding(get: { route }, set: { chooseRoute($0) })) {
           ForEach(choice.routes, id: \.self) { id in Text(routeTitle(id)).tag(id) }
         }
@@ -316,7 +365,13 @@ struct ProviderConnectionView: View {
         TextField("Model ID", text: $selectedModel).textFieldStyle(.roundedBorder).disabled(working)
           .accessibilityLabel("Model ID")
         if requiresPlan(modelID, for: route) {
-          Text("Choose a model available through the Model Studio API.")
+          Text("Choose a model available through the Model Studio API. qwen4-max-preview is Token Plan only.")
+            .font(.caption).foregroundStyle(.secondary)
+        }
+        if keyMismatch {
+          Text(route == "alibaba-token-plan"
+            ? "Token Plan keys start with sk-sp-. A pay-as-you-go key uses International."
+            : "A key starting with sk-sp- belongs on Token Plan, not pay-as-you-go.")
             .font(.caption).foregroundStyle(.secondary)
         }
         if !catalogError.isEmpty { Text(catalogError).font(.caption).foregroundStyle(.secondary) }
@@ -346,8 +401,22 @@ struct ProviderConnectionView: View {
         Text(variables.joined(separator: "\n")).font(.caption.monospaced()).foregroundStyle(.secondary)
           .textSelection(.enabled)
       }
-      if let notes = Self.apiKeyNotes[route] ?? provider["notes"] as? String, !notes.isEmpty {
+      if let notes = studioGuidance, !notes.isEmpty {
         Text(notes).font(.caption).foregroundStyle(.secondary)
+      }
+      if route == "qwen-intl", let url = URL(string: "https://modelstudio.console.alibabacloud.com/ap-southeast-1") {
+        Link("Open Singapore console", destination: url)
+      }
+      if route == "alibaba-token-plan",
+        let url = URL(string: "https://modelstudio.console.alibabacloud.com/ap-southeast-1/subscription/token-plan/personal") {
+        Link("Open Token Plan", destination: url)
+      }
+      if route == "qwen-intl" || route == "qwen-cn" {
+        DisclosureGroup("Older DashScope API") {
+          Text("Earlier Qwen ids. Qwen4-Max uses International.")
+            .font(.caption).foregroundStyle(.secondary)
+          Button("Use DashScope") { chooseRoute("alibaba", keepKey: true) }
+        }
       }
       if modelStudio {
         Divider().padding(.vertical, 3)
@@ -367,7 +436,12 @@ struct ProviderConnectionView: View {
       }
     }
     .disabled(working)
-    .onChange(of: key) { _, _ in resetWorkspaceModels() }
+    .onChange(of: key) { _, _ in
+      resetWorkspaceModels()
+      guard meteredRoute, suppliedKey.hasPrefix("sk-sp-") else { return }
+      chooseRoute("alibaba-token-plan", keepKey: true)
+      message = "This key starts with sk-sp-. Token Plan is selected so it is not saved as pay-as-you-go."
+    }
     .onChange(of: workspaceEndpoint) { _, _ in resetWorkspaceModels() }
   }
 
@@ -375,6 +449,7 @@ struct ProviderConnectionView: View {
     switch id {
     case "qwen-intl": "International"
     case "qwen-cn": "China"
+    case "alibaba-token-plan": "Token Plan"
     case "alibaba": "DashScope"
     case "zai": "Z.AI"
     case "zhipu": "Zhipu"
@@ -382,12 +457,13 @@ struct ProviderConnectionView: View {
     }
   }
 
-  private func chooseRoute(_ id: String) {
+  private func chooseRoute(_ id: String, keepKey: Bool = false) {
     guard route != id else { return }
+    let preservedKey = key
     route = id
     let row = app.providers.first { string($0, "id") == id } ?? [:]
     selectedModel = id == app.provider ? app.model : ""
-    key = ""
+    key = keepKey ? preservedKey : ""
     message = ""
     models = []
     modelQuery = ""
@@ -412,6 +488,9 @@ struct ProviderConnectionView: View {
           return ModelRow(id: model, name: model, releaseDate: String(label.dropLast(modelSuffix.count)))
         }
         return ModelRow(id: model, name: label)
+      }
+      if selectedModel.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty, ids.contains("qwen4-max") {
+        selectedModel = "qwen4-max"
       }
       catalogError = ""
     } catch {
@@ -500,9 +579,11 @@ struct ProviderConnectionView: View {
         self.key = ""
         app.section = "Workspace"
         if !app.projectID.isEmpty { app.showWelcome = false }
+        let thinking = (model == "qwen4-max" || model == "qwen4-max-preview")
+          ? " Thinking starts at low." : ""
         app.notice = app.projectID.isEmpty
-          ? "Provider selected. Open a project to use it."
-          : "Provider selected. Use Test model to verify the connection."
+          ? "Provider selected. Open a project, then use Test model." + thinking
+          : "Provider selected. Use Test model to verify the connection." + thinking
         dismiss()
       } catch { message = error.localizedDescription }
     }

@@ -37,8 +37,9 @@ console. In the TUI, configure Qwen Code in the same way before connecting
 with `:connect qwen-code`.
 
 Qwen Code owns model selection and billing for this connection. Its
-subscription keys are for interactive AI coding. Core and other SuperQode
-BYOK harnesses use the regional Model Studio API keys below.
+subscription keys are for interactive AI coding. Coding Plan does not include
+`qwen4-max`. Core and other SuperQode harnesses use the regional Model Studio
+API keys below, or the native Token Plan connection.
 
 [Alibaba's Qwen Code setup](https://www.alibabacloud.com/help/en/model-studio/qwen-code.md) ·
 [Alibaba's supported uses by plan](https://www.alibabacloud.com/help/en/model-studio/more-tools)
@@ -56,11 +57,20 @@ Qwen Code subscriptions and token plans:
 
 Use a key issued for the selected region. The two routes keep credentials
 separate. Saving a key does not send a model request or verify entitlement.
-For an international workspace, start with `qwen3.8-flash` for speed and
-`qwen3.7-plus` for a balanced option. You can compare them with `glm-5.3`
-and `deepseek-v4.1-flash` if your workspace offers them. The Model Studio
-route translates SuperQode's thinking effort for those models. GLM-5.3
-always thinks, even if the selected effort is off.
+For an international workspace, start with `qwen4-max`. Keep `qwen3.8-flash`
+when you want the cheaper, faster option. You can compare them with
+`qwen3.7-plus`, `glm-5.3`, and `deepseek-v4.1-flash` if your workspace offers
+them. The Model Studio route translates SuperQode's thinking effort for those
+models. On `qwen4-max`, an unset effort stays at low so a trial turn does not
+use the API's high default. GLM-5.3 always thinks, even if the selected effort
+is off.
+
+Singapore pay-as-you-go for `qwen4-max` is $1.50 input and $4.50 output per
+million tokens. Cache reads are $0.075. A new international account includes
+1 million free tokens for 90 days, and thinking counts toward that quota.
+Turn on **Free quota only** in the console so the account does not start
+billing when the grant ends. A key that starts with `sk-sp-` is not this
+route.
 
 In the macOS app, choose **Provider API key → Qwen · International API**,
 enter the key and your workspace endpoint if Alibaba issued one, then click
@@ -71,7 +81,7 @@ to verify inference. In a shell or the TUI, use:
 ```text
 superqode models --provider qwen-intl --live
 :models provider qwen-intl live
-:connect byok qwen-intl qwen3.8-flash
+:connect byok qwen-intl qwen4-max
 ```
 
 The macOS picker shows context and output limits when the workspace catalog
@@ -91,9 +101,25 @@ ending in `/compatible-mode/v1`. SuperQode lists chat models from Alibaba's
 workspace catalog where available and labels offline examples as unverified.
 Listing a model does not guarantee inference access or a particular price.
 
-The metered routes reject Token Plan credentials. For a plan you already
-have, use Qwen Code's `/auth` menu. The `qwen4-max-preview` Token Plan model
-is excluded from metered discovery. See [Alibaba's API key setup](https://www.alibabacloud.com/help/en/model-studio/get-api-key),
+The metered routes reject Token Plan credentials. In the macOS app, pasting a
+key that starts with `sk-sp-` switches to Token Plan instead of saving it on
+pay-as-you-go.
+
+## Token Plan
+
+Token Plan is a separate interactive connection, `alibaba-token-plan`. It uses
+an `sk-sp-` key and the fixed endpoint
+`https://token-plan.ap-southeast-1.maas.aliyuncs.com/compatible-mode/v1`.
+The model list leads with `qwen4-max`. Headless runs, evaluations, and batch
+jobs are refused. `qwen4-max-preview` stays on this plan through 25 November
+2026 and is excluded from metered discovery.
+
+```text
+:connect byok alibaba-token-plan qwen4-max
+```
+
+Coding Plan is not this connection. It does not include `qwen4-max`. Use Qwen
+Code and `/auth` for Coding Plan. See [Alibaba's API key setup](https://www.alibabacloud.com/help/en/model-studio/get-api-key),
 [workspace endpoints](https://www.alibabacloud.com/help/en/model-studio/base-url),
 and [models and pricing](https://www.alibabacloud.com/help/en/model-studio/models).
 
@@ -123,7 +149,8 @@ Qwen is available through several distinct paths:
 | Goal | Route |
 | --- | --- |
 | Use the complete first-party Qwen Code agent | `:connect qwen-code` |
-| Use a metered Model Studio model inside a SuperQode harness | `:connect byok qwen-intl <model>` or `:connect byok qwen-cn <model>` |
+| Use a metered Model Studio model inside a SuperQode harness | `:connect byok qwen-intl qwen4-max` or `:connect byok qwen-cn <model>` |
+| Use an Alibaba Token Plan key for interactive coding | `:connect byok alibaba-token-plan qwen4-max` |
 | Use a local Qwen model inside the SuperQode native harness | `:connect local ollama <qwen-model>` |
 | Start a repository-owned Qwen coding HarnessSpec | `superqode harness init qwen-coder --template qwen-coding --output harness.yaml` |
 

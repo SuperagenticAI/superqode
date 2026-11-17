@@ -37,9 +37,16 @@ from .base import (
 from ..credentials import provider_api_key, sync_provider_env
 from ..model_studio import (
     METERED_PROVIDERS,
+    STUDIO_PROVIDERS,
+    TOKEN_PLAN_PROVIDER,
+    explain_failure,
     is_plan_model,
+    is_qwen4,
+    mark_explicit_cache,
+    output_limit,
     thinking_options,
     validate_metered_route,
+    validate_token_plan_route,
 )
 from ..model_specs import (
     normalize_model_for_provider,
@@ -633,29 +640,60 @@ class LiteLLMGateway(GatewayInterface):
                 resolved[name] = out
             request_kwargs["extra_headers"] = resolved
 
+    def _studio_failure(self, provider: str, error_text: str) -> str | None:
+        if provider not in STUDIO_PROVIDERS:
+            return None
+        definition = PROVIDERS.get(provider)
+        key = provider_api_key(definition) if definition else ""
+        from ..dynamic import resolve_base_url
+
+        base = resolve_base_url(definition) if definition else ""
+        return explain_failure(provider, error_text, key or "", base or "")
+
     def _apply_model_studio_options(
         self, provider: str, model: str, level: Optional[str], request_kwargs: Dict[str, Any]
     ) -> None:
-        if provider not in METERED_PROVIDERS:
+        if provider not in STUDIO_PROVIDERS:
             return
-        if is_plan_model(model.removeprefix("openai/")):
+        if provider in METERED_PROVIDERS and is_plan_model(model.removeprefix("openai/")):
             raise ValueError(f"{model} is available through Token Plan, not metered Model Studio.")
         key = request_kwargs.get("api_key")
         base_url = request_kwargs.get("api_base")
         if not key or not base_url:
+            variable = PROVIDERS[provider].env_vars[0]
             raise AuthenticationError(
-                f"Set {PROVIDERS[provider].env_vars[0]} and use its Model Studio endpoint.",
+                f"Set {variable} and use its Model Studio endpoint.",
                 provider=provider,
                 model=model,
                 error_type="authentication",
             )
-        validate_metered_route(base_url, key)
+        if provider == TOKEN_PLAN_PROVIDER:
+            validate_token_plan_route(base_url, key)
+        else:
+            validate_metered_route(base_url, key)
         options = thinking_options(model, level)
         if options:
             extra = dict(request_kwargs.get("extra_body") or {})
             # Explicit provider-specific tuning overrides the generic effort setting.
             if not {"reasoning_effort", "thinking_budget", "enable_thinking"}.intersection(extra):
                 extra.update(options)
+                request_kwargs["extra_body"] = extra
+        thinking = bool(options.get("enable_thinking", True)) if options else False
+        limit = output_limit(model, thinking, request_kwargs.get("max_tokens"))
+        if limit is not None:
+            request_kwargs.pop("max_tokens", None)
+            request_kwargs["max_completion_tokens"] = limit
+        cache_off = os.environ.get("SUPERQODE_DISABLE_PROMPT_CACHE", "").strip().lower() in {
+            "1",
+            "true",
+            "yes",
+            "on",
+        }
+        if is_qwen4(model) and not cache_off:
+            messages = request_kwargs.get("messages")
+            if isinstance(messages, list) and mark_explicit_cache(messages):
+                extra = dict(request_kwargs.get("extra_body") or {})
+                extra.setdefault("prompt_cache_options", {"mode": "explicit", "ttl": "5m"})
                 request_kwargs["extra_body"] = extra
         if request_kwargs.get("stream"):
             request_kwargs.setdefault("stream_options", {"include_usage": True})
@@ -1267,10 +1305,14 @@ class LiteLLMGateway(GatewayInterface):
 
         # Check for specific error types
         if isinstance(e, litellm.AuthenticationError):
+            explained = self._studio_failure(provider, error_msg)
             env_hint = f"Set {' or '.join(env_vars)}" if env_vars else ""
             raise AuthenticationError(
-                f"Invalid API key for provider '{provider}'. {env_hint}. "
-                f"Get your key at: {docs_url}",
+                explained
+                or (
+                    f"Invalid API key for provider '{provider}'. {env_hint}. "
+                    f"Get your key at: {docs_url}"
+                ),
                 provider=provider,
                 model=model,
                 error_type="authentication",
@@ -1309,8 +1351,9 @@ class LiteLLMGateway(GatewayInterface):
             ) from e
 
         if isinstance(e, litellm.BadRequestError):
+            explained = self._studio_failure(provider, error_msg)
             raise InvalidRequestError(
-                f"Invalid request to '{provider}': {error_msg}",
+                explained or f"Invalid request to '{provider}': {error_msg}",
                 provider=provider,
                 model=model,
                 error_type="invalid_request",
@@ -2703,7 +2746,7 @@ class LiteLLMGateway(GatewayInterface):
         reasoning_effort = kwargs.pop("reasoning_effort", None)
         structured_output_mode = kwargs.pop("structured_output_mode", None)
         response_schema = kwargs.get("response_schema")
-        if reasoning_effort and provider not in METERED_PROVIDERS:
+        if reasoning_effort and provider not in STUDIO_PROVIDERS:
             request_kwargs.update(self._resolve_reasoning_effort(provider, model, reasoning_effort))
         if structured_output_mode:
             request_kwargs.update(
@@ -3008,7 +3051,7 @@ class LiteLLMGateway(GatewayInterface):
         reasoning_effort = kwargs.pop("reasoning_effort", None)
         structured_output_mode = kwargs.pop("structured_output_mode", None)
         response_schema = kwargs.get("response_schema")
-        if reasoning_effort and provider not in METERED_PROVIDERS:
+        if reasoning_effort and provider not in STUDIO_PROVIDERS:
             request_kwargs.update(self._resolve_reasoning_effort(provider, model, reasoning_effort))
         if structured_output_mode:
             request_kwargs.update(

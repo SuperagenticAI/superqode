@@ -13,6 +13,7 @@ from dataclasses import dataclass, field
 from enum import Enum
 from typing import Dict, List, Optional
 
+from .model_studio import TOKEN_PLAN_BASE
 from .models import (
     LATEST_GOOGLE_FLASH_MODEL,
     LATEST_GOOGLE_MODEL_IDS,
@@ -375,9 +376,9 @@ PROVIDERS: Dict[str, ProviderDef] = {
         base_url_env="QWEN_CN_API_BASE",
         default_base_url="https://dashscope.aliyuncs.com/compatible-mode/v1",
         docs_url="https://www.alibabacloud.com/help/en/model-studio/get-api-key",
-        example_models=["qwen3-coder-plus", "qwen-plus"],
+        example_models=["qwen4-max", "qwen3-coder-plus", "qwen-plus"],
         dynamic=True,
-        notes="Metered Model Studio API for the China region. Use a key issued for this region. Coding Plan and Token Plan keys use separate endpoints; configure those through Qwen Code /auth instead. No model request is sent when saving a key.",
+        notes="Metered Model Studio API for the China region, including qwen4-max. Use a key issued for this region. Coding Plan and Token Plan keys use separate endpoints. No model request is sent when saving a key.",
     ),
     "qwen-intl": ProviderDef(
         id="qwen-intl",
@@ -390,6 +391,7 @@ PROVIDERS: Dict[str, ProviderDef] = {
         default_base_url="https://dashscope-intl.aliyuncs.com/compatible-mode/v1",
         docs_url="https://www.alibabacloud.com/help/en/model-studio/get-api-key",
         example_models=[
+            "qwen4-max",
             "qwen3.8-flash",
             "qwen3.7-plus",
             "glm-5.3",
@@ -398,7 +400,29 @@ PROVIDERS: Dict[str, ProviderDef] = {
             "qwen-plus",
         ],
         dynamic=True,
-        notes="Metered Model Studio API for the international region. Use an international-region key. A China-region or coding-plan key is not interchangeable. For Coding Plan or Token Plan, choose Qwen Code and enter /auth.",
+        notes="Metered Model Studio API for the international region, including qwen4-max. Use an international-region key. Coding Plan and Token Plan keys use separate endpoints.",
+    ),
+    "alibaba-token-plan": ProviderDef(
+        id="alibaba-token-plan",
+        name="Alibaba Token Plan",
+        tier=ProviderTier.TIER1,
+        category=ProviderCategory.CHINA_LABS,
+        env_vars=["ALIBABA_TOKEN_PLAN_API_KEY"],
+        litellm_prefix="openai/",
+        docs_url="https://modelstudio.console.alibabacloud.com/ap-southeast-1/subscription/token-plan/personal",
+        default_base_url=TOKEN_PLAN_BASE,
+        example_models=[
+            "qwen4-max",
+            "qwen3.8-flash",
+            "qwen3.8-max",
+            "qwen3.7-plus",
+            "glm-5.3",
+            "deepseek-v4.1-flash",
+        ],
+        dynamic=True,
+        auth_mode="subscription",
+        credential_prefix="sk-sp-",
+        notes="Interactive Token Plan only. Not pay-as-you-go. Coding Plan is a different host and does not include qwen4-max.",
     ),
     "alibaba": ProviderDef(
         id="alibaba",
@@ -415,7 +439,7 @@ PROVIDERS: Dict[str, ProviderDef] = {
             "qwen2.5-coder-32b-instruct",
             "qwen2.5-72b-instruct",
         ],
-        notes="DashScope API route. For explicit regional setup, choose Qwen China API or Qwen International API. Coding Plan and Token Plan keys belong to their dedicated endpoints; configure those through Qwen Code /auth.",
+        notes="Older DashScope API for earlier Qwen ids. Qwen4-Max uses Qwen International API. Coding Plan and Token Plan keys belong on their own endpoints.",
     ),
     "minimax": ProviderDef(
         id="minimax",

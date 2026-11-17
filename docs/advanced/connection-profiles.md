@@ -75,10 +75,12 @@ agents, with Hugging Face Tau shown alongside its live installation status.
 
 The SuperQode model-source picker offers **Local**, **BYOK** and
 **Use your subscription (Experimental)**. Every experimental provider card
-is labelled **Partner integration in progress**. Alibaba Token Plan, Grok,
-Kimi Code models, MiniMax Token Plan and OpenAI/ChatGPT are information-only
-entries: selecting one does not authenticate, switch harnesses or connect a
-model. Provider access and integration still need confirmation and testing.
+is labelled **Partner integration in progress**. The Alibaba Token Plan,
+Grok, Kimi Code models, MiniMax Token Plan and OpenAI/ChatGPT cards are
+information-only entries: selecting one does not authenticate, switch
+harnesses or connect a model. A Token Plan key still connects with
+`:connect byok alibaba-token-plan qwen4-max`. Provider access and integration
+still need confirmation and testing.
 Claude/Anthropic subscription access is excluded.
 
 Vendor agent accounts remain under **Existing harnesses → Subscriptions**.
@@ -88,6 +90,7 @@ compatibility; they are separate from the experimental cards.
 | Source | Route |
 | --- | --- |
 | MiniMax Token Plan | `:connect plan-minimax`: native model access using `MINIMAX_TOKEN_PLAN_API_KEY` with an `sk-cp` key, or `superqode auth login minimax-token-plan`. Uses `https://api.minimax.io/v1`; ordinary MiniMax/OpenAI keys cannot substitute. |
+| Alibaba Token Plan | `:connect byok alibaba-token-plan qwen4-max`: interactive sessions with an `sk-sp-` key at `https://token-plan.ap-southeast-1.maas.aliyuncs.com/compatible-mode/v1`. Pay-as-you-go keys stay on `qwen-intl`. Coding Plan stays on Qwen Code `/auth` and does not include `qwen4-max`. |
 | Grok account | `:connect plan-grok` / `:grok api`: native model access using the Grok CLI session. |
 
 Codex, Copilot, Kimi Code and other vendor agents retain their own coding

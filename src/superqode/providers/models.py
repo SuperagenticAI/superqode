@@ -2098,21 +2098,38 @@ def _catalog_label(model_id: str, released: str) -> str:
     return f"{text} · {model_id}"
 
 
-# Alibaba publishes this one Qwen 4 id on Token Plan. models.dev does not
-# list it, and pay-as-you-go DashScope does not serve it.
+# Qwen4-Max went GA on 16 November 2026. The preview id stays on Token Plan
+# until that window closes, and never on a metered route.
+_QWEN4_GA_ID = "qwen4-max"
+_QWEN4_GA_LABEL = "2026-11-16 · qwen4-max"
 _QWEN4_PREVIEW_ID = "qwen4-max-preview"
 _QWEN4_PREVIEW_LABEL = "Qwen 4 Max Preview · Token Plan"
-_QWEN4_PREVIEW_ROUTES = frozenset({"qwen-intl", "qwen-cn"})
+_METERED_QWEN_ROUTES = frozenset({"qwen-intl", "qwen-cn"})
 
 
 def _with_published_qwen4(
     provider_id: str, examples: list[tuple[str, str]]
 ) -> list[tuple[str, str]]:
-    if provider_id not in _QWEN4_PREVIEW_ROUTES:
+    from . import model_studio
+
+    if provider_id in _METERED_QWEN_ROUTES:
+        rest = [
+            (model_id, label)
+            for model_id, label in examples
+            if model_id not in {_QWEN4_GA_ID, _QWEN4_PREVIEW_ID}
+        ]
+        return [(_QWEN4_GA_ID, _QWEN4_GA_LABEL), *rest]
+    if provider_id != model_studio.TOKEN_PLAN_PROVIDER:
         return examples
-    if any(model_id == _QWEN4_PREVIEW_ID for model_id, _label in examples):
-        return examples
-    return [(_QWEN4_PREVIEW_ID, _QWEN4_PREVIEW_LABEL), *examples]
+    rest = [
+        (model_id, label)
+        for model_id, label in examples
+        if model_id not in {_QWEN4_GA_ID, _QWEN4_PREVIEW_ID}
+    ]
+    pinned = [(_QWEN4_GA_ID, _QWEN4_GA_LABEL)]
+    if model_studio.preview_open():
+        pinned.append((_QWEN4_PREVIEW_ID, _QWEN4_PREVIEW_LABEL))
+    return pinned + rest
 
 
 def catalog_examples(provider_id: str) -> list[tuple[str, str]]:
