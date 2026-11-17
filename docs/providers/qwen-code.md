@@ -48,35 +48,42 @@ API keys below, or the native Token Plan connection.
 
 For Core or another BYOK harness, the model-provider picker also offers
 `qwen-cn` and `qwen-intl`. These are metered Model Studio APIs, separate from
-Qwen Code subscriptions and token plans:
+Qwen Code subscriptions and token plans. SuperQode does not choose the region.
+In Model Studio, pick the region, create the key there, and copy the
+OpenAI-compatible base URL. A key works only with the region that issued it.
+The two routes keep credentials separate. Saving a key does not send a model
+request or verify entitlement.
 
-| Route | SuperQode key variable | Default endpoint | Optional endpoint override |
-| --- | --- | --- | --- |
-| China API, `qwen-cn` | `QWEN_CN_API_KEY` | `https://dashscope.aliyuncs.com/compatible-mode/v1` | `QWEN_CN_API_BASE` |
-| International API, `qwen-intl` | `QWEN_INTL_API_KEY` | `https://dashscope-intl.aliyuncs.com/compatible-mode/v1` | `QWEN_INTL_API_BASE` |
+| Route | SuperQode key variable | Endpoint |
+| --- | --- | --- |
+| Region you choose, `qwen-intl` | `QWEN_INTL_API_KEY` | The OpenAI-compatible URL from that console. In the shell, set `QWEN_INTL_API_BASE`. |
+| China API, `qwen-cn` | `QWEN_CN_API_KEY` | `https://dashscope.aliyuncs.com/compatible-mode/v1`, or a China workspace URL in `QWEN_CN_API_BASE`. |
 
-Use a key issued for the selected region. The two routes keep credentials
-separate. Saving a key does not send a model request or verify entitlement.
-For an international workspace, start with `qwen4-max`. Keep `qwen3.8-flash`
-when you want the cheaper, faster option. You can compare them with
-`qwen3.7-plus`, `glm-5.3`, and `deepseek-v4.1-flash` if your workspace offers
-them. The Model Studio route translates SuperQode's thinking effort for those
-models. On `qwen4-max`, an unset effort stays at low so a trial turn does not
-use the API's high default. GLM-5.3 always thinks, even if the selected effort
-is off.
+The macOS **Your region** screen stays off until that URL is pasted. It accepts
+an official Model Studio host (`*.maas.aliyuncs.com` or a DashScope host) whose
+path is `/compatible-mode/v1`, including a region Alibaba adds later. Token
+Plan and Coding Plan hosts are rejected on this route. A host outside Model
+Studio is rejected so the key is not sent elsewhere. Prices and free quota
+stay in the Model Studio console, because Alibaba can change them.
 
-Singapore pay-as-you-go for `qwen4-max` is $1.50 input and $4.50 output per
-million tokens. Cache reads are $0.075. A new international account includes
-1 million free tokens for 90 days, and thinking counts toward that quota.
-Turn on **Free quota only** in the console so the account does not start
-billing when the grant ends. A key that starts with `sk-sp-` is not this
-route.
+In the shell, set `QWEN_INTL_API_BASE` to the same URL. If that variable is
+unset, existing shell commands still reach
+`https://dashscope-intl.aliyuncs.com/compatible-mode/v1`. Set the variable when
+the console shows a different region.
 
-In the macOS app, choose **Provider API key → Qwen · International API**,
-enter the key and your workspace endpoint if Alibaba issued one, then click
-**Load workspace models**. This lists model IDs
-without saving the key or sending a prompt. Select an ID and use **Test model**
-to verify inference. In a shell or the TUI, use:
+Start with `qwen4-max` when the workspace lists it. Keep `qwen3.8-flash` when
+you want the cheaper, faster option. You can compare them with `qwen3.7-plus`,
+`glm-5.3`, and `deepseek-v4.1-flash` if your workspace offers them. The Model
+Studio route translates SuperQode's thinking effort for those models. On
+`qwen4-max`, an unset effort stays at low so a trial turn does not use the
+API's high default. GLM-5.3 always thinks, even if the selected effort is off.
+A key that starts with `sk-sp-` is not this route.
+
+In the macOS app, choose **Alibaba Model Studio**, leave **Your region**
+selected, paste the key and the endpoint, then click **Load workspace models**.
+This lists model IDs without saving the key or sending a prompt. Select an ID
+and use **Test model** to verify inference. In a shell or the TUI, set
+`QWEN_INTL_API_BASE`, then use:
 
 ```text
 superqode models --provider qwen-intl --live

@@ -382,7 +382,7 @@ PROVIDERS: Dict[str, ProviderDef] = {
     ),
     "qwen-intl": ProviderDef(
         id="qwen-intl",
-        name="Qwen · International API",
+        name="Qwen · Model Studio",
         tier=ProviderTier.TIER1,
         category=ProviderCategory.CHINA_LABS,
         env_vars=["QWEN_INTL_API_KEY"],
@@ -400,7 +400,7 @@ PROVIDERS: Dict[str, ProviderDef] = {
             "qwen-plus",
         ],
         dynamic=True,
-        notes="Metered Model Studio API for the international region, including qwen4-max. Use an international-region key. Coding Plan and Token Plan keys use separate endpoints.",
+        notes="Metered Model Studio API, including qwen4-max. Paste the OpenAI-compatible URL for the region you chose in the console. Coding Plan and Token Plan keys use separate endpoints.",
     ),
     "alibaba-token-plan": ProviderDef(
         id="alibaba-token-plan",
@@ -439,7 +439,7 @@ PROVIDERS: Dict[str, ProviderDef] = {
             "qwen2.5-coder-32b-instruct",
             "qwen2.5-72b-instruct",
         ],
-        notes="Older DashScope API for earlier Qwen ids. Qwen4-Max uses Qwen International API. Coding Plan and Token Plan keys belong on their own endpoints.",
+        notes="Older DashScope API for earlier Qwen ids. Qwen4-Max uses the Model Studio URL you paste. Coding Plan and Token Plan keys belong on their own endpoints.",
     ),
     "minimax": ProviderDef(
         id="minimax",

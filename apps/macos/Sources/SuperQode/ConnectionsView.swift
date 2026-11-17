@@ -52,7 +52,7 @@ struct ProviderConnectionView: View {
     "xai": "xAI (Grok)", "meta": "Meta", "google": "Google", "siliconflow": "SiliconFlow",
   ]
   private static let apiKeyNotes = [
-    "qwen-intl": "Use a Model Studio API key issued for the international region.",
+    "qwen-intl": "Paste the Model Studio API key and the OpenAI-compatible URL from the region you chose.",
     "qwen-cn": "Use a Model Studio API key issued for the China region.",
     "alibaba": "Use a DashScope API key.",
     "xai": "Use an API key from the xAI Console.",
@@ -94,22 +94,26 @@ struct ProviderConnectionView: View {
     if meteredRoute { return suppliedKey.hasPrefix("sk-sp-") }
     return false
   }
+  private var regionEndpoint: String {
+    workspaceEndpoint.trimmingCharacters(in: .whitespacesAndNewlines)
+  }
+  /// Pay-as-you-go outside China has many Model Studio regions. The pasted URL is the region.
+  private var needsRegionEndpoint: Bool { route == "qwen-intl" }
   private var canConnect: Bool {
     !working && !modelID.isEmpty && !requiresPlan(modelID, for: route) && !keyMismatch
       && (configured || !suppliedKey.isEmpty)
+      && (!needsRegionEndpoint || !regionEndpoint.isEmpty)
   }
   private var studioGuidance: String? {
     switch route {
-    case "qwen-intl" where modelID.isEmpty || modelID == "qwen4-max":
-      return "Singapore pay-as-you-go. qwen4-max is $1.50 in and $4.50 out per million tokens. Cache reads are $0.075. New accounts get 1 million free tokens for 90 days. Thinking counts toward that quota. In the console, turn on Free quota only so the account does not auto-bill when the grant ends."
     case "qwen-intl":
-      return "Use a Model Studio API key issued for the international region."
+      return "Pay-as-you-go. In Model Studio, choose the region, then paste the OpenAI-compatible URL from that console. The key works only with the region that issued it. A new URL replaces the saved one. Coding Plan and Token Plan use other endpoints."
     case "qwen-cn":
-      return "China pay-as-you-go key. It does not use the Singapore free quota. qwen4-max is available here. A Token Plan key belongs on Token Plan."
+      return "China pay-as-you-go. Leave the endpoint empty to use the China shared host, or paste the workspace URL from the China console. A Token Plan key belongs on Token Plan."
     case "alibaba-token-plan":
-      return "Token Plan key (sk-sp-) for interactive coding. The endpoint is fixed. Headless and batch jobs are refused. Coding Plan is a different host and does not include qwen4-max. Use Qwen Code and /auth for Coding Plan. qwen4-max-preview stays on this plan through 25 November 2026."
+      return "Token Plan key (sk-sp-) for interactive coding. Alibaba publishes one endpoint for this plan. Headless and batch jobs are refused. Coding Plan is a different host and does not include qwen4-max. Use Qwen Code and /auth for Coding Plan. qwen4-max-preview stays on this plan through 25 November 2026."
     case "alibaba":
-      return "Older DashScope API for earlier Qwen ids. Qwen4-Max uses International."
+      return "Older DashScope API for earlier Qwen ids. Qwen4-Max uses the Model Studio URL you paste."
     default:
       return Self.apiKeyNotes[route] ?? provider["notes"] as? String
     }
@@ -187,7 +191,7 @@ struct ProviderConnectionView: View {
             }
           } else {
             if let featured {
-              providerButton(featured, subtitle: "Connect Qwen4-Max with a Singapore Model Studio API key.")
+              providerButton(featured, subtitle: "Connect Qwen4-Max with a Model Studio API key. You choose the region.")
             }
             providerSection("China Labs", rows: curated, category: "China Labs", order: Self.chinaOrder)
             providerSection("US Labs", rows: curated, category: "US Labs", order: Self.usOrder)
@@ -271,9 +275,9 @@ struct ProviderConnectionView: View {
         let shown = choice.routes.filter { $0 != "alibaba" }
         if route == "alibaba" {
           VStack(alignment: .leading, spacing: 8) {
-            Text("DashScope is the older API. Qwen4-Max uses International.")
+            Text("DashScope is the older API. Qwen4-Max uses the Model Studio URL you paste.")
               .font(.callout).foregroundStyle(.secondary)
-            Button("Use International") { chooseRoute("qwen-intl", keepKey: true) }
+            Button("Use your region") { chooseRoute("qwen-intl", keepKey: true) }
           }
           .padding(.horizontal, 24).padding(.bottom, 14)
         } else if !shown.isEmpty {
@@ -370,7 +374,7 @@ struct ProviderConnectionView: View {
         }
         if keyMismatch {
           Text(route == "alibaba-token-plan"
-            ? "Token Plan keys start with sk-sp-. A pay-as-you-go key uses International."
+            ? "Token Plan keys start with sk-sp-. A pay-as-you-go key uses the region that issued it."
             : "A key starting with sk-sp- belongs on Token Plan, not pay-as-you-go.")
             .font(.caption).foregroundStyle(.secondary)
         }
@@ -404,8 +408,9 @@ struct ProviderConnectionView: View {
       if let notes = studioGuidance, !notes.isEmpty {
         Text(notes).font(.caption).foregroundStyle(.secondary)
       }
-      if route == "qwen-intl", let url = URL(string: "https://modelstudio.console.alibabacloud.com/ap-southeast-1") {
-        Link("Open Singapore console", destination: url)
+      if route == "qwen-intl" || route == "qwen-cn",
+        let url = URL(string: "https://modelstudio.console.alibabacloud.com/") {
+        Link("Open Model Studio", destination: url)
       }
       if route == "alibaba-token-plan",
         let url = URL(string: "https://modelstudio.console.alibabacloud.com/ap-southeast-1/subscription/token-plan/personal") {
@@ -413,26 +418,49 @@ struct ProviderConnectionView: View {
       }
       if route == "qwen-intl" || route == "qwen-cn" {
         DisclosureGroup("Older DashScope API") {
-          Text("Earlier Qwen ids. Qwen4-Max uses International.")
+          Text("Earlier Qwen ids. Qwen4-Max uses the Model Studio URL you paste.")
             .font(.caption).foregroundStyle(.secondary)
           Button("Use DashScope") { chooseRoute("alibaba", keepKey: true) }
         }
       }
       if modelStudio {
         Divider().padding(.vertical, 3)
-        TextField("Workspace endpoint (optional)", text: $workspaceEndpoint).textFieldStyle(.roundedBorder)
+        TextField(
+          needsRegionEndpoint ? "Model Studio endpoint" : "Workspace endpoint (optional)",
+          text: $workspaceEndpoint,
+          prompt: Text(
+            needsRegionEndpoint
+              ? "https://workspace.region.maas.aliyuncs.com/compatible-mode/v1"
+              : "https://dashscope.aliyuncs.com/compatible-mode/v1"
+          )
+        )
+        .textFieldStyle(.roundedBorder)
+        .accessibilityIdentifier("provider.endpoint")
+        if needsRegionEndpoint && regionEndpoint.isEmpty {
+          Text("Paste the endpoint from the Model Studio region you selected. Use provider stays off until it is set.")
+            .font(.caption).foregroundStyle(.secondary)
+        }
+        if route == "qwen-cn" && regionEndpoint.isEmpty {
+          Text("Empty uses https://dashscope.aliyuncs.com/compatible-mode/v1.")
+            .font(.caption.monospaced()).foregroundStyle(.secondary).textSelection(.enabled)
+        }
         HStack {
           Button("Load workspace models", action: loadWorkspaceModels)
-            .disabled(workspaceLookup != nil || (suppliedKey.isEmpty && !configured))
+            .disabled(
+              workspaceLookup != nil || (suppliedKey.isEmpty && !configured)
+                || (needsRegionEndpoint && regionEndpoint.isEmpty)
+            )
           if workspaceLookup != nil { ProgressView().controlSize(.small) }
         }
         if !workspaceMessage.isEmpty {
           Text(workspaceMessage).font(.caption).foregroundStyle(.secondary)
         }
       }
-      let endpoint = string(provider, modelStudio ? "workspace_base_url" : "default_base_url")
-      if !endpoint.isEmpty {
-        Text(endpoint).font(.caption.monospaced()).foregroundStyle(.secondary).textSelection(.enabled)
+      if !modelStudio {
+        let endpoint = string(provider, "default_base_url")
+        if !endpoint.isEmpty {
+          Text(endpoint).font(.caption.monospaced()).foregroundStyle(.secondary).textSelection(.enabled)
+        }
       }
     }
     .disabled(working)
@@ -447,7 +475,7 @@ struct ProviderConnectionView: View {
 
   private func routeTitle(_ id: String) -> String {
     switch id {
-    case "qwen-intl": "International"
+    case "qwen-intl": "Your region"
     case "qwen-cn": "China"
     case "alibaba-token-plan": "Token Plan"
     case "alibaba": "DashScope"

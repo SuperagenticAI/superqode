@@ -105,46 +105,65 @@ def validate_token_plan_route(base_url: str, key: str) -> None:
         )
     if credential_kind(key) != "plan":
         raise ValueError(
-            "Token Plan keys start with sk-sp-. A Model Studio pay-as-you-go key uses International."
+            "Token Plan keys start with sk-sp-. A pay-as-you-go key uses the Model Studio region that issued it."
         )
 
 
+# Workspace hosts are {workspace}.{region}.maas.aliyuncs.com. Shared DashScope
+# hosts are dashscope.aliyuncs.com, dashscope-<region>.aliyuncs.com, or
+# <region>.dashscope.aliyuncs.com. A new region Alibaba publishes still matches.
+_OFFICIAL_METERED_HOST = re.compile(
+    r"(?:"
+    r"[a-z0-9-]+\.[a-z0-9-]+\.maas\.aliyuncs\.com"
+    r"|dashscope(?:-[a-z0-9-]+)?\.aliyuncs\.com"
+    r"|[a-z0-9-]+\.dashscope\.aliyuncs\.com"
+    r")"
+)
+_ENDPOINT_HINT = "Paste the HTTPS OpenAI-compatible URL from the Model Studio region you chose."
+
+
 def workspace_catalog_url(base_url: str) -> str | None:
-    parts = urlsplit(base_url)
-    host = parts.hostname or ""
+    parts = urlsplit((base_url or "").strip())
+    host = (parts.hostname or "").rstrip(".").lower()
     if (
         parts.scheme == "https"
-        and parts.netloc.lower() == host
+        and parts.port is None
+        and parts.username is None
         and parts.path.rstrip("/") == "/compatible-mode/v1"
         and not parts.query
         and not parts.fragment
         and re.fullmatch(r"[a-z0-9-]+\.[a-z0-9-]+\.maas\.aliyuncs\.com", host)
+        and not host.startswith("token-plan.")
     ):
         return f"https://{host}/api/v1/models"
     return None
 
 
 def validate_workspace_endpoint(base_url: str) -> str:
-    """Allow official metered Alibaba endpoints in the desktop picker."""
+    """Allow the OpenAI-compatible URL from any Model Studio region.
+
+    The desktop screen does not pick a region. The pasted host must be one
+    Alibaba publishes for Model Studio, so the key is not sent elsewhere.
+    Token Plan and Coding Plan hosts stay on their own routes.
+    """
     base_url = base_url.strip().rstrip("/")
     if len(base_url) > 512 or any(char.isspace() for char in base_url):
-        raise ValueError(
-            "Enter the HTTPS OpenAI-compatible Model Studio URL from your Alibaba console."
-        )
-    validate_metered_route(base_url, "")
-    if workspace_catalog_url(base_url) or base_url in {
-        f"https://{host}/compatible-mode/v1"
-        for host in (
-            "dashscope.aliyuncs.com",
-            "dashscope-intl.aliyuncs.com",
-            "dashscope-us.aliyuncs.com",
-            "cn-hongkong.dashscope.aliyuncs.com",
-        )
-    }:
-        return base_url
-    raise ValueError(
-        "Enter the HTTPS OpenAI-compatible Model Studio URL from your Alibaba console."
-    )
+        raise ValueError(_ENDPOINT_HINT)
+    parts = urlsplit(base_url)
+    host = (parts.hostname or "").rstrip(".").lower()
+    normalized = f"https://{host}/compatible-mode/v1" if host else base_url
+    validate_metered_route(normalized, "")
+    if (
+        parts.scheme == "https"
+        and parts.port is None
+        and parts.username is None
+        and not parts.query
+        and not parts.fragment
+        and parts.path.rstrip("/") == "/compatible-mode/v1"
+        and _OFFICIAL_METERED_HOST.fullmatch(host)
+    ):
+        return normalized
+    raise ValueError(_ENDPOINT_HINT)
 
 
 def thinking_options(model: str, level: str | None) -> dict:
@@ -288,11 +307,11 @@ def explain_failure(provider: str, error_text: str, key: str, base_url: str) -> 
             "This key and endpoint are not a Token Plan pair. "
             "Token Plan needs an sk-sp- key and "
             "https://token-plan.ap-southeast-1.maas.aliyuncs.com/compatible-mode/v1. "
-            "A pay-as-you-go key uses the International Model Studio endpoint. "
+            "A pay-as-you-go key uses the Model Studio endpoint for the region that issued it. "
             "Coding Plan uses a different host and does not include qwen4-max."
         )
     return (
         "This key and endpoint are not a pair. "
-        "An International key calls the Singapore endpoint, and a China key calls the China endpoint. "
+        "Use the API key from the same Model Studio region as this endpoint. "
         "A Token Plan key starts with sk-sp- and does not belong on pay-as-you-go."
     )

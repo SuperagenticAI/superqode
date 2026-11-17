@@ -13,6 +13,7 @@ from superqode.providers.model_studio import (
     thinking_options,
     thinking_policy,
     validate_token_plan_route,
+    validate_workspace_endpoint,
 )
 
 
@@ -67,8 +68,42 @@ def test_failure_text_names_the_key_and_endpoint_pair():
         "sk-intl",
         "https://dashscope-intl.aliyuncs.com/compatible-mode/v1",
     )
-    assert "International" in metered and "sk-intl" not in metered
+    assert "same Model Studio region" in metered and "sk-intl" not in metered
     assert "content check" in explain_failure("qwen-intl", "DataInspectionFailed", "", "")
+
+
+def test_workspace_endpoint_accepts_any_official_model_studio_region():
+    frankfurt = "https://ws-london.eu-central-1.maas.aliyuncs.com/compatible-mode/v1"
+    assert validate_workspace_endpoint(frankfurt + "/") == frankfurt
+    assert (
+        validate_workspace_endpoint(
+            "https://WS-Demo.ap-northeast-1.maas.aliyuncs.com/compatible-mode/v1"
+        )
+        == "https://ws-demo.ap-northeast-1.maas.aliyuncs.com/compatible-mode/v1"
+    )
+    assert (
+        validate_workspace_endpoint("https://dashscope-eu.aliyuncs.com/compatible-mode/v1")
+        == "https://dashscope-eu.aliyuncs.com/compatible-mode/v1"
+    )
+    assert (
+        validate_workspace_endpoint("https://cn-hongkong.dashscope.aliyuncs.com/compatible-mode/v1")
+        == "https://cn-hongkong.dashscope.aliyuncs.com/compatible-mode/v1"
+    )
+
+
+def test_workspace_endpoint_rejects_other_hosts_and_plan_routes():
+    with pytest.raises(ValueError, match="Model Studio region"):
+        validate_workspace_endpoint("https://example.com/compatible-mode/v1")
+    with pytest.raises(ValueError, match="sk-sp-"):
+        validate_workspace_endpoint(
+            "https://token-plan.ap-southeast-1.maas.aliyuncs.com/compatible-mode/v1"
+        )
+    with pytest.raises(ValueError, match="sk-sp-"):
+        validate_workspace_endpoint("https://coding-intl.dashscope.aliyuncs.com/compatible-mode/v1")
+    with pytest.raises(ValueError, match="Model Studio region"):
+        validate_workspace_endpoint(
+            "https://ws-demo.eu-central-1.maas.aliyuncs.com/compatible-mode/v1?x=1"
+        )
 
 
 def test_token_plan_route_rejects_a_paygo_key(monkeypatch):

@@ -7,6 +7,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+- Model Studio pay-as-you-go uses the OpenAI-compatible URL from the region
+  the user chose. The macOS app does not select a region. macOS 0.4.19
+  (build 45) bundles Python engine 2.31.21.
+
 ## [2.31.21] - 2026-11-17
 
 - The macOS welcome Start building card opens a project from anywhere on the

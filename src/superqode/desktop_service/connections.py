@@ -149,7 +149,12 @@ def list_connections(
             "credential_variables": list(definition.env_vars),
             "optional_credential_variables": list(definition.optional_env),
             "default_base_url": definition.default_base_url,
-            "workspace_base_url": configured_endpoint or resolve_base_url(definition)
+            # qwen-intl has no region until the user pastes one. qwen-cn is the
+            # China route, so an empty field still means the China shared host.
+            "workspace_base_url": (
+                configured_endpoint
+                or (resolve_base_url(definition) if definition.id == "qwen-cn" else None)
+            )
             if definition.id in METERED_PROVIDERS
             else None,
             "workspace_endpoint_override": configured_endpoint,

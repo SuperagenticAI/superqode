@@ -90,7 +90,7 @@ compatibility; they are separate from the experimental cards.
 | Source | Route |
 | --- | --- |
 | MiniMax Token Plan | `:connect plan-minimax`: native model access using `MINIMAX_TOKEN_PLAN_API_KEY` with an `sk-cp` key, or `superqode auth login minimax-token-plan`. Uses `https://api.minimax.io/v1`; ordinary MiniMax/OpenAI keys cannot substitute. |
-| Alibaba Token Plan | `:connect byok alibaba-token-plan qwen4-max`: interactive sessions with an `sk-sp-` key at `https://token-plan.ap-southeast-1.maas.aliyuncs.com/compatible-mode/v1`. Pay-as-you-go keys stay on `qwen-intl`. Coding Plan stays on Qwen Code `/auth` and does not include `qwen4-max`. |
+| Alibaba Token Plan | `:connect byok alibaba-token-plan qwen4-max`: interactive sessions with an `sk-sp-` key at `https://token-plan.ap-southeast-1.maas.aliyuncs.com/compatible-mode/v1`. Pay-as-you-go keys stay on `qwen-intl` with the OpenAI-compatible URL from the Model Studio region you chose. Coding Plan stays on Qwen Code `/auth` and does not include `qwen4-max`. |
 | Grok account | `:connect plan-grok` / `:grok api`: native model access using the Grok CLI session. |
 
 Codex, Copilot, Kimi Code and other vendor agents retain their own coding
