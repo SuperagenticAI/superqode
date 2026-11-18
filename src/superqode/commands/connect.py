@@ -278,6 +278,10 @@ def connect_setup(provider, json_output):
         click.echo(f"\nBase URL:  export {pdef.base_url_env}={pdef.default_base_url or '<url>'}")
         if pdef.default_base_url:
             click.echo(f"           (defaults to {pdef.default_base_url})")
+        if pdef.id in {"qwen-intl", "qwen-cn"}:
+            from superqode.providers.model_studio import WORKSPACE_URL_HINT
+
+            click.echo(f"           {WORKSPACE_URL_HINT}")
     if pdef.docs_url:
         click.echo(f"\nDocs:      {pdef.docs_url}")
     if examples:

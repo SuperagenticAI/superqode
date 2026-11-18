@@ -69,7 +69,8 @@ stay in the Model Studio console, because Alibaba can change them.
 In the shell, set `QWEN_INTL_API_BASE` to the same URL. If that variable is
 unset, existing shell commands still reach
 `https://dashscope-intl.aliyuncs.com/compatible-mode/v1`. Set the variable when
-the console shows a different region.
+the console shows a different region. A workspace URL from the region you chose
+receives new features. The shared host remains the default.
 
 Start with `qwen4-max` when the workspace lists it. Keep `qwen3.8-flash` when
 you want the cheaper, faster option. You can compare them with `qwen3.7-plus`,
@@ -94,7 +95,8 @@ superqode models --provider qwen-intl --live
 The macOS picker lists the model IDs the workspace returns. Context, tool and
 thinking metadata are not shown yet. GLM-5.3 always uses reasoning, so selecting
 Off does not disable it. Model listing and the no-tool Test model action do not
-certify tool calling or coding quality.
+certify tool calling or coding quality. Outside that picker, `qwen4-max` uses
+the published 1,000,000-token context, so a session does not compact at about 8K.
 
 The thinking adapter also recognises `deepseek-v4-pro` and
 `deepseek-v4.1-flash-1017`, alongside the supported dated DeepSeek aliases.

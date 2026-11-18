@@ -9,6 +9,13 @@ METERED_PROVIDERS = frozenset({"qwen-cn", "qwen-intl"})
 TOKEN_PLAN_PROVIDER = "alibaba-token-plan"
 STUDIO_PROVIDERS = METERED_PROVIDERS | {TOKEN_PLAN_PROVIDER}
 TOKEN_PLAN_BASE = "https://token-plan.ap-southeast-1.maas.aliyuncs.com/compatible-mode/v1"
+# Alibaba's shared DashScope hosts still answer, and they remain the default
+# when no workspace URL is set. Since 30 September 2026 they receive no new
+# features. A workspace URL is the host from the region the user chose.
+WORKSPACE_URL_HINT = (
+    "A workspace URL from the region you chose receives new features. "
+    "The shared host remains the default."
+)
 # 24:00 on 25 November 2026 in China Standard Time (UTC+8).
 _PREVIEW_END = datetime(2026, 11, 25, 16, 0, tzinfo=timezone.utc)
 _PLAN_ONLY_MODELS = frozenset({"qwen4-max-preview"})

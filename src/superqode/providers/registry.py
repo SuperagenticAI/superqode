@@ -13,7 +13,7 @@ from dataclasses import dataclass, field
 from enum import Enum
 from typing import Dict, List, Optional
 
-from .model_studio import TOKEN_PLAN_BASE
+from .model_studio import TOKEN_PLAN_BASE, WORKSPACE_URL_HINT
 from .models import (
     LATEST_GOOGLE_FLASH_MODEL,
     LATEST_GOOGLE_MODEL_IDS,
@@ -378,7 +378,8 @@ PROVIDERS: Dict[str, ProviderDef] = {
         docs_url="https://www.alibabacloud.com/help/en/model-studio/get-api-key",
         example_models=["qwen4-max", "qwen3-coder-plus", "qwen-plus"],
         dynamic=True,
-        notes="Metered Model Studio API for the China region, including qwen4-max. Use a key issued for this region. Coding Plan and Token Plan keys use separate endpoints. No model request is sent when saving a key.",
+        notes="Metered Model Studio API for the China region, including qwen4-max. Use a key issued for this region. Coding Plan and Token Plan keys use separate endpoints. No model request is sent when saving a key. "
+        + WORKSPACE_URL_HINT,
     ),
     "qwen-intl": ProviderDef(
         id="qwen-intl",
@@ -400,7 +401,8 @@ PROVIDERS: Dict[str, ProviderDef] = {
             "qwen-plus",
         ],
         dynamic=True,
-        notes="Metered Model Studio API, including qwen4-max. Paste the OpenAI-compatible URL for the region you chose in the console. Coding Plan and Token Plan keys use separate endpoints.",
+        notes="Metered Model Studio API, including qwen4-max. Paste the OpenAI-compatible URL for the region you chose in the console. Coding Plan and Token Plan keys use separate endpoints. "
+        + WORKSPACE_URL_HINT,
     ),
     "alibaba-token-plan": ProviderDef(
         id="alibaba-token-plan",

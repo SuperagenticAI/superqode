@@ -4,6 +4,7 @@ from datetime import datetime, timezone
 
 import pytest
 
+from superqode.providers.models import get_model_info
 from superqode.providers.model_studio import (
     TOKEN_PLAN_BASE,
     explain_failure,
@@ -15,6 +16,22 @@ from superqode.providers.model_studio import (
     validate_token_plan_route,
     validate_workspace_endpoint,
 )
+
+
+@pytest.mark.parametrize(
+    "provider",
+    ["qwen-intl", "qwen-cn", "alibaba", "alibaba-token-plan"],
+)
+def test_qwen4_max_uses_the_published_million_token_context(provider):
+    info = get_model_info(provider, "qwen4-max")
+    assert info is not None
+    assert info.context_window == 1_000_000
+    assert info.max_output == 131_072
+    assert info.pricing_known is False
+    preview = get_model_info(provider, "openai/qwen4-max-preview")
+    assert preview is not None
+    assert preview.context_window == 1_000_000
+    assert preview.max_output == 393_216
 
 
 def test_qwen4_effort_defaults_to_low_and_maps_the_documented_levels():

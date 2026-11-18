@@ -11,6 +11,14 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   Cloud Model Studio is a short note there, under Your agent, and on
   Subscription models.
 
+## [2.31.23] - 2026-11-18
+
+- `qwen4-max` and `qwen4-max-preview` use Alibaba's published 1,000,000-token
+  context when the model catalog has no usable row. Compaction no longer
+  starts at about 8K. Prices stay in the Model Studio console.
+- The shell and the Mac Model Studio screen say that a workspace URL from the
+  region you chose receives new features. The shared host remains the default.
+
 ## [2.31.22] - 2026-11-18
 
 - First PyPI release with the Alibaba Model Studio and Qwen4-Max path.

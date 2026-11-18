@@ -1652,16 +1652,71 @@ def _build_effective_models() -> Dict[str, Dict[str, ModelInfo]]:
 # ============================================================================
 
 
+# Alibaba documents this context for qwen4-max and qwen4-max-preview.
+# https://www.alibabacloud.com/help/en/model-studio/qwen4-max
+_QWEN4_PUBLISHED_CONTEXT = 1_000_000
+_QWEN4_PUBLISHED_OUTPUT = {
+    "qwen4-max": 131_072,
+    "qwen4-max-preview": 393_216,
+}
+_QWEN4_CONTEXT_PROVIDERS = frozenset({"qwen-intl", "qwen-cn", "alibaba", "alibaba-token-plan"})
+
+
+def _bare_model_id(model_id: str) -> str:
+    text = (model_id or "").strip()
+    if text.lower().startswith("openai/"):
+        text = text.split("/", 1)[1]
+    return text.rsplit("/", 1)[-1]
+
+
+def _published_qwen4_model(provider_id: str, model_id: str) -> Optional[ModelInfo]:
+    """Context published by Model Studio when the catalog has no usable row."""
+    bare = _bare_model_id(model_id)
+    max_output = _QWEN4_PUBLISHED_OUTPUT.get(bare)
+    if provider_id not in _QWEN4_CONTEXT_PROVIDERS or max_output is None:
+        return None
+    return ModelInfo(
+        id=bare,
+        name="Qwen4-Max" if bare == "qwen4-max" else "Qwen4-Max Preview",
+        provider=provider_id,
+        context_window=_QWEN4_PUBLISHED_CONTEXT,
+        max_output=max_output,
+        pricing_known=False,
+        capabilities=[
+            ModelCapability.TOOLS,
+            ModelCapability.VISION,
+            ModelCapability.STREAMING,
+            ModelCapability.JSON_MODE,
+            ModelCapability.REASONING,
+            ModelCapability.CODE,
+            ModelCapability.LONG_CONTEXT,
+        ],
+        description="Model Studio published context. Prices stay in the console.",
+        released="2026-11-16" if bare == "qwen4-max" else "2026-11-11",
+    )
+
+
 def get_model_info(provider_id: str, model_id: str) -> Optional[ModelInfo]:
     """Get model info by provider and model ID."""
     models = get_effective_models()
+    bare = _bare_model_id(model_id)
+    catalog_hit = None
+    for source in _CATALOG_SOURCE_IDS.get(provider_id, (provider_id,)):
+        provider_models = models.get(source, {})
+        catalog_hit = provider_models.get(model_id) or provider_models.get(bare)
+        if catalog_hit is not None:
+            break
+
+    published = _published_qwen4_model(provider_id, model_id)
+    # A missing or short catalog row must not compact qwen4-max at about 8K.
+    if published is not None and (
+        catalog_hit is None or int(catalog_hit.context_window or 0) < published.context_window
+    ):
+        return published
+    if catalog_hit is not None:
+        return catalog_hit
+
     provider_models = models.get(provider_id, {})
-
-    # Try exact match first
-    if model_id in provider_models:
-        return provider_models[model_id]
-
-    # Try fuzzy match (partial ID match)
     for mid, info in provider_models.items():
         if model_id in mid or mid in model_id:
             return info

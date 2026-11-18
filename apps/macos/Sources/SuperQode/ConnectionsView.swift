@@ -109,9 +109,9 @@ struct ProviderConnectionView: View {
   private var studioGuidance: String? {
     switch route {
     case "qwen-intl":
-      return "Pay-as-you-go. In Model Studio, choose the region, then paste the OpenAI-compatible URL from that console. The key works only with the region that issued it. A new URL replaces the saved one. Coding Plan and Token Plan use other endpoints."
+      return "Pay-as-you-go. In Model Studio, choose the region, then paste the OpenAI-compatible URL from that console. The key works only with the region that issued it. A new URL replaces the saved one. Coding Plan and Token Plan use other endpoints. A workspace URL from the region you chose receives new features. The shared host remains the default."
     case "qwen-cn":
-      return "China pay-as-you-go. Leave the endpoint empty to use the China shared host, or paste the workspace URL from the China console. A Token Plan key belongs on Token Plan."
+      return "China pay-as-you-go. Leave the endpoint empty to use the China shared host, or paste the workspace URL from the China console. A Token Plan key belongs on Token Plan. A workspace URL from the region you chose receives new features. The shared host remains the default."
     case "alibaba-token-plan":
       return "Token Plan key (sk-sp-) for interactive coding. Alibaba publishes one endpoint for this plan. Headless and batch jobs are refused. Coding Plan is a different host and does not include qwen4-max. Use Qwen Code and /auth for Coding Plan. qwen4-max-preview stays on this plan through 25 November 2026."
     case "alibaba":
