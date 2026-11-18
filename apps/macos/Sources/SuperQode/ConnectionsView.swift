@@ -2,10 +2,12 @@ import AppKit
 import SwiftUI
 
 struct ProviderConnectionView: View {
+  var opensOnModelStudio = false
   @EnvironmentObject private var app: Workspace
   @DialogDismiss private var dismiss
 
   @State private var choice: Choice?
+  @State private var openedStudio = false
   @State private var route = ""
   @State private var providerQuery = ""
   @State private var showAllProviders = false
@@ -119,16 +121,46 @@ struct ProviderConnectionView: View {
     }
   }
 
+  private var studioChoice: Choice? {
+    choices(
+      in: providerRows.filter { Self.alibabaRoutes.contains(string($0, "id")) },
+      orderedBy: ["alibaba"]
+    ).first
+  }
+
+  private var studioRouteKey: String {
+    "\(app.providers.count)|"
+      + providerRows.map { string($0, "id") }
+      .filter { Self.alibabaRoutes.contains($0) }
+      .sorted()
+      .joined(separator: ",")
+  }
+
   var body: some View {
     Group {
       if let choice {
         detail(choice)
+      } else if opensOnModelStudio && !openedStudio {
+        ProgressView("Opening Model Studio…")
+          .frame(maxWidth: .infinity, maxHeight: .infinity)
       } else {
         chooser
       }
     }
     .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
     .task { app.prepareModelCatalog() }
+    .task(id: studioRouteKey) { openModelStudioIfRequested() }
+  }
+
+  private func openModelStudioIfRequested() {
+    guard opensOnModelStudio, !openedStudio, choice == nil else { return }
+    if let featured = studioChoice, let route = featured.routes.first {
+      openedStudio = true
+      chooseRoute(route)
+      choice = featured
+      return
+    }
+    if !app.providers.isEmpty { openedStudio = true }
   }
 
   private func choices(in rows: [[String: Any]], orderedBy order: [String] = []) -> [Choice] {

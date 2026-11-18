@@ -62,26 +62,17 @@ struct WelcomeView: View {
       }
   }
   private var startCard: some View {
-    ZStack(alignment: .topLeading) {
-      Button(action: app.chooseProject) {
-        startColumn
-          .padding(28)
-          .frame(maxWidth: .infinity, minHeight: 280, alignment: .topLeading)
-          .background(Color.qPanel)
-          .contentShape(Rectangle())
-      }
-      .buttonStyle(.plain)
-      .disabled(!app.connected || app.openingProject)
-      .accessibilityIdentifier("welcome.openProject")
-      .accessibilityLabel(app.openingProject ? "Opening project" : "Open project")
-      VStack(alignment: .leading, spacing: 20) {
-        startIntro.hidden()
-        openProjectRow.hidden()
-        welcomeActions
-        startFootnote.hidden()
-      }
-      .padding(28)
+    Button(action: app.chooseProject) {
+      startColumn
+        .padding(28)
+        .frame(maxWidth: .infinity, minHeight: 280, alignment: .topLeading)
+        .background(Color.qPanel)
+        .contentShape(Rectangle())
     }
+    .buttonStyle(.plain)
+    .disabled(!app.connected || app.openingProject)
+    .accessibilityIdentifier("welcome.openProject")
+    .accessibilityLabel(app.openingProject ? "Opening project" : "Open project")
     .clipShape(RoundedRectangle(cornerRadius: 20))
     .overlay(
       RoundedRectangle(cornerRadius: 20).strokeBorder(.primary.opacity(0.08))
@@ -92,7 +83,6 @@ struct WelcomeView: View {
     VStack(alignment: .leading, spacing: 20) {
       startIntro
       openProjectRow
-      welcomeActions.hidden().accessibilityHidden(true)
       startFootnote
     }
   }
@@ -121,24 +111,12 @@ struct WelcomeView: View {
     .outlinedSurface(radius: 7)
   }
 
-  private var welcomeActions: some View {
-    HStack(spacing: 12) {
-      Button {
-        app.openConnections("source:local")
-      } label: {
-        Label("Local model", systemImage: "desktopcomputer")
-      }.accessibilityIdentifier("welcome.localModel")
-      Button {
-        app.openConnections("source:key")
-      } label: {
-        Label("API key", systemImage: "key")
-      }.accessibilityIdentifier("welcome.apiKey")
-    }.buttonStyle(.bordered).disabled(app.connectionPickerDisabled)
-  }
-
   private var startFootnote: some View {
-    Text("Your project stays on your Mac. Your chosen agent or provider handles model requests.")
-      .font(.caption).foregroundStyle(.secondary).fixedSize(horizontal: false, vertical: true)
+    VStack(alignment: .leading, spacing: 6) {
+      Text("Your project stays on your Mac. Your chosen agent or provider handles model requests.")
+      Text("Alibaba Cloud Model Studio connects after you open a project. More integrations will follow.")
+    }
+    .font(.caption).foregroundStyle(.secondary).fixedSize(horizontal: false, vertical: true)
   }
   private var recentCard: some View {
     VStack(alignment: .leading, spacing: 16) {

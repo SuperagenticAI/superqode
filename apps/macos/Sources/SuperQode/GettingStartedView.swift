@@ -98,6 +98,8 @@ struct GettingStartedView: View {
             done: false)
           Button("Open project…", action: app.chooseProject).buttonStyle(BrandButtonStyle())
             .disabled(!app.connected).keyboardShortcut("o")
+          Text("Alibaba Cloud Model Studio connects after you open a project. More integrations will follow.")
+            .font(.caption).foregroundStyle(.secondary).fixedSize(horizontal: false, vertical: true)
           if !app.connected { ProgressView("Starting the local engine…").font(.caption) }
           Button("Learn harness evaluation & optimization") {
             app.learningTopic = "Harnesses"

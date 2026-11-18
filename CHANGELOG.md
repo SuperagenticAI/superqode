@@ -7,6 +7,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+- The macOS welcome screen asks for a project before any connection. Alibaba
+  Cloud Model Studio is a short note there, under Your agent, and on
+  Subscription models.
+
 ## [2.31.22] - 2026-11-18
 
 - First PyPI release with the Alibaba Model Studio and Qwen4-Max path.

@@ -23,6 +23,15 @@ struct ConnectionStartGrid: View {
   ]
 
   var body: some View {
+    VStack(alignment: .leading, spacing: 10) {
+      tileGrid
+      Text("Alibaba Cloud Model Studio is under Your agent. More integrations will follow.")
+        .font(.caption).foregroundStyle(.secondary)
+        .fixedSize(horizontal: false, vertical: true)
+    }
+  }
+
+  private var tileGrid: some View {
     LazyVGrid(columns: [GridItem(.adaptive(minimum: 198), spacing: 12, alignment: .top)], spacing: 12) {
       ForEach(Self.tiles) { tile in
         Button { app.openConnections(tile.page) } label: {

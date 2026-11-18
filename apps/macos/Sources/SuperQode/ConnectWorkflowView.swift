@@ -184,8 +184,8 @@ struct ConnectionView: View {
               dismiss()
               app.openLocalAIAdvanced(tab)
             })
-        } else if page == "source:key" {
-          ProviderConnectionView()
+        } else if page == "source:key" || page == "source:studio" {
+          ProviderConnectionView(opensOnModelStudio: page == "source:studio")
         } else if page.hasPrefix("configure:") {
           HarnessConfigurationView(mode: String(page.dropFirst(10))) { id in
             selectHarness(id)
@@ -346,6 +346,9 @@ struct ConnectionView: View {
       VStack(alignment: .leading, spacing: 10) {
         Text(catalogTitle).font(.title2.weight(.semibold)).accessibilityAddTraits(.isHeader)
         if !subtitle.isEmpty { Text(subtitle).font(.callout).foregroundStyle(.secondary) }
+        if (page == "menu:root" || page == "menu:plan") && search.isEmpty {
+          modelStudioHint
+        }
         ConnectionSearchField(title: "Search " + catalogSearchScope, text: $search)
       }.padding(.horizontal, 24).padding(.vertical, 16)
       Divider()
@@ -474,6 +477,20 @@ struct ConnectionView: View {
     }
   }
 
+  private var modelStudioHint: some View {
+    HStack(alignment: .firstTextBaseline, spacing: 10) {
+      Text("Alibaba Cloud Model Studio")
+        .font(.callout)
+      Text("Use the API key and endpoint from the region you chose.")
+        .font(.caption).foregroundStyle(.secondary)
+      Spacer(minLength: 8)
+      Button("Open") { push("source:studio") }
+        .buttonStyle(.bordered)
+        .controlSize(.small)
+        .accessibilityIdentifier("connect.modelStudio")
+    }
+  }
+
   @ViewBuilder private var detectedConnections: some View {
     if let chips = menu["detected"] as? [[String: Any]], !chips.isEmpty {
       Text("Detected on this Mac").font(.headline)
@@ -511,6 +528,7 @@ struct ConnectionView: View {
     }
     if page == "source:local" { return "Local model" }
     if page == "source:key" { return "API key" }
+    if page == "source:studio" { return "Alibaba Model Studio" }
     return string(menu, "title", "Connect")
   }
   private var subtitle: String {
@@ -754,6 +772,12 @@ struct ConnectionView: View {
             Text(
               "This model subscription integration is experimental and unavailable in the terminal too. Use a vendor subscription agent from Existing harnesses → Subscriptions instead."
             ).font(.callout).foregroundStyle(.secondary)
+            if string(selected, "id") == "plan-alibaba-models" {
+              Text("Alibaba Cloud Model Studio is available. Paste the API key and the endpoint from the region you chose. Token Plan is on that screen.")
+                .font(.callout).foregroundStyle(.secondary)
+              Button("Open Model Studio") { push("source:studio") }
+                .accessibilityIdentifier("connect.modelStudio")
+            }
             Button("Browse subscription agents") { push("menu:vendors") }
           }
           Button("Choose an existing HarnessSpec") { push("harnesses") }
