@@ -30,7 +30,7 @@ select the plan and region associated with your key. For Token Plan Personal,
 use the key from your subscription. For Token Plan Team, use the key from your
 assigned seat. Coding Plan uses its own plan key.
 
-Exit Qwen Code, check the connection in SuperQode and choose **Use verified
+Exit Qwen Code, check the connection in SuperQode and choose **Use this
 connection**. The check starts the agent and opens a session. Send a small
 interactive coding task to verify model access and review usage in Alibaba's
 console. In the TUI, configure Qwen Code in the same way before connecting
@@ -91,11 +91,10 @@ superqode models --provider qwen-intl --live
 :connect byok qwen-intl qwen4-max
 ```
 
-The macOS picker shows context and output limits when the workspace catalog
-provides them, advertised tool support, and whether SuperQode knows the model's
-thinking controls. Missing metadata stays unknown. GLM-5.3 always uses reasoning;
-the app explains that selecting Off cannot disable it. Model listing and the
-no-tool Test model action do not certify tool calling or coding quality.
+The macOS picker lists the model IDs the workspace returns. Context, tool and
+thinking metadata are not shown yet. GLM-5.3 always uses reasoning, so selecting
+Off does not disable it. Model listing and the no-tool Test model action do not
+certify tool calling or coding quality.
 
 The thinking adapter also recognises `deepseek-v4-pro` and
 `deepseek-v4.1-flash-1017`, alongside the supported dated DeepSeek aliases.

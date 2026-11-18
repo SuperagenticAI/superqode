@@ -7,11 +7,22 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [2.31.22] - 2026-11-18
+
+- First PyPI release with the Alibaba Model Studio and Qwen4-Max path.
+  2.31.21 was tagged but not published, so its changes listed below ship in
+  this release.
 - Model Studio pay-as-you-go uses the OpenAI-compatible URL from the region
-  the user chose. The macOS app does not select a region. macOS 0.4.19
-  (build 45) bundles Python engine 2.31.21.
+  the user chose. The macOS app does not select a region. `QWEN_INTL_API_BASE`
+  sets that URL for the `qwen-intl` provider in the terminal.
+- Document `SUPERQODE_NONINTERACTIVE` in the environment variable reference.
+- Qwen Code docs name the **Use this connection** button correctly and no
+  longer say the macOS picker shows context, tool and thinking metadata.
+- macOS 0.4.19 (build 45) bundles Python engine 2.31.22.
 
 ## [2.31.21] - 2026-11-17
+
+Tagged but not published to PyPI. Its changes ship in 2.31.22.
 
 - The macOS welcome Start building card opens a project from anywhere on the
   card. Local model and API key stay separate actions. With no project open,

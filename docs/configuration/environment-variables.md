@@ -96,6 +96,7 @@ Every `SUPERQODE_*` variable in one place. Most behavior is configurable per-har
 | `SUPERQODE_RLM_DIR` | path | `~/.superqode/rlm` | Root for native RLM sessions and runtime state. |
 | `SUPERQODE_RLM_SESSION_DIR` | path | `<rlm dir>/sessions` | Where the native RLM harness stores its session trees. |
 | `SUPERQODE_PURE_PERMISSIONS_HEADLESS` | `1` to allow | unset | Allow a harness with no approvals or sandbox, such as PiPy, to run headless. Unattended runs have no reviewer, so this must be set deliberately. |
+| `SUPERQODE_NONINTERACTIVE` | `0`/`1` | unset | Marks the process as non-interactive. Accepts `1`, `true`, `yes` or `on`. SuperQode sets it itself for headless runs (a prompt, `--print` or JSON output) and for Mac app background jobs such as evaluations, checks and tuning. When set, the Alibaba Token Plan route refuses to start, because Token Plan is for interactive coding only. |
 | `SUPERQODE_CONNECT` | profile name | unset | Auto-connect a connection profile when the TUI starts (set by `--connect`). |
 | `SUPERQODE_CONNECT_MENU` | `v1`/`v2` | `v1` | Connect existing-harness layout. `v1` keeps Other harnesses; `v2` shows Open (and Closed once that list is non-empty). Overrides `connect_menu` in `~/.superqode/config.json`. |
 | `SUPERQODE_STDIN_WAIT` | seconds | `0.2` | How long a headless run waits for piped stdin before deciding none was sent. |

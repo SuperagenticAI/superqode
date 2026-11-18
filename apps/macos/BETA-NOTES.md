@@ -1,6 +1,6 @@
 # SuperQode for macOS public beta 0.4.19
 
-Version 0.4.19 (build 45) bundles Python engine 2.31.21.
+Version 0.4.19 (build 45) bundles Python engine 2.31.22.
 
 - **Connections** leads with Qwen4-Max. Paste the Model Studio endpoint for the region you chose in the console. The app does not pick a region. China and Token Plan stay separate.
 
