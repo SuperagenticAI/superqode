@@ -16,7 +16,9 @@ Usage:
 
 from __future__ import annotations
 
+import re
 from dataclasses import dataclass, field
+from datetime import datetime, timedelta
 from enum import Enum, auto
 from typing import Any, Dict, List, Optional, Tuple
 
@@ -1841,8 +1843,81 @@ def price_schedule(
     return prices
 
 
+# New Gemini launches from models.dev join the reviewed Google list when they
+# were released no more than this many days before the newest reviewed model
+# (or any time after it). At most this many are added, newest first.
+GOOGLE_NEW_MODEL_WINDOW_DAYS = 60
+GOOGLE_NEW_MODEL_LIMIT = 4
+# Gemini API inventory that is not a coding chat model, even when models.dev
+# marks it as tool capable.
+_GOOGLE_NON_CODING_MARKERS = (
+    "latest",
+    "live",
+    "banana",
+    "omni",
+    "lyria",
+    "deep-research",
+    "computer-use",
+    "customtools",
+    "translate",
+    "robotics",
+)
+_GOOGLE_GEMINI_ID = re.compile(r"^gemini-(\d+)(?:[.-]|$)")
+
+
+def _new_google_models(models: Dict[str, ModelInfo]) -> list[ModelInfo]:
+    """Recent Gemini chat models from models.dev that the reviewed list lacks.
+
+    The window is anchored to the newest reviewed release date rather than
+    today, so the result only changes when the catalog does. Gemini 1.x and
+    2.x, rolling ``-latest`` aliases, retired ids, models without tool calling
+    and specialty endpoints (embedding, image, speech, live, video, music,
+    research and computer use) are left out.
+    """
+    reviewed = set(LATEST_GOOGLE_MODEL_IDS)
+    reviewed_dates = [
+        (getattr(models.get(model_id), "released", "") or "")[:10]
+        for model_id in LATEST_GOOGLE_MODEL_IDS
+    ] + [
+        (getattr(MODELS["google"].get(model_id), "released", "") or "")[:10]
+        for model_id in LATEST_GOOGLE_MODEL_IDS
+    ]
+    reviewed_dates = [text for text in reviewed_dates if text]
+    if not reviewed_dates:
+        return []
+    try:
+        anchor = datetime.strptime(max(reviewed_dates), "%Y-%m-%d").date()
+    except ValueError:
+        return []
+    cutoff = (anchor - timedelta(days=GOOGLE_NEW_MODEL_WINDOW_DAYS)).isoformat()
+
+    candidates = []
+    for model_id, info in models.items():
+        if not model_id or model_id in reviewed or model_id in RETIRED_GOOGLE_MODELS:
+            continue
+        match = _GOOGLE_GEMINI_ID.match(model_id.lower())
+        if match is None or int(match.group(1)) < 3:
+            continue
+        text = f"{model_id} {info.name}".lower()
+        if not _is_chat_model(info) or any(m in text for m in _GOOGLE_NON_CODING_MARKERS):
+            continue
+        if not info.supports_tools:
+            continue
+        released = (info.released or "")[:10]
+        if not released or released < cutoff:
+            continue
+        candidates.append(info)
+    candidates.sort(key=_hosted_model_sort_key, reverse=True)
+    return candidates[:GOOGLE_NEW_MODEL_LIMIT]
+
+
 def _latest_google_models(models: Dict[str, ModelInfo]) -> Dict[str, ModelInfo]:
-    """Return Google's lifecycle-reviewed BYOK chat/coding models newest-first."""
+    """Return Google's reviewed BYOK chat/coding models, then recent launches.
+
+    The reviewed ids lead in their fixed order, so the default stays the same.
+    Gemini chat models that models.dev lists and the reviewed list lacks follow,
+    newest first (see ``_new_google_models``).
+    """
     result = {}
     for model_id in LATEST_GOOGLE_MODEL_IDS:
         # Keep reviewed additions visible when a refreshed third-party cache
@@ -1851,6 +1926,8 @@ def _latest_google_models(models: Dict[str, ModelInfo]) -> Dict[str, ModelInfo]:
         info = models.get(model_id) or MODELS["google"].get(model_id)
         if info is not None:
             result[model_id] = info
+    for info in _new_google_models(models):
+        result.setdefault(info.id, info)
     return result
 
 
@@ -2214,7 +2291,10 @@ def _with_published_qwen4(
 def catalog_examples(provider_id: str) -> list[tuple[str, str]]:
     """Model ids for the Mac Catalog examples menu, newest release first.
 
-    Google stays on the reviewed Gemini list. Local servers and the Grok
+    Google lists the reviewed Gemini ids first, in their fixed order, then up
+    to four recent Gemini chat models from the cached models.dev catalog that
+    the reviewed list lacks, newest first. With no cache it is the reviewed
+    list alone. Local servers and the Grok
     subscription catalog keep their own ids. Every other provider uses the
     full models.dev chat catalog for that provider. Embedding, speech, image,
     and other non-chat ids are left out because this field is a coding model.
@@ -2228,13 +2308,16 @@ def catalog_examples(provider_id: str) -> list[tuple[str, str]]:
     if provider_id == "google":
         client = _catalog_client()
         dated = client._models.get("google", {})
-        return _with_published_qwen4(
-            provider_id,
-            [
-                (model_id, _catalog_label(model_id, getattr(dated.get(model_id), "released", "")))
-                for model_id in LATEST_GOOGLE_MODEL_IDS
-            ],
-        )
+        examples = [
+            (model_id, _catalog_label(model_id, getattr(dated.get(model_id), "released", "")))
+            for model_id in LATEST_GOOGLE_MODEL_IDS
+        ]
+        seen = {model_id for model_id, _label in examples}
+        for info in _new_google_models(dated):
+            if info.id not in seen:
+                seen.add(info.id)
+                examples.append((info.id, _catalog_label(info.id, info.released)))
+        return _with_published_qwen4(provider_id, examples)
     if definition is not None and (
         definition.tier == ProviderTier.LOCAL or provider_id == "grok-cli"
     ):

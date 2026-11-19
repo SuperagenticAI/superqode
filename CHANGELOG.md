@@ -7,6 +7,14 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+- The Google model list in the Mac Catalog examples menu and the terminal
+  pickers now adds new Gemini chat models from the cached models.dev catalog
+  after the reviewed list, so a Gemini launch shows up without a release. Up
+  to four are added, newest first, when they support tool calling and were
+  released no more than 60 days before the newest reviewed model or later.
+  Gemini 1.x and 2.x, `-latest` aliases, retired ids and embedding, image,
+  speech, live, video and research models are left out. The reviewed ids stay
+  first, so the default is unchanged. With no cache the list is as before.
 - Add Gemini 4 Neon (`gemini-4-neon`) to the Google provider, CodeGem and the
   terminal model pickers. It lists after Gemini 4 Hydrogen and before Gemini 4
   Argon, with a 1,048,576 token context window, a 65,536 token output limit,

@@ -6,8 +6,10 @@ from datetime import datetime, timedelta
 
 from superqode.providers.models import (
     LATEST_GOOGLE_MODEL_IDS,
+    ModelCapability,
     ModelInfo,
     catalog_examples,
+    get_models_for_provider,
 )
 from superqode.providers.models_dev import CacheMetadata, ModelsDev
 
@@ -140,8 +142,10 @@ def test_google_and_local_catalogs_stay_curated(monkeypatch):
     monkeypatch.setattr("superqode.providers.models_dev.get_models_dev", lambda: client)
 
     google = catalog_examples("google")
-    assert [model_id for model_id, _label in google] == list(LATEST_GOOGLE_MODEL_IDS)
-    assert "gemini-4-carbon" not in [model_id for model_id, _label in google]
+    ids = [model_id for model_id, _label in google]
+    assert ids[: len(LATEST_GOOGLE_MODEL_IDS)] == list(LATEST_GOOGLE_MODEL_IDS)
+    # Without tool support in the catalog row, an unreviewed id stays out.
+    assert "gemini-4-carbon" not in ids
     assert google[2][1] == "2026-10-13 · gemini-4-argon"
     assert catalog_examples("ollama")[0][0] != "gemini-4-carbon"
     assert catalog_examples("apple-foundation") == [("system-on-device", "system-on-device")]
@@ -265,3 +269,104 @@ def test_desktop_discovery_lists_terminal_hosts_and_loads_models_on_demand(tmp_p
         assert result["state"] == "needs-test"
     finally:
         service.close()
+
+
+def _gemini(model_id: str, released: str, *, tools: bool = True, name: str = "") -> ModelInfo:
+    return ModelInfo(
+        id=model_id,
+        name=name or model_id,
+        provider="google",
+        released=released,
+        capabilities=[ModelCapability.TOOLS] if tools else [],
+    )
+
+
+def _fake_google_catalog() -> dict[str, ModelInfo]:
+    rows = [
+        _gemini("gemini-4-hydrogen", "2026-11-12"),
+        _gemini("gemini-4-neon", "2026-11-18"),
+        _gemini("gemini-4-argon", "2026-10-13"),
+        _gemini("gemini-5-foo", "2026-12-02"),
+        _gemini("gemini-4-carbon", "2026-11-10"),
+        _gemini("gemini-embedding-3", "2026-12-01"),
+        _gemini("gemini-4-flash-tts", "2026-12-01"),
+        _gemini("gemini-4-flash-image", "2026-12-01"),
+        _gemini("gemini-4-flash-live-preview", "2026-12-01"),
+        _gemini("gemini-flash-latest", "2026-12-01"),
+        _gemini("gemini-nano-banana-3", "2026-12-01", tools=False),
+        _gemini("gemini-2.5-pro", "2026-12-01"),
+        _gemini("gemini-3.2-pro", "2026-03-01"),
+        _gemini("gemini-3.7-flash", "2026-10-01"),
+        _gemini("claude-fable-5-2@default", "2026-11-09"),
+    ]
+    return {row.id: row for row in rows}
+
+
+def test_google_menu_appends_new_gemini_models(monkeypatch):
+    client = _client({"google": _fake_google_catalog()})
+    monkeypatch.setattr("superqode.providers.models_dev.get_models_dev", lambda: client)
+
+    google = catalog_examples("google")
+    ids = [model_id for model_id, _label in google]
+    reviewed = len(LATEST_GOOGLE_MODEL_IDS)
+    assert ids[:reviewed] == list(LATEST_GOOGLE_MODEL_IDS)
+    assert ids[0] == "gemini-4-hydrogen"
+    assert ids[reviewed:] == ["gemini-5-foo", "gemini-4-carbon"]
+    assert google[reviewed][1] == "2026-12-02 · gemini-5-foo"
+
+
+def test_google_menu_excludes_old_and_specialty_models(monkeypatch):
+    client = _client({"google": _fake_google_catalog()})
+    monkeypatch.setattr("superqode.providers.models_dev.get_models_dev", lambda: client)
+
+    ids = [model_id for model_id, _label in catalog_examples("google")]
+    for excluded in (
+        "gemini-embedding-3",
+        "gemini-4-flash-tts",
+        "gemini-4-flash-image",
+        "gemini-4-flash-live-preview",
+        "gemini-flash-latest",
+        "gemini-nano-banana-3",
+        "gemini-2.5-pro",
+        "gemini-3.2-pro",
+        "gemini-3.7-flash",
+        "claude-fable-5-2@default",
+    ):
+        assert excluded not in ids
+
+
+def test_google_menu_has_no_duplicates_and_caps_extras(monkeypatch):
+    catalog = _fake_google_catalog()
+    for index in range(6):
+        model_id = f"gemini-5-extra-{index}"
+        catalog[model_id] = _gemini(model_id, f"2026-12-1{index}")
+    client = _client({"google": catalog})
+    monkeypatch.setattr("superqode.providers.models_dev.get_models_dev", lambda: client)
+
+    ids = [model_id for model_id, _label in catalog_examples("google")]
+    assert len(ids) == len(set(ids))
+    extras = ids[len(LATEST_GOOGLE_MODEL_IDS) :]
+    assert len(extras) == 4
+    assert extras[0] == "gemini-5-extra-5"
+
+
+def test_google_menu_without_cache_is_the_reviewed_list(monkeypatch):
+    monkeypatch.setattr("superqode.providers.models_dev.get_models_dev", lambda: _client({}))
+    google = catalog_examples("google")
+    assert [model_id for model_id, _label in google] == list(LATEST_GOOGLE_MODEL_IDS)
+
+
+def test_google_picker_appends_new_gemini_models(monkeypatch):
+    from superqode.providers import models as model_db
+
+    monkeypatch.setattr(model_db, "_live_models", {"google": _fake_google_catalog()})
+    monkeypatch.setattr(model_db, "_use_live_data", True)
+    monkeypatch.setattr(model_db, "_live_autoload_attempted", True)
+    model_db._EFFECTIVE_CACHE.clear()
+    try:
+        for include_all in (False, True):
+            ids = list(get_models_for_provider("google", include_all=include_all))
+            assert ids[: len(LATEST_GOOGLE_MODEL_IDS)] == list(LATEST_GOOGLE_MODEL_IDS)
+            assert ids[len(LATEST_GOOGLE_MODEL_IDS) :] == ["gemini-5-foo", "gemini-4-carbon"]
+    finally:
+        model_db._EFFECTIVE_CACHE.clear()
