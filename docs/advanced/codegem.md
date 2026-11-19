@@ -301,7 +301,8 @@ New model generations do not inherit guessed thinking controls or context limits
 Gemini requests leave Google's per-model default thinking level in place. Set
 `model_policy.reasoning` to `low`, `medium` or `high` (or `minimal` where the
 model documents it) to choose a level; unsupported levels are rejected with the
-supported list. Gemini 4 Argon requests send its documented `medium` default.
+supported list. Gemini 4 Argon requests send its documented `medium` default,
+and Gemini 4 Neon requests send `high`. Neon also accepts `xhigh`.
 For shorter waits before the answer starts, try `low` on models that support it;
 model-side thinking can delay the first visible text even with streaming on.
 The Python stream API also honours an explicit `StreamOptions.reasoning` when

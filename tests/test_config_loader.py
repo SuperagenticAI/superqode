@@ -19,8 +19,9 @@ def test_default_google_recommendations_and_aliases():
 
     google = config.providers["google"]
 
-    assert google.recommended_models[:5] == [
+    assert google.recommended_models[:6] == [
         "gemini-4-hydrogen",
+        "gemini-4-neon",
         "gemini-4-argon",
         "gemini-3.8-flash",
         "gemini-3.6-flash",

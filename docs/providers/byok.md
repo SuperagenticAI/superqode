@@ -102,6 +102,7 @@ superqode connect byok google gemini-3.1-pro-preview
 
 | Model | Best For |
 |-------|----------|
+| `gemini-4-neon` | Gemini 4 Neon for complex coding and agentic work (paid tier) |
 | `gemini-3.1-pro-preview` | Latest Pro model from models.dev |
 | `gemini-flash-latest` | Latest Flash model from models.dev |
 

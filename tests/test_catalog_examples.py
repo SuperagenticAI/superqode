@@ -142,7 +142,7 @@ def test_google_and_local_catalogs_stay_curated(monkeypatch):
     google = catalog_examples("google")
     assert [model_id for model_id, _label in google] == list(LATEST_GOOGLE_MODEL_IDS)
     assert "gemini-4-carbon" not in [model_id for model_id, _label in google]
-    assert google[1][1] == "2026-10-13 · gemini-4-argon"
+    assert google[2][1] == "2026-10-13 · gemini-4-argon"
     assert catalog_examples("ollama")[0][0] != "gemini-4-carbon"
     assert catalog_examples("apple-foundation") == [("system-on-device", "system-on-device")]
     assert catalog_examples("grok-cli")[0][0] == "grok-4.6"

@@ -19,6 +19,7 @@ def _usage(input=0, output=0, cache_read=0, reasoning=None):
 @pytest.mark.parametrize(
     "model_id, on, expected",
     [
+        ("gemini-4-neon", "2026-11-19", (3.0, 15.0, 0.15)),
         ("gemini-4-argon", "2026-11-30", (2.0, 10.0, 0.10)),
         ("gemini-4-argon", "2026-12-01", (4.0, 20.0, 0.20)),
         ("gemini-3.8-flash", "2026-12-31", (0.75, 3.75, 0.075)),
@@ -33,6 +34,11 @@ def _usage(input=0, output=0, cache_read=0, reasoning=None):
 )
 def test_published_prices_and_schedules(model_id, on, expected):
     assert price_schedule(MODELS["google"][model_id], 1000, on) == expected
+
+
+def test_neon_pricing_is_flat_across_its_context():
+    info = MODELS["google"]["gemini-4-neon"]
+    assert price_schedule(info, 1_000_000, "2026-11-19") == (3.0, 15.0, 0.15)
 
 
 @pytest.mark.parametrize(

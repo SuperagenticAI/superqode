@@ -18,6 +18,7 @@ All keys below are read by CodeGem from `runtime.config`, except
 
 | Job | Model | Provider |
 | --- | --- | --- |
+| Complex coding and agentic work, paid tier | `gemini-4-neon` | `google` |
 | Hard, long-horizon coding and large refactors | `gemini-4-argon` | `google` |
 | Complex reasoning over large codebases | `gemini-3.1-pro-preview` | `google` |
 | Agentic work that leans on custom tools | `gemini-3.1-pro-preview-customtools` | `google` |
@@ -30,17 +31,45 @@ All keys below are read by CodeGem from `runtime.config`, except
 
 - `stream` is `true`. Replies arrive through `streamGenerateContent` and text is
   shown live. Set `stream: false` for one `generateContent` request per turn.
-- No thinking level is sent unless the model has a required default (Argon
-  sends `medium`) or you set `model_policy.reasoning` or `thinking_config`, so
-  Google's per-model default applies.
-- `max_output_tokens` defaults to 32,768, except Argon while streaming, which
-  defaults to 65,536.
+- No thinking level is sent unless the model has a required default (Neon
+  sends `high`, Argon sends `medium`) or you set `model_policy.reasoning` or
+  `thinking_config`, so Google's per-model default applies.
+- `max_output_tokens` defaults to 32,768, except Gemini 4 models such as Neon
+  and Argon while streaming, which default to 65,536.
 - Requests retry HTTP 429, 5xx and network errors up to `max_attempts` (default
   4), with `retry_initial_delay` (default 1 second) and `retry_max_delay`
   (default 60 seconds). Streaming retries happen only before the first chunk.
 - Long replies follow continuation tokens for up to `max_continuation_hops`
   (default 64) requests. A dropped stream resumes from its last checkpoint up to
   `max_stream_resumes` (default 8) times.
+
+## Gemini 4 Neon
+
+Pick Neon for complex coding, repository-level debugging, multi-file refactors
+and long agentic sessions with many tool calls. Google places it between
+Gemini 4 Hydrogen and Gemini 4 Carbon. It is available on the paid tier of the
+Gemini API only.
+
+Neon has a unified 1,048,576 token context window shared by input, thinking and
+output. CodeGem gives it the same Gemini 4 defaults as Argon: a 20 minute
+`timeout`, a 65,536 token streaming output default (32,768 with
+`stream: false`), and continuation up to `max_output_tokens_ceiling` (default
+131,072). Thinking levels are `low`, `medium`, `high` (default) and `xhigh`.
+Sampling parameters are dropped with a warning, as for every Gemini 4 model.
+
+```yaml
+runtime:
+  backend: codegem
+  config:
+    stream: true
+    max_output_tokens_ceiling: 131072
+    timeout: 1200
+model_policy:
+  reasoning: high
+```
+
+Use `xhigh` for hard, multi-step problems where `high` falls short. It uses
+more tokens and takes longer.
 
 ## Gemini 4 Argon
 
@@ -280,6 +309,7 @@ Thinking tokens are billed as output. Estimates are not a billing statement.
 
 | Model | Input | Output | Cached input | Scheduled change |
 | --- | --- | --- | --- | --- |
+| `gemini-4-neon` | $3.00 | $15.00 | $0.15 | None |
 | `gemini-4-argon` | $2.00 | $10.00 | $0.10 | From 1 December 2026: $4.00, $20.00, $0.20 |
 | `gemini-3.8-flash` | $0.75 | $3.75 | $0.075 | From 1 January 2027: $1.50, $7.50, $0.15 |
 | `gemini-3.6-flash` | $0.75 | $3.75 | $0.075 | From 1 January 2027: $1.50, $7.50, $0.15 |

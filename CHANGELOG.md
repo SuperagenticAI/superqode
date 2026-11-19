@@ -7,6 +7,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+- Add Gemini 4 Neon (`gemini-4-neon`) to the Google provider, CodeGem and the
+  terminal model pickers. It lists after Gemini 4 Hydrogen and before Gemini 4
+  Argon, with a 1,048,576 token context window, a 65,536 token output limit,
+  thinking levels `low`, `medium`, `high` (default) and `xhigh`, and paid tier
+  prices of $3.00 input, $0.15 cached input and $15.00 output per 1M tokens.
 - The macOS welcome screen asks for a project before any connection. Alibaba
   Cloud Model Studio is a short note there, under Your agent, and on
   Subscription models.

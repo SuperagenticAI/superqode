@@ -143,6 +143,7 @@ async def test_local_servers_are_not_retried():
     "model,default",
     [
         ("gemini-4-hydrogen", "high"),
+        ("gemini-4-neon", "high"),
         ("gemini-4-argon", "medium"),
         ("gemini-3.8-flash", "medium"),
         ("gemini-3.6-flash", "medium"),
@@ -181,6 +182,10 @@ async def test_explicit_thinking_config_wins():
         ("gemini-4-argon", "medium"),
         ("gemini-4-argon", "high"),
         ("gemini-4-hydrogen", "xhigh"),
+        ("gemini-4-neon", "low"),
+        ("gemini-4-neon", "medium"),
+        ("gemini-4-neon", "high"),
+        ("gemini-4-neon", "xhigh"),
     ],
 )
 def test_gemini_accepts_documented_thinking_level(model, level):
@@ -263,6 +268,32 @@ async def test_argon_timeout_and_output_defaults(monkeypatch):
     assert seen[0]["generationConfig"]["thinkingConfig"] == {"thinkingLevel": "MEDIUM"}
     assert seen[1]["generationConfig"]["maxOutputTokens"] == 32768
     assert seen[2]["generationConfig"]["maxOutputTokens"] == 32768
+
+
+@pytest.mark.asyncio
+async def test_neon_timeout_output_and_thinking_defaults(monkeypatch):
+    timeouts = []
+    real = httpx.AsyncClient
+
+    def client(*args, **kwargs):
+        timeouts.append(kwargs["timeout"])
+        return real(*args, **kwargs)
+
+    monkeypatch.setattr(httpx, "AsyncClient", client)
+    seen = []
+    stream, _ = _stream([httpx.Response(200, json=OK)], seen=seen)
+    await _run(stream, "gemini-4-neon")
+    assert timeouts[0] >= 1200
+    assert seen[0]["generationConfig"]["maxOutputTokens"] == 65536
+    assert seen[0]["generationConfig"]["thinkingConfig"] == {"thinkingLevel": "HIGH"}
+
+
+@pytest.mark.asyncio
+async def test_backend_maps_neon_xhigh_and_rejects_minimal(tmp_path):
+    config = await _backend_config(tmp_path, "gemini-4-neon", "xhigh")
+    assert config["thinking_config"] == {"thinkingLevel": "XHIGH"}
+    with pytest.raises(ValueError, match="not supported for gemini-4-neon"):
+        await _backend_config(tmp_path, "gemini-4-neon", "minimal")
 
 
 def _hop(parts, reason, token=None, thoughts=0):

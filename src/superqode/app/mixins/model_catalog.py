@@ -26,6 +26,7 @@ from superqode.providers.models import (
     LATEST_GOOGLE_FLASH_3_6_MODEL,
     LATEST_GOOGLE_FLASH_MODEL,
     LATEST_GOOGLE_HYDROGEN_MODEL,
+    LATEST_GOOGLE_NEON_MODEL,
     LATEST_GOOGLE_PRO_MODEL,
 )
 
@@ -148,6 +149,13 @@ class ModelCatalogMixin:
                 "recommended": True,
             },
             {
+                "id": LATEST_GOOGLE_NEON_MODEL,
+                "name": "Gemini 4 Neon",
+                "context": 1_048_576,
+                "desc": "Gemini 4 Neon for complex coding and agentic work - paid tier",
+                "recommended": True,
+            },
+            {
                 "id": LATEST_GOOGLE_ARGON_MODEL,
                 "name": "Gemini 4 Argon",
                 "context": 1048576,
@@ -251,6 +259,11 @@ class ModelCatalogMixin:
                 "id": "claude-opus-4-7",
                 "name": "Claude Opus 4.7",
                 "context": 1000000,
+            },
+            {
+                "id": LATEST_GOOGLE_NEON_MODEL,
+                "name": "Gemini 4 Neon",
+                "context": 1_048_576,
             },
             {
                 "id": LATEST_GOOGLE_ARGON_MODEL,

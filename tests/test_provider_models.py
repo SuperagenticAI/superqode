@@ -18,6 +18,7 @@ def test_builtin_google_byok_models_are_current_and_newest_first(monkeypatch):
 
     assert list(models) == [
         "gemini-4-hydrogen",
+        "gemini-4-neon",
         "gemini-4-argon",
         "gemini-3.8-flash",
         "gemini-3.6-flash",
@@ -39,16 +40,23 @@ def test_gemini4_metadata_and_terminal_lists_match_google_api(monkeypatch):
 
     models = get_models_for_provider("google")
     hydrogen = models["gemini-4-hydrogen"]
+    neon = models["gemini-4-neon"]
     argon = models["gemini-4-argon"]
-    assert hydrogen.context_window == argon.context_window == 1_048_576
-    assert hydrogen.max_output == 65_536
+    assert hydrogen.context_window == neon.context_window == argon.context_window == 1_048_576
+    assert hydrogen.max_output == neon.max_output == 65_536
     assert argon.max_output == 32_768
     assert hydrogen.supports_tools and hydrogen.supports_reasoning
+    assert neon.supports_tools and neon.supports_reasoning and neon.supports_vision
     assert argon.supports_tools and argon.supports_reasoning
-    assert PROVIDERS["google"].example_models[:2] == [hydrogen.id, argon.id]
+    assert (neon.input_price, neon.cached_input_price, neon.output_price) == (3.0, 0.15, 15.0)
+    assert PROVIDERS["google"].example_models[:3] == [hydrogen.id, neon.id, argon.id]
     rows = ModelCatalogMixin._get_gemini_models(object())
     assert rows[0]["id"] == hydrogen.id
     assert rows[0]["context"] == hydrogen.context_window
+    assert rows[1]["id"] == neon.id
+    assert rows[1]["context"] == neon.context_window
+    openhands = [row["id"] for row in ModelCatalogMixin._get_openhands_models(object())]
+    assert openhands.index(neon.id) + 1 == openhands.index(argon.id)
 
 
 def test_fresh_google_cache_preserves_argon_and_excludes_specialty_models():
@@ -70,7 +78,7 @@ def test_fresh_google_cache_preserves_argon_and_excludes_specialty_models():
     for include_all in (False, True):
         models = get_models_for_provider("google", include_all=include_all)
         assert list(models) == list(model_db.LATEST_GOOGLE_MODEL_IDS)
-        assert list(models)[:2] == ["gemini-4-hydrogen", "gemini-4-argon"]
+        assert list(models)[:3] == ["gemini-4-hydrogen", "gemini-4-neon", "gemini-4-argon"]
 
 
 def test_builtin_xai_grok_4_5_metadata(monkeypatch):
@@ -258,6 +266,7 @@ def test_live_google_models_drop_deprecated_aliases_and_specialty_endpoints():
 
     expected = [
         "gemini-4-hydrogen",
+        "gemini-4-neon",
         "gemini-4-argon",
         "gemini-3.8-flash",
         "gemini-3.6-flash",
