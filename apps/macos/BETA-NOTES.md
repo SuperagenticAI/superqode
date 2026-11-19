@@ -1,4 +1,14 @@
-# SuperQode for macOS public beta 0.4.19
+# SuperQode for macOS public beta 0.4.20
+
+Version 0.4.20 (build 46) bundles Python engine 2.31.23.
+
+- Gemini 4 Neon is in the Google menu, after Hydrogen and before Argon.
+- New Gemini chat models from models.dev appear automatically after the reviewed list.
+- `qwen4-max` and `qwen4-max-preview` use the published 1M context when the catalog has no usable row.
+- The Model Studio screen says a workspace URL from the region you chose receives new features. The shared host remains the default.
+- The welcome screen asks for a project before any connection. Alibaba Cloud Model Studio is a short note there, under Your agent, and on Subscription models.
+
+## 0.4.19 (build 45)
 
 Version 0.4.19 (build 45) bundles Python engine 2.31.22.
 

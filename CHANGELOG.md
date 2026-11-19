@@ -7,6 +7,13 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [2.31.23] - 2026-11-19
+
+- Add Gemini 4 Neon (`gemini-4-neon`) to the Google provider, CodeGem and the
+  terminal model pickers. It lists after Gemini 4 Hydrogen and before Gemini 4
+  Argon, with a 1,048,576 token context window, a 65,536 token output limit,
+  thinking levels `low`, `medium`, `high` (default) and `xhigh`, and paid tier
+  prices of $3.00 input, $0.15 cached input and $15.00 output per 1M tokens.
 - The Google model list in the Mac Catalog examples menu and the terminal
   pickers now adds new Gemini chat models from the cached models.dev catalog
   after the reviewed list, so a Gemini launch shows up without a release. Up
@@ -15,22 +22,15 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   Gemini 1.x and 2.x, `-latest` aliases, retired ids and embedding, image,
   speech, live, video and research models are left out. The reviewed ids stay
   first, so the default is unchanged. With no cache the list is as before.
-- Add Gemini 4 Neon (`gemini-4-neon`) to the Google provider, CodeGem and the
-  terminal model pickers. It lists after Gemini 4 Hydrogen and before Gemini 4
-  Argon, with a 1,048,576 token context window, a 65,536 token output limit,
-  thinking levels `low`, `medium`, `high` (default) and `xhigh`, and paid tier
-  prices of $3.00 input, $0.15 cached input and $15.00 output per 1M tokens.
-- The macOS welcome screen asks for a project before any connection. Alibaba
-  Cloud Model Studio is a short note there, under Your agent, and on
-  Subscription models.
-
-## [2.31.23] - 2026-11-18
-
 - `qwen4-max` and `qwen4-max-preview` use Alibaba's published 1,000,000-token
   context when the model catalog has no usable row. Compaction no longer
   starts at about 8K. Prices stay in the Model Studio console.
 - The shell and the Mac Model Studio screen say that a workspace URL from the
   region you chose receives new features. The shared host remains the default.
+- The macOS welcome screen asks for a project before any connection. Alibaba
+  Cloud Model Studio is a short note there, under Your agent, and on
+  Subscription models.
+- macOS 0.4.20 (build 46) bundles Python engine 2.31.23.
 
 ## [2.31.22] - 2026-11-18
 

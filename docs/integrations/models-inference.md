@@ -41,7 +41,8 @@ the complete model-provider catalog.
 | vLLM | Start a vLLM OpenAI-compatible endpoint | `:connect local vllm <model>` | `superqode local doctor` | [Local Providers](../providers/local.md) |
 | SGLang | Start an SGLang endpoint | `:connect local sglang <model>` | `superqode local doctor` | [Local Providers](../providers/local.md) |
 | Hugging Face TGI | Start a TGI endpoint | `:connect local tgi <model>` | `superqode local doctor` | [Local Providers](../providers/local.md) |
-| MLX and MLX-VLM | `uv tool install "superqode[mlx]"` on supported Apple Silicon | `:connect local mlx <model>` | `superqode local doctor` | [Local Providers](../providers/local.md) |
+| MLX | `uv tool install "superqode[mlx]"` on supported Apple Silicon | `:connect local mlx <model>` | `superqode local doctor` | [Local Providers](../providers/local.md) |
+| MLX-VLM | `uv tool install "superqode[mlx-vlm]"` on supported Apple Silicon | `superqode models convert-mlx` uses mlx-vlm for multimodal models that mlx-lm cannot convert | `superqode models convert-mlx --help` | [Model Catalog](../advanced/model-catalog.md) |
 | DwarfStar | Install and start a compatible DwarfStar server | Select the discovered local route | `superqode local doctor` | [Local Providers](../providers/local.md#dwarfstar-ds4) |
 | Apple Foundation Models | Bundled native bridge on an eligible Mac with macOS 26+ and Apple Intelligence ready; optional Python SDK remains available for standalone CLI | Local AI → Quick Start → Apple on-device model | Check availability; use Direct Chat or explicitly enable utility hooks | [Native setup and limits](../advanced/local-runtime-workspace.md#apple-foundation-models) |
 | Transformers | Install `transformers`, `accelerate`, and the required compute framework | Select the local Transformers route | `superqode local doctor` | [Local Stack Doctor](../advanced/local-stack.md) |

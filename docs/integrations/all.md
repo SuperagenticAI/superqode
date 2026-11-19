@@ -53,7 +53,7 @@ are documented on the linked category page.
 | MetaHarness | Export and optimize a HarnessSpec through Superagentic MetaHarness | [Optimization](optimization.md) |
 | Microsoft Model Context Protocol, MCP | Connect tool servers and expose harness tools | [Protocols and tools](protocols-tools.md) |
 | MLflow | Export run artifacts and metrics | [Observability](observability.md) |
-| MLX and MLX-VLM | Run supported models locally on Apple Silicon | [Models and inference](models-inference.md) |
+| MLX and MLX-VLM | Run supported MLX text models locally on Apple Silicon, and convert multimodal Hugging Face models with `superqode[mlx-vlm]` | [Models and inference](models-inference.md) |
 | Modal | Execute commands in a Modal cloud sandbox | [Sandboxes](sandboxes.md) |
 | Monty Python REPL | Add bounded Python calculation to a harness | [Protocols and tools](protocols-tools.md) |
 | Ollama | Connect locally served models | [Models and inference](models-inference.md) |
