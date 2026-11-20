@@ -425,6 +425,19 @@ async def _approve_loop_pending_inner(loop, index, always, harness_spec):
         from ..harness.approval_memory import remember_approval_decision
 
         remember_approval_decision(spec, tool_name=tool_name, arguments=arguments, action="allow")
+    # Hand the tool output back to the model and finish the paused turn. Before
+    # this, the raw tool output was returned as the final answer and the model
+    # never saw it, so an approved `ls` ended the turn with a file listing.
+    resume = getattr(loop, "continue_after_approval", None)
+    if resume is not None:
+        resumed = await resume(
+            tool_name,
+            str(tool_call_id) if tool_call_id else None,
+            arguments,
+            result,
+        )
+        if resumed is not None:
+            return resumed
     from .loop import AgentResponse
 
     return AgentResponse(
@@ -447,6 +460,9 @@ async def _reject_loop_pending(
         raise RuntimeError("No pending approval to reject")
     pending = dict(loop._pending_approval)
     loop._pending_approval = None
+    discard = getattr(loop, "discard_approval_continuation", None)
+    if discard is not None:
+        discard()
     tool_name = str(pending.get("tool_name") or "")
     if always and getattr(loop.config, "harness_spec", None) is not None:
         from ..harness.approval_memory import remember_approval_decision

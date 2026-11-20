@@ -312,7 +312,9 @@ async def test_agent_session_surfaces_and_approves_child_approval(tmp_path):
     assert waited.metadata["pending_approvals"][0]["tool_name"] == "echo"
     assert approved.success, approved.error
     assert approved.metadata["status"] == "idle"
-    assert approved.metadata["result"] == "approved"
+    # The child turn continues after approval: the model sees the tool output
+    # and answers ("done" once the scripted gateway runs out).
+    assert approved.metadata["result"] == "done"
     await loop._get_peer_manager().close_all()
 
 

@@ -7,6 +7,17 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+- Approving a tool call now continues the turn. Before, when you allowed a
+  paused tool call in Ask mode (the Mac app, `/approve` in the terminal, ACP
+  editors and channels), SuperQode showed the tool's raw output, such as a
+  file listing, as the answer and stopped without the model ever seeing it.
+  The output now goes back to the model, which answers your question. Other
+  tool calls from the same step are kept, and a second approval in that step
+  pauses again. This affected every model, not only Gemini.
+- When a model replies to a tool result with nothing but reasoning or an
+  empty message, the streaming turn now says the model returned an empty
+  response instead of ending silently.
+
 ## [2.31.23] - 2026-11-19
 
 - Add Gemini 4 Neon (`gemini-4-neon`) to the Google provider, CodeGem and the

@@ -808,6 +808,16 @@ class AgentResponse:
     cost_currency: Optional[str] = None
 
 
+def _empty_response_notice(provider: str, model: str) -> str:
+    return (
+        f"⚠️ The model '{provider}/{model}' returned an empty response. This could mean:\n\n"
+        "• The model is not responding properly\n"
+        "• The model may be overloaded or unavailable\n"
+        "• The model format may not be compatible\n\n"
+        "Try a different model or check your provider configuration."
+    )
+
+
 class ToolApprovalRequired(RuntimeError):
     """Raised internally when a tool call must pause for HITL approval."""
 
@@ -816,6 +826,10 @@ class ToolApprovalRequired(RuntimeError):
         self.tool_name = tool_name
         self.arguments = dict(arguments)
         self.tool_call_id = tool_call_id
+        # Filled by the batch executor: results of calls in the same turn that
+        # already ran (by position) and the position of the paused call.
+        self.completed: Dict[int, Tuple[str, str, Dict[str, Any], Any]] = {}
+        self.call_index: int = -1
 
 
 class AgentLoop:
@@ -963,6 +977,9 @@ class AgentLoop:
         self._cancelled = False
         self.pause_on_approval = False
         self._pending_approval: Optional[Dict[str, Any]] = None
+        # Paused turn state kept so an approved tool call resumes the model
+        # turn instead of ending it with the raw tool output.
+        self._approval_continuation: Optional[Dict[str, Any]] = None
         self._approved_tool_call_ids: set[str] = set()
         self._approval_receipts: dict = {}
 
@@ -2932,24 +2949,42 @@ class AgentLoop:
             and len(runnable) > 1
             and all(self._tool_is_read_only(prepared[i][0]) for i in runnable)
         )
-        if run_parallel:
-            outcomes = await asyncio.gather(
-                *(dispatch(i) for i in runnable), return_exceptions=True
-            )
-            for i, outcome in zip(runnable, outcomes):
-                if isinstance(outcome, ToolApprovalRequired) or isinstance(outcome, DoomLoopAbort):
-                    raise outcome
-                if isinstance(outcome, BaseException):
-                    tool_name, tool_call_id, tool_args = prepared[i]
-                    results[i] = (
-                        tool_name,
-                        tool_call_id,
-                        tool_args,
-                        ToolResult(success=False, output="", error=str(outcome)),
-                    )
-        else:
-            for i in runnable:
-                await dispatch(i)
+        current = -1
+        try:
+            if run_parallel:
+                outcomes = await asyncio.gather(
+                    *(dispatch(i) for i in runnable), return_exceptions=True
+                )
+                approvals = [
+                    i
+                    for i, outcome in zip(runnable, outcomes)
+                    if isinstance(outcome, ToolApprovalRequired)
+                ]
+                for i, outcome in zip(runnable, outcomes):
+                    if isinstance(outcome, DoomLoopAbort):
+                        raise outcome
+                if approvals:
+                    current = approvals[0]
+                    raise outcomes[runnable.index(current)]
+                for i, outcome in zip(runnable, outcomes):
+                    if isinstance(outcome, BaseException):
+                        tool_name, tool_call_id, tool_args = prepared[i]
+                        results[i] = (
+                            tool_name,
+                            tool_call_id,
+                            tool_args,
+                            ToolResult(success=False, output="", error=str(outcome)),
+                        )
+            else:
+                for i in runnable:
+                    current = i
+                    await dispatch(i)
+        except ToolApprovalRequired as pause:
+            # Keep what already ran so an approved resume does not lose or
+            # repeat those calls, and remember which call is waiting.
+            pause.completed = dict(results)
+            pause.call_index = current
+            raise
 
         return [results[i] for i in range(n)]
 
@@ -2960,11 +2995,176 @@ class AgentLoop:
         """Back-compat alias for :meth:`_execute_tool_batch`."""
         return await self._execute_tool_batch(tool_calls)
 
-    async def run(self, user_message: str, *, images=None) -> AgentResponse:
+    def _save_approval_continuation(
+        self,
+        pause: "ToolApprovalRequired",
+        *,
+        mode: str,
+        messages: List["AgentMessage"],
+        tool_calls: List[Dict],
+        user_message: str,
+        iterations: int,
+        tool_calls_made: int,
+        auto_continues: int = 0,
+        fast_chat: bool = False,
+        routed_tool_plan: Any = None,
+    ) -> None:
+        """Keep the paused turn so approving the tool call can resume it."""
+        self._approval_continuation = {
+            "mode": mode,
+            "messages": messages,
+            "tool_calls": list(tool_calls or []),
+            "completed": dict(getattr(pause, "completed", {}) or {}),
+            "call_index": int(getattr(pause, "call_index", -1)),
+            "tool_call_id": pause.tool_call_id,
+            "user_message": user_message,
+            "iterations": iterations,
+            "tool_calls_made": tool_calls_made,
+            "auto_continues": auto_continues,
+            "fast_chat": fast_chat,
+            "routed_tool_plan": routed_tool_plan,
+        }
+
+    def discard_approval_continuation(self) -> None:
+        """Drop paused turn state (used when the paused call is rejected)."""
+        self._approval_continuation = None
+
+    async def continue_after_approval(
+        self,
+        tool_name: str,
+        tool_call_id: Optional[str],
+        arguments: Dict[str, Any],
+        result: ToolResult,
+    ) -> Optional[AgentResponse]:
+        """Resume a paused turn after its pending tool call was approved and run.
+
+        The approved result (plus any calls from the same turn that already
+        ran) is added to the history as tool messages, any remaining calls in
+        the turn run next, and the model is called again so it can use the
+        output and answer. Returns ``None`` when there is no paused turn to
+        resume, so callers can fall back to returning the tool output.
+        """
+        state = self._approval_continuation
+        self._approval_continuation = None
+        if not state:
+            return None
+        if state.get("tool_call_id") and tool_call_id and state["tool_call_id"] != tool_call_id:
+            return None
+        tool_calls: List[Dict] = state["tool_calls"]
+        completed: Dict[int, Tuple[str, str, Dict[str, Any], ToolResult]] = dict(state["completed"])
+        index = state.get("call_index", -1)
+        if not 0 <= index < len(tool_calls):
+            index = next((i for i in range(len(tool_calls)) if i not in completed), -1)
+        if index < 0:
+            return None
+        completed[index] = (tool_name, str(tool_call_id or ""), dict(arguments), result)
+        remaining = [i for i in range(len(tool_calls)) if i not in completed]
+        if remaining:
+            try:
+                more = await self._execute_tool_batch([tool_calls[i] for i in remaining])
+            except ToolApprovalRequired as pause:
+                for position, row in (getattr(pause, "completed", {}) or {}).items():
+                    completed[remaining[position]] = row
+                position = getattr(pause, "call_index", -1)
+                state["completed"] = completed
+                state["call_index"] = remaining[position] if 0 <= position < len(remaining) else -1
+                state["tool_call_id"] = pause.tool_call_id
+                self._approval_continuation = state
+                return AgentResponse(
+                    content="",
+                    messages=state["messages"],
+                    tool_calls_made=int(state.get("tool_calls_made") or 0),
+                    iterations=int(state.get("iterations") or 0),
+                    stopped_reason="needs_approval",
+                )
+            for position, row in enumerate(more):
+                completed[remaining[position]] = row
+
+        messages: List[AgentMessage] = state["messages"]
+        tool_calls_made = int(state.get("tool_calls_made") or 0)
+        for i in range(len(tool_calls)):
+            name, call_id, _args, tool_result = completed[i]
+            tool_calls_made += 1
+            messages.append(
+                AgentMessage(
+                    role="tool",
+                    content=tool_result.to_message(),
+                    tool_call_id=call_id,
+                    name=name,
+                )
+            )
+            if self._session_manager:
+                self._session_manager.add_tool_result(
+                    name, tool_result.to_message(), tool_call_id=call_id
+                )
+            image_msg = self._image_followup_message(tool_result)
+            if image_msg is not None:
+                messages.append(image_msg)
+        state["tool_calls_made"] = tool_calls_made
+        messages[:] = await self._maybe_summarize(messages)
+
+        if state.get("mode") != "stream":
+            return await self.run(state["user_message"], _continuation=state)
+
+        self.last_stream_stats = {
+            "prompt_tokens": 0,
+            "completion_tokens": 0,
+            "total_tokens": 0,
+            "total_cost": 0.0,
+        }
+        self.last_stream_error = ""
+        self.last_stream_completed = False
+        self._arm_doom_guard()
+        chunks: List[str] = []
+        self.run_active = True
+        try:
+            async for chunk in self._run_streaming_loop(
+                messages,
+                state["user_message"],
+                int(state.get("iterations") or 0),
+                tool_calls_made,
+                int(state.get("auto_continues") or 0),
+                bool(state.get("fast_chat")),
+            ):
+                if chunk:
+                    chunks.append(chunk)
+        finally:
+            self.run_active = False
+        content = "".join(chunks)
+        stats = self.last_stream_stats
+        if self._approval_continuation is not None and self._pending_approval:
+            stopped_reason = "needs_approval"
+        elif self.last_stream_error:
+            stopped_reason = "error"
+        else:
+            stopped_reason = "complete"
+        return AgentResponse(
+            content=content,
+            messages=messages,
+            tool_calls_made=tool_calls_made,
+            iterations=int(state.get("iterations") or 0),
+            stopped_reason=stopped_reason,
+            error=self.last_stream_error or None,
+            input_tokens=stats.get("prompt_tokens") or None,
+            output_tokens=stats.get("completion_tokens") or None,
+            total_tokens=stats.get("total_tokens") or None,
+            cost_usd=stats.get("total_cost") or None,
+        )
+
+    async def run(
+        self,
+        user_message: str,
+        *,
+        images=None,
+        _continuation: Optional[Dict[str, Any]] = None,
+    ) -> AgentResponse:
         """Run the agent loop until completion.
 
         Args:
             user_message: The user's request
+            _continuation: Internal. Paused turn state saved at an approval
+                pause; the loop picks up from that history instead of starting
+                a new turn.
 
         Returns:
             AgentResponse with the final result
@@ -3064,14 +3264,23 @@ class AgentLoop:
                 pass
             return response
 
+        if _continuation is None:
+            # A fresh turn discards any continuation left by an abandoned pause.
+            self._approval_continuation = None
+
         if not self._session_started:
             self._session_started = True
             await self.hooks.fire(SESSION_START, lifecycle_ctx, user_message)
 
         # user_prompt_submit handler hooks may block a prompt outright (DENY),
         # e.g. policy filters. Deny returns immediately without calling the model.
-        submit = await self.hooks.fire_decision(USER_PROMPT_SUBMIT, lifecycle_ctx, user_message)
-        if submit.denied:
+        # A resumed turn already passed this check when it started.
+        submit = (
+            None
+            if _continuation is not None
+            else await self.hooks.fire_decision(USER_PROMPT_SUBMIT, lifecycle_ctx, user_message)
+        )
+        if submit is not None and submit.denied:
             return await _finish(
                 AgentResponse(
                     content=submit.message or "Prompt blocked by policy.",
@@ -3084,28 +3293,32 @@ class AgentLoop:
 
         messages: List[AgentMessage] = []
 
-        if fast_chat:
+        if _continuation is not None:
+            fast_chat = bool(_continuation.get("fast_chat"))
+            messages = _continuation["messages"]
+        elif fast_chat:
             messages.append(self._fast_chat_system_message())
         # Add system message if we have one
         elif self.system_prompt:
             messages.append(AgentMessage(role="system", content=self._system_prompt_for_run()))
 
-        if not fast_chat:
+        if not fast_chat and _continuation is None:
             messages.extend(self._load_stored_messages())
 
-        # Add user message
-        from superqode.image_input import image_message
+        if _continuation is None:
+            # Add user message
+            from superqode.image_input import image_message
 
-        messages.append(
-            AgentMessage(role="user", content=image_message(user_message, images or []))
-        )
+            messages.append(
+                AgentMessage(role="user", content=image_message(user_message, images or []))
+            )
 
-        # Save to session storage if enabled
-        if self._session_manager:
-            self._session_manager.add_user_message(user_message)
+            # Save to session storage if enabled
+            if self._session_manager:
+                self._session_manager.add_user_message(user_message)
 
-        tool_calls_made = 0
-        iterations = 0
+        tool_calls_made = int((_continuation or {}).get("tool_calls_made") or 0)
+        iterations = int((_continuation or {}).get("iterations") or 0)
         unexecuted_tool_intent_retries = 0
         max_unexecuted_tool_intent_retries = 1 if self.config.loop_policy.semantic_tool_retry else 0
         auto_continues = 0
@@ -3117,8 +3330,8 @@ class AgentLoop:
         # schema prefix byte-stable across model steps and preserves provider
         # prompt-cache reuse. Shadow mode records the same plan without
         # changing the catalogue sent to the model.
-        routed_tool_plan = None
-        if not fast_chat and self.tool_router is not None:
+        routed_tool_plan = (_continuation or {}).get("routed_tool_plan")
+        if not fast_chat and self.tool_router is not None and _continuation is None:
             initial_tool_defs = self._get_tool_definitions()
             routed_tool_plan = await self.tool_router.plan(user_message, initial_tool_defs)
             self.last_tool_routing_plan = routed_tool_plan
@@ -3276,7 +3489,7 @@ class AgentLoop:
             if not response_content.strip() and not response.tool_calls:
                 # Model returned empty content with no tool calls - this is likely a problem
                 # Provide a helpful error message instead of empty content
-                response_content = f"⚠️ The model '{self.config.provider}/{self.config.model}' returned an empty response. This could mean:\n\n• The model is not responding properly\n• The model may be overloaded or unavailable\n• The model format may not be compatible\n\nTry a different model or check your provider configuration."
+                response_content = _empty_response_notice(self.config.provider, self.config.model)
 
             # Check for tool calls
             if response.tool_calls:
@@ -3352,7 +3565,19 @@ class AgentLoop:
 
                 try:
                     results = await self._execute_tool_batch(response.tool_calls)
-                except ToolApprovalRequired:
+                except ToolApprovalRequired as pause:
+                    self._save_approval_continuation(
+                        pause,
+                        mode="run",
+                        messages=messages,
+                        tool_calls=response.tool_calls,
+                        user_message=user_message,
+                        iterations=iterations,
+                        tool_calls_made=tool_calls_made,
+                        auto_continues=auto_continues,
+                        fast_chat=fast_chat,
+                        routed_tool_plan=routed_tool_plan,
+                    )
                     return await _finish(
                         AgentResponse(
                             content="",
@@ -3587,6 +3812,8 @@ class AgentLoop:
         }
         self.last_stream_error = ""
         self.last_stream_completed = False
+        # A fresh turn discards any continuation left by an abandoned pause.
+        self._approval_continuation = None
 
         fast_chat = self._use_fast_chat_path(user_message)
         # Resolve the real (loaded, for local) context window once so adaptive
@@ -3931,7 +4158,18 @@ class AgentLoop:
 
                 try:
                     results = await self._execute_tool_batch(tool_calls)
-                except ToolApprovalRequired:
+                except ToolApprovalRequired as pause:
+                    self._save_approval_continuation(
+                        pause,
+                        mode="stream",
+                        messages=messages,
+                        tool_calls=tool_calls,
+                        user_message=user_message,
+                        iterations=iterations,
+                        tool_calls_made=tool_calls_made,
+                        auto_continues=auto_continues,
+                        fast_chat=fast_chat,
+                    )
                     return
                 except DoomLoopAbort as abort:
                     if self.on_thinking:
@@ -4015,6 +4253,11 @@ class AgentLoop:
                 # No tool calls - we have the final response
                 # If we had tool calls in previous iterations but no content now,
                 # the model should still provide a summary
+                if not full_content.strip() and not fast_chat:
+                    # Thinking models sometimes answer a tool result with only
+                    # reasoning or nothing at all. Say so rather than ending
+                    # the turn silently (the non-streaming loop does the same).
+                    yield _empty_response_notice(self.config.provider, self.config.model)
                 if self.config.rubric and rubric_rounds >= max(0, self.config.max_rubric_rounds):
                     rubric_result = {"verdict": "ungraded", "reason": "Rubric round limit reached"}
                 if self.on_thinking:

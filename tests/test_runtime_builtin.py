@@ -258,8 +258,10 @@ async def test_builtin_runtime_pauses_and_approves_tool_call():
 
     resumed = await runtime.approve_and_resume()
 
+    # The tool output goes back to the model, which then answers. The scripted
+    # gateway answers "done" once its script runs out.
     assert resumed.stopped_reason == "complete"
-    assert resumed.content == "approved"
+    assert resumed.content == "done"
     assert runtime.get_pending_approvals() == []
 
 

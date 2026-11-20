@@ -67,6 +67,7 @@ class BuiltinRuntime:
             raise RuntimeError("No pending approval to reject")
         pending = dict(self._loop._pending_approval)
         self._loop._pending_approval = None
+        self._loop.discard_approval_continuation()
         tool_name = str(pending.get("tool_name") or "")
         if always and self._harness_spec is not None:
             from ..harness.approval_memory import remember_approval_decision
