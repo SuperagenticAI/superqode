@@ -444,4 +444,6 @@ def main():
 
 
 if __name__ == "__main__":
-    main()
+    from .process_exit import run_and_exit
+
+    run_and_exit(main)

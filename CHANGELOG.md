@@ -17,6 +17,17 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - When a model replies to a tool result with nothing but reasoning or an
   empty message, the streaming turn now says the model returned an empty
   response instead of ending silently.
+- The Mac app stops the working bar as soon as the answer arrives. Before, it
+  kept moving until the engine had saved the turn's checkpoint and closed its
+  worker. A message sent in that moment now waits for the workspace instead of
+  being ignored, and the worker now skips the slow interpreter teardown when
+  it exits.
+- Thinking levels now reach Gemini 3 and Gemini 4 models on the plain Google
+  API key route. A `model_policy.reasoning` value in a harness file was
+  dropped there before, so Gemini 4 Neon ran at Google's default of `high`
+  whatever the harness asked for. Gemini 4 models on this route also get the 1.0 default
+  temperature Google recommends and a thought signature on earlier tool calls
+  that lack one, as Gemini 3 already did.
 
 ## [2.31.23] - 2026-11-19
 

@@ -143,7 +143,7 @@ import UserNotifications
         // Esc, Return and Up arrow act in the conversation and message box only,
         // so they are listed here without menu key equivalents.
         Button("Stop Agent (Esc)") { workspace.cancel() }
-          .disabled(!workspace.active || workspace.busy)
+          .disabled(!workspace.showsWorking || workspace.busy)
         Button("Allow Pending Request (Return)") {
           if let request = workspace.pendingApprovalRequestID { workspace.approve(request, allow: true) }
         }.disabled(workspace.pendingApprovalRequestID == nil || workspace.busy)
@@ -633,10 +633,11 @@ struct CodingView: View {
   private var workbenchToolbar: some View {
     HStack(spacing: 12) {
       if !app.selectedJob.isEmpty {
-        if app.active { BrandActivityIndicator(status: app.activityStatus) }
+        if app.showsWorking { BrandActivityIndicator(status: app.activityStatus) }
         else {
-          ThreadStatusIndicator(status: string(app.detail, "status"))
-          Text(ThreadStatusIndicator.title(string(app.detail, "status"))).font(.caption).foregroundStyle(.secondary)
+          let shownStatus = app.turnAnswered ? "completed" : string(app.detail, "status")
+          ThreadStatusIndicator(status: shownStatus)
+          Text(ThreadStatusIndicator.title(shownStatus)).font(.caption).foregroundStyle(.secondary)
           if HandoffMenuRules.isFinishedCodingTurn(app.detail) {
             HandoffMenu(store: app.handoffTargets, identifier: "workbench.sendTo")
           }
@@ -943,7 +944,7 @@ struct CodingComposer: View {
         .onDrop(of: [.fileURL], isTargeted: nil) { app.consumeFileDrop($0) }
         .overlay(alignment: .topLeading) {
           if app.draft.isEmpty {
-            Text(app.active ? "Draft your next message…" : continuesConversation ? "Ask a follow-up or describe the next change…" : "Describe the change you want to make…")
+            Text(app.showsWorking ? "Draft your next message…" : continuesConversation ? "Ask a follow-up or describe the next change…" : "Describe the change you want to make…")
               .font(.system(size: 15)).foregroundStyle(.secondary).padding(13).allowsHitTesting(false)
           }
         }
@@ -1013,7 +1014,7 @@ struct CodingComposer: View {
         if app.canSteer {
           Button("Steer run", action: app.steerDraft).disabled(app.draft.isEmpty)
         }
-        if app.active {
+        if app.showsWorking {
           Button("Stop", systemImage: "stop.fill", action: app.cancel)
             .help("Stop the current run; wait for the agent to acknowledge cancellation")
         }
@@ -1479,17 +1480,17 @@ struct EventStream: View {
           }
         }
       }
-      if app.active || !activity.isEmpty {
+      if app.showsWorking || !activity.isEmpty {
         Divider()
         VStack(spacing: 6) {
-          if app.active {
+          if app.showsWorking {
             AgentWorkingCard(
               status: app.activityStatus, activity: currentAgentActivity(app.events),
               startedAt: RunStats.startDate(app.detail), waitingSince: RunStats.waitingSince(app.detail),
               planLine: PlanSnapshot.compactLine(plan))
           }
           // Folded until the person opens it, including while a run is active.
-          AgentActivityView(events: activity, active: app.active)
+          AgentActivityView(events: activity, active: app.showsWorking)
             .id(app.selectedJob)
         }.padding(.horizontal, 24).padding(.vertical, 6)
       }
@@ -1547,7 +1548,7 @@ struct EventRow: View {
   var body: some View {
     Group {
       if type == "activity_group" {
-        AgentActivityView(events: data["events"] as? [[String: Any]] ?? [], active: app.active)
+        AgentActivityView(events: data["events"] as? [[String: Any]] ?? [], active: app.showsWorking)
       } else if type == "approval" {
         VStack(alignment: .leading, spacing: 10) {
           Label("Permission requested", systemImage: "hand.raised").font(.headline).foregroundStyle(

@@ -69,6 +69,8 @@ class DesktopService:
         self._engine_lease.record(pid=os.getpid())
         self._project_leases = {}
         self._reapers = {}
+        # Runs whose worker has sent its final result but has not exited yet.
+        self._answered: set[str] = set()
         self.lock = threading.RLock()
         # Projects with a Git commit, push or branch switch in progress.
         self._ship_projects: set[str] = set()
@@ -424,6 +426,8 @@ class DesktopService:
                     self._status(job_id, "needs_approval")
                 elif event.get("type") == "result":
                     result = event.get("data")
+                    with self.lock:
+                        self._answered.add(job_id)
                 elif event.get("type") == "error":
                     error = event.get("data", {}).get("message", "Execution failed")
             code = process.wait()
@@ -494,6 +498,7 @@ class DesktopService:
             with self.lock:
                 self.processes.pop(job_id, None)
                 self.pending.pop(job_id, None)
+                self._answered.discard(job_id)
             if process.stdin:
                 process.stdin.close()
             if process.stdout:
@@ -1808,6 +1813,9 @@ class DesktopService:
                     (params["id"], after),
                 )
                 row["event_stream_open"] = params["id"] in self.processes
+                # The answer is complete while the worker seals its checkpoint
+                # and exits. Apps stop showing work here, before the status changes.
+                row["answered"] = row["status"] == "running" and params["id"] in self._answered
             row["has_more_events"] = len(event_rows) > 500
             page_rows = event_rows[:500]
             row["events"] = [{"sequence": r["seq"], **json.loads(r["payload"])} for r in page_rows]

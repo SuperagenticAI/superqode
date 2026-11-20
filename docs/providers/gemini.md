@@ -24,6 +24,18 @@ Set `GEMINI_API_KEY` or `GOOGLE_API_KEY`. See [Bring Your Own Key](byok.md).
 For the Google-focused native harness, its six tools, and a headless first run,
 see [CodeGem](../advanced/codegem.md).
 
+Without a thinking level, Google's per-model default applies, which is `high`
+for Gemini 4 Neon and can feel slow for everyday edits. A harness file can set
+one for Gemini 3 and Gemini 4 models on this route:
+
+```yaml
+model_policy:
+  reasoning: medium
+```
+
+SuperQode sends the nearest level the model documents: `off` becomes the
+lowest level and `max` the highest, such as `xhigh` on Neon.
+
 ## Related documentation
 
 - [Google Antigravity](antigravity.md)

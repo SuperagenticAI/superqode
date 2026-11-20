@@ -100,7 +100,7 @@ import SwiftUI
       approve(request, allow: enter)
       return true
     }
-    if escape, active, activityStatus != "cancelling", !busy {
+    if escape, showsWorking, activityStatus != "cancelling", !busy {
       cancel()
       return true
     }

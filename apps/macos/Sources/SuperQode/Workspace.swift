@@ -833,6 +833,16 @@ private func jobStamp(_ row: [String: Any]) -> Double {
     if string(row, "kind") == "local" { return false }
     return live.contains(string(row, "status"))
   }
+  /// The agent has sent its final answer. The worker is only sealing the
+  /// checkpoint and exiting, so it still holds the workspace, but nothing is
+  /// working for the person any more.
+  var turnAnswered: Bool {
+    guard string(detail, "kind") == "task", activityStatus == "running" else { return false }
+    if detail["answered"] as? Bool == true { return true }
+    return events.suffix(8).contains { string($0, "type") == "result" }
+  }
+  /// Working indicators and Stop follow the answer, not the worker process.
+  var showsWorking: Bool { active && !turnAnswered }
   /// Detail loads after the jobs list. The working bar uses the list status until then.
   var activityStatus: String {
     let detailStatus = string(detail, "status")
@@ -1828,7 +1838,7 @@ private func jobStamp(_ row: [String: Any]) -> Double {
     }
   }
   var canSubmitDraft: Bool {
-    connected && !loadingConversationDraft && !connectionDisconnected && !busy && !active
+    connected && !loadingConversationDraft && !connectionDisconnected && !busy && !showsWorking
       && !checkingConnection && !projectID.isEmpty && (isManaged || !model.isEmpty)
       && detail["archived"] as? Bool != true
       && !draft.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
@@ -1839,7 +1849,7 @@ private func jobStamp(_ row: [String: Any]) -> Double {
     guard connected else { notice = "The local engine is offline. Your draft is kept; reconnect before sending."; return }
 
     guard detail["archived"] as? Bool != true else { notice = "Restore this archived thread before continuing."; return }
-    guard !loadingConversationDraft, !connectionDisconnected, !busy, !active, !checkingConnection, !projectID.isEmpty,
+    guard !loadingConversationDraft, !connectionDisconnected, !busy, !showsWorking, !checkingConnection, !projectID.isEmpty,
       (isManaged || !model.isEmpty), !draft.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty else { return }
     if interactionMode == "plan" && !enforcesSessionControls {
       notice = "Plan mode applies to a SuperQode harness that can enforce it. This agent uses its own tools and permissions."
@@ -1882,6 +1892,8 @@ private func jobStamp(_ row: [String: Any]) -> Double {
         self.busy = false
         onSettled?(accepted)
       }
+      // An answered turn releases the workspace once its worker exits.
+      await self.waitForAnsweredTurn()
       let result = try await self.engine.call("tasks.start", params) as? [String: Any] ?? [:]
       let id = string(result, "id")
       guard !id.isEmpty else { throw EngineError(message: "The engine did not accept this message.") }
@@ -1924,6 +1936,14 @@ private func jobStamp(_ row: [String: Any]) -> Double {
       await self.refreshDetail()
       await self.refreshJobs()
       self.savePreferences()
+    }
+  }
+  /// Waits briefly for an answered turn's worker to finish sealing its checkpoint.
+  func waitForAnsweredTurn() async {
+    let deadline = ContinuousClock.now.advanced(by: .seconds(20))
+    while active && turnAnswered && ContinuousClock.now < deadline {
+      do { try await Task.sleep(for: .milliseconds(50)) } catch { return }
+      await refreshDetail()
     }
   }
   func queueAction(_ method: String, extra: [String: Any] = [:]) {

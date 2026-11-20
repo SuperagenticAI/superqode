@@ -76,3 +76,56 @@ async def test_vendor_stream_failure_cannot_be_reported_completed(tmp_path, monk
         )
     assert not any(name == "result" for name, _ in emitted)
     close.assert_awaited_once()
+
+
+def test_answered_turn_is_reported_before_the_worker_exits(desktop):
+    """The app stops showing work once the final result arrives."""
+    import threading
+
+    service, project, _ = desktop
+    service._write(
+        "INSERT INTO jobs VALUES(?,?,?,?,?,?,?,?,?)",
+        ("answered-turn", project["id"], "task", "answer", "running", "{}", None, 1, 1),
+    )
+    exited = threading.Event()
+    observed = {}
+
+    def wait():
+        observed["during"] = service.dispatch("jobs.get", {"id": "answered-turn"})
+        exited.set()
+        return 0
+
+    lines = [
+        json.dumps({"type": "harness_event", "data": {"event": "model_delta"}}) + "\n",
+        json.dumps({"type": "result", "data": {"status": "completed"}}) + "\n",
+    ]
+    process = SimpleNamespace(stdout=io.StringIO("".join(lines)), stdin=io.StringIO(), wait=wait)
+    service.processes["answered-turn"] = process
+    before = service.dispatch("jobs.get", {"id": "answered-turn"})
+    assert before["answered"] is False
+    service._watch("answered-turn", process)
+    assert exited.is_set()
+    assert observed["during"]["status"] == "running"
+    assert observed["during"]["answered"] is True
+    after = service.dispatch("jobs.get", {"id": "answered-turn"})
+    assert after["status"] == "completed"
+    assert after["answered"] is False
+    assert "answered-turn" not in service._answered
+
+
+def test_running_turn_without_result_is_not_answered(desktop):
+    service, project, _ = desktop
+    service._write(
+        "INSERT INTO jobs VALUES(?,?,?,?,?,?,?,?,?)",
+        ("approval-turn", project["id"], "task", "approval", "running", "{}", None, 1, 1),
+    )
+    observed = {}
+
+    def wait():
+        observed["during"] = service.dispatch("jobs.get", {"id": "approval-turn"})
+        return 0
+
+    line = json.dumps({"type": "approval", "data": {"request_id": "r1", "tool": {}}}) + "\n"
+    process = SimpleNamespace(stdout=io.StringIO(line), stdin=io.StringIO(), wait=wait)
+    service._watch("approval-turn", process)
+    assert observed["during"]["answered"] is False

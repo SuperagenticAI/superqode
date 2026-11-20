@@ -10,10 +10,12 @@ Performance features:
 """
 
 import asyncio
+import base64
 import concurrent.futures
 import json
 import logging
 import os
+import re
 import threading
 import time
 from typing import Any, AsyncIterator, Dict, List, Optional, Tuple
@@ -65,6 +67,110 @@ _LOCAL_DUMMY_API_KEYS = {
     "ds4": "sk-local-ds4-dummy",
     "sglang": "sk-local-sglang-dummy",
 }
+
+
+# LiteLLM 1.91 treats a Gemini model as Gemini 3 or newer only when its name
+# contains "gemini-3". Gemini 4 and later then miss the thinking-level mapping,
+# the 1.0 default temperature and the thought-signature fallback, so the
+# gateway applies those itself for later generations on the Gemini API. The
+# gateway also sends thinking levels for Gemini 3, which the generic
+# reasoning mapping drops for Google.
+_GEMINI_GENERATION = re.compile(r"^gemini-(\d+)(?:[.-]|$)")
+_GEMINI_THINKING_ORDER = ("minimal", "low", "medium", "high", "xhigh")
+# Google's documented placeholder for a function call without a signature,
+# the same value LiteLLM sends for Gemini 3.
+_GEMINI_DUMMY_THOUGHT_SIGNATURE = base64.b64encode(b"skip_thought_signature_validator").decode()
+
+
+def _gemini_generation(provider: str, model: str) -> int:
+    """Gemini model generation on the Gemini API, or 0 for anything else."""
+    if (provider or "").lower() not in {"google", "gemini"}:
+        return 0
+    match = _GEMINI_GENERATION.match((model or "").lower().split("/")[-1])
+    return int(match[1]) if match else 0
+
+
+def _gemini_thinking_level(model: str, level: Optional[str]) -> Optional[str]:
+    """Map a provider-neutral reasoning level to a level the Gemini model accepts.
+
+    ``off`` becomes the lowest supported level (Gemini 4 cannot turn thinking
+    off) and ``max`` the highest. A level the model does not document moves to
+    the nearest one it does, so ``minimal`` becomes ``low`` on Neon.
+    """
+    if not level:
+        return None
+    value = str(level).strip().lower()
+    from superqode.codegem.profiles import resolve_profile
+
+    try:
+        profile = resolve_profile(model, "google")
+    except ValueError:
+        return None
+    allowed = [item for item in _GEMINI_THINKING_ORDER if item in (profile.thinking_levels or ())]
+    if not allowed:
+        allowed = ["low", "medium", "high"]
+    if value in {"off", "none", "disable", "disabled"}:
+        return allowed[0]
+    if value == "max":
+        return allowed[-1]
+    if value not in _GEMINI_THINKING_ORDER:
+        return None
+    if value in allowed:
+        return value
+    wanted = _GEMINI_THINKING_ORDER.index(value)
+    return min(allowed, key=lambda item: abs(_GEMINI_THINKING_ORDER.index(item) - wanted))
+
+
+def _has_thought_signature(call: Dict[str, Any]) -> bool:
+    if "__thought__" in str(call.get("id") or ""):
+        return True
+    for owner in (call, call.get("function")):
+        fields = owner.get("provider_specific_fields") if isinstance(owner, dict) else None
+        if isinstance(fields, dict) and fields.get("thought_signature"):
+            return True
+    return False
+
+
+def apply_gemini_next_request_shaping(
+    provider: str,
+    model: str,
+    request_kwargs: Dict[str, Any],
+    reasoning_effort: Optional[str],
+) -> None:
+    """Send the chosen thinking level to Gemini 3 and newer on the Gemini API.
+
+    Without a level, Google's default applies (``high`` for Gemini 4 Neon).
+    Gemini 4 and newer also get the request handling LiteLLM gives Gemini 3.
+    """
+    generation = _gemini_generation(provider, model)
+    if generation < 3:
+        return
+    level = _gemini_thinking_level(model, reasoning_effort)
+    has_config = any(
+        key in request_kwargs for key in ("thinkingConfig", "thinking_config", "thinking")
+    )
+    if level and not has_config:
+        request_kwargs.pop("reasoning_effort", None)
+        # "off" keeps the lowest level and hides thought summaries.
+        show = str(reasoning_effort).strip().lower() not in {"off", "none", "disable", "disabled"}
+        request_kwargs["thinkingConfig"] = {"thinkingLevel": level, "includeThoughts": show}
+    if generation < 4:
+        return
+    # Google recommends keeping the default temperature of 1.0.
+    if request_kwargs.get("temperature") is None:
+        request_kwargs["temperature"] = 1.0
+    for message in request_kwargs.get("messages") or []:
+        calls = message.get("tool_calls") if isinstance(message, dict) else None
+        if not calls:
+            continue
+        signed = []
+        for call in calls:
+            if isinstance(call, dict) and not _has_thought_signature(call):
+                fields = dict(call.get("provider_specific_fields") or {})
+                fields["thought_signature"] = _GEMINI_DUMMY_THOUGHT_SIGNATURE
+                call = {**call, "provider_specific_fields": fields}
+            signed.append(call)
+        message["tool_calls"] = signed
 
 
 def _local_dummy_api_key(provider: str) -> str:
@@ -2769,6 +2875,7 @@ class LiteLLMGateway(GatewayInterface):
         # Applied after kwargs merge so user overrides via extra kwargs win.
         self._apply_local_request_shaping(provider, model, request_kwargs, bool(tools))
         self._apply_kimi_k3_request_shaping(provider, model, request_kwargs)
+        apply_gemini_next_request_shaping(provider, model, request_kwargs, reasoning_effort)
         self._apply_openai_responses_shaping(provider, model, request_kwargs)
 
         try:
@@ -3076,6 +3183,7 @@ class LiteLLMGateway(GatewayInterface):
         # Local-model tuning. Same rationale as in chat_completion.
         self._apply_local_request_shaping(provider, model, request_kwargs, bool(tools))
         self._apply_kimi_k3_request_shaping(provider, model, request_kwargs)
+        apply_gemini_next_request_shaping(provider, model, request_kwargs, reasoning_effort)
         self._apply_openai_responses_shaping(provider, model, request_kwargs)
 
         try:
