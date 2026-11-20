@@ -1,4 +1,8 @@
-# SuperQode for macOS public beta 0.4.20
+# SuperQode for macOS public beta 0.4.21
+
+Version 0.4.21 (build 47) bundles Python engine 2.31.23. It is a fresh build of the 0.4.20 changes below.
+
+## 0.4.20 (build 46)
 
 Version 0.4.20 (build 46) bundles Python engine 2.31.23.
 
