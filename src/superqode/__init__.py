@@ -38,7 +38,7 @@ __all__ = [
     "sidebar",
 ]
 
-__version__ = "2.31.23"
+__version__ = "2.31.24"
 
 
 # Stable, lightweight public extension surface.  Importing this package does

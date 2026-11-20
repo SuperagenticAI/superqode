@@ -1,4 +1,12 @@
-# SuperQode for macOS public beta 0.4.21
+# SuperQode for macOS public beta 0.4.22
+
+Version 0.4.22 (build 48) bundles Python engine 2.31.24.
+
+- The working bar stops as soon as the answer arrives.
+- Approving a tool call now continues the turn, so the model answers your question instead of stopping at the tool's output.
+- Thinking levels set in a harness file now apply to Gemini models on the Google API key route.
+
+## 0.4.21 (build 47)
 
 Version 0.4.21 (build 47) bundles Python engine 2.31.23. It is a fresh build of the 0.4.20 changes below.
 
