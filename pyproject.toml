@@ -82,12 +82,12 @@ sandbox-modal = [
     "modal>=1.0.0",
 ]
 sandbox-daytona = [
-    "daytona>=0.1.0",
+    "daytona>=0.1.0,<1",
 ]
 sandbox-cloud = [
     "e2b>=2.0.0",
     "modal>=1.0.0",
-    "daytona>=0.1.0",
+    "daytona>=0.1.0,<1",
 ]
 web = [
     "textual-serve>=1.1.3",
