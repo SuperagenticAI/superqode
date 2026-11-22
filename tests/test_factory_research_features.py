@@ -62,7 +62,8 @@ def test_trace_requires_actual_check_evidence_and_retains_artifact_links(
     requirements(project)
     root, store, run = make_completed(project, monkeypatch)
     before = evidence.trace(root, run)
-    assert before["covered"] == 0 and before["application_checks"][0]["status"] == "missing"
+    assert before["covered"] == 0 and before["application_checks"][0]["status"] == "never_ran"
+    assert before["requirements"][0]["status"] == "uncovered"
     result = verification.verify_factory(run, root=root)
     row = result["traceability"]["requirements"][0]
     assert row["status"] == "covered"
@@ -74,7 +75,8 @@ def test_trace_requires_actual_check_evidence_and_retains_artifact_links(
     store.add_artifact(run, kind="integration_candidate", content="new candidate", actor="fixture")
     stale = evidence.trace(root, run)
     assert stale["covered"] == 0
-    assert stale["application_checks"][0]["status"] == "missing"
+    assert stale["application_checks"][0]["status"] == "never_ran"
+    assert "older candidate" in stale["application_checks"][0]["reason"]
 
 
 def test_verifier_draft_install_requires_exact_review_and_source(project):

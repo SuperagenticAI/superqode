@@ -36,7 +36,7 @@ def trace(root, reference):
     candidate = next(
         (a for a in reversed(order.artifacts) if a.kind == "integration_candidate"), None
     )
-    evidence_bound = bool(
+    bound = bool(
         artifact
         and artifact.kind == "factory_verification"
         and artifact.digest == digest(artifact.content)
@@ -44,32 +44,48 @@ def trace(root, reference):
         and binding.get("factory_digest") == plan.snapshot.digest
         and candidate is not None
         and candidate.artifact_id == binding.get("candidate_id")
-        and report.get("isolation_applied")
-        and not report.get("missing_evidence")
     )
+    missing = [m.get("kind", "unknown") for m in report.get("missing_evidence", [])]
     check_rows = []
     from .verification import evaluator_contract
 
     try:
         expected, _ = evaluator_contract(plan)
-    except ValueError:
-        expected = {}
+        contract_error = ""
+    except ValueError as exc:
+        expected, contract_error = {}, str(exc)
     for check in definition["orchestration"]["acceptance_checks"]:
         results = [r for r in report.get("results", []) if r.get("check") == check]
         ids = [r.get("id") for r in results]
         expected_ids = [r["id"] for r in expected.get(check, [])]
-        complete = evidence_bound and bool(expected_ids) and sorted(ids) == sorted(expected_ids)
+        failed = [r.get("id") for r in results if r.get("status") != "passed"]
+        if artifact is None:
+            status, reason = "never_ran", "Protected verification has not run for this run."
+        elif not bound:
+            status, reason = (
+                "never_ran",
+                "The last verification ran on an older candidate or revision.",
+            )
+        elif failed:
+            # A real failure is reported even when other evidence is missing.
+            status, reason = "failed", "Failing cases: " + ", ".join(failed)
+        elif contract_error or not expected_ids:
+            status, reason = "blocked", contract_error or "No protected evaluator cases."
+        elif sorted(ids) == sorted(expected_ids) and report.get("isolation_applied"):
+            status, reason = "passed", "All protected cases passed."
+        elif missing:
+            status, reason = "blocked", "Missing evidence: " + ", ".join(missing)
+        else:
+            status, reason = "blocked", "Not every protected case produced a result."
         check_rows.append(
             {
                 "check": check,
                 "category": definition["improvement"]["checks"][check].get("category", "test"),
-                "status": (
-                    "passed" if all(r.get("status") == "passed" for r in results) else "failed"
-                )
-                if complete
-                else "missing",
+                "status": status,
+                "reason": reason,
                 "verification_artifact": artifact.artifact_id if artifact else None,
                 "cases": ids,
+                "failed_cases": failed,
             }
         )
     rows = []
@@ -91,30 +107,47 @@ def trace(root, reference):
                 }
             )
         checks = [c for c in check_rows if c["check"] in requirement["checks"]]
+        states = {c["status"] for c in checks}
+        if "failed" in states:
+            status = "failed"
+        elif "blocked" in states:
+            status = "blocked"
+        elif all(s["completed"] for s in stages) and states == {"passed"}:
+            status = "covered"
+        else:
+            status = "uncovered"
         rows.append(
             {
                 "id": name,
                 "description": requirement["description"],
                 "stages": stages,
                 "checks": checks,
-                "status": "covered"
-                if all(s["completed"] for s in stages)
-                and all(c["status"] == "passed" for c in checks)
-                else "uncovered",
+                "status": status,
             }
         )
+    check_counts = {
+        key: sum(c["status"] == key for c in check_rows)
+        for key in ("passed", "failed", "blocked", "never_ran")
+    }
+    requirement_counts = {
+        key: sum(r["status"] == key for r in rows)
+        for key in ("covered", "failed", "blocked", "uncovered")
+    }
     return {
-        "format": "superqode.factory-trace/1",
+        "format": "superqode.factory-trace/2",
         "run": reference,
         "snapshot_digest": plan.snapshot.digest,
         "candidate": {
             key: binding.get(key) for key in ("candidate_id", "candidate_digest", "candidate_tree")
         },
+        "verification_bound_to_current": bound,
+        "missing_evidence": missing,
         "historical_evidence_only": True,
         "requirements": rows,
         "application_checks": check_rows,
         "requirements_declared": bool(rows),
-        "covered": sum(r["status"] == "covered" for r in rows),
+        "covered": requirement_counts["covered"],
+        "summary": {"checks": check_counts, "requirements": requirement_counts},
         "release_authorized": False,
     }
 
