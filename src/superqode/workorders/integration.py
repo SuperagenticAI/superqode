@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import hashlib
+import json
 import os
 import subprocess
 import tempfile
@@ -174,6 +175,28 @@ def integrate_task_workspace(
     patch = delta.patch
     files = delta.files
     digest = delta.digest
+    from superqode.factory.protection import protected_paths, restore_protected, touched
+
+    protected = protected_paths(store.get(reference))
+    tampered = touched(files, protected)
+    if tampered:
+        # Never integrate worker edits to protected evaluators; flag the attempt.
+        candidate_tree = restore_protected(task_workspace, candidate_tree, baseline_tree, protected)
+        patch = _git(
+            task_workspace,
+            ["diff", "--binary", "--full-index", baseline_tree, candidate_tree, "--"],
+        )
+        files = _changed_paths(task_workspace, baseline_tree, candidate_tree)
+        digest = hashlib.sha256(patch.encode()).hexdigest()
+        store.add_artifact(
+            reference,
+            kind="factory_protected_write",
+            task_id=task_id,
+            path=str(task_workspace),
+            content=json.dumps({"paths": tampered}, sort_keys=True),
+            metadata={"dropped_from_candidate": True},
+            actor=actor,
+        )
 
     with work_order_integration_lock(store, reference):
         order = store.get(reference)

@@ -69,6 +69,7 @@ class WorkTaskWorkspace:
     workspace_id: str = ""
     scope: str = "task"
     integration_path: Path | None = None
+    hidden_paths: tuple[str, ...] = ()
 
 
 class _WorkOrderCancelled(Exception):
@@ -237,6 +238,15 @@ async def _execute_claimed_task(
                 "workspace_id": workspace.workspace_id,
                 "scope": workspace.scope,
                 "integration_workspace": str(workspace.integration_path or ""),
+                **(
+                    {
+                        "evaluators_hidden": True,
+                        "hidden_paths": list(workspace.hidden_paths),
+                        "sandbox_masking": _sandbox_masking_active(),
+                    }
+                    if workspace.hidden_paths
+                    else {}
+                ),
             },
             actor=worker_id,
         )
@@ -312,15 +322,32 @@ async def _execute_claimed_task(
                     invocation_namespace=retry_namespace,
                 )
             ):
-                outcome = await _execute_harness_task(
-                    order,
-                    task,
-                    provider=provider,
-                    model=model,
-                    runtime=runtime,
-                    sandbox=sandbox,
-                    working_directory=workspace.path,
+                from superqode.factory.protection import hidden_paths_scope, mask_targets
+
+                masked = (
+                    await asyncio.to_thread(mask_targets, store.get(order.work_order_id))
+                    if workspace.hidden_paths
+                    else ()
                 )
+                with hidden_paths_scope(masked):
+                    outcome = await _execute_harness_task(
+                        order,
+                        task,
+                        provider=provider,
+                        model=model,
+                        runtime=runtime,
+                        sandbox=sandbox,
+                        working_directory=workspace.path,
+                    )
+                if outcome.get("protected_access"):
+                    store.add_artifact(
+                        order.work_order_id,
+                        kind="factory_protected_access",
+                        task_id=task.task_id,
+                        content=json.dumps({"tools": outcome["protected_access"]}, sort_keys=True),
+                        metadata={"denied": True},
+                        actor=worker_id,
+                    )
                 if outcome.get("stopped_reason") == "recovery_required":
                     raise _RecoveryRequired(outcome.get("error") or "PiPy requires reconciliation")
             end_guard = await asyncio.to_thread(
@@ -821,6 +848,9 @@ async def _execute_harness_task(
         work_order=order,
         secure_defaults=True,
     )
+    from superqode.factory.protection import guard_governance
+
+    governance, protected_access = guard_governance(governance, order)
     primary = split_provider_model_ref(spec.model_policy.primary)
     resolved_provider = (
         provider.strip()
@@ -900,6 +930,7 @@ async def _execute_harness_task(
             "result_run_ids": [item.run_id for item in workflow_result.results],
             "governance": governance.to_public_dict(),
             "promotion": promotion_selection,
+            "protected_access": list(protected_access),
             **usage,
         }
     session = await kernel.session(f"{order.work_order_id}-{task.task_id}")
@@ -934,6 +965,7 @@ async def _execute_harness_task(
         "cost_currency": result.response.cost_currency,
         "governance": governance.to_public_dict(),
         "promotion": promotion_selection,
+        "protected_access": list(protected_access),
     }
 
 
@@ -1090,6 +1122,19 @@ async def _enforce_role_contract(
             workspace.baseline_tree,
         )
         metadata["workspace_files"] = list(delta.files)
+        from superqode.factory.protection import touched
+
+        tampered = touched(delta.files, workspace.hidden_paths)
+        if tampered:
+            store.add_artifact(
+                order.work_order_id,
+                kind="factory_protected_write",
+                task_id=task.task_id,
+                path=str(workspace.path),
+                content=json.dumps({"paths": tampered}, sort_keys=True),
+                metadata={"dropped_from_candidate": True},
+                actor=worker_id,
+            )
         if delta.files:
             reason = f"{task.role.value} tasks are evidence-only but changed: " + ", ".join(
                 delta.files
@@ -1197,6 +1242,7 @@ async def _prepare_task_workspace(
                 source_tree=str(data.get("source_tree", "")),
                 workspace_id=str(data.get("workspace_id", "")),
                 scope=str(data.get("scope", "task")),
+                hidden_paths=tuple(data.get("hidden_paths", ())),
                 integration_path=Path(data["integration_workspace"])
                 if data.get("integration_workspace")
                 else None,
@@ -1220,6 +1266,15 @@ async def _prepare_task_workspace(
     if is_factory_order(order):
         manager = factory_worktree_manager(order)
     integration_tree = await asyncio.to_thread(snapshot_worktree_tree, integration.path)
+    hidden: tuple[str, ...] = ()
+    if is_factory_order(order):
+        # Workers never receive protected acceptance evaluators in their copy.
+        from superqode.factory.protection import protected_paths, tree_without
+
+        hidden = await asyncio.to_thread(protected_paths, order)
+        integration_tree = await asyncio.to_thread(
+            tree_without, integration.path, integration_tree, hidden
+        )
     task_commit = await asyncio.to_thread(
         create_tree_commit,
         integration.path,
@@ -1245,6 +1300,7 @@ async def _prepare_task_workspace(
         workspace_id=info.session_id,
         scope="task",
         integration_path=integration.path,
+        hidden_paths=hidden,
     )
 
 
@@ -1391,6 +1447,12 @@ async def _record_workspace_evidence(
         },
         actor=worker_id,
     )
+
+
+def _sandbox_masking_active() -> bool:
+    from superqode.sandbox.local_sandbox import sandbox_status
+
+    return bool(sandbox_status()["active"])
 
 
 def _workspace_id(work_order_id: str, task_id: str) -> str:

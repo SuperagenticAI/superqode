@@ -275,6 +275,13 @@ SCHEMA = obj(
                     ("max_workers", "max_seconds"),
                 ),
                 "release": {"const": "human"},
+                # SuperGauge is the release quality control. Ship is always required.
+                "release_gauge": obj(
+                    {
+                        "level": {"enum": ["L1", "L2", "L3", "L4"]},
+                        "require_ship": {"const": True},
+                    }
+                ),
                 "release_authority": obj(
                     {
                         "method": {"const": "p256-signature"},

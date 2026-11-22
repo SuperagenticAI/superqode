@@ -60,12 +60,23 @@ def sandbox_available() -> bool:
     return _backend_for_platform() != "none"
 
 
-def _seatbelt_profile(cwd: Path, *, allow_network: bool, writable: list[Path]) -> str:
+def _hidden_paths() -> list[Path]:
+    """Host paths the active Factory worker scope must not expose to commands."""
+    try:
+        from superqode.factory.protection import hidden_paths
+    except Exception:  # pragma: no cover - optional during partial installs
+        return []
+    return [Path(path) for path in hidden_paths()]
+
+
+def _seatbelt_profile(
+    cwd: Path, *, allow_network: bool, writable: list[Path], hidden: list[Path] = ()
+) -> str:
     """Build a Seatbelt (SBPL) profile: read all, write only to allowed roots."""
+    import json
+
     write_rules = []
     for path in writable:
-        import json
-
         write_rules.append(f"  (subpath {json.dumps(str(path), ensure_ascii=False)})")
     write_block = "\n".join(write_rules)
     lines = [
@@ -83,6 +94,8 @@ def _seatbelt_profile(cwd: Path, *, allow_network: bool, writable: list[Path]) -
     ]
     if not allow_network:
         lines.append("(deny network*)")
+    for path in hidden:
+        lines.append(f"(deny file-read* file-write* (subpath {json.dumps(str(path))}))")
     return "\n".join(lines)
 
 
@@ -119,10 +132,11 @@ def build_sandboxed_argv(
     if allow_network is None:
         allow_network = mode == MODE_WORKSPACE_WRITE
     cwd = Path(cwd)
+    hidden = _hidden_paths()
 
     if backend == "seatbelt":
         profile = _seatbelt_profile(
-            cwd, allow_network=allow_network, writable=_writable_roots(cwd, mode)
+            cwd, allow_network=allow_network, writable=_writable_roots(cwd, mode), hidden=hidden
         )
         argv = ["sandbox-exec", "-p", profile, *shell_argv]
         return SandboxPlan(argv=argv, applied=True, backend="seatbelt")
@@ -132,6 +146,12 @@ def build_sandboxed_argv(
     if mode == MODE_WORKSPACE_WRITE:
         resolved = str(cwd.resolve())
         argv += ["--bind", resolved, resolved]
+    for path in hidden:
+        # Mask protected evaluators: an empty directory or an empty file.
+        if path.is_dir():
+            argv += ["--tmpfs", str(path)]
+        elif path.exists():
+            argv += ["--ro-bind", "/dev/null", str(path)]
     if not allow_network:
         argv += ["--unshare-net"]
     argv += ["--die-with-parent", *shell_argv]

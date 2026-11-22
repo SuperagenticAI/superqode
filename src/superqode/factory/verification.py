@@ -126,8 +126,40 @@ def _candidate_copy(root, tree, destination, archive, excluded, timeout):
     return "sha256:" + hasher.hexdigest()
 
 
-def verify_factory(reference, *, root=".", timeout=120, actor="verifier"):
-    """Evaluate outside agent state; persist missing evidence rather than a false pass."""
+def _contamination(copy, plan, checks):
+    """Copy-detection probes: a candidate must not contain an evaluator verbatim."""
+    definition = plan.snapshot.payload["definition"]
+    assets = definition["data_context"].get("files", {})
+    digests = {}
+    for name in checks:
+        reference = definition["improvement"]["checks"][name].get("evaluator")
+        path = relative_path(assets[reference]["path"]).as_posix()
+        text = plan.snapshot.payload["sources"][path]["text"]
+        digests[hashlib.sha256(text.encode()).hexdigest()] = name
+    detected = []
+    for path in sorted(copy.rglob("*")):
+        if not path.is_file() or path.stat().st_size > 1024 * 1024:
+            continue
+        found = digests.get(hashlib.sha256(path.read_bytes()).hexdigest())
+        if found:
+            detected.append({"check": found, "path": path.relative_to(copy).as_posix()})
+    return {
+        "probes": ["evaluator-copy:" + name for name in sorted(checks)],
+        "detected": detected,
+    }
+
+
+def verify_factory(reference, *, root=".", timeout=120, actor="verifier", judges=None):
+    """Evaluate outside agent state; persist missing evidence rather than a false pass.
+
+    ``judges`` are optional model judge results. They can hold or reject the
+    SuperGauge verdict, never approve it.
+    """
+    judges = list(judges or [])
+    from superqode.gauge import judge_effect
+
+    for judge in judges:
+        judge_effect(judge)
     if isinstance(timeout, bool) or not isinstance(timeout, int) or not 1 <= timeout <= 300:
         raise ValueError("Verification timeout must be between 1 and 300 seconds")
     root = Path(root).resolve()
@@ -181,8 +213,8 @@ def verify_factory(reference, *, root=".", timeout=120, actor="verifier"):
         "isolation_applied": False,
         "runtime": {"python": sys.version.split()[0], "libraries": "standard-library-only"},
         "started_at": time.time(),
+        "evaluator_context": "separate protected sandbox; evaluator files excluded from the candidate",
         "limitations": [
-            "Evaluator secrecy during implementation is not established.",
             "This is not release authorization or production certification.",
         ],
     }
@@ -210,6 +242,7 @@ def verify_factory(reference, *, root=".", timeout=120, actor="verifier"):
                 excluded,
                 max(0.01, deadline - time.monotonic()),
             )
+            report["contamination"] = _contamination(copy, plan, checks)
             ready = run_python_probe(
                 ["python", "-c", "print('superqode-verifier-ready')"],
                 candidate=copy,
@@ -277,13 +310,19 @@ def verify_factory(reference, *, root=".", timeout=120, actor="verifier"):
         for a in updated.artifacts
         if a.artifact_id == updated.metadata["factory_verification"]["artifact_id"]
     )
-    record = verification_record(updated, artifact)
+    record = verification_record(updated, artifact, judges=judges)
     store.add_artifact(
         reference,
         kind="factory_quality_record",
         content=canonical(record),
         digest=digest(canonical(record)),
-        metadata={"verification_artifact_id": artifact.artifact_id},
+        metadata={
+            "verification_artifact_id": artifact.artifact_id,
+            "factory_digest": record["subject"]["factory_digest"],
+            "candidate_id": record["subject"]["candidate"]["id"],
+            "candidate_digest": record["subject"]["candidate"]["digest"],
+            "verdict": record["decision"]["verdict"],
+        },
         actor=actor,
     )
     from .evidence import trace
@@ -304,14 +343,31 @@ def verify_factory(reference, *, root=".", timeout=120, actor="verifier"):
     }
 
 
-def verification_record(order, artifact):
+def verification_record(order, artifact, *, judges=()):
+    """Project protected verification into a candidate-bound SuperGauge record.
+
+    The verdict is computed from deterministic evidence: ship, hold or reject.
+    Ship is a quality recommendation; release still needs a human signature.
+    """
+    from superqode.gauge import decide
+    from .protection import provenance
+
     report = json.loads(artifact.content)
     binding = report["binding"]
+    protection = provenance(order)
+    contamination = report.get("contamination") or {}
+    cases = len(binding["cases"])
     record = AgentQualityRecord(
         profile={"id": "sg/coding-agent", "version": "0.1", "tier": "T1"},
         subject={
             "agent": order.metadata["factory"]["name"],
             "harness_digest": binding["harness_digest"],
+            "factory_digest": binding["factory_digest"],
+            "candidate": {
+                "id": binding["candidate_id"],
+                "digest": binding["candidate_digest"],
+                "tree": binding["candidate_tree"],
+            },
             "authority": {
                 "sandbox": report.get("sandbox", "none"),
                 "egress": "deny-by-default",
@@ -320,28 +376,67 @@ def verification_record(order, artifact):
         },
         task_set={
             "manifest_digest": digest(canonical(binding["evaluators"])),
-            "held_in": len(binding["cases"]),
-            "held_out": 0,
-            "sealed": False,
+            "held_in": 0,
+            "held_out": cases,
+            "sealed": protection["evaluators_hidden"],
         },
     )
+    if contamination.get("probes"):
+        record.task_set["canary_ids"] = list(contamination["probes"])
     if "code_digest" in report:
         record.subject["code_digest"] = report["code_digest"]
-    if report["results"]:
-        value = sum(row["status"] == "passed" for row in report["results"]) / len(binding["cases"])
-        record.add_measure("task.completion", value, n=len(binding["cases"]), split="held-in")
+    results = report["results"]
+    complete = not report["missing_evidence"] and len(results) == cases
+    failed = [f"{row['check']}/{row['id']}" for row in results if row["status"] != "passed"]
+    if results:
+        value = sum(row["status"] == "passed" for row in results) / cases
+        record.add_measure("task.completion", value, n=cases, split="held-out")
         record.add_gate(
-            "task.completion", "pass" if value == 1 else "fail", floor=1, split="held-in"
+            "task.completion",
+            "pass" if value == 1 and complete else "fail",
+            floor=1,
+            split="held-out",
         )
-    record.add_measure(
-        "assurance.evidence_complete",
-        not report["missing_evidence"] and len(report["results"]) == len(binding["cases"]),
-    )
+    record.add_measure("assurance.evidence_complete", complete)
     record.add_gate(
         "safety.isolation", "pass" if report["isolation_applied"] else "fail", source="native"
     )
+    record.add_gate(
+        "assurance.evaluator_hidden",
+        "pass" if protection["evaluators_hidden"] else "fail",
+        source="native",
+    )
+    if contamination.get("probes"):
+        record.add_gate(
+            "assurance.contamination",
+            "fail" if contamination.get("detected") else "pass",
+            source="native",
+        )
+    reject, hold = [], []
+    if failed and report["isolation_applied"]:
+        reject.append("acceptance cases failed: " + ", ".join(failed[:10]))
+    writes = [f for f in protection["flags"] if f["kind"] == "write"]
+    reads = [f for f in protection["flags"] if f["kind"] == "read"]
+    if writes:
+        reject.append("a worker tried to modify protected evaluators")
+    if contamination.get("detected"):
+        reject.append("the candidate contains a protected evaluator verbatim")
+    if reads:
+        hold.append("a worker tried to read protected evaluators; review the run")
+    for missing in report["missing_evidence"]:
+        hold.append(f"missing evidence: {missing.get('kind')}")
+    if not report["missing_evidence"] and len(results) != cases:
+        hold.append("not every acceptance case produced a result")
+    if not protection["evaluators_hidden"]:
+        hold.append("evaluator files were not hidden from every worker")
     record.assurance = {
-        "evaluator_independent": False,
+        "evaluator_independent": protection["evaluators_hidden"],
+        "evaluator_provenance": {
+            "evaluators": binding["evaluators"],
+            "hidden_from_workers": protection["evaluators_hidden"],
+            "hidden_paths": protection["hidden_paths"],
+            "flags": protection["flags"],
+        },
         "evidence": {
             "ledger": f".superqode/workorders/store.sqlite3#{order.work_order_id}/{artifact.artifact_id}",
             "format": report["format"],
@@ -349,9 +444,13 @@ def verification_record(order, artifact):
             "replayable": False,
         },
     }
+    decision = decide(gates=record.gates, reject_reasons=reject, hold_reasons=hold, judges=judges)
+    for judge in decision["judges"]:
+        record.add_measure(f"judge.{judge['id']}", judge["verdict"], model=judge["model"])
     record.decision = {
-        "verdict": "hold",
-        "reason": "Application acceptance evidence; release authority remains separate",
+        **decision,
+        "actor": "superqode-gauge",
+        "release_requires": "a signed human approval bound to this candidate",
     }
     return record.to_dict()
 

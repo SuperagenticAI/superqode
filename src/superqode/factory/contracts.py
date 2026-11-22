@@ -317,6 +317,14 @@ def validate_completed(order, *, final=False):
             ),
             None,
         )
+        visible = expected
+        if latest and expected:
+            # Reviewers see the candidate without protected evaluators.
+            from pathlib import Path
+
+            from .protection import protected_paths, tree_without
+
+            visible = tree_without(Path(order.repository), expected, protected_paths(order))
         for task in latest.values():
             _, payload = _artifact(order, task)
             reviews = [
@@ -324,7 +332,7 @@ def validate_completed(order, *, final=False):
                 for key, value in payload["outputs"].items()
                 if task.metadata["factory_contract"]["outputs"][key]["type"] == "review"
             ]
-            if payload["candidate_tree"] != expected or any(
+            if payload["candidate_tree"] not in {expected, visible} or any(
                 v["verdict"] != "approved" for v in reviews
             ):
                 raise ValueError(

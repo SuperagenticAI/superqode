@@ -211,8 +211,23 @@ def _add_reliability(record, runs: list[dict]) -> None:
 @click.option(
     "--require-ship", is_flag=True, help="Require L2 or higher and recorded ship approval."
 )
-def gauge_gate(record_path: Path, level: str, quiet: bool, require_ship: bool = False) -> None:
+@click.option(
+    "--factory-digest", default="", help="Require the record to bind this factory revision."
+)
+@click.option(
+    "--candidate-digest", default="", help="Require the record to bind this exact candidate."
+)
+def gauge_gate(
+    record_path: Path,
+    level: str,
+    quiet: bool,
+    require_ship: bool = False,
+    factory_digest: str = "",
+    candidate_digest: str = "",
+) -> None:
     """Exit non-zero when the record does not reach LEVEL. The CI verb."""
+    from superqode.gauge.verdict import binding_failures
+
     record = _load(record_path)
     failures = check_levels(record)
     reached = highest_level(record)
@@ -225,6 +240,9 @@ def gauge_gate(record_path: Path, level: str, quiet: bool, require_ship: bool = 
         click.echo(f"\nhighest level met: {reached or 'none'}")
 
     blockers = release_failures(record) if require_ship else []
+    blockers += binding_failures(
+        record, factory_digest=factory_digest, candidate_digest=candidate_digest
+    )
     required_level = level
     if require_ship and LEVELS.index(required_level) < LEVELS.index("L2"):
         required_level = "L2"

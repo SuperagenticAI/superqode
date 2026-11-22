@@ -20,6 +20,7 @@ from .record import (
     record_from_eval,
 )
 from .levels import LEVELS, check_levels, highest_level
+from .verdict import binding_failures, decide, judge_effect, release_check
 from .sources import (
     ledger_evidence,
     policy_decisions,
@@ -35,6 +36,10 @@ __all__ = [
     "LEVELS",
     "check_levels",
     "highest_level",
+    "binding_failures",
+    "decide",
+    "judge_effect",
+    "release_check",
     "ledger_evidence",
     "policy_decisions",
     "policy_decisions_from_ledger",

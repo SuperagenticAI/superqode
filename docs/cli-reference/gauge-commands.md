@@ -54,11 +54,16 @@ sq gauge gate record.yaml --level L2 --require-ship --quiet
 | `--level {L1..L4}` | `L2` | Minimum level required |
 | `--quiet` | off | Suppress the report, leave the exit code |
 | `--require-ship` | off | Require at least L2, a ship verdict, a named actor and passing gates |
+| `--factory-digest` | none | Fail unless the record binds this Factory revision |
+| `--candidate-digest` | none | Fail unless the record binds this exact candidate |
 
 Conformance records may carry hold or reject decisions. Use `--require-ship`
-in deployment jobs to check the recorded release approval as well as the level.
-Your release system must authenticate the approver, bind the record to the
-candidate and enforce its profile. The actor field records an identity.
+in deployment jobs to check the recorded verdict as well as the level, and the
+two digest options to check that the record describes the exact revision and
+candidate you are about to release. A ship verdict is a quality recommendation,
+not an approval: your release system must still authenticate the human approver.
+Software Factory runs do all of this for you: see
+[Factory commands](factory-commands.md#release-decision).
 
 Without `--quiet` it prints each level with its blockers:
 

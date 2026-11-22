@@ -26,7 +26,7 @@ def completed(project, monkeypatch):
     return make_completed(project, monkeypatch)
 
 
-def make_completed(project, monkeypatch):
+def make_completed(project, monkeypatch, *, tamper=False, peek=None):
     evaluator = project / "protected/probes.json"
     evaluator.parent.mkdir()
     evaluator.write_text(
@@ -54,8 +54,12 @@ def make_completed(project, monkeypatch):
     async def execute(order, task, *, working_directory, **kwargs):
         if task.task_id == "implement":
             (working_directory / "app.py").write_text("print(43)\n")
-            # Simulate a proposed weakening of the evaluator in the application.
-            (working_directory / "protected/probes.json").write_text('{"cases": []}')
+            if peek is not None:
+                peek.append((working_directory / "protected/probes.json").exists())
+            if tamper:
+                # Simulate a worker trying to weaken the protected evaluator.
+                (working_directory / "protected").mkdir(exist_ok=True)
+                (working_directory / "protected/probes.json").write_text('{"cases": []}')
         return {"content": "Evidence", "stopped_reason": "complete", "tool_calls": 1}
 
     monkeypatch.setattr(runner, "_execute_harness_task", execute)
@@ -87,17 +91,22 @@ def simulated_probes(monkeypatch):
     return calls
 
 
-def test_pinned_evaluators_bind_exact_candidate_and_emit_hold_record(completed, simulated_probes):
+def test_pinned_evaluators_bind_exact_candidate_and_emit_ship_record(completed, simulated_probes):
     root, store, run_id = completed
     result = verification.verify_factory(run_id, root=root)
     report = result["report"]
     assert report["status"] == "passed"
     assert len(report["results"]) == 1
     assert len(simulated_probes) == 2
-    assert result["record"]["decision"]["verdict"] == "hold"
-    assert result["record"]["assurance"]["evaluator_independent"] is False
-    assert highest_level(result["record"]) == "L1"
-    assert result["record"]["subject"]["code_digest"] == report["code_digest"]
+    record = result["record"]
+    assert record["decision"]["verdict"] == "ship"
+    assert record["decision"]["actor"] == "superqode-gauge"
+    assert record["assurance"]["evaluator_independent"] is True
+    assert record["task_set"]["sealed"] is True
+    assert highest_level(record) == "L2"
+    assert record["subject"]["code_digest"] == report["code_digest"]
+    assert record["subject"]["factory_digest"] == report["binding"]["factory_digest"]
+    assert record["subject"]["candidate"]["digest"] == report["binding"]["candidate_digest"]
     assert (
         report["binding"]["factory_digest"]
         == store.get(run_id).metadata["factory"]["snapshot_digest"]
@@ -183,7 +192,7 @@ def test_native_verification_end_to_end(completed):
     assert result["report"]["status"] == "passed", result["report"]
     assert result["report"]["isolation_applied"] is True
     assert result["report"]["sandbox"] in {"seatbelt", "bwrap"}
-    assert result["record"]["decision"]["verdict"] == "hold"
+    assert result["record"]["decision"]["verdict"] == "ship"
 
 
 def test_legacy_checks_and_fabricated_check_results_cannot_authorize_factory(completed):

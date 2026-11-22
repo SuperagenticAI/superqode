@@ -439,6 +439,10 @@ def handle(service, method, params):
             params["run"], actor="desktop", reason="Stopped from Factory Studio"
         )
         return {"id": order.work_order_id, "status": order.status.value}
+    if method == "factory.release.status":
+        from superqode.factory.release import release_status
+
+        return release_status(params["run"], root=root)
     if method == "factory.release.challenge":
         from superqode.factory.release import issue_challenge
 
@@ -1121,6 +1125,13 @@ async def run(request, emit):
             "verification_status": verified["report"]["status"],
             "record": verified["record"],
             "missing_evidence": verified["report"]["missing_evidence"],
+            "gauge": {
+                "verdict": verified["record"]["decision"]["verdict"],
+                "reasons": verified["record"]["decision"]["reasons"],
+                "factory_digest": verified["record"]["subject"]["factory_digest"],
+                "candidate": verified["record"]["subject"]["candidate"],
+            },
+            "traceability": verified["traceability"],
         }
     else:
         from superqode.factory.release import apply_approved
