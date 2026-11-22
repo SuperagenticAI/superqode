@@ -23,7 +23,7 @@ struct FactoryStudioView: View {
   private var controlDraft: FactoryControlDraft { FactoryControlDraft(name: factoryName, binding: binding,
     model: modelRef, seconds: seconds, workers: workers, network: network) }
   private var controlsHaveChanges: Bool { syncedControls.map { $0 != controlDraft } ?? false }
-  private var idle: Bool { !library.busy && !app.anyActive && !app.busy }
+  private var idle: Bool { !library.busy && !library.acceptance.busy && !app.anyActive && !app.busy }
   private var order: [String: Any] { library.detail["work_order"] as? [String: Any] ?? [:] }
   private var stages: [[String: Any]] { library.review["stages"] as? [[String: Any]] ?? [] }
   private var tasks: [[String: Any]] { order["tasks"] as? [[String: Any]] ?? [] }
@@ -197,6 +197,7 @@ struct FactoryStudioView: View {
           }
           Text("Reusable skills and measured harness changes are under Improve. Proposals never activate automatically.")
             .font(.caption).foregroundStyle(.secondary)
+          Text("Configure acceptance outcomes and protected verifiers in Workflow.").font(.caption).foregroundStyle(.secondary)
           DisclosureGroup("Validation notes") { warnings }
         }.padding(.leading, 12)
       }.frame(minWidth: 290)
@@ -204,9 +205,13 @@ struct FactoryStudioView: View {
   }
 
   private var workflow: some View {
+    ScrollViewReader { proxy in
     ScrollView {
       VStack(alignment: .leading, spacing: 14) {
-        Text("Stages and dependencies").font(.headline)
+        HStack {
+          Text("Stages and dependencies").font(.headline); Spacer()
+          nativeButton("factory.workflow.acceptance", action: { proxy.scrollTo("factory.acceptance", anchor: .top) }, title: "Acceptance & verification") { Text("Acceptance & verification").font(.caption) }
+        }
         if let loop = library.review["revision_loop"] as? [String: Any], !loop.isEmpty {
           Text("Bounded revision loop").font(.subheadline)
           CodeBlock(text: pretty(loop))
@@ -226,6 +231,9 @@ struct FactoryStudioView: View {
         }
         warnings
         Divider()
+        FactoryAcceptanceSetupView(studio: library, library: library.acceptance, active: active && tab == "Workflow")
+          .id("factory.acceptance")
+        Divider()
         Text("Whole-workflow instruction experiment").font(.headline)
         Text("Save and validate the Factory first. Select an entry, dependent or reviewer stage; only its goal changes. Inputs, outputs, branches, loops, checks and gates remain fixed. Preparing and running the exported paired suite are separate actions.").font(.caption).foregroundStyle(.secondary)
         Picker("Stage to compare", selection: $experimentStage) {
@@ -242,6 +250,7 @@ struct FactoryStudioView: View {
         Text("Continuous outcomes prepares investigations and follow-up signals. Scheduling and deployment are separate actions.")
           .font(.caption).foregroundStyle(.secondary)
       }
+    }
     }
   }
   private var definition: some View {
@@ -296,6 +305,7 @@ struct FactoryStudioView: View {
           }
         }.padding(.trailing, 12)
       }.frame(minWidth: 210, idealWidth: 260, maxWidth: 300)
+      ScrollViewReader { proxy in
       ScrollView {
         VStack(alignment: .leading, spacing: 12) {
           if !order.isEmpty {
@@ -308,6 +318,7 @@ struct FactoryStudioView: View {
               Button("Run ready stages…") { confirmation = "worker" }.disabled(!idle)
               Button("Verify candidate…") { confirmation = "verify" }.disabled(!idle)
               Button("Stop run") { confirmation = "cancel" }.disabled(library.run.isEmpty)
+              nativeButton("factory.run.coverage", action: { proxy.scrollTo("factory.requirements", anchor: .top) }, title: "Requirement coverage") { Text("Requirement coverage") }
             }
             ForEach(tasks, id: \.description) { task in
               VStack(alignment: .leading, spacing: 6) {
@@ -323,6 +334,8 @@ struct FactoryStudioView: View {
             }
             DisclosureGroup("Run evidence & budget") { CodeBlock(text: pretty(library.detail["cockpit"])) }
             DisclosureGroup("Protected verification receipt") { CodeBlock(text: pretty(metadata["factory_verification"])) }
+            FactoryRequirementTraceView(studio: library, library: library.acceptance, active: active && tab == "Runs")
+              .id("factory.requirements")
             DisclosureGroup("Recorded evidence & SuperGauge") { CodeBlock(text: pretty(library.detail["evidence"])) }
             if !string(library.detail, "candidate_id").isEmpty {
               Text("Verified candidate diff").font(.headline)
@@ -340,6 +353,7 @@ struct FactoryStudioView: View {
           } else { Text("Select a trial to inspect its stages and evidence.").foregroundStyle(.secondary) }
         }.padding(.leading, 12)
       }.frame(minWidth: 290)
+      }
     }
     }
   }

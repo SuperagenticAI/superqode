@@ -1,10 +1,12 @@
 import SwiftUI
+import Combine
 
 @MainActor final class FactoryStudioLibrary: ObservableObject {
   let trialSuites = FactoryTrialSuiteLibrary()
   let operations = FactoryOperationsLibrary()
+  let acceptance = FactoryAcceptanceLibrary()
   let navigation = FactoryNavigation(initial: FactoryNavigation.initialTab)
-  @Published var text = "" { didSet { if text != oldValue { version += 1; review = [:] } } }
+  @Published var text = "" { didSet { if text != oldValue { version += 1; review = [:]; acceptance.sourceChanged(text) } } }
   @Published var description = "" { didSet { if description != oldValue { version += 1 } } }
   @Published var review: [String: Any] = [:]
   @Published var improvementPlans: [[String: Any]] = []
@@ -17,7 +19,7 @@ import SwiftUI
   @Published var sourceReview: [String: Any] = [:]
   @Published var revisions: [[String: Any]] = []
   @Published var runs: [[String: Any]] = []
-  @Published var run = "" { didSet { if run != oldValue { detail = [:] } } }
+  @Published var run = "" { didSet { if run != oldValue { detail = [:]; acceptance.selectRun(run) } } }
   @Published var detail: [String: Any] = [:]
   @Published var proposal: [String: Any] = [:]
   @Published var job: [String: Any] = [:]
@@ -33,6 +35,8 @@ import SwiftUI
   private var actionRun = ""
   private var trialRequest = UUID().uuidString
   private var trialGoal = ""
+  private var acceptanceChanges: AnyCancellable?
+  init() { acceptanceChanges = acceptance.objectWillChange.sink { [weak self] in self?.objectWillChange.send() } }
   var canApplyProposal: Bool { !string(proposal, "yaml").isEmpty }
 
   @discardableResult func workflowExperiment(_ engine: Engine, stage: String, goal: String, workGoal: String) async -> Bool {
@@ -57,6 +61,7 @@ import SwiftUI
     guard identity != project else { return }
     trialSuites.enter(identity)
     operations.enter(identity)
+    acceptance.enter(identity)
     navigation.enter(identity)
     if !project.isEmpty { drafts[project] = (text, description, expectedFileDigest) }
     operation = UUID(); sourceGeneration += 1; sourceReview = [:]; busy = false; project = identity; review = [:]; detail = [:]; run = ""
@@ -64,6 +69,7 @@ import SwiftUI
     revisions = []; runs = []; job = [:]; proposal = [:]; failure = ""; message = ""
     let draft = drafts[identity]
     text = draft?.0 ?? ""; description = draft?.1 ?? ""; expectedFileDigest = draft?.2 ?? ""
+    acceptance.sourceChanged(text)
     trialRequest = UUID().uuidString; version += 1
   }
   func rpc(_ engine: Engine, _ method: String, _ params: [String: Any] = [:]) async throws -> [String: Any] {

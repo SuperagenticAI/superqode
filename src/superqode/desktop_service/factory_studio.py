@@ -206,6 +206,16 @@ def handle(service, method, params):
                 data["governance"]["budget"][key] = controls[key]
         if "allow_network" in controls:
             data["governance"]["permissions"]["allow_network"] = controls["allow_network"]
+        if "requirements" in controls:
+            data["data_context"]["requirements"] = controls["requirements"]
+        if "check_categories" in controls:
+            categories = controls["check_categories"]
+            if not isinstance(categories, dict) or set(categories) - set(
+                data["improvement"]["checks"]
+            ):
+                raise ValueError("Choose existing acceptance checks for category edits")
+            for name, category in categories.items():
+                data["improvement"]["checks"][name]["category"] = category
         if "public_key" in controls:
             authority = data["governance"].setdefault(
                 "release_authority",
@@ -241,6 +251,7 @@ def handle(service, method, params):
             "stages": data["orchestration"]["stages"],
             "requirements": data["data_context"].get("requirements", {}),
             "application_checks": data["improvement"]["checks"],
+            "acceptance_checks": data["orchestration"]["acceptance_checks"],
             "revision_loop": data["orchestration"].get("revision_loop", {}),
             "layers": list(LAYERS),
             "bindings": data["inference"]["harnesses"],

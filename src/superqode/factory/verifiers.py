@@ -3,6 +3,7 @@
 import asyncio
 from dataclasses import asdict
 from copy import deepcopy
+import difflib
 import json
 from pathlib import Path
 
@@ -70,6 +71,14 @@ def draft(root, checks, *, yaml_text=None):
         "base_snapshot_digest": current.digest,
         "snapshot_digest": snapshot.digest,
         "yaml": text,
+        "diff": "".join(
+            difflib.unified_diff(
+                before.path.read_text().splitlines(True),
+                text.splitlines(True),
+                fromfile="Saved Factory",
+                tofile="Proposed verifier configuration",
+            )
+        ),
         "files": files,
         "checks": checks,
         "missing_protected_checks": missing,

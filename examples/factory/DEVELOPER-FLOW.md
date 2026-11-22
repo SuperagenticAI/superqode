@@ -24,9 +24,10 @@ header's project menu switches projects while keeping the Factory context.
    model. Edit the name, binding, model and budget, then **Apply controls to
    draft**. Unapplied field edits block saving and new-trial preparation; discard
    them explicitly if you want the current definition instead.
-3. Inspect **Workflow** for stages, handoffs, conditions and human gates. Use
-   **Definition & diff** for advanced changes, including protected evaluator
-   assets. A starter's self-check alone does not authorize acceptance or release.
+3. Inspect **Workflow** for stages, handoffs, conditions and human gates. In
+   **Acceptance & verification**, map requirements to contributing stages and
+   final checks. Classify checks as build, startup, health, service, security or
+   tests. Apply these edits to the draft, then validate and save the revision.
 4. Validate again, enter a revision reason and save. **Manage → Source control**
    reviews and commits the declared Factory sources. The setup checklist checks
    matching saved and source-review evidence; visiting pages does not mark them
@@ -43,6 +44,25 @@ header's project menu switches projects while keeping the Factory context.
 The checklist's last item is **prepare a bounded trial**. A queued trial is not
 shown as a successful execution. The app keeps source validation, observed
 execution, protected verification and release authority distinct.
+
+## Configure and inspect acceptance
+
+Under **Build → Workflow → Prepare protected verifiers**, describe the expected
+application behavior and explicitly select a drafting model, or prepare explicit
+Python probes. Review the definition diff, probe code, assumptions and expected
+outputs, mark the expectations reviewed, then save the proposed configuration.
+Saving never executes probes or updates existing runs. Changed source invalidates
+the proposal. Prepare a fresh trial to measure the saved checks.
+
+The protected runtime supports Python standard-library probes with a read-only
+candidate and no sockets. External services, third-party dependencies and other
+unsupported requirements need an appropriate execution contract. A check category
+alone is not evidence that the service or application was exercised.
+
+**Run & verify → Single trial → Requirements & application checks** connects the
+run's pinned requirements to stages, tasks, artifacts and protected check results.
+Missing or unbound evidence remains uncovered. This historical trace does not
+grant current release approval.
 
 ## Improve a harness or skill
 
@@ -92,7 +112,21 @@ provenance. External scores cannot authorize adoption; a fresh native metered
 comparison remains mandatory. This is proposal interoperability, not complete
 shared-budget integration of external search.
 
+## Observe outcomes
+
+**Improve → Observed outcomes & costs** records one attributed observation for a
+finished run and groups observations by Factory revision. Reusing an observation
+id with identical values is safe; changing it is rejected. Unknown human effort,
+tokens or costs remain unknown. Recorded run usage excludes optimizer experiments
+and infrastructure spending and must not be presented as total engagement cost.
+Comparisons are descriptive and do not establish causal improvement.
+
 ## Maintain the Factory
+
+**Manage → Operations → Intake decisions** shows bounded authenticated event
+dispositions and reason codes, with links to queued runs. Payload content,
+signatures and secrets are excluded. An empty list is not proof that the external
+webhook connection has been tested.
 
 **Manage → Operations** puts host readiness and source recovery first. Deployment
 and archive retention are collapsed advanced sections. Receipts can be expanded

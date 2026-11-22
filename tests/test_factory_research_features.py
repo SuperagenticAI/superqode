@@ -248,6 +248,45 @@ def test_cli_and_desktop_share_verifier_drafts(studio):
     assert cli.exit_code == 0, cli.output
 
 
+def test_native_acceptance_controls_edit_only_the_reviewable_draft(studio):
+    import yaml
+
+    rpc, root, _ = studio
+    before = (root / ".superqode/factory.yaml").read_text()
+    original = yaml.safe_load(before)
+    mapping = {
+        "correct-answer": {
+            "description": "Return the corrected answer",
+            "stages": ["implement"],
+            "checks": ["regression"],
+        }
+    }
+    result = rpc(
+        "edit",
+        yaml=before,
+        controls={"requirements": mapping, "check_categories": {"regression": "health"}},
+    )
+    value = yaml.safe_load(result["yaml"])
+    assert value["data_context"]["requirements"] == mapping
+    assert value["improvement"]["checks"]["regression"]["category"] == "health"
+    assert value["governance"] == original["governance"]
+    assert value["orchestration"] == original["orchestration"]
+    assert (root / ".superqode/factory.yaml").read_text() == before
+    review = rpc("inspect", yaml=result["yaml"])
+    assert review["requirements"] == mapping
+    assert "regression" in review["acceptance_checks"]
+    with pytest.raises(ValueError, match="existing acceptance"):
+        rpc("edit", yaml=before, controls={"check_categories": {"invented": "test"}})
+    with pytest.raises(ValueError):
+        rpc("edit", yaml=before, controls={"check_categories": {"regression": "passed"}})
+    proposal = rpc("verifier.draft", checks=checks())
+    assert (
+        "Saved Factory" in proposal["diff"]
+        and "Proposed verifier configuration" in proposal["diff"]
+    )
+    assert proposal["execution_started"] is False
+
+
 def test_mcp_new_tools_preserve_confirmation_and_execution_boundaries(project):
     from superqode.mcp.factory_server import build_factory_mcp_server
 

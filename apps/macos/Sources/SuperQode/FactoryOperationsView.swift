@@ -18,7 +18,7 @@ struct FactoryOperationsView: View {
   @State private var days = 30
   @State private var recoveryExpanded = true
   @State private var recoveryDigest = ""
-  private var idle: Bool { !library.busy && !studio.busy && !app.anyActive && !app.busy }
+  private var idle: Bool { !library.busy && !studio.busy && !studio.acceptance.busy && !app.anyActive && !app.busy }
   private var package: [String: Any] { library.packages.first { string($0, "id") == selectedPackage } ?? [:] }
 
   var body: some View {
@@ -32,8 +32,9 @@ struct FactoryOperationsView: View {
           if library.busy { ProgressView().controlSize(.small) }
         }
         if !library.failure.isEmpty { Text(library.failure).foregroundStyle(.orange).textSelection(.enabled) }
-        Text(library.readiness["worker_ready"] as? Bool == true ? "Protected readiness probes passed on this host." : "Host execution has not been certified by this view. Run isolation checks; model routes still require separate testing.").font(.caption)
+        Text(library.readiness["worker_ready"] as? Bool == true ? "Protected readiness probes passed on this host. Model routes and application acceptance need separate testing." : library.readiness["probe_executed"] as? Bool == true ? "Host checks did not pass. Inspect the findings below before starting a worker." : "Host isolation is untested in this view. Run isolation checks; application acceptance remains separate.").font(.caption)
         DisclosureGroup("Host readiness") { CodeBlock(text: pretty(library.readiness)) }
+        FactoryIntakeReceiptView(studio: studio, library: studio.acceptance, active: active)
         Divider()
         DisclosureGroup("Backup & evidence handover", isExpanded: $recoveryExpanded) {
         VStack(alignment: .leading, spacing: 12) {

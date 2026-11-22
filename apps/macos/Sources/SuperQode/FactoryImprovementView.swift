@@ -31,9 +31,9 @@ struct FactoryImprovementView: View {
   @State private var selectedPlan = ""
   @State private var confirmation = ""
   @State private var tabGeneration = UUID()
-  @State private var tab = ProcessInfo.processInfo.arguments.contains("--factory-optimization-inspect") ? "Evidence" : "Inputs"
+  @State private var tab = ProcessInfo.processInfo.arguments.contains("--factory-optimization-inspect") || ProcessInfo.processInfo.arguments.contains("--factory-acceptance-inspect") ? "Evidence" : "Inputs"
   private var planID: String { string(library.improvementPlan, "id") }
-  private var idle: Bool { !library.busy && !app.anyActive && !app.busy }
+  private var idle: Bool { !library.busy && !library.acceptance.busy && !app.anyActive && !app.busy }
   private var compared: Bool { library.improvementPreview["compared"] as? Bool == true || !library.improvementComparisonJob.isEmpty || library.improvementPlan["compared"] as? Bool == true }
   private var reflection: String { app.provider + "/" + app.model }
   private var eligible: Bool { library.improvementResult["eligible"] as? Bool == true && !library.improvementComparisonJob.isEmpty }
@@ -253,6 +253,8 @@ struct FactoryImprovementView: View {
   private var evidence: some View {
     ScrollView {
       VStack(alignment: .leading, spacing: 12) {
+        FactoryOutcomeView(studio: library, library: library.acceptance, active: active && tab == "Evidence")
+        Divider()
         HStack {
           Text("Shared optimizer usage").font(.headline)
           Spacer()
