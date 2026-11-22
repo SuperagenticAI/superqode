@@ -15,6 +15,7 @@ def output(function):
             if isinstance(value, dict) and (
                 value.get("structural_passed") is False
                 or (value.get("worker_ready") is False and kwargs.get("probe"))
+                or value.get("application_passed") is False
             ):
                 raise click.exceptions.Exit(2)
         except (ValueError, OSError, KeyError) as exc:
@@ -38,11 +39,23 @@ def operations():
     "--probe", is_flag=True, help="Execute protected synthetic isolation probes; no models"
 )
 @click.option("--require-platform", type=click.Choice(["Darwin", "Linux"]), default=None)
+@click.option(
+    "--application",
+    is_flag=True,
+    help="Run the project's build, start, health and service checks in a temporary checkout",
+)
+@click.option("--timeout", default=300, type=click.IntRange(min=1, max=1800), show_default=True)
 @output
-def check(project, probe, require_platform):
+def check(project, probe, require_platform, application, timeout):
     from superqode.factory.operations import readiness
 
-    return readiness(project, probe=probe, require_platform=require_platform or "")
+    return readiness(
+        project,
+        probe=probe,
+        require_platform=require_platform or "",
+        application=application,
+        timeout=timeout,
+    )
 
 
 @operations.command("handover")

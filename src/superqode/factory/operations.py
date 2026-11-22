@@ -64,8 +64,31 @@ def ownership(root):
         lease.close()
 
 
-def readiness(root, *, probe=False, require_platform="", allow_disarmed=False):
-    """No model calls. A structural check alone never certifies a worker host."""
+_HOST_ACTIONS = {
+    "platform": "Run Factory workers on macOS or Linux.",
+    "python": "Use Python 3.12 or 3.13 for the Factory worker.",
+    "instance-state": "Run `sq factory operations reactivate` after recovery, or recover the instance.",
+    "factory": "Fix .superqode/factory.yaml, or run `sq factory init --template fix-and-verify`.",
+    "git-baseline": "Commit the application baseline so runs can pin a starting revision.",
+    "protected-sandbox": "Install Bubblewrap (Linux) or use macOS so verification can run isolated.",
+}
+
+
+def readiness(
+    root,
+    *,
+    probe=False,
+    require_platform="",
+    allow_disarmed=False,
+    application=False,
+    timeout=300,
+):
+    """No model calls. A structural check alone never certifies a worker host.
+
+    With ``application`` the project's own build, start, health and service
+    checks run in a temporary checkout of HEAD. Every finding carries a label:
+    configured, execution_tested or quality_evaluated. There is no score.
+    """
     from superqode.sandbox.local_sandbox import _backend_for_platform
 
     root = Path(root).resolve()
@@ -75,7 +98,15 @@ def readiness(root, *, probe=False, require_platform="", allow_disarmed=False):
     checks = []
 
     def check(name, passed, detail):
-        checks.append({"id": name, "passed": bool(passed), "detail": detail})
+        checks.append(
+            {
+                "id": name,
+                "passed": bool(passed),
+                "detail": detail,
+                "label": "configured",
+                "action": "" if passed else _HOST_ACTIONS.get(name, ""),
+            }
+        )
 
     check(
         "platform",
@@ -103,7 +134,33 @@ def readiness(root, *, probe=False, require_platform="", allow_disarmed=False):
     backend = _backend_for_platform()
     check("protected-sandbox", backend != "none", backend)
     if probe:
-        checks.extend(_probe(root))
+        for row in _probe(root):
+            row.setdefault("label", "execution_tested")
+            row.setdefault(
+                "action",
+                ""
+                if row["passed"]
+                else "Protected isolation failed on this host; fix the sandbox before running workers.",
+            )
+            checks.append(row)
+    from .readiness import application_findings
+
+    try:
+        findings = application_findings(
+            root, execute=application, timeout=timeout, snapshot_digest=snapshot_digest
+        )
+    except (ValueError, OSError) as exc:
+        findings = [
+            {
+                "id": "application-checks",
+                "category": "factory",
+                "label": "configured",
+                "status": "missing",
+                "detail": str(exc),
+                "action": "Fix the Factory definition, then check again.",
+            }
+        ]
+    executed = [f for f in findings if f["label"] == "execution_tested"]
     return {
         "format": "superqode.factory-readiness/1",
         "engine_version": __version__,
@@ -116,6 +173,16 @@ def readiness(root, *, probe=False, require_platform="", allow_disarmed=False):
         "worker_ready": probe and all(c["passed"] for c in checks),
         "models_tested": False,
         "release_authorization": False,
+        "application": findings,
+        "application_executed": application,
+        "application_passed": (
+            all(f["status"] == "passed" for f in executed) if executed else None
+        ),
+        "labels": {
+            label: sum(f["label"] == label for f in findings)
+            for label in ("configured", "execution_tested", "quality_evaluated")
+        },
+        "actions": [f["action"] for f in [*checks, *findings] if f.get("action")],
     }
 
 

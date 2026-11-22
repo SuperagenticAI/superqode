@@ -35,7 +35,12 @@ def handle(service, root, method, params):
         lease = Lease(project_lease_path(service.root, root))
         try:
             if action == "check":
-                return operations.readiness(root, probe=True)
+                return operations.readiness(
+                    root,
+                    probe=True,
+                    application=params.get("application") is True,
+                    timeout=int(params.get("timeout", 300)),
+                )
             if action == "handover":
                 return handover.create(
                     root, runs=params.get("runs", []), improvements=params.get("improvements", [])
