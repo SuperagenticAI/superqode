@@ -243,6 +243,9 @@ class FactoryMixin:
         from superqode.factory.evidence import trace
         from superqode.factory.summaries import trace_lines
 
+        if tokens and tokens[0] in {"trace", "outcomes", "record-outcome"}:
+            self._run_cli_passthrough(["factory", "evidence", *tokens], log, "Factory evidence")
+            return
         if len(tokens) != 1:
             log.add_info("Usage: :factory evidence <work-order-id>")
             return

@@ -55,6 +55,8 @@ def test_tui_factory_flow_status_trial_run_evidence_and_decide(project, monkeypa
     assert "➖ never ran" in host.shown[-1]
     host.factory(f"decide {run}")
     assert "⛔ Release blocked" in host.shown[-1]
+    host.factory("evidence outcomes")
+    assert host.passthrough[-1] == ["factory", "evidence", "outcomes"]
     host.factory("check --application")
     assert host.passthrough[-1] == ["factory", "check", "--application"]
     host.factory('describe "We fix bugs" --model ollama/qwen3:8b')
