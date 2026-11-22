@@ -1,4 +1,4 @@
-"""`sq gauge` — emit and check Agent Quality Records.
+"""`sq gauge`: emit and check Agent Quality Records.
 
 The record format is published at github.com/SuperagenticAI/supergauge. These
 commands project state SuperQode already holds into it; `gauge gate` is the verb

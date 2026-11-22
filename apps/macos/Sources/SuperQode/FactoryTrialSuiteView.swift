@@ -97,7 +97,7 @@ struct FactoryTrialSuiteView: View {
       }
       Text("Use a clean committed application repository. Reference saved Factory definitions or revision files, with optional per-case references. Paired revisions must preserve protected checks, governance and workflow structure. Up to eight cases use the same pinned application seed.").font(.caption).foregroundStyle(.secondary)
       SourceEditor(text: $library.text, path: "factory-trial-suite.yaml", editable: idle, documentID: "factory-trial-suite:" + studio.project, active: active).brandSurface()
-      Button("Prepare paired projects — no model calls") {
+      Button("Prepare paired projects: no model calls") {
         let ticket = studio.navigation.ticket(); let token = tabGeneration
         Task { await library.prepare(app.engine); if library.failure.isEmpty { showScorecard(ticket, token: token) } }
       }.disabled(!idle || library.text.isEmpty)

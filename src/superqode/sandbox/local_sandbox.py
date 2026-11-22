@@ -1,12 +1,12 @@
 """Local OS-level command sandboxing.
 
 Confines shell commands to the workspace using the operating system's own
-isolation primitives — macOS Seatbelt (``sandbox-exec``) and Linux Bubblewrap
-(``bwrap``) — so even auto-approved commands cannot write outside the project or
+isolation primitives (macOS Seatbelt ``sandbox-exec`` and Linux Bubblewrap
+``bwrap``), so even auto-approved commands cannot write outside the project or
 reach the network.
 
 Modes (via ``SUPERQODE_SANDBOX`` env var):
-- ``off`` / ``danger-full-access``: no sandbox (default — opt-in for safety).
+- ``off`` / ``danger-full-access``: no sandbox (default; opt in for safety).
 - ``workspace-write``: read anywhere, write only to the workspace + temp,
   network allowed.
 - ``read-only``: read anywhere, write only to temp, network denied.

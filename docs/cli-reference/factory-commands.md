@@ -12,6 +12,65 @@ The factory layer does not replace sessions. It annotates the durable session gr
 between local OSS models, BYOK models, proprietary runtimes, and different harnesses without losing
 history.
 
+## Quick start
+
+The macOS app is the primary Factory interface. The CLI and TUI use the same
+engine and can run the whole flow on their own:
+
+```bash
+sq factory init --template fix-and-verify     # full FactorySpec; keeps existing routes
+sq factory show                               # stages, checks, release rule, recent runs
+sq factory describe "We triage bugs, fix them and verify" --model ollama/qwen3-coder
+sq factory describe --apply sha256:DRAFT --confirm --reason "Reviewed draft"
+sq factory sources inspect
+sq factory sources commit --digest sha256:REVIEW --path .superqode/factory.yaml \
+  --message "Version the Factory" --confirm
+sq factory check --application                # host checks plus build, start and health runs
+sq factory trial "Fix the export freeze"      # queues one WorkOrder; no agent runs
+sq factory worker WORK_ID --live
+sq factory verify WORK_ID --execute
+sq factory evidence trace WORK_ID
+sq factory decide WORK_ID                     # SuperGauge verdict and release blockers
+```
+
+`init` writes `.superqode/factory.yaml` from a template. A route-only policy in
+that file is upgraded in place and its `default_route` and `routes` are kept;
+an existing FactorySpec is replaced only with `--force`. Every save is kept as a
+revision under `.superqode/factory-studio/revisions`, the same store the app uses.
+
+`describe` sends the description and current definition to the chosen model with
+no tools and prints a draft with its diff, assumptions and missing capabilities.
+It writes nothing to `factory.yaml`. The draft is stored by digest, and
+`describe --apply DIGEST --confirm` saves it only if the Factory has not changed
+since the draft was made. Release authority cannot be changed by a draft.
+
+`sources inspect` lists the saved definition and its declared components with
+diffs against HEAD. `sources commit` creates a local commit of the chosen paths,
+only for the exact reviewed digest and only with `--confirm`. It never pushes.
+
+`check` runs the readiness report with emoji status lines and exits with status
+2 when a requested application check fails. `decide` prints the release status
+and exits with status 2 while release is blocked. `show`, `check`, `trial` and
+`decide` accept `--json`.
+
+In the TUI, the same flow is:
+
+| TUI command | Does |
+| --- | --- |
+| `:factory` or `:factory status` | Factory overview, recent runs and the session route |
+| `:factory init [--template NAME] [--force]` | Create a FactorySpec |
+| `:factory describe "<process>" --model p/m` | Draft a FactorySpec for review (runs the CLI) |
+| `:factory check [--application]` | Readiness (runs the CLI) |
+| `:factory trial "<goal>"` | Queue one WorkOrder; no agent runs |
+| `:factory run WORK_ID` | Run it with live agents (`sq factory worker WORK_ID --live`) |
+| `:factory evidence WORK_ID` | Checks and requirements by status |
+| `:factory decide WORK_ID` | SuperGauge verdict and release blockers |
+| `:factory session` | Session model, harness, route and lineage |
+
+Status marks are ✅ passed or covered, ⏸️ held or uncovered, ❌ failed or
+rejected, ⛔ blocked and ➖ never ran. Route, mode, switch, fork and lineage
+commands are unchanged.
+
 ## factory validate
 
 Validate a legacy routing policy or a versioned FactorySpec and its referenced
@@ -101,23 +160,41 @@ substitute passing check. Agent self-check commands retain their existing role a
 become protected evidence just by adding a category.
 
 `evidence trace` links each requirement to expanded stage tasks, artifacts,
-protected check results and the verification artifact. Missing evidence remains
-uncovered. Verification retains a `factory_requirement_trace` artifact, including
-application check categories. The report grants no release authority.
+protected check results and the verification artifact. Each acceptance check has
+one status:
 
-Intake receipts retain up to 256 local authenticated decisions with fixed reason
+| Check status | Meaning |
+| --- | --- |
+| `passed` | Verification ran on the current candidate and every case passed |
+| `failed` | At least one case failed |
+| `blocked` | Verification ran but could not produce a result, for example a contract error or missing sandbox evidence |
+| `never_ran` | No verification exists for the current candidate, or it is stale |
+
+Requirements are `covered` (every linked check passed and a linked stage has
+evidence), `failed` (a linked check failed), `blocked` (a linked check is
+blocked or never ran, or stage evidence is missing) or `uncovered` (no linked
+checks). The report (`superqode.factory-trace/2`) includes a `summary` with these
+counts, the reason and failed case ids for each check, and whether the
+verification is bound to the current candidate. Verification retains a
+`factory_requirement_trace` artifact. The report grants no release authority.
+
+Intake receipts retain the 256 most recently seen decisions with fixed reason
 codes for queueing, duplicates, policy filtering, replay, delivery conflicts and
 limits. They retain hashes, counts and run references, without raw task content,
-signatures or secrets. Unauthenticated requests do not create receipt state.
+signatures or secrets. Requests that fail authentication are counted in one
+`authentication_failed` row per source, with no fingerprint of their content.
 
 Outcome recording requires a finished run and a stable observation id. Retries
 are idempotent; conflicting observations and double-counting a run are rejected.
 Business outcomes are explicitly operator-reported, separate from protected
-verification. Reports group actual runs by pinned Factory revision and include
-human effort and recorded compute usage. Missing human effort or compute costs
-remain unknown. These observations do not establish causal optimization gains.
-Recorded run costs exclude optimization experiments and infrastructure costs;
-inspect the optimizer's existing usage ledger separately for those experiments.
+verification. Reports group runs by pinned Factory revision and page through every
+run in the project. Each revision's `cost_usd` adds three parts, also shown under
+`cost`: runs with an observed outcome, every other attempt of that revision
+(including failed and cancelled runs) and improvement experiments whose plan ran
+against that revision. A run that never started counts as zero. If any part is
+unknown, the total is unknown rather than a partial sum. Missing human effort
+also stays unknown. Infrastructure costs are not included, and these
+observations do not establish causal optimization gains.
 
 The shared desktop backend exposes `factory.verifier.draft`,
 `factory.verifier.install`, `factory.evidence.trace`, `factory.evidence.outcomes`,
@@ -316,7 +393,25 @@ Python CLI applications. Shell commands, provider credentials and package setup
 are not inherited. General application runtimes require additional adapters.
 
 Candidate files are read-only; each case has separate writable scratch. Declared
-evaluator files are omitted from the candidate copy. Network and host-data reads
+evaluator files are omitted from the candidate copy.
+
+### Evaluators are hidden from workers
+
+Evaluator files (every `data_context.files` entry with `purpose: evaluator`, plus
+`.superqode/evaluators`) are removed from each task's Git worktree before an
+agent starts, so they are not on disk in the worker's checkout. With
+`SUPERQODE_SANDBOX` enabled, the worker sandbox also masks those paths in the
+project and integration folders (Bubblewrap mounts an empty folder or file over
+them; Seatbelt denies reads and writes). Tool arguments that name an evaluator
+path are denied by a governance rule and recorded. Edits a worker makes to a
+protected path are dropped during integration and recorded.
+
+Each run records provenance: whether evaluators were hidden in every task
+workspace, which paths were hidden, whether sandbox masking was active, and any
+`factory_protected_access` (read attempt) or `factory_protected_write` artifacts.
+Without the OS sandbox, the hiding is the worktree removal plus the governance
+rule; a process that reads the original project folder directly is not blocked.
+Verification also checks the candidate for copies of evaluator content. Network and host-data reads
 are denied by a dedicated macOS Seatbelt or Linux Bubblewrap profile. Interpreter
 and OS library roots remain readable. Metadata access is permitted on macOS;
 this is not a claim that all host information is hidden. Symlink candidates,
@@ -331,11 +426,20 @@ Concurrent verification is fenced; a cancelled or superseded verifier cannot
 publish acceptance. After a crash, an expired verifier can be replaced by a new
 bounded attempt. Receipts and discarded results remain evidence.
 
-Results also emit a SuperGauge record using existing measure names. Its verdict
-is **hold**, its task set is unsealed and it does not assert evaluator
-independence. This records acceptance of one artifact; it does not measure harness
-reliability or certify production readiness. Evaluator secrecy during the earlier
-implementation stage has not been established.
+Results also emit a SuperGauge record bound to the Factory revision
+(`subject.factory_digest`) and the exact candidate (`subject.candidate` with id,
+digest and tree). Its verdict is one of:
+
+| Verdict | When |
+| --- | --- |
+| **ship** | Every held-out case passed, evaluators were hidden from every task workspace, the worker had no protected access, and no evaluator copy was found |
+| **hold** | Evidence is missing, evaluators were not hidden, a protected read was attempted, or a model judge asked to hold |
+| **reject** | A case failed, a worker wrote to an evaluator path, an evaluator copy was found, or a model judge rejected |
+
+The task set is sealed only when evaluators were hidden from every task
+workspace. Model judges may hold or reject; a judge that tries to approve is
+refused. The record measures acceptance of one candidate. It does not measure
+harness reliability across many runs or certify production readiness.
 
 Ordinary `sq work check` cannot replace this verifier for factory runs.
 `sq work prepare` reuses the exact verified candidate rather than creating a new
@@ -346,6 +450,36 @@ A stdlib watchdog also kills the probe group if its controlling worker exits.
 Native isolation can be checked without models using
 `python scripts/check-factory-verification-sandbox.py`. The smoke test uses only
 generated repository fixtures, including a denied loopback connection.
+
+## Release decision
+
+A Factory release needs both a SuperGauge verdict and a human signature. The
+gauge requirement is set at the Factory level:
+
+```yaml
+governance:
+  release_gauge:
+    level: L2          # L1 to L4; default L2
+    require_ship: true # always true; a hold or reject never releases
+```
+
+Before a release challenge is issued, the engine checks that a SuperGauge record
+exists for this run, reaches the required level with a **ship** verdict, and is
+bound to the same Factory revision, candidate id and candidate digest as the
+verification. A missing, stale, held or rejected record blocks release. The
+record id and digest are included in the signed challenge.
+
+```bash
+sq factory decide WORK_ID
+sq factory decide WORK_ID --json
+sq gauge gate RECORD.json --level L2 --require-ship \
+  --factory-digest SNAPSHOT_DIGEST --candidate-digest SHA256_DIGEST
+```
+
+`decide` lists every blocker (no verification, verification held, gauge
+missing, stale or not ship, no signer configured) and whether the run is ready
+for a human signature. The gauge never signs; a person with a configured key
+still has to authorize the exact candidate.
 
 ## factory release-challenge, authorize and apply
 
@@ -382,8 +516,8 @@ the same authorization and expected tree. Cancellation revokes continuation.
 
 `apply` changes the local working tree; it does not commit, push or deploy.
 An already completed application can be acknowledged without applying it again.
-The verifier's SuperGauge record remains acceptance evidence with its own hold
-verdict; the authenticated release decision is recorded separately.
+The SuperGauge record is the quality decision; the authenticated release
+decision is recorded separately and requires it.
 
 The native **Factory Studio** can enroll a user-presence protected Secure Enclave
 key, add its public key to the draft policy, authenticate an exact candidate
@@ -414,7 +548,8 @@ delivery explicitly. Jobs use the existing desktop engine lifecycle and survive
 navigation. Native approval is disabled for truncated diffs. A missing protected
 probe manifest or signing authority holds verification or delivery respectively.
 The starters intentionally require customer acceptance criteria before delivery.
-Continuous outcomes is a workflow preset; it does not silently schedule work.
+Continuous outcomes is a workflow preset; it schedules work only through a
+declared intake schedule that you tick (see Campaigns and event intake).
 Optimization remains available through existing harness experiments and never
 activates a factory revision automatically.
 
@@ -489,7 +624,8 @@ for supported revision inputs, fixture limits, budgets and evidence semantics.
 
 ## factory status
 
-Show factory metadata for the active or selected session.
+Show factory metadata for the active or selected session. Use `sq factory show`
+for the FactorySpec itself.
 
 ```bash
 superqode factory status [SESSION_ID] [--json]
@@ -508,11 +644,15 @@ Routes include `private`, `local`, `cheap`, `best`, `review`, `long-context`, an
 
 ## factory init-policy
 
-Create `.superqode/factory.yaml` with local-first defaults.
+Create `.superqode/factory.yaml` as a full FactorySpec (the `fix-and-verify`
+template) that also carries the local-first `default_route` and `routes`, so
+route commands keep working. An existing file is kept unless `--force` is given.
+`--routes-only` writes the older route-only policy file.
 
 ```bash
 superqode factory init-policy
 superqode factory init-policy --force
+superqode factory init-policy --routes-only
 ```
 
 ## factory policy
@@ -613,12 +753,31 @@ Shared with the native Factory Studio Operations tab:
 
 | Command | Purpose |
 | --- | --- |
-| `sq factory operations check [--probe] [--require-platform Darwin\|Linux]` | Inspect host readiness; protected probes execute only with `--probe` |
+| `sq factory operations check [--probe] [--application] [--timeout N] [--require-platform Darwin\|Linux]` | Inspect host readiness; protected probes execute only with `--probe`, project build, start and health checks only with `--application` |
 | `sq factory operations deploy --platform OS --target-project PATH --python PATH --reference ID` | Generate an inert, pinned one-shot worker package |
 | `sq factory operations handover [--run ID] [--improvement ID]` | Archive Factory sources and selected inspection evidence |
 | `sq factory operations verify ID --digest SHA256` | Verify package integrity against the supplied receipt |
 | `sq factory operations restore ID --digest SHA256 --destination PATH` | Recover into a fresh operations recovery folder; no live queue |
 | `sq factory operations retention --keep N --days N` | Preview archive-only cleanup |
+
+### Readiness labels
+
+Every readiness finding carries one label and, when something is missing, a
+next action:
+
+| Label | Meaning |
+| --- | --- |
+| `configured` | The setting or tool is present; nothing was run |
+| `execution_tested` | The check was actually run on this host |
+| `quality_evaluated` | A protected verification of the same Factory revision passed |
+
+With `--application`, the project's own acceptance checks with category
+`build`, `start` or `health` run in a temporary detached worktree of HEAD (inside
+the OS sandbox when available), each with `--timeout` seconds (default 300). The
+worktree is removed afterwards. A missing build, start or health check is a
+finding with an action. The report gives counts per label and
+`application_passed`; it has no overall score, and readiness is not a release
+decision. `sq factory check` prints the same report with status marks.
 
 Each command accepts `--project`. Cleanup application additionally requires the
 reviewed `--cutoff` and `--apply-digest`. Deployment startup is a separate explicit
@@ -673,6 +832,26 @@ for aggregate reservations, cooldowns, deduplication and stopping rules.
 `sq factory intake serve` provides a loopback receiver for a customer HTTPS
 proxy. GitHub, Linear and generic monitoring adapters only queue work. See
 [signed intake](../../examples/factory/INTAKE.md) for scope/signature contracts.
+
+Schedules are a local intake source:
+
+```yaml
+orchestration:
+  intake:
+    enabled: true
+    max_pending: 2
+    max_per_hour: 4
+    sources: {}
+    schedules:
+      - id: nightly-upkeep
+        goal: Update dependencies and fix any failing tests
+        interval_minutes: 1440   # 5 to 10080
+```
+
+`sq factory intake tick` queues each schedule at most once per interval, under
+the same pending and hourly limits and admission ledger as webhooks, and records
+a receipt. It does not start agents and does not run by itself; call it from
+cron, a launchd timer or a CI schedule, then run a worker.
 
 ## Runtime recovery and retirement
 

@@ -1,7 +1,7 @@
 """Read release-decision evidence out of SuperQode's existing stores.
 
-The record fields that carry the most weight — who accepted the result, what to
-revert to, and whether policy held — already exist in SuperQode. They live in
+The record fields that carry the most weight (who accepted the result, what to
+revert to, and whether policy held) already exist in SuperQode. They live in
 the promotion registry, the governance decision path and the harness protocol
 ledger. This module reads them so `gauge run` reports what happened rather than
 asking an operator to retype it.

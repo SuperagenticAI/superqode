@@ -1,44 +1,73 @@
 # Building a Code Factory with SuperQode
 
-Your code factory is the organization-owned system that combines coding agents, harnesses, models, repositories, context, tools, policies, evaluation gates, and delivery workflows. SuperQode provides its terminal-first execution and control layer.
-
-The existing SuperQode Software Factory implementation is the durable delivery system inside this broader product model. It orchestrates multiple coding-agent harnesses and provides the execution, evaluation, governance, and optimization controls required to deliver verified repository changes. It is broader than the `sq factory` command group, and it does not treat one autonomous chat session as a complete delivery system.
+Your code factory is the organization-owned system that combines coding agents, harnesses, models, repositories, context, tools, policies, evaluation gates, and delivery workflows. The SuperQode Software Factory defines that system as code, runs it through durable WorkOrders, checks the result with protected evaluators and SuperGauge, and releases only what a person signs.
 
 ```text
-Build the harness
+Define the Factory (FactorySpec)
       ↓
-Run sessions or durable WorkOrders
+Queue a trial and run its WorkOrder
       ↓
-Evaluate patches, checks, cost, and evidence
+Verify the exact candidate with hidden evaluators
       ↓
-Accept, merge, reject, or recover
+SuperGauge verdict: ship, hold or reject
       ↓
-Improve the harness under regression gates
+Human signature, then apply
+      ↓
+Improve the Factory under held-out gates
       ↺
 ```
 
-The primary interface is the terminal. SuperQode does not require a hosted coordination server, web workspace, desktop application, or mobile client to finish work.
+The macOS app is the primary interface. The CLI and TUI are fully capable on their own: every step above, from creating a Factory to the release decision, has a `sq factory` command and a `:factory` TUI command that use the same engine and the same files. No hosted coordination server is required.
 
-## The product model
+## The seven layers
 
-| Factory layer | SuperQode component | What it owns |
+A FactorySpec (`.superqode/factory.yaml`) has seven layers, with governance across all of them:
+
+| Layer | In the FactorySpec | What it owns |
 | --- | --- | --- |
-| Worker definition | `HarnessSpec` | Runtime, model policy, tools, context, memory, sandbox, workflow, checks, and approvals. |
-| Runtime portability | Harness Protocol and adapters | A common lifecycle across native Core, SDK, ACP, Python, RLM Code, and imported harnesses. |
-| Interactive operation | Session graph and Switchboard | Live sessions, peers, forks, handoffs, steering, approvals, and share artifacts. |
-| Routing and lineage | `sq factory` | Project routes plus recorded model, runtime, harness, and mode changes. |
-| Durable delivery | WorkOrder | Goal, task DAG, roles, budgets, leases, worktrees, evidence, checks, review, and final decision. |
-| Execution plane | `sq work worker` | Persistent queue consumption, bounded concurrency, heartbeats, retry, and crash recovery. |
-| Operator surface | `sq work watch` | Live task, lease, budget, gate, artifact, worker, and event visibility. |
-| Quality system | Harness eval and benchmark | Comparable scorecards and regression gates across harness variants. |
-| Improvement loop | Harness candidates, `improve`, and `optimize` | Staged candidates, negative evidence, held-out gates, audit, adoption, and rollback-friendly version control. |
+| Factories-as-code | `apiVersion`, `metadata`, revisions | The versioned definition itself, saved revisions and source commits |
+| Data and context | `data_context` | Repository, context and skill files, requirements, and protected evaluator files |
+| Compute | `compute` | Where work runs: each task in its own isolated Git worktree (`runner: worktree`), inside the OS sandbox when enabled |
+| Inference | `inference` | The harnesses stages bind to, with their model policy and skills |
+| Improvement | `improvement` | Acceptance checks and guarded experiments on harnesses, skills, routes and workflow |
+| Orchestration | `orchestration` | Stages, dependencies, human gates, acceptance checks, revision loops and intake |
+| Access | `access` | The interfaces that can operate the Factory: macOS, CLI, TUI, API and MCP |
+| Governance (across all layers) | `governance` | Permissions, budgets, release authority (signers) and the SuperGauge release requirement |
 
-The `factory` command group is one module inside the Software Factory: it controls
-route intent and lineage, and now includes the initial versioned FactorySpec
-loader, component snapshots and dry-run compiler. Those definition commands
-produce inspectable draft plans without admitting work. WorkOrders remain the
-durable delivery machinery. See [Factory Commands](../cli-reference/factory-commands.md)
-for the foundation's supported contracts and limitations.
+Supporting components:
+
+| Component | Role in the Factory |
+| --- | --- |
+| `HarnessSpec` | Worker definition: runtime, model policy, tools, context, memory, sandbox, workflow, checks and approvals |
+| Harness Protocol and adapters | A common lifecycle across native Core, SDK, ACP, Python, RLM Code and imported harnesses |
+| WorkOrder | Goal, task DAG, roles, budgets, leases, worktrees, evidence, checks, review and final decision |
+| `sq factory worker` and `sq work worker` | Queue consumption, bounded concurrency, heartbeats, retry and crash recovery |
+| Protected verification | Runs evaluators against a read-only copy of the exact candidate |
+| SuperGauge | The quality verdict bound to the Factory revision and candidate |
+| Session graph and Switchboard | Live sessions, forks, handoffs and route lineage for interactive work |
+
+Factory definition commands compile a saved FactorySpec into a pinned plan, admit it as a WorkOrder, run it, verify it and record the release decision. WorkOrders remain the durable delivery machinery. See [Factory Commands](../cli-reference/factory-commands.md) for every command and its limits.
+
+## From definition to release
+
+```bash
+sq factory init --template fix-and-verify
+sq factory check --application
+sq factory trial "Fix the export freeze"
+sq factory worker WORK_ID --live
+sq factory verify WORK_ID --execute
+sq factory evidence trace WORK_ID
+sq factory decide WORK_ID
+sq factory release-challenge WORK_ID --key owner
+sq factory authorize WORK_ID --proof .superqode/release-proof.json
+sq factory apply WORK_ID --candidate-id ARTIFACT_ID --candidate-digest SHA256_DIGEST
+```
+
+- Evaluator files are removed from every task worktree before agents start. With `SUPERQODE_SANDBOX` on, the worker sandbox also masks them. Attempts to read or write them are recorded, and edits are dropped.
+- Verification reports each acceptance check as passed, failed, blocked or never ran, and each requirement as covered, failed, blocked or uncovered.
+- SuperGauge gives **ship**, **hold** or **reject** for the exact candidate. Model judges may hold or reject but never approve.
+- Release requires a SuperGauge record at the level set in `governance.release_gauge` (default L2) with a ship verdict, bound to the same revision and candidate, and then a human signature. Neither alone is enough.
+- Readiness checks label each finding `configured`, `execution_tested` or `quality_evaluated`; they never produce a score.
 
 ## Architecture
 
@@ -49,8 +78,8 @@ for the foundation's supported contracts and limitations.
             └───────────────┬───────┴─────────────────────┘
                             │ repo-owned contracts
                             ▼
-                    SUPERQODE TERMINAL PLANE
-             CLI / TUI / Harness Protocol / event stores
+                    SUPERQODE CONTROL PLANE
+       macOS app / CLI / TUI / Harness Protocol / event stores
                     │                       │
            interactive sessions       durable WorkOrder
           switchboard + lineage      task DAG + budgets + gates
@@ -66,6 +95,10 @@ for the foundation's supported contracts and limitations.
                   accept / merge / reject / recover
                                │
                                ▼
+          HIDDEN-EVALUATOR VERIFICATION + SUPERGAUGE
+              ship / hold / reject → human signature
+                               │
+                               ▼
                       EVALUATE AND IMPROVE
                 candidate → held-out gate → human adopt
 ```
@@ -78,7 +111,8 @@ The local default is SQLite plus repository-owned files. A foreground worker is 
 | --- | --- |
 | Work interactively with one coding agent | `superqode --harness harness.yaml` |
 | Run a repeatable one-shot harness task | `sq harness run --spec harness.yaml --prompt "..."` |
-| Coordinate live sessions and forks | `:switchboard` and `:factory` |
+| Define, run and release through a Factory | The macOS app, `sq factory`, or `:factory` |
+| Coordinate live sessions and forks | `:switchboard` and `:factory session` |
 | Deliver a repository change through roles and gates | `sq work create`, then `sq work worker` |
 | Keep a builder or CI machine consuming work | `sq work worker` |
 | Watch execution without a browser | `sq work watch WORK_ID` |
@@ -201,7 +235,7 @@ Routes describe intent instead of vendor names:
 | `long-context` | Prefer long-context models and harnesses. |
 | `no-subscription` | Avoid subscription-only runtimes; use local or BYOK routes. |
 
-Create the project policy and inspect route resolution:
+Create the project Factory (it carries the route policy) and inspect route resolution:
 
 ```bash
 sq factory init-policy
@@ -247,8 +281,12 @@ Ctrl+C or `SIGTERM` stops a persistent worker from claiming more tasks and lets 
 
 The current factory can:
 
-- author and version seven-layer FactorySpecs in native Factory Studio, with explicit model-assisted proposals and pinned trials
-- verify Python CLI candidates with protected probes and require candidate-bound signatures before working-tree delivery
+- author and version seven-layer FactorySpecs in the macOS app, the CLI or the TUI, with explicit model-assisted drafts and pinned trials
+- hide evaluator files from worker checkouts, record any access, and drop protected edits
+- verify Python CLI candidates with protected probes, emit a SuperGauge ship, hold or reject verdict bound to the candidate, and require that verdict plus a candidate-bound signature before working-tree delivery
+- run a project's own build, start and health checks as readiness evidence
+- report outcome cost per Factory revision including failed attempts and optimization experiments
+- queue work from signed webhooks or declared schedules
 - define and import portable harnesses
 - run many harness and runtime families through shared contracts
 - coordinate interactive sessions, peers, forks, handoffs, and lineage

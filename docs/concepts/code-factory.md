@@ -73,7 +73,7 @@ Guarded Factory improvement
 
 ## Terminal-first operation
 
-The CLI and TUI are the primary interfaces. Builders can connect agents, switch harnesses without discarding a session, run WorkOrders, inspect evidence, approve delivery, and evaluate improvements without depending on a hosted web workspace.
+The macOS app is the primary Software Factory interface, and the CLI and TUI are fully capable on their own. Builders can connect agents, switch harnesses without discarding a session, run WorkOrders, inspect evidence, approve delivery, and evaluate improvements without depending on a hosted web workspace.
 
 Focused APIs and channels can expose a running local SuperQode instance when remote access is useful. They complement the terminal workflow rather than replace it.
 
@@ -114,13 +114,12 @@ sq harness optimize --spec harness.yaml --tasks tasks.yaml
 
 ## Product boundary
 
-SuperQode provides the terminal execution, delivery, evaluation, governance, and optimization layers of a code factory. It does not require a proprietary web, mobile, or desktop client suite. It can work with established coding agents instead of requiring an organization to replace them.
+SuperQode provides the execution, delivery, evaluation, governance, and optimization layers of a code factory. The macOS app is the primary Software Factory interface, and the CLI and TUI are fully capable on their own; no hosted web workspace is required. It can work with established coding agents instead of requiring an organization to replace them.
 
-The `sq factory` command is one module within this product model. It manages
-routing and lineage and includes an initial versioned definition/compiler
-foundation. Compilation produces draft WorkOrder plans; explicit submission and
-worker commands admit and execute them through WorkOrders, with durable human
-continuation gates. WorkOrders, harness evaluation, policy, and optimization provide
+The `sq factory` command group operates the Software Factory: it creates and
+versions the FactorySpec, queues trials as WorkOrders, runs and verifies them,
+and reports the SuperGauge verdict and release blockers, with durable human
+gates and a signed release. WorkOrders, harness evaluation, policy, and optimization provide
 the existing delivery controls. See [Factory Commands](../cli-reference/factory-commands.md).
 
 ## Next steps
