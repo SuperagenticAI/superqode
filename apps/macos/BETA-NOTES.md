@@ -1,4 +1,13 @@
-# SuperQode for macOS public beta 0.4.22
+# SuperQode for macOS public beta 0.4.23
+
+Version 0.4.23 (build 49) bundles Python engine 2.32.0.
+
+- New Factory Studio: build, test, improve, export and manage a software factory for your team.
+- Releases are checked by SuperGauge and still need your signed decision.
+- Acceptance checks stay hidden from coding agents, and results show passed, failed, blocked or never ran.
+- Export a portable factory to take it wherever you work.
+
+## 0.4.22 (build 48)
 
 Version 0.4.22 (build 48) bundles Python engine 2.31.24.
 

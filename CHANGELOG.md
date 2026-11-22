@@ -7,6 +7,37 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [2.32.0] - 2026-11-22
+
+- New Software Factory: describe how your team works and SuperQode builds a
+  versioned, customer-operated factory around Warp's seven Factory Stack
+  layers (factories-as-code, data and context, compute, inference,
+  improvement, orchestration, access), with governance across all of them.
+  It starts with the Fix and verify and Continuous outcomes templates.
+- SuperGauge is the release check. Each verification produces a SuperGauge
+  record bound to the factory revision and the exact candidate, with a ship,
+  hold or reject verdict. Model judges can hold or reject, never approve. A
+  release still needs a signed human decision.
+- Acceptance checks are hidden from coding agents. Evaluator files are removed
+  from worker copies, reads and edits are blocked and recorded, and the OS
+  sandbox masks them when `SUPERQODE_SANDBOX` is on.
+- Requirement to evidence tracing shows checks as passed, failed, blocked or
+  never ran, and requirements as covered, failed, blocked or uncovered.
+- Readiness runs your project's own build, start and health checks and labels
+  each finding configured, execution-tested or quality-evaluated, without a
+  score.
+- AI-drafted verifier setups are saved only after review, explainable intake
+  receipts cover GitHub, Linear, monitors and schedules, and outcome reports
+  compare revisions including failed attempts and optimization cost.
+- Portable export packages the factory files, snapshot and checksums so the
+  factory can be taken elsewhere. Running it on another platform still needs
+  an adapter.
+- New CLI commands: `sq factory init --template`, `show`, `describe`,
+  `sources`, `check`, `trial`, `decide` and `intake tick`. The TUI gains
+  `:factory status`, `init`, `describe`, `check`, `trial`, `run`, `evidence`
+  and `decide`; the previous session view is now `:factory session`.
+- The Mac app adds Factory Studio with Build, Test, Improve, Export and Manage.
+
 ## [2.31.24] - 2026-11-20
 
 - Approving a tool call now continues the turn. Before, after you allowed a
