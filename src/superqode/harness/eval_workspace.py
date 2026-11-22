@@ -74,7 +74,7 @@ def changed_files(before: dict, after: dict) -> list[str]:
 class EvaluationWorkspace:
     """Capture one input before any trials; never write into the source project."""
 
-    def __init__(self, root, *, exclude_paths=()):
+    def __init__(self, root, *, exclude_paths=(), temporary_dir=None, git_discovery=True):
         self.source = Path(root).resolve(strict=True)
         self.excluded_files = {
             Path(str(p) + suffix).resolve()
@@ -82,9 +82,13 @@ class EvaluationWorkspace:
             for suffix in ("", "-wal", "-shm")
         }
         self.temporary = None
+        self.temporary_dir = temporary_dir
+        self.git_discovery = git_discovery
 
     def __enter__(self):
-        self.temporary = tempfile.TemporaryDirectory(prefix="superqode-eval-")
+        self.temporary = tempfile.TemporaryDirectory(
+            prefix="superqode-eval-", dir=self.temporary_dir
+        )
         try:
             self.root = Path(self.temporary.name)
             self.snapshot = self.root / "fixture"
@@ -105,6 +109,8 @@ class EvaluationWorkspace:
                     timeout=15,
                 )
             except FileNotFoundError:
+                proc = None
+            if not self.git_discovery:
                 proc = None
             if proc is not None and proc.returncode == 0:
                 self.git_fixture = True

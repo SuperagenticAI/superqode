@@ -21,6 +21,11 @@ struct SourceEditor: NSViewRepresentable {
     var sourceDocumentID = ""
     var interactionEnabled = true
     var highContrast = false
+    override var acceptsFirstResponder: Bool { interactionEnabled && super.acceptsFirstResponder }
+    override func becomeFirstResponder() -> Bool {
+      guard interactionEnabled else { return false }
+      return super.becomeFirstResponder()
+    }
     override func drawBackground(in rect: NSRect) {
       super.drawBackground(in: rect)
       guard window?.firstResponder === self, let layout = layoutManager, textContainer != nil else { return }

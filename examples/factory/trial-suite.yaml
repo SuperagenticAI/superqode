@@ -1,0 +1,13 @@
+# Start in a clean, committed application repository with protected acceptance probes.
+# Replace candidate with a different saved definition or resolved snapshot to compare revisions.
+format: superqode.factory-trial-suite/1
+name: reference
+baseline: .superqode/factory.yaml
+candidate: .superqode/factory.yaml
+budget:
+  max_seconds: 3600
+  max_tokens: 120000
+  max_tool_calls: 100
+cases:
+  - id: representative-fix
+    goal: Replace this with a representative application defect and its acceptance requirements.

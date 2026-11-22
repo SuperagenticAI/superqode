@@ -63,6 +63,49 @@ def dataset(tmp_path, evaluator=None, cases=2):
 
 
 @pytest.mark.asyncio
+async def test_variant_routes_and_prompts_are_frozen_before_any_trial(tmp_path, monkeypatch):
+    args = dataset(tmp_path, cases=1)
+    routes = {str(p): f"lmstudio/model-{i}" for i, p in enumerate(args["spec_paths"])}
+    prompts = {str(p): {"0": f"pinned prompt {i}"} for i, p in enumerate(args["spec_paths"])}
+    observed = []
+
+    class Backend:
+        async def run(self, request):
+            observed.append((request.provider, request.model, request.prompt))
+            for path in routes:
+                routes[path] = "openai/unapproved"
+                prompts[path]["0"] = "mutated after execution began"
+            return response()
+
+    monkeypatch.setattr("superqode.harness.kernel.create_harness_backend", lambda _: Backend())
+    report = await evaluation.run_harness_eval(**args, model_routes=routes, task_prompts=prompts)
+    assert observed == [
+        ("lmstudio", "model-0", "pinned prompt 0"),
+        ("lmstudio", "model-1", "pinned prompt 1"),
+    ]
+    assert list(report["inference_routes"].values()) == ["lmstudio/model-0", "lmstudio/model-1"]
+
+
+@pytest.mark.asyncio
+async def test_readonly_stage_cannot_pass_after_mutating_fixture(tmp_path, monkeypatch):
+    (tmp_path / "source.txt").write_text("original")
+
+    class Backend:
+        async def run(self, request):
+            (request.working_directory / "source.txt").write_text("changed")
+            return response()
+
+    monkeypatch.setattr("superqode.harness.kernel.create_harness_backend", lambda _: Backend())
+    report = await evaluation.run_harness_eval(
+        **dataset(tmp_path, cases=1), readonly_workspace=True
+    )
+    assert report["readonly_workspace"] is True
+    assert all(v["tasks"][0]["status"] == "error" for v in report["variants"])
+    assert all(not v["tasks"][0]["workspace_integrity"]["unchanged"] for v in report["variants"])
+    assert (tmp_path / "source.txt").read_text() == "original"
+
+
+@pytest.mark.asyncio
 async def test_every_case_and_variant_has_same_pristine_inputs_and_fresh_kernel(
     tmp_path, monkeypatch
 ):
@@ -167,3 +210,27 @@ def test_missing_git_still_supports_plain_fixture(tmp_path, monkeypatch):
     with EvaluationWorkspace(tmp_path) as workspace:
         with workspace.trial() as root:
             assert (root / "input.txt").read_text() == "fixture"
+
+
+@pytest.mark.asyncio
+async def test_all_variant_specs_are_frozen_before_a_trial_can_change_another_file(
+    tmp_path, monkeypatch
+):
+    options = dataset(tmp_path)
+    candidate_path = Path(options["spec_paths"][1])
+    original = candidate_path.read_text()
+    seen = []
+
+    class Backend:
+        async def run(self, request):
+            seen.append(request.spec.name)
+            if request.spec.name == "baseline":
+                changed = yaml.safe_load(original)
+                changed["name"] = "tampered-after-baseline"
+                candidate_path.write_text(yaml.safe_dump(changed))
+            return response()
+
+    monkeypatch.setattr("superqode.harness.kernel.create_harness_backend", lambda _: Backend())
+    report = await evaluation.run_harness_eval(**options)
+    assert seen == ["baseline", "baseline", "candidate", "candidate"]
+    assert len(report["spec_digests"]) == 2

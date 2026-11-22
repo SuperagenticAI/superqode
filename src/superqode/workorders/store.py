@@ -4,15 +4,15 @@ from __future__ import annotations
 
 import json
 import hashlib
-import os
 import sqlite3
 import time
-from contextlib import closing
+from contextlib import closing, contextmanager
 from dataclasses import replace
 from pathlib import Path
 from typing import Any, Iterable
 
 from .models import (
+    COMPLETED_TASK_STATUSES,
     TERMINAL_WORK_ORDER_STATUSES,
     WorkArtifact,
     WorkOrder,
@@ -67,6 +67,22 @@ class WorkOrderStore:
         together, so a client can retry after losing the response.
         """
         self._validate_order(order)
+        if order.status == WorkOrderStatus.DRAFT and any(
+            "retry_authorization" in task.metadata for task in order.tasks
+        ):
+            raise ValueError("Fresh drafts cannot contain controller retry authorization")
+        if order.status == WorkOrderStatus.DRAFT and any(
+            key in task.metadata
+            for task in order.tasks
+            for key in (
+                "gate_digest",
+                "gate_approval",
+                "gate_last_decision",
+                "factory_output_receipt",
+                "factory_skip_receipt",
+            )
+        ):
+            raise ValueError("Fresh drafts cannot contain preapproved human gates")
         fingerprint = None
         if request_id is not None:
             if not isinstance(request_id, str) or not request_id.strip() or len(request_id) > 512:
@@ -137,6 +153,101 @@ class WorkOrderStore:
     def get(self, reference: str) -> WorkOrder:
         with closing(self._connect()) as conn:
             return self._load_tx(conn, reference)
+
+    def find_submission(self, request_id: str) -> WorkOrder | None:
+        """Find a durable receipt without creating or restarting work."""
+        with closing(self._connect()) as conn:
+            row = conn.execute(
+                "select work_order_id from work_submissions where request_id=?", (request_id,)
+            ).fetchone()
+            return self._load_tx(conn, row["work_order_id"]) if row else None
+
+    def issue_factory_release_challenge(self, reference, payload):
+        from superqode.factory.release import release_context
+
+        with self._transaction() as conn:
+            order = self._load_tx(conn, reference)
+            _, context = release_context(order)
+            if order.status != WorkOrderStatus.READY_TO_MERGE or any(
+                payload.get(k) != v for k, v in context.items()
+            ):
+                raise ValueError("Release candidate changed before challenge creation")
+            conn.execute(
+                "insert into factory_release_challenges(id,work_order_id,payload,created,used) values(?,?,?,?,0)",
+                (payload["id"], order.work_order_id, json.dumps(payload), time.time()),
+            )
+            self._append_event_tx(
+                conn,
+                order.work_order_id,
+                "factory.release_challenge",
+                data={
+                    "id": payload["id"],
+                    "key_id": payload["key_id"],
+                    "expires_at": payload["expires_at"],
+                },
+            )
+
+    def factory_release_challenge(self, identity):
+        with closing(self._connect()) as conn:
+            row = conn.execute(
+                "select * from factory_release_challenges where id=?", (identity,)
+            ).fetchone()
+            if row is None:
+                raise ValueError("Release challenge is missing")
+            return {**dict(row), "payload": json.loads(row["payload"])}
+
+    def authorize_factory_release(self, reference, *, challenge_id, signature):
+        from superqode.factory.release import verify_signature
+
+        with self._transaction() as conn:
+            order = self._load_tx(conn, reference)
+            row = conn.execute(
+                "select * from factory_release_challenges where id=?", (challenge_id,)
+            ).fetchone()
+            if row is None or row["work_order_id"] != order.work_order_id:
+                raise ValueError("Release challenge is missing or belongs to another run")
+            payload = json.loads(row["payload"])
+            actor = verify_signature(order, payload, signature, fresh=not row["used"])
+            prior = order.metadata.get("factory_release", {})
+            if row["used"]:
+                if (
+                    prior.get("payload") == payload
+                    and order.decision
+                    and order.decision.verdict == "accepted"
+                ):
+                    return order
+                raise ValueError("Release challenge was already consumed or approval was revoked")
+            if order.status != WorkOrderStatus.READY_TO_MERGE:
+                raise ValueError(
+                    "Prepare the current verified candidate before authorizing delivery"
+                )
+            now = time.time()
+            authorization = {"payload": payload, "signature": signature, "authorized_at": now}
+            updated = replace(
+                order,
+                decision=WorkOrderDecision(
+                    verdict="accepted",
+                    decided_at=now,
+                    actor=actor,
+                    reason="Authenticated approval of the exact verified candidate",
+                    metadata={
+                        "challenge_id": challenge_id,
+                        "verification_id": payload["verification_id"],
+                    },
+                ),
+                updated_at=now,
+                metadata={**order.metadata, "factory_release": authorization},
+            )
+            conn.execute("update factory_release_challenges set used=1 where id=?", (challenge_id,))
+            self._save_tx(conn, updated)
+            self._append_event_tx(
+                conn,
+                order.work_order_id,
+                "factory.release_authorized",
+                actor=actor,
+                data={"challenge_id": challenge_id, "candidate_id": payload["candidate_id"]},
+            )
+            return updated
 
     def begin_invocation(
         self,
@@ -502,6 +613,29 @@ class WorkOrderStore:
             ]
             return events if after_sequence is not None else list(reversed(events))
 
+    def export_evidence(self, reference: str) -> dict[str, Any]:
+        """Capture one consistent, bounded historical view, without execution state import."""
+        with closing(self._connect()) as conn:
+            conn.execute("BEGIN")
+            order = self._load_tx(conn, reference)
+            events = conn.execute(
+                "select * from work_order_events where work_order_id=? order by sequence limit 2001",
+                (order.work_order_id,),
+            ).fetchall()
+            invocations = conn.execute(
+                "select task_id,invocation_id,operation,fingerprint,replay_safe,worker_id,attempt,status,workspace,updated_at "
+                "from work_invocations where work_order_id=? order by updated_at limit 501",
+                (order.work_order_id,),
+            ).fetchall()
+            if len(events) > 2000 or len(invocations) > 500:
+                raise ValueError("Run exceeds handover event or invocation limits")
+            return {
+                "work_order": order.to_dict(),
+                "events": [{**dict(r), "data": json.loads(r["data"] or "{}")} for r in events],
+                "invocations": [dict(r) for r in invocations],
+                "inspection_only": True,
+            }
+
     def add_task(self, reference: str, task: WorkOrderTask, *, actor: str = "") -> WorkOrder:
         with self._transaction() as conn:
             order = self._load_tx(conn, reference)
@@ -582,6 +716,10 @@ class WorkOrderStore:
             )
             now = time.time()
             for order in orders:
+                if "factory" in order.metadata:
+                    from superqode.factory.maintenance import assert_enabled
+
+                    assert_enabled(order.repository)
                 order = self._recover_expired_tx(conn, order, now=now)
                 if order.status not in {WorkOrderStatus.QUEUED, WorkOrderStatus.RUNNING}:
                     continue
@@ -591,9 +729,45 @@ class WorkOrderStore:
                     and running_count >= order.budget.max_workers
                 ):
                     continue
+                order = self._resolve_factory_conditions_tx(conn, order, actor=worker_id)
+                if order.status not in {WorkOrderStatus.QUEUED, WorkOrderStatus.RUNNING}:
+                    continue
                 completed = {
-                    task.task_id for task in order.tasks if task.status == WorkTaskStatus.SUCCEEDED
+                    task.task_id for task in order.tasks if task.status in COMPLETED_TASK_STATUSES
                 }
+                for gate in order.tasks:
+                    if (
+                        gate.metadata.get("human_gate") is not True
+                        or gate.status not in {WorkTaskStatus.PENDING, WorkTaskStatus.WAITING}
+                        or not set(gate.dependencies).issubset(completed)
+                    ):
+                        continue
+                    token = _human_gate_digest(order, gate)
+                    if gate.metadata.get("gate_approval", {}).get("digest") == token:
+                        continue
+                    if (
+                        gate.status == WorkTaskStatus.WAITING
+                        and gate.metadata.get("gate_digest") == token
+                    ):
+                        continue
+                    waiting = replace(
+                        gate,
+                        status=WorkTaskStatus.WAITING,
+                        updated_at=now,
+                        metadata={**gate.metadata, "gate_digest": token},
+                    )
+                    order = replace(
+                        order, tasks=_replace_task(order.tasks, waiting), updated_at=now
+                    )
+                    self._save_tx(conn, order)
+                    self._append_event_tx(
+                        conn,
+                        order.work_order_id,
+                        "task.waiting_for_human",
+                        task_id=gate.task_id,
+                        actor=worker_id,
+                        data={"digest": token},
+                    )
                 claimable = next(
                     (
                         task
@@ -673,6 +847,79 @@ class WorkOrderStore:
                 return updated, claimed
         return None
 
+    def decide_gate(
+        self,
+        reference: str,
+        task_id: str,
+        *,
+        expected_digest: str,
+        decision: str,
+        actor: str,
+        reason: str = "",
+    ) -> WorkOrder:
+        """Record a workflow continuation, never an approval to merge or release.
+
+        Actor is local audit attribution. Remote callers must authenticate and
+        authorize their principal before calling this store method.
+        """
+        if decision not in {"approve", "hold"} or not actor.strip() or not expected_digest:
+            raise ValueError(
+                "Gate decisions require approve/hold, an actor and the inspected digest"
+            )
+        with self._transaction() as conn:
+            order = self._load_tx(conn, reference)
+            task = _find_task(order, task_id)
+            record = {
+                "digest": expected_digest,
+                "decision": decision,
+                "actor": actor,
+                "reason": reason,
+            }
+            prior = task.metadata.get("gate_last_decision", {})
+            if all(prior.get(key) == value for key, value in record.items()):
+                if task.status not in {WorkTaskStatus.PENDING, WorkTaskStatus.WAITING}:
+                    return order
+                if expected_digest == _human_gate_digest(order, task):
+                    return order
+                raise ValueError("Human gate context changed; inspect the current evidence")
+            if order.status not in {WorkOrderStatus.QUEUED, WorkOrderStatus.RUNNING}:
+                raise ValueError(f"Cannot decide a human gate from {order.status.value}")
+            if task.metadata.get("human_gate") is not True or task.status != WorkTaskStatus.WAITING:
+                raise ValueError("Task is not waiting at a human gate")
+            if expected_digest != _human_gate_digest(
+                order, task
+            ) or expected_digest != task.metadata.get("gate_digest"):
+                raise ValueError(
+                    "Human gate context changed; refresh the worker and inspect its evidence"
+                )
+            record["decided_at"] = time.time()
+            metadata = {**task.metadata, "gate_last_decision": record}
+            if decision == "approve":
+                metadata["gate_approval"] = record
+            updated_task = replace(
+                task,
+                metadata=metadata,
+                updated_at=record["decided_at"],
+                status=WorkTaskStatus.PENDING if decision == "approve" else WorkTaskStatus.WAITING,
+            )
+            updated = self._refresh_order(
+                replace(
+                    order,
+                    tasks=_replace_task(order.tasks, updated_task),
+                    updated_at=record["decided_at"],
+                )
+            )
+            self._save_tx(conn, updated)
+            self._append_event_tx(
+                conn,
+                order.work_order_id,
+                f"task.gate_{decision}",
+                task_id=task_id,
+                actor=actor,
+                data=record,
+            )
+            return updated
+
     def heartbeat(
         self,
         reference: str,
@@ -706,6 +953,96 @@ class WorkOrderStore:
                 data={"lease_expires_at": renewed.lease_expires_at},
             )
             return renewed
+
+    def _resolve_factory_conditions_tx(self, conn, order, *, actor):
+        conditional = any(
+            t.metadata.get("factory_contract", {}).get("when")
+            or t.metadata.get("factory_contract", {}).get("loop")
+            for t in order.tasks
+        )
+        if not conditional:
+            return order
+        from superqode.factory.runtime import _pinned_plan
+        from superqode.factory.compiler import materialize_snapshot
+        from superqode.factory.contracts import activation
+        from superqode.factory.snapshot import canonical, digest
+
+        # Pure snapshot verification here; integration/workspace validation remains
+        # in the runner and protected verifier, outside this SQLite transaction.
+        materialize_snapshot(_pinned_plan(order), verify_only=True)
+        for _ in range(len(order.tasks)):
+            completed = {t.task_id for t in order.tasks if t.status in COMPLETED_TASK_STATUSES}
+            changed = False
+            for task in order.tasks:
+                if task.status != WorkTaskStatus.PENDING or not set(task.dependencies) <= completed:
+                    continue
+                contract = task.metadata.get("factory_contract", {})
+                if not contract.get("when") and not contract.get("loop"):
+                    continue
+                try:
+                    active, evidence = activation(order, task)
+                except (ValueError, KeyError, TypeError) as exc:
+                    now = time.time()
+                    blocked = replace(
+                        task,
+                        status=WorkTaskStatus.BLOCKED,
+                        error=str(exc),
+                        ended_at=now,
+                        updated_at=now,
+                    )
+                    order = self._refresh_order(
+                        replace(order, tasks=_replace_task(order.tasks, blocked))
+                    )
+                    self._save_tx(conn, order)
+                    self._append_event_tx(
+                        conn,
+                        order.work_order_id,
+                        "task.blocked",
+                        task_id=task.task_id,
+                        actor=actor,
+                        data={"reason": str(exc)},
+                    )
+                    return order
+                if active:
+                    continue
+                now = time.time()
+                receipt = digest(
+                    canonical(
+                        {
+                            "task": task.task_id,
+                            "snapshot": task.metadata.get("factory_snapshot"),
+                            "evidence": evidence,
+                        }
+                    )
+                )
+                skipped = replace(
+                    task,
+                    status=WorkTaskStatus.SKIPPED,
+                    ended_at=now,
+                    updated_at=now,
+                    metadata={**task.metadata, "factory_skip_receipt": receipt},
+                )
+                order = self._refresh_order(
+                    replace(order, tasks=_replace_task(order.tasks, skipped))
+                )
+                self._save_tx(conn, order)
+                self._append_event_tx(
+                    conn,
+                    order.work_order_id,
+                    "task.skipped",
+                    task_id=task.task_id,
+                    actor=actor,
+                    data={
+                        "reason": "Pinned condition did not select this stage",
+                        "receipt": receipt,
+                        "evidence": evidence,
+                    },
+                )
+                completed.add(task.task_id)
+                changed = True
+            if not changed:
+                break
+        return order
 
     def complete_task(
         self,
@@ -1044,6 +1381,10 @@ class WorkOrderStore:
         passed = bool(rows) and all(item.get("status") == "passed" for item in rows)
         with self._transaction() as conn:
             order = self._load_tx(conn, reference)
+            if "factory" in order.metadata:
+                raise ValueError(
+                    "Factory acceptance requires protected verification; use sq factory verify"
+                )
             if order.status not in {
                 WorkOrderStatus.REVIEWING,
                 WorkOrderStatus.CHECKING,
@@ -1078,6 +1419,130 @@ class WorkOrderStore:
             )
             return updated
 
+    def begin_factory_verification(self, reference, *, verification_id, binding, timeout, actor):
+        """Fence one bounded verifier without leasing or replaying an agent task."""
+        with self._transaction() as conn:
+            order = self._load_tx(conn, reference)
+            if (
+                "factory" not in order.metadata
+                or not order.tasks
+                or any(task.status not in COMPLETED_TASK_STATUSES for task in order.tasks)
+            ):
+                raise ValueError("Factory verification requires completed workflow tasks")
+            if order.status not in {
+                WorkOrderStatus.REVIEWING,
+                WorkOrderStatus.CHECKING,
+                WorkOrderStatus.READY_TO_MERGE,
+                WorkOrderStatus.BLOCKED,
+            }:
+                raise ValueError(f"Cannot verify factory from {order.status.value}")
+            now = time.time()
+            prior = order.metadata.get("factory_verification", {})
+            if prior.get("state") == "running" and prior.get("expires_at", 0) > now:
+                raise ValueError("A factory verification is already running")
+            candidate = next(
+                (a for a in reversed(order.artifacts) if a.kind == "integration_candidate"), None
+            )
+            if (
+                candidate is None
+                or candidate.artifact_id != binding.get("candidate_id")
+                or candidate.digest != binding.get("candidate_digest")
+            ):
+                raise ValueError("Factory verification candidate changed")
+            receipt = {
+                "id": verification_id,
+                "state": "running",
+                "binding": binding,
+                "started_at": now,
+                "expires_at": now + timeout + 10,
+            }
+            updated = replace(
+                order,
+                status=WorkOrderStatus.CHECKING,
+                decision=None,
+                updated_at=now,
+                metadata={
+                    **order.metadata,
+                    "factory_verification": receipt,
+                    "acceptance_checks_passed": False,
+                },
+            )
+            self._save_tx(conn, updated)
+            self._append_event_tx(
+                conn, order.work_order_id, "factory.verification_started", actor=actor, data=receipt
+            )
+            return updated
+
+    def finish_factory_verification(self, reference, *, verification_id, report, actor):
+        """Store candidate-bound evidence; stale/cancelled verifiers cannot grant a pass."""
+        with self._transaction() as conn:
+            order = self._load_tx(conn, reference)
+            receipt = order.metadata.get("factory_verification", {})
+            if (
+                receipt.get("id") != verification_id
+                or receipt.get("state") != "running"
+                or receipt.get("expires_at", 0) < time.time()
+                or receipt.get("binding") != report.get("binding")
+                or order.status != WorkOrderStatus.CHECKING
+            ):
+                raise ValueError("Factory verification is stale, expired or no longer active")
+            candidate = next(
+                (a for a in reversed(order.artifacts) if a.kind == "integration_candidate"), None
+            )
+            if candidate is None or candidate.artifact_id != report["binding"]["candidate_id"]:
+                raise ValueError("Factory verification candidate changed")
+            expected = {(row["check"], row["id"]) for row in report["binding"]["cases"]}
+            results = report.get("results", [])
+            actual = {(row["check"], row["id"]) for row in results}
+            passed = (
+                bool(expected)
+                and actual == expected
+                and len(results) == len(expected)
+                and report.get("isolation_applied") is True
+                and not report.get("missing_evidence")
+                and all(row.get("status") == "passed" for row in results)
+            )
+            report = {**report, "status": "passed" if passed else "held"}
+            content = json.dumps(report, sort_keys=True, separators=(",", ":"), allow_nan=False)
+            artifact = WorkArtifact(
+                artifact_id=generate_artifact_id(),
+                kind="factory_verification",
+                created_at=time.time(),
+                content=content,
+                digest="sha256:" + hashlib.sha256(content.encode()).hexdigest(),
+                metadata={
+                    "passed": passed,
+                    "binding": report["binding"],
+                    "verification_id": verification_id,
+                },
+            )
+            updated = replace(
+                order,
+                status=WorkOrderStatus.CHECKING if passed else WorkOrderStatus.BLOCKED,
+                artifacts=(*order.artifacts, artifact),
+                decision=None,
+                updated_at=time.time(),
+                error="" if passed else "Protected factory verification did not pass",
+                metadata={
+                    **order.metadata,
+                    "acceptance_checks_passed": passed,
+                    "factory_verification": {
+                        **receipt,
+                        "state": "passed" if passed else "held",
+                        "artifact_id": artifact.artifact_id,
+                    },
+                },
+            )
+            self._save_tx(conn, updated)
+            self._append_event_tx(
+                conn,
+                order.work_order_id,
+                "factory.verification_completed",
+                actor=actor,
+                data={"passed": passed, "artifact_id": artifact.artifact_id},
+            )
+            return updated
+
     def mark_ready_to_merge(
         self,
         reference: str,
@@ -1096,7 +1561,7 @@ class WorkOrderStore:
             }:
                 raise ValueError(f"Cannot prepare merge from {order.status.value}")
             if not order.tasks or any(
-                task.status != WorkTaskStatus.SUCCEEDED for task in order.tasks
+                task.status not in COMPLETED_TASK_STATUSES for task in order.tasks
             ):
                 raise ValueError("Cannot prepare merge until every task has succeeded")
             if order.acceptance_tests and not order.metadata.get("acceptance_checks_passed"):
@@ -1107,6 +1572,7 @@ class WorkOrderStore:
                 for artifact in order.artifacts
             ):
                 raise ValueError("Integration candidate artifact is missing")
+            _require_factory_verification(order, candidate_artifact_id)
             now = time.time()
             updated = replace(
                 order,
@@ -1182,6 +1648,18 @@ class WorkOrderStore:
                 raise ValueError("Cannot merge until the integration candidate is approved")
             if order.metadata.get("integration_candidate_id") != candidate_artifact_id:
                 raise ValueError("Approved integration candidate is no longer current")
+            authorization_id = ""
+            if "factory" in order.metadata:
+                from superqode.factory.release import require_authorization
+
+                actor = require_authorization(order)
+                authorization_id = order.metadata["factory_release"]["payload"]["id"]
+                receipt = conn.execute(
+                    "select used from factory_release_challenges where id=? and work_order_id=?",
+                    (authorization_id, order.work_order_id),
+                ).fetchone()
+                if receipt is None or receipt["used"] != 1:
+                    raise ValueError("Release authorization has no consumed challenge receipt")
             now = time.time()
             updated = replace(
                 order,
@@ -1194,6 +1672,7 @@ class WorkOrderStore:
                         "expected_tree": expected_tree,
                         "actor": actor,
                         "started_at": now,
+                        **({"authorization_id": authorization_id} if authorization_id else {}),
                     },
                 },
             )
@@ -1327,7 +1806,7 @@ class WorkOrderStore:
             now = time.time()
             tasks = tuple(
                 task
-                if task.status == WorkTaskStatus.SUCCEEDED
+                if task.status in COMPLETED_TASK_STATUSES
                 else replace(
                     task,
                     status=WorkTaskStatus.CANCELLED,
@@ -1355,6 +1834,65 @@ class WorkOrderStore:
                 "work.cancelled",
                 actor=actor,
                 data={"reason": reason},
+            )
+            return updated
+
+    def retry_failed_task(self, reference, task_id, *, expected_attempt, actor, reason=""):
+        """Explicitly retry a recorded failure; never replay an uncertain invocation."""
+        if type(expected_attempt) is not int or expected_attempt < 1:
+            raise ValueError("Choose the recorded failed attempt before retrying")
+        with self._transaction() as conn:
+            order = self._load_tx(conn, reference)
+            task = _find_task(order, task_id)
+            if task.status != WorkTaskStatus.FAILED or task.attempts != expected_attempt:
+                raise ValueError("Failed task changed; refresh before authorizing a retry")
+            if task.attempts >= task.max_attempts:
+                raise ValueError("Task exhausted its pinned attempt limit; prepare a new trial")
+            if order.decision is not None or order.status != WorkOrderStatus.FAILED:
+                raise ValueError("Only an unapproved failed WorkOrder can retry a recorded failure")
+            if conn.execute(
+                "select 1 from work_invocations where work_order_id=? and task_id=? and status in ('intent','uncertain') limit 1",
+                (order.work_order_id, task_id),
+            ).fetchone():
+                raise ValueError("Reconcile uncertain invocation outcomes before retrying")
+            policy = evaluate_work_order_policy(order, phase="admission", task=task)
+            if not policy.allowed:
+                raise ValueError("WorkOrder budget or policy does not permit retry")
+            now = time.time()
+            pending = replace(
+                task,
+                status=WorkTaskStatus.PENDING,
+                error="",
+                worker_id="",
+                lease_expires_at=None,
+                heartbeat_at=None,
+                ended_at=None,
+                updated_at=now,
+                metadata={
+                    **task.metadata,
+                    "retry_authorization": {
+                        "id": generate_artifact_id(),
+                        "failed_attempt": expected_attempt,
+                        "reason": reason,
+                    },
+                },
+            )
+            updated = replace(
+                order,
+                tasks=_replace_task(order.tasks, pending),
+                status=WorkOrderStatus.QUEUED,
+                error="",
+                updated_at=now,
+                metadata={**order.metadata, "acceptance_checks_passed": False},
+            )
+            self._save_tx(conn, updated)
+            self._append_event_tx(
+                conn,
+                order.work_order_id,
+                "task.retry_authorized",
+                task_id=task_id,
+                actor=actor,
+                data={"failed_attempt": expected_attempt, "reason": reason},
             )
             return updated
 
@@ -1391,11 +1929,11 @@ class WorkOrderStore:
                     )
                 else:
                     tasks.append(task)
-            if not resumed and any(task.status != WorkTaskStatus.SUCCEEDED for task in tasks):
+            if not resumed and any(task.status not in COMPLETED_TASK_STATUSES for task in tasks):
                 raise ValueError("No blocked task matched the resume request")
             resumed_status = (
                 WorkOrderStatus.REVIEWING
-                if tasks and all(task.status == WorkTaskStatus.SUCCEEDED for task in tasks)
+                if tasks and all(task.status in COMPLETED_TASK_STATUSES for task in tasks)
                 else WorkOrderStatus.QUEUED
             )
             updated = replace(
@@ -1431,6 +1969,15 @@ class WorkOrderStore:
         with self._transaction() as conn:
             order = self._load_tx(conn, reference)
             if verdict == "accepted":
+                if "factory" in order.metadata:
+                    if not expected_candidate_digest or not expected_candidate_id:
+                        raise ValueError(
+                            "Factory approval requires protected acceptance checks and the exact verified candidate id and digest"
+                        )
+                    _require_factory_verification(order, expected_candidate_id)
+                    raise ValueError(
+                        "Factory release approval requires a signed challenge; actor labels are not authentication"
+                    )
                 if expected_candidate_digest or expected_candidate_id:
                     candidate = next(
                         (a for a in reversed(order.artifacts) if a.kind == "integration_candidate"),
@@ -1450,7 +1997,7 @@ class WorkOrderStore:
                             "Review candidate changed; inspect the current diff before approving"
                         )
                 if not order.tasks or any(
-                    task.status != WorkTaskStatus.SUCCEEDED for task in order.tasks
+                    task.status not in COMPLETED_TASK_STATUSES for task in order.tasks
                 ):
                     raise ValueError("Cannot accept until every task has succeeded")
                 if order.acceptance_tests and not order.metadata.get("acceptance_checks_passed"):
@@ -1562,7 +2109,7 @@ class WorkOrderStore:
     @staticmethod
     def _refresh_order(order: WorkOrder) -> WorkOrder:
         statuses = {task.status for task in order.tasks}
-        if order.tasks and statuses == {WorkTaskStatus.SUCCEEDED}:
+        if order.tasks and statuses <= COMPLETED_TASK_STATUSES:
             status = WorkOrderStatus.REVIEWING
             error = ""
         elif WorkTaskStatus.FAILED in statuses:
@@ -1668,6 +2215,12 @@ class WorkOrderStore:
             raise ValueError("Worker lease expired; recover ownership before committing")
 
     def _initialize(self) -> None:
+        from superqode.factory.maintenance import store_transaction
+
+        with store_transaction(self.path):
+            self._initialize_schema()
+
+    def _initialize_schema(self) -> None:
         with closing(self._connect()) as conn:
             conn.executescript(
                 """
@@ -1685,6 +2238,11 @@ class WorkOrderStore:
                     request_id text primary key,
                     work_order_id text not null unique,
                     fingerprint text not null,
+                    foreign key(work_order_id) references work_orders(work_order_id)
+                );
+                create table if not exists factory_release_challenges (
+                    id text primary key, work_order_id text not null,
+                    payload text not null, created real not null, used integer not null default 0,
                     foreign key(work_order_id) references work_orders(work_order_id)
                 );
                 create table if not exists work_order_events (
@@ -1737,8 +2295,13 @@ class WorkOrderStore:
         conn.execute("pragma synchronous = full")
         return conn
 
+    @contextmanager
     def _transaction(self):
-        return _ImmediateTransaction(self._connect())
+        from superqode.factory.maintenance import store_transaction
+
+        with store_transaction(self.path):
+            with _ImmediateTransaction(self._connect()) as connection:
+                yield connection
 
     def _load_tx(self, conn: sqlite3.Connection, reference: str) -> WorkOrder:
         normalized = reference.strip()
@@ -1855,6 +2418,75 @@ class _ImmediateTransaction:
                 self.conn.rollback()
         finally:
             self.conn.close()
+
+
+def _require_factory_verification(order: WorkOrder, candidate_id: str) -> None:
+    if "factory" not in order.metadata:
+        return
+    receipt = order.metadata.get("factory_verification", {})
+    artifact = next(
+        (
+            a
+            for a in order.artifacts
+            if a.artifact_id == receipt.get("artifact_id") and a.kind == "factory_verification"
+        ),
+        None,
+    )
+    candidate = next(
+        (a for a in reversed(order.artifacts) if a.kind == "integration_candidate"), None
+    )
+    if receipt.get("state") != "passed" or artifact is None or candidate is None:
+        raise ValueError("Factory requires passing protected verification for the exact candidate")
+    report = json.loads(artifact.content)
+    binding = report.get("binding", {})
+    if (
+        artifact.digest != "sha256:" + hashlib.sha256(artifact.content.encode()).hexdigest()
+        or report.get("status") != "passed"
+        or not report.get("isolation_applied")
+        or binding != receipt.get("binding")
+        or binding.get("candidate_id") != candidate_id
+        or candidate_id != candidate.artifact_id
+        or binding.get("candidate_digest") != candidate.digest
+        or binding.get("candidate_tree") != candidate.metadata.get("candidate_tree")
+        or binding.get("factory_digest") != order.metadata["factory"].get("snapshot_digest")
+        or candidate.digest != hashlib.sha256(candidate.content.encode()).hexdigest()
+        or candidate.metadata.get("digest") != candidate.digest
+    ):
+        raise ValueError("Factory verification does not match the current candidate")
+
+
+def _human_gate_digest(order: WorkOrder, task: WorkOrderTask) -> str:
+    """Bind continuation to the stage, pinned factory and completed-run evidence."""
+    completed = [item for item in order.tasks if item.status in COMPLETED_TASK_STATUSES]
+    completed_ids = {item.task_id for item in completed}
+    payload = {
+        "work_order_id": order.work_order_id,
+        "goal": order.goal,
+        "factory": order.metadata.get("factory"),
+        "stage": {
+            key: task.to_dict()[key]
+            for key in (
+                "task_id",
+                "goal",
+                "role",
+                "harness",
+                "dependencies",
+                "acceptance_tests",
+            )
+        },
+        "completed": [item.to_dict() for item in completed],
+        "artifacts": [
+            artifact.to_dict()
+            for artifact in order.artifacts
+            if artifact.task_id in completed_ids or not artifact.task_id
+        ],
+    }
+    return (
+        "sha256:"
+        + hashlib.sha256(
+            json.dumps(payload, sort_keys=True, separators=(",", ":"), allow_nan=False).encode()
+        ).hexdigest()
+    )
 
 
 def _submission_fingerprint(order: WorkOrder, *, queue: bool) -> str:

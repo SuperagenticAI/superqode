@@ -331,6 +331,7 @@ _NONINTERACTIVE_JOBS = frozenset(
         "optimization",
         "check",
         "studio",
+        "factory",
         "local-comparison",
     }
 )
@@ -413,6 +414,10 @@ def main():
                 from superqode.harness.verification import run
 
                 run(request["studio_plan"], directory, emit)
+            elif request["kind"] == "factory":
+                from .factory_studio import run
+
+                asyncio.run(run_async_job(run(request, emit)))
             elif request["kind"] == "local-runtime":
                 from .local_runtimes import worker
 

@@ -249,7 +249,7 @@ private func jobStamp(_ row: [String: Any]) -> Double {
   }
   func resetWorkbenchPanels() {
     var next = navigationState
-    next.drawer = ""; next.expanded = false; next.inspector = false; next.filesMounted = false; next.studioMounted = false; next.modelsMounted = false; next.toolsMounted = false
+    next.drawer = ""; next.expanded = false; next.inspector = false; next.filesMounted = false; next.studioMounted = false; next.factoryMounted = false; next.modelsMounted = false; next.toolsMounted = false
     if next != navigationState { navigationState = next }
   }
   func toggleWorkbenchInspector() {
@@ -265,7 +265,7 @@ private func jobStamp(_ row: [String: Any]) -> Double {
 
   init(recoveryStore: WorkspaceRecoveryStore? = nil, preferences: UserDefaults = .standard, engine: Engine? = nil) {
     let smokeRecovery = ProcessInfo.processInfo.environment["SUPERQODE_SMOKE_RECOVERY_DIRECTORY"].map { URL(fileURLWithPath: $0) }
-    let store = recoveryStore ?? (ProcessInfo.processInfo.arguments.contains("--smoke-test")
+    let store = recoveryStore ?? ((ProcessInfo.processInfo.arguments.contains("--smoke-test") || ProcessInfo.processInfo.arguments.contains("--factory-smoke-test") || ProcessInfo.processInfo.arguments.contains("--factory-demo-inspect") || ProcessInfo.processInfo.arguments.contains("--factory-suite-inspect") || ProcessInfo.processInfo.arguments.contains("--factory-feedback-inspect") || ProcessInfo.processInfo.arguments.contains("--factory-optimization-inspect") || ProcessInfo.processInfo.arguments.contains("--factory-operations-inspect") || ProcessInfo.processInfo.arguments.contains("--factory-navigation-inspect") || ProcessInfo.processInfo.arguments.contains("--factory-guided-inspect"))
       ? WorkspaceRecoveryStore(directory: smokeRecovery) : .applicationStore())
     self.recoveryStore = store
     self.preferences = preferences
@@ -279,6 +279,7 @@ private func jobStamp(_ row: [String: Any]) -> Double {
   }
   let engine: Engine
   let harnessStudio = HarnessStudioLibrary()
+  let factoryStudio = FactoryStudioLibrary()
   let terminals = ProjectTerminals()
   let credentialStore = CredentialStore()
   @Published var providers: [[String: Any]] = []
@@ -908,7 +909,14 @@ private func jobStamp(_ row: [String: Any]) -> Double {
           }
         }
       }
-      if args.contains("--smoke-test") {
+      if args.contains("--factory-smoke-test") { await smokeFactoryStudio() }
+      else if args.contains("--factory-demo-inspect") { await inspectFactoryDemo() }
+      else if args.contains("--factory-suite-inspect") { await inspectFactorySuite() }
+      else if args.contains("--factory-feedback-inspect") { await inspectFactoryFeedback() }
+      else if args.contains("--factory-navigation-inspect") || args.contains("--factory-guided-inspect") { await inspectFactoryNavigation() }
+      else if args.contains("--factory-operations-inspect") { await inspectFactoryOperations() }
+      else if args.contains("--factory-optimization-inspect") { await inspectFactoryOptimization() }
+      else if args.contains("--smoke-test") {
         if args.contains("--welcome-only") { await smokeWelcomeStartup() }
         else { await smokeTest() }
       }
@@ -925,6 +933,9 @@ private func jobStamp(_ row: [String: Any]) -> Double {
 
   func openProjectInAgentSpace(_ path: String) {
     perform { try await self.open(path, landing: .agentSpace) }
+  }
+  func openProjectInFactory(_ path: String) {
+    perform { try await self.open(path, landing: .factory) }
   }
 
   func chooseProject(openFolder: (String) -> Void) {
@@ -949,6 +960,7 @@ private func jobStamp(_ row: [String: Any]) -> Double {
   enum ProjectLanding {
     case workspace
     case agentSpace
+    case factory
   }
 
   func open(_ path: String, recordHistory: Bool = true, expectedProjectID: String? = nil,
@@ -1052,6 +1064,7 @@ private func jobStamp(_ row: [String: Any]) -> Double {
     if recordHistory, landing == .workspace, let saved = savedDestinations[projectID] {
       applyDestination(saved)
     }
+    if landing == .factory { section = "Factory Studio" }
     showWelcome = false
     if selectedJob.isEmpty {
       resetThreadConnection()

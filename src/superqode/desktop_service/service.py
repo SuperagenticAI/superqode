@@ -109,6 +109,8 @@ class DesktopService:
               id TEXT,source TEXT,relative TEXT,metadata TEXT,stamp TEXT,updated REAL,PRIMARY KEY(id,source));
             CREATE INDEX IF NOT EXISTS external_sessions_source ON external_sessions(source);
             CREATE TABLE IF NOT EXISTS local_model_plans(id TEXT PRIMARY KEY,plan TEXT,created REAL);
+            CREATE TABLE IF NOT EXISTS factory_improvement_plans(id TEXT PRIMARY KEY,project TEXT,payload TEXT,created REAL);
+            CREATE TABLE IF NOT EXISTS factory_source_reviews(id TEXT PRIMARY KEY,project TEXT,payload TEXT,created REAL);
             CREATE TABLE IF NOT EXISTS studio_reviews(id TEXT PRIMARY KEY,project TEXT,payload TEXT,created REAL);
             CREATE TABLE IF NOT EXISTS studio_check_plans(id TEXT PRIMARY KEY,project TEXT,payload TEXT,created REAL);
             CREATE TABLE IF NOT EXISTS local_runtime_bindings(project TEXT,harness TEXT,model TEXT,runtime TEXT,digest TEXT,PRIMARY KEY(project,harness,model));
@@ -524,6 +526,7 @@ class DesktopService:
             "local-runtime",
             "local-comparison",
             "studio",
+            "factory",
         }:
             raise ValueError("Unknown job type")
         with self.lock:
@@ -567,6 +570,10 @@ class DesktopService:
                 raise ValueError("Finish or stop the active project run before starting another")
             if len(self.processes) >= 4:
                 raise ValueError("Four runs are already active")
+            if kind == "factory":
+                from .factory_studio import validate_request
+
+                params = validate_request(root, params, service=self)
             params = {
                 **params,
                 "command_id": key,
@@ -812,6 +819,7 @@ class DesktopService:
                     if params.get("runtime_action") == "warm"
                     else "Local runtime tool check",
                     "studio": params.get("studio_plan", {}).get("title", "Harness check"),
+                    "factory": "Factory · " + str(params.get("factory_action", "operation")),
                 }[kind]
             from .ownership import Lease, project_lease_path
 
@@ -1086,6 +1094,10 @@ class DesktopService:
                 process.stdin.write(json.dumps(params) + "\n")
                 process.stdin.flush()
                 self._background(self._watch, job_id, process, secrets, logger)
+                if kind == "factory" and params.get("factory_deadline_seconds"):
+                    self._background(
+                        self._factory_deadline, job_id, process, params["factory_deadline_seconds"]
+                    )
             except Exception:
                 if process is not None:
                     try:
@@ -1103,6 +1115,30 @@ class DesktopService:
                     lease.close()
                 raise
             return {"id": job_id}
+
+    def _factory_deadline(self, job_id, process, seconds):
+        try:
+            process.wait(timeout=seconds)
+        except subprocess.TimeoutExpired:
+            with self.lock:
+                if self.processes.get(job_id) is not process:
+                    return
+                rows = self._all("SELECT status FROM jobs WHERE id=?", (job_id,))
+                if not rows or rows[0]["status"] not in {"running", "queued", "needs_approval"}:
+                    return
+                self.append(
+                    job_id,
+                    {
+                        "type": "error",
+                        "data": {
+                            "message": "Factory improvement wall-time budget exhausted; execution stopped"
+                        },
+                    },
+                )
+                try:
+                    self.dispatch("jobs.cancel", {"id": job_id})
+                except ValueError:
+                    pass
 
     def _model_studio_endpoints(self):
         return {
@@ -1163,6 +1199,10 @@ class DesktopService:
         return self._dispatch(method, params)
 
     def _dispatch(self, method: str, params: dict):
+        if method.startswith("factory."):
+            from .factory_studio import handle
+
+            return handle(self, method, params)
         if method.startswith("ship."):
             from .ship import MUTATIONS, action as ship_action, assert_idle
 

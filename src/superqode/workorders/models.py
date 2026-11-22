@@ -37,11 +37,16 @@ class WorkTaskStatus(str, Enum):
     """Lifecycle states for a worker-sized WorkOrder task."""
 
     PENDING = "pending"
+    WAITING = "waiting_for_human"
     RUNNING = "running"
     SUCCEEDED = "succeeded"
+    SKIPPED = "skipped"
     BLOCKED = "blocked"
     FAILED = "failed"
     CANCELLED = "cancelled"
+
+
+COMPLETED_TASK_STATUSES = frozenset({WorkTaskStatus.SUCCEEDED, WorkTaskStatus.SKIPPED})
 
 
 class WorkTaskRole(str, Enum):

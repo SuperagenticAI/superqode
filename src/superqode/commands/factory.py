@@ -1,16 +1,388 @@
-"""SuperQode 'factory' CLI: record model/harness switches and forks for a session."""
+"""Factory definitions, compilation, routing and session lineage."""
 
 import json
 import click
-import click
 
-import click
+from .factory_operations import operations
+from .factory_improvement import improve
+from .factory_campaigns import campaign
+from .factory_intake import intake
 
 
 @click.group()
 def factory():
     """Model- and harness-independent Code Factory commands."""
     pass
+
+
+factory.add_command(operations)
+factory.add_command(improve)
+factory.add_command(campaign)
+factory.add_command(intake)
+
+
+@factory.command("suite-prepare")
+@click.option("--project", default=".", type=click.Path(file_okay=False))
+@click.option("--suite", required=True, help="Project-relative suite YAML")
+def factory_suite_prepare(project, suite):
+    """Pin paired application projects and WorkOrders without model calls."""
+    from pathlib import Path
+    from superqode.factory import trials
+    from superqode.factory.versioning import source_path
+
+    try:
+        root = Path(project).resolve()
+        plan = trials.prepare(root, suite_text=trials._read(source_path(root, suite), 250000))
+        click.echo(json.dumps(plan, indent=2))
+    except (ValueError, OSError) as exc:
+        raise click.ClickException(str(exc)) from exc
+
+
+@factory.command("suite-inspect")
+@click.option("--project", default=".", type=click.Path(file_okay=False))
+@click.argument("suite_id")
+def factory_suite_inspect(project, suite_id):
+    """Inspect paired outcomes, usage and pending human gates."""
+    from superqode.factory import trials
+
+    try:
+        click.echo(json.dumps(trials.scorecard(project, suite_id), indent=2))
+    except (ValueError, OSError) as exc:
+        raise click.ClickException(str(exc)) from exc
+
+
+@factory.command("suite-run")
+@click.option("--project", default=".", type=click.Path(file_okay=False))
+@click.option("--live", is_flag=True)
+@click.argument("suite_id")
+def factory_suite_run(project, live, suite_id):
+    """Advance existing WorkOrders; pause at gates and never deliver changes."""
+    import asyncio
+    from superqode.factory import trials
+
+    if not live:
+        raise click.ClickException(
+            "Use --live to authorize models, self-checks and protected probes"
+        )
+    try:
+        click.echo(json.dumps(asyncio.run(trials.advance(project, suite_id)), indent=2))
+    except (ValueError, OSError) as exc:
+        raise click.ClickException(str(exc)) from exc
+
+
+@factory.command("suite-gate")
+@click.option("--project", default=".", type=click.Path(file_okay=False))
+@click.option("--entry", required=True)
+@click.option("--stage", required=True)
+@click.option("--digest", required=True)
+@click.option("--decision", type=click.Choice(["approve", "hold"]), required=True)
+@click.option("--reason", default="")
+@click.argument("suite_id")
+def factory_suite_gate(project, entry, stage, digest, decision, reason, suite_id):
+    """Record an explicit workflow continuation; never authorize a release."""
+    from superqode.factory import trials
+
+    try:
+        click.echo(
+            json.dumps(
+                trials.gate(project, suite_id, entry, stage, digest, decision, reason), indent=2
+            )
+        )
+    except (ValueError, OSError) as exc:
+        raise click.ClickException(str(exc)) from exc
+
+
+@factory.command("suite-retry")
+@click.option("--project", default=".", type=click.Path(file_okay=False))
+@click.option("--entry", required=True)
+@click.option("--stage", required=True)
+@click.option("--attempt", required=True, type=click.IntRange(min=1))
+@click.option("--reason", required=True)
+@click.argument("suite_id")
+def factory_suite_retry(project, entry, stage, attempt, reason, suite_id):
+    """Explicitly authorize another known-failed attempt; execute separately."""
+    from superqode.factory import trials
+
+    try:
+        click.echo(
+            json.dumps(trials.retry(project, suite_id, entry, stage, attempt, reason), indent=2)
+        )
+    except (ValueError, OSError) as exc:
+        raise click.ClickException(str(exc)) from exc
+
+
+def _definition_options(command):
+    command = click.option(
+        "--spec",
+        default=".superqode/factory.yaml",
+        show_default=True,
+        help="Factory file, relative to the project",
+    )(command)
+    return _project_option(command)
+
+
+def _project_option(command):
+    return click.option(
+        "--project",
+        default=".",
+        type=click.Path(file_okay=False),
+        show_default=True,
+        help="Project root; resolution stays inside this directory",
+    )(command)
+
+
+@factory.command("validate")
+@_definition_options
+@click.option("--json", "json_output", is_flag=True, help="Emit JSON")
+def factory_validate(project, spec, json_output):
+    """Validate a definition and its components without model calls or writes."""
+    from superqode.factory import load_factory, resolve_factory
+
+    try:
+        definition = load_factory(spec, root=project)
+        snapshot = None if definition.legacy else resolve_factory(definition)
+    except (ValueError, OSError) as exc:
+        raise click.ClickException(str(exc)) from exc
+    payload = {
+        "valid": True,
+        "kind": "routing-policy" if definition.legacy else "Factory",
+        "snapshot_digest": snapshot.digest if snapshot else None,
+        "execution_started": False,
+    }
+    if json_output:
+        click.echo(json.dumps(payload, indent=2))
+    else:
+        click.echo(
+            "Valid routing-only policy."
+            if definition.legacy
+            else f"Valid FactorySpec: {snapshot.digest}"
+        )
+        click.echo("No agents or acceptance checks were executed.")
+
+
+@factory.command("resolve")
+@_definition_options
+def factory_resolve(project, spec):
+    """Print a pinned definition/component snapshot as JSON, without writes."""
+    from superqode.factory import load_factory, resolve_factory
+
+    try:
+        snapshot = resolve_factory(load_factory(spec, root=project))
+    except (ValueError, OSError) as exc:
+        raise click.ClickException(str(exc)) from exc
+    click.echo(json.dumps(snapshot.to_dict(), indent=2))
+
+
+@factory.command("compile")
+@_definition_options
+@click.option("--goal", required=True, help="Delivery goal for the draft WorkOrder")
+@click.option(
+    "--write-snapshot",
+    is_flag=True,
+    help="Also write the pinned bundle inside the project; does not submit work",
+)
+def factory_compile(project, spec, goal, write_snapshot):
+    """Print a draft WorkOrder plan; never queue, execute, merge or activate it."""
+    from superqode.factory import (
+        compile_factory,
+        load_factory,
+        materialize_snapshot,
+        resolve_factory,
+    )
+
+    try:
+        snapshot = resolve_factory(load_factory(spec, root=project))
+        plan = compile_factory(snapshot, root=project, goal=goal)
+        if write_snapshot:
+            materialize_snapshot(plan)
+    except (ValueError, OSError) as exc:
+        raise click.ClickException(str(exc)) from exc
+    click.echo(json.dumps({**plan.to_dict(), "snapshot_written": write_snapshot}, indent=2))
+
+
+@factory.command("submit")
+@_project_option
+@click.option("--plan", required=True, help="Saved compiler JSON plan, relative to the project")
+@click.option("--request-id", required=True, help="Stable intake id; reuse it when retrying")
+@click.option("--actor", required=True, help="Local audit attribution")
+def factory_submit(project, plan, request_id, actor):
+    """Admit a materialized plan to WorkOrders without executing agents."""
+    from pathlib import Path
+    from superqode.factory.definition import project_path
+    from superqode.factory.runtime import admit_factory, load_compiled_plan
+
+    try:
+        root = Path(project).resolve()
+        path = project_path(root, plan)
+        if path.stat().st_size > 16_000_000:
+            raise ValueError("Factory plan exceeds 16 MB")
+        compiled = load_compiled_plan(json.loads(path.read_text(encoding="utf-8")), root=root)
+        order = admit_factory(compiled, request_id=request_id, actor=actor)
+    except (ValueError, OSError, KeyError) as exc:
+        raise click.ClickException(str(exc)) from exc
+    click.echo(json.dumps({"work_order": order.to_dict(), "execution_started": False}, indent=2))
+
+
+@factory.command("inspect")
+@_project_option
+@click.argument("work_order_id")
+def factory_inspect(project, work_order_id):
+    """Inspect a factory run, pending gates and evidence without running work."""
+    from superqode.factory.runtime import factory_store, is_factory_order
+    from superqode.workorders.cockpit import build_cockpit_snapshot
+
+    try:
+        store = factory_store(project, read_only=True)
+        if not is_factory_order(store.get(work_order_id)):
+            raise ValueError("WorkOrder is not a factory run")
+        snapshot = build_cockpit_snapshot(store, work_order_id)
+    except Exception as exc:
+        raise click.ClickException(str(exc)) from exc
+    click.echo(json.dumps(snapshot, indent=2))
+
+
+@factory.command("gate")
+@_project_option
+@click.argument("work_order_id")
+@click.argument("stage")
+@click.option("--digest", required=True, help="Gate digest from factory inspect")
+@click.option("--decision", type=click.Choice(["approve", "hold"]), required=True)
+@click.option("--actor", required=True, help="Local audit attribution; not a release authorization")
+@click.option("--reason", default="")
+def factory_gate(project, work_order_id, stage, digest, decision, actor, reason):
+    """Continue or hold a workflow gate; never approve a release."""
+    from superqode.factory.runtime import factory_store, validate_factory_order
+
+    try:
+        store = factory_store(project)
+        validate_factory_order(store.get(work_order_id))
+        order = store.decide_gate(
+            work_order_id,
+            stage,
+            expected_digest=digest,
+            decision=decision,
+            actor=actor,
+            reason=reason,
+        )
+    except (ValueError, OSError, KeyError) as exc:
+        raise click.ClickException(str(exc)) from exc
+    click.echo(json.dumps(order.to_dict(), indent=2))
+
+
+@factory.command("worker")
+@_project_option
+@click.argument("work_order_id")
+@click.option(
+    "--live", is_flag=True, help="Authorize agent execution, including possible provider charges"
+)
+@click.option("--id", "worker_id", default="factory-worker", show_default=True)
+@click.option("--concurrency", default=1, type=click.IntRange(min=1, max=64), show_default=True)
+@click.option(
+    "--once/--follow", default=True, help="Drain ready work, or keep waiting for more work"
+)
+def factory_worker(project, work_order_id, live, worker_id, concurrency, once):
+    """Execute through existing durable workers; pending human gates remain paused."""
+    import asyncio
+    from superqode.factory.runtime import factory_store, validate_factory_order
+    from superqode.workorders.worker import WorkOrderWorker, WorkOrderWorkerConfig
+
+    if not live:
+        raise click.ClickException(
+            "Use --live to authorize agent execution and possible provider charges"
+        )
+    try:
+        store = factory_store(project)
+        validate_factory_order(store.get(work_order_id))
+        worker = WorkOrderWorker(
+            store,
+            WorkOrderWorkerConfig(
+                worker_id=worker_id,
+                reference=work_order_id,
+                concurrency=concurrency,
+                isolation="worktree",
+                once=once,
+            ),
+        )
+        stats = asyncio.run(worker.run())
+    except (ValueError, OSError, KeyError) as exc:
+        raise click.ClickException(str(exc)) from exc
+    click.echo(json.dumps(stats.to_dict(), indent=2))
+
+
+@factory.command("verify")
+@_project_option
+@click.argument("work_order_id")
+@click.option("--execute", is_flag=True, help="Authorize bounded application probe execution")
+@click.option("--timeout", default=120, type=click.IntRange(min=1, max=300), show_default=True)
+def factory_verify(project, work_order_id, execute, timeout):
+    """Run protected deterministic acceptance; never approve or release software."""
+    from superqode.factory.verification import verify_factory
+
+    if not execute:
+        raise click.ClickException("Use --execute to authorize protected application probes")
+    try:
+        result = verify_factory(work_order_id, root=project, timeout=timeout)
+    except (OSError, ValueError, KeyError) as exc:
+        raise click.ClickException(str(exc)) from exc
+    click.echo(json.dumps(result, indent=2))
+    if result["report"]["status"] != "passed":
+        raise click.exceptions.Exit(2)
+
+
+@factory.command("release-challenge")
+@_project_option
+@click.argument("work_order_id")
+@click.option("--key", "key_id", required=True, help="Signer id pinned in release_authority")
+def factory_release_challenge(project, work_order_id, key_id):
+    """Request a short-lived signature challenge for the exact verified change."""
+    from superqode.factory.release import issue_challenge
+
+    try:
+        result = issue_challenge(work_order_id, root=project, key_id=key_id)
+    except (ValueError, OSError) as exc:
+        raise click.ClickException(str(exc)) from exc
+    click.echo(json.dumps(result, indent=2))
+
+
+@factory.command("authorize")
+@_project_option
+@click.argument("work_order_id")
+@click.option("--proof", required=True, help="Signed proof JSON, relative to the project")
+def factory_authorize(project, work_order_id, proof):
+    """Verify a pinned signer's signature; this does not apply the change."""
+    from pathlib import Path
+    from superqode.factory.definition import project_path
+    from superqode.factory.release import authorize_release
+
+    try:
+        path = project_path(Path(project).resolve(), proof)
+        if path.stat().st_size > 8192:
+            raise ValueError("Release proof exceeds 8 KB")
+        result = authorize_release(work_order_id, json.loads(path.read_text()), root=project)
+    except (ValueError, OSError, KeyError) as exc:
+        raise click.ClickException(str(exc)) from exc
+    click.echo(json.dumps(result.to_dict(), indent=2))
+
+
+@factory.command("apply")
+@_project_option
+@click.argument("work_order_id")
+@click.option("--candidate-id", required=True)
+@click.option("--candidate-digest", required=True)
+def factory_apply(project, work_order_id, candidate_id, candidate_digest):
+    """Apply an authenticated candidate to the working tree; no commit or deployment."""
+    from superqode.factory.release import apply_approved
+
+    try:
+        order = apply_approved(
+            work_order_id,
+            root=project,
+            candidate_id=candidate_id,
+            candidate_digest=candidate_digest,
+        )
+    except (ValueError, OSError) as exc:
+        raise click.ClickException(str(exc)) from exc
+    click.echo(json.dumps(order.to_dict(), indent=2))
 
 
 @factory.command("status")

@@ -575,7 +575,12 @@ class LiteLLMGateway(GatewayInterface):
             if any(info.get(key) != value for key, value in capabilities.items()):
                 info.update(capabilities)
                 litellm.register_model({model_key: info})
-        retries = self._rate_limit_retries()
+        from superqode.evaluation.usage_scope import current_usage_scope
+
+        metered = current_usage_scope() is not None
+        if metered:
+            request_kwargs["num_retries"] = 0
+        retries = 0 if metered else self._rate_limit_retries()
         attempt = 0
         while True:
             try:
@@ -2569,6 +2574,37 @@ class LiteLLMGateway(GatewayInterface):
         tool_choice=None,
         **kwargs,
     ):
+        from superqode.evaluation.usage_scope import current_usage_scope
+
+        scope = current_usage_scope()
+
+        async def call():
+            return await self._local_chat_completion(
+                messages, model, provider, temperature, max_tokens, tools, tool_choice, **kwargs
+            )
+
+        return (
+            await scope.request(
+                call,
+                provider or split_provider_model_ref(model).provider,
+                model,
+                kwargs.get("api_base") or kwargs.get("base_url"),
+            )
+            if scope
+            else await call()
+        )
+
+    async def _local_chat_completion(
+        self,
+        messages,
+        model,
+        provider=None,
+        temperature=None,
+        max_tokens=None,
+        tools=None,
+        tool_choice=None,
+        **kwargs,
+    ):
         from superqode.local.execution import LocalTurn, is_local
 
         route = provider or split_provider_model_ref(model).provider
@@ -2602,6 +2638,21 @@ class LiteLLMGateway(GatewayInterface):
         tool_choice=None,
         **kwargs,
     ):
+        from superqode.evaluation.usage_scope import current_usage_scope
+
+        if current_usage_scope() is not None:
+            response = await self.chat_completion(
+                messages, model, provider, temperature, max_tokens, tools, tool_choice, **kwargs
+            )
+            yield StreamChunk(
+                content=response.content,
+                thinking_content=response.thinking_content,
+                tool_calls=response.tool_calls,
+                usage=response.usage,
+                cost=response.cost,
+                finish_reason=response.finish_reason,
+            )
+            return
         from contextlib import aclosing
         from superqode.local.execution import LocalTurn, is_local
 
@@ -2888,6 +2939,10 @@ class LiteLLMGateway(GatewayInterface):
                     response = await self._acompletion_with_retry(request_kwargs)
                     break
                 except Exception as e:
+                    from superqode.evaluation.usage_scope import current_usage_scope
+
+                    if current_usage_scope() is not None:
+                        raise
                     last_error = e
                     is_last = i == len(model_candidates) - 1
                     retryable = self._is_model_not_found_error(
@@ -3196,6 +3251,10 @@ class LiteLLMGateway(GatewayInterface):
                     response = await self._acompletion_with_retry(request_kwargs)
                     break
                 except Exception as e:
+                    from superqode.evaluation.usage_scope import current_usage_scope
+
+                    if current_usage_scope() is not None:
+                        raise
                     last_error = e
                     is_last = i == len(model_candidates) - 1
                     retryable = self._is_model_not_found_error(

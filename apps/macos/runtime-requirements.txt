@@ -1,4 +1,5 @@
 # Patched packages layered over the bundled standalone Python runtime.
+superagentic-metaharness==0.7.0 --hash=sha256:714a8ad1b065f8ca5ec0df333daf4a1494e913cd10d401e7bbe5c2b827a51c17
 fsspec==2026.6.0 --hash=sha256:02e0b71817df9b2169dc30a16832045764def1191b43dcff5bb85bdee212d2a1
 pip==26.2.2 --hash=sha256:fd7f4dfa8190e014013b9f08f3e973f4e4c26ffd179a204895533a7254813a70
 certifi==2026.10.19 --hash=sha256:42d35340cc5b9ba78e818ddbff0c5b1c2b779de448a340fd1b989f5fa8670e1b

@@ -148,3 +148,95 @@ def sandbox_status() -> dict:
         "available": backend != "none",
         "active": mode not in (MODE_OFF, MODE_DANGER) and backend != "none",
     }
+
+
+def build_verification_argv(argv: list[str], *, candidate: Path, scratch: Path) -> SandboxPlan:
+    """Strict Python-probe sandbox: no host-data reads, source writes or network.
+
+    Unlike interactive sandbox modes, this plan never permits unconfined
+    execution. The caller must reject an unapplied plan. Runtime roots contain
+    the current interpreter and standard library; no user home is exposed.
+    """
+    import json
+    import sys
+
+    candidate, scratch = candidate.resolve(), scratch.resolve()
+    backend = _backend_for_platform()
+    if backend == "none":
+        return SandboxPlan([], False, "none", "protected verification requires an OS sandbox")
+    if (
+        candidate == scratch
+        or candidate.is_relative_to(scratch)
+        or scratch.is_relative_to(candidate)
+    ):
+        return SandboxPlan(
+            [], False, backend, "candidate and scratch must be separate sibling workspaces"
+        )
+    if not argv or Path(argv[0]).resolve() != Path(sys.executable).resolve():
+        return SandboxPlan(
+            [], False, backend, "protected probes require the current Python interpreter"
+        )
+    runtime = {Path(sys.base_prefix).resolve(), Path(sys.prefix).resolve()}
+    if any(
+        path == Path("/") or path == candidate or candidate.is_relative_to(path) for path in runtime
+    ):
+        return SandboxPlan(
+            [], False, backend, "interpreter runtime root would expose the verification workspace"
+        )
+    readable = {candidate, scratch, *runtime}
+    if backend == "seatbelt":
+        # Cryptex library paths are OS assets; never allow /System wholesale,
+        # since /System/Volumes/Data also contains customer files.
+        readable.update(
+            Path(path)
+            for path in (
+                "/System/Library",
+                "/usr/lib",
+                "/System/Volumes/Preboot/Cryptexes/OS/usr/lib",
+                "/System/Volumes/Preboot/Cryptexes/OS/System/Library",
+                "/System/Cryptexes/OS/usr/lib",
+                "/System/Cryptexes/OS/System/Library",
+            )
+        )
+        rules = "\n".join(f"  (subpath {json.dumps(str(path))})" for path in sorted(readable))
+        executables = {Path(argv[0]).absolute(), Path(argv[0]).resolve()}
+        exec_rules = "\n".join(
+            f"  (literal {json.dumps(str(path))})" for path in sorted(executables)
+        )
+        profile = "\n".join(
+            [
+                "(version 1)",
+                "(deny default)",
+                f"(allow process-exec\n{exec_rules}\n)",
+                "(allow sysctl-read)",
+                "(allow file-map-executable)",
+                "(allow file-read-metadata)",
+                f"(allow file-read*\n{rules}\n",
+                '  (literal "/dev/null") (literal "/dev/urandom") (literal "/dev/random")',
+                '  (subpath "/dev/fd") (literal "/dev/stdout") (literal "/dev/stderr"))',
+                # dyld opens the root directory during bootstrap. A literal rule
+                # permits that directory, without granting reads below it.
+                '(allow file-read-data (literal "/"))',
+                f'(allow file-write* (subpath {json.dumps(str(scratch))}) (literal "/dev/null") (literal "/dev/stdout") (literal "/dev/stderr") (subpath "/dev/fd"))',
+            ]
+        )
+        return SandboxPlan(["sandbox-exec", "-p", profile, *argv], True, backend)
+    # Mount only the interpreter, system libraries and the candidate. No / bind.
+    readable.update(
+        path for path in (Path("/lib"), Path("/lib64"), Path("/usr/lib")) if path.exists()
+    )
+    options = [
+        "bwrap",
+        "--unshare-all",
+        "--die-with-parent",
+        "--new-session",
+        "--proc",
+        "/proc",
+        "--dev",
+        "/dev",
+    ]
+    for path in sorted(readable, key=lambda item: (len(item.parts), str(item))):
+        if path != scratch:
+            options += ["--ro-bind", str(path), str(path)]
+    options += ["--bind", str(scratch), str(scratch), "--chdir", str(candidate), *argv]
+    return SandboxPlan(options, True, backend)

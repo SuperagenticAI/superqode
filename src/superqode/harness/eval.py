@@ -4,7 +4,9 @@ from __future__ import annotations
 
 import time
 import hashlib
+import json
 from contextlib import ExitStack
+from copy import deepcopy
 from dataclasses import asdict
 from pathlib import Path
 from typing import Any
@@ -12,13 +14,13 @@ from typing import Any
 import yaml
 
 from .evaluators import EvaluationResult, evaluate_content, validate_evaluator
-from .loader import load_harness_spec
+from .loader import load_harness_spec, harness_spec_to_dict
 from .store import create_harness_store
 from .kernel import init_harness
 from .spec import WorkflowMode
 from .testing import build_failure_digest
 from .workflow import run_workflow, workflow_steps_from_spec
-from .eval_workspace import EvaluationWorkspace
+from .eval_workspace import EvaluationWorkspace, file_manifest, manifest_digest
 
 EVAL_SPLITS = ("all", "held-in", "held-out")
 
@@ -112,6 +114,10 @@ async def run_harness_eval(
     eval_split: str = "all",
     recovery_store: str | Path | None = None,
     workspace_snapshot: EvaluationWorkspace | None = None,
+    model_routes: dict[str, str] | None = None,
+    task_prompts: dict[str, dict[str, str]] | None = None,
+    readonly_workspace: bool = False,
+    evaluation_observer=None,
 ) -> dict[str, Any]:
     task_file = load_eval_tasks(tasks_path)
     split = _normalize_eval_filter(eval_split)
@@ -125,6 +131,33 @@ async def run_harness_eval(
     if not specs:
         raise ValueError("At least one harness spec is required")
 
+    # Freeze every variant before any untrusted trial can modify another spec file.
+    pinned_specs = {str(path): load_harness_spec(path) for path in specs}
+    routes = deepcopy(model_routes)
+    prompts = deepcopy(task_prompts)
+    if routes is not None:
+        from superqode.providers.model_specs import split_provider_model_ref
+
+        if set(routes) != set(pinned_specs):
+            raise ValueError("Evaluation routes must cover exactly the pinned variants")
+        parsed_routes = {}
+        for key, route in routes.items():
+            if not isinstance(route, str) or "/" not in route:
+                raise ValueError("Evaluation routes require provider/model names")
+            parsed_routes[key] = split_provider_model_ref(route)
+    if prompts is not None:
+        if set(prompts) != set(pinned_specs):
+            raise ValueError("Evaluation prompts must cover exactly the pinned variants")
+        for values in prompts.values():
+            if (
+                not isinstance(values, dict)
+                or set(values) != {t["id"] for t in tasks}
+                or any(
+                    not isinstance(v, str) or not v.strip() or len(v.encode()) > 250000
+                    for v in values.values()
+                )
+            ):
+                raise ValueError("Evaluation prompts must cover exactly the selected tasks")
     with ExitStack() as stack:
         workspace_snapshot = workspace_snapshot or (
             stack.enter_context(
@@ -151,13 +184,26 @@ async def run_harness_eval(
             variant_results.append(
                 await _run_variant_eval(
                     spec_path=spec_path,
-                    tasks=tasks,
-                    provider=provider,
-                    model=model,
+                    pinned_spec=pinned_specs[str(spec_path)],
+                    tasks=[
+                        {**deepcopy(t), "prompt": prompts[str(spec_path)][t["id"]]} for t in tasks
+                    ]
+                    if prompts is not None
+                    else deepcopy(tasks),
+                    provider=parsed_routes[str(spec_path)].provider
+                    if routes is not None
+                    else provider,
+                    model=parsed_routes[str(spec_path)].model if routes is not None else model,
                     runtime=runtime,
                     working_dir=working_dir,
                     sandbox_backend=sandbox_backend,
                     live=live,
+                    **(
+                        {"evaluation_observer": evaluation_observer}
+                        if evaluation_observer is not None
+                        else {}
+                    ),
+                    **({"readonly_workspace": True} if readonly_workspace else {}),
                     **({"workspace_snapshot": workspace_snapshot} if live else {}),
                     **({"recovery_store": recovery_store} if recovery_store is not None else {}),
                 )
@@ -172,9 +218,36 @@ async def run_harness_eval(
         # baseline solved. The baseline itself cannot regress against itself.
         regressed_variants = [item["harness"] for item in variant_results[1:] if item["regressed"]]
         return {
+            **({"readonly_workspace": True} if readonly_workspace else {}),
+            **({"inference_routes": routes} if routes is not None else {}),
+            **(
+                {
+                    "prompt_digests": {
+                        key: {
+                            identity: "sha256:" + hashlib.sha256(value.encode()).hexdigest()
+                            for identity, value in values.items()
+                        }
+                        for key, values in prompts.items()
+                    }
+                }
+                if prompts is not None
+                else {}
+            ),
             "workspace": {"mode": "isolated-copy", "snapshot_sha256": workspace_snapshot.digest}
             if workspace_snapshot
             else {"mode": "setup-only"},
+            "spec_digests": {
+                str(path): "sha256:"
+                + hashlib.sha256(
+                    json.dumps(
+                        harness_spec_to_dict(spec),
+                        sort_keys=True,
+                        separators=(",", ":"),
+                        allow_nan=False,
+                    ).encode()
+                ).hexdigest()
+                for path, spec in pinned_specs.items()
+            },
             "tasks_file": str(tasks_path),
             "tasks_hash": task_file.get("tasks_hash"),
             "task_metadata": task_file.get("metadata") or {},
@@ -233,9 +306,12 @@ async def _run_variant_eval(
     live: bool,
     recovery_store: str | Path | None = None,
     workspace_snapshot: EvaluationWorkspace | None = None,
+    pinned_spec=None,
+    readonly_workspace: bool = False,
+    evaluation_observer=None,
 ) -> dict[str, Any]:
     started = time.monotonic()
-    spec = load_harness_spec(spec_path)
+    spec = pinned_spec or load_harness_spec(spec_path)
     task_results = []
     recovery = None
     if recovery_store is not None and live:
@@ -251,6 +327,7 @@ async def _run_variant_eval(
                 "runtime": runtime,
                 "sandbox": sandbox_backend,
                 "format_version": 2,
+                **({"readonly_workspace": True} if readonly_workspace else {}),
                 "snapshot_sha256": workspace_snapshot.digest if workspace_snapshot else None,
             },
             tasks=tasks,
@@ -271,6 +348,7 @@ async def _run_variant_eval(
                     sandbox_backend=sandbox_backend,
                     live=live,
                     workspace_snapshot=workspace_snapshot,
+                    **({"readonly_workspace": True} if readonly_workspace else {}),
                 )
 
             if not live:
@@ -283,11 +361,21 @@ async def _run_variant_eval(
                 row["workspace"] = workspace_snapshot.evidence(root)
                 return row
 
-        task_results.append(
-            await recovery.run_case(str(task["id"]), execute_case)
-            if recovery
-            else await execute_case()
-        )
+        if evaluation_observer is not None:
+            if recovery is not None:
+                raise ValueError("Metered evaluation cannot reuse a separate recovery cache")
+            with evaluation_observer.operation(
+                spec=spec_path, task=task, provider=provider, model=model
+            ) as operation:
+                row = await execute_case()
+                evaluation_observer.complete(operation, row)
+                task_results.append(row)
+        else:
+            task_results.append(
+                await recovery.run_case(str(task["id"]), execute_case)
+                if recovery
+                else await execute_case()
+            )
     passed = sum(1 for item in task_results if item["status"] == "passed")
     failed = sum(1 for item in task_results if item["status"] == "failed")
     score = passed / len(task_results) if task_results else 0.0
@@ -351,6 +439,7 @@ async def _run_eval_task(
     sandbox_backend: str,
     live: bool,
     workspace_snapshot: EvaluationWorkspace | None = None,
+    readonly_workspace: bool = False,
 ) -> dict[str, Any]:
     started = time.monotonic()
     if not live:
@@ -366,6 +455,7 @@ async def _run_eval_task(
         from copy import deepcopy
 
         grader = deepcopy(task.get("evaluator") or {})
+        before = manifest_digest(file_manifest(Path(working_dir))) if readonly_workspace else None
         if spec.workflow.mode != WorkflowMode.SINGLE:
             result = await run_workflow(
                 kernel,
@@ -392,6 +482,12 @@ async def _run_eval_task(
             run_id = result.run_id
         usage = _usage_from_result(result)
         execution_error = _execution_error(result)
+        integrity = {}
+        if readonly_workspace:
+            after = manifest_digest(file_manifest(Path(working_dir)))
+            integrity = {"before": before, "after": after, "unchanged": before == after}
+            if before != after:
+                execution_error = "Evidence-only stage modified its evaluation fixture"
         if execution_error:
             evaluation = EvaluationResult(
                 evaluator="execution", status="error", reason=execution_error
@@ -408,6 +504,7 @@ async def _run_eval_task(
         passed = evaluation.status == "passed"
         reason = evaluation.reason
         return {
+            **({"workspace_integrity": integrity} if readonly_workspace else {}),
             "id": task["id"],
             "split": task.get("split") or "held-in",
             "status": evaluation.status,
@@ -538,6 +635,8 @@ def _aggregate_run_usage(results: list[Any] | tuple[Any, ...]) -> dict[str, Any]
         ):
             value = getattr(result, key, None)
             row[key] = value if value is not None else getattr(response, response_key, None)
+        tool_calls = getattr(result, "tool_calls_made", getattr(response, "tool_calls_made", None))
+        row["tool_calls"] = tool_calls if type(tool_calls) is int and tool_calls >= 0 else None
         row["cost_currency"] = getattr(result, "cost_currency", None) or getattr(
             response, "cost_currency", None
         )
@@ -562,7 +661,7 @@ def _aggregate_usage_dicts(usages: list[dict[str, Any]]) -> dict[str, Any]:
         key: sum(int(row[key]) for row in rows)
         if rows and all(row.get(key) is not None for row in rows)
         else None
-        for key in ("tokens_in", "tokens_out", "total_tokens")
+        for key in ("tokens_in", "tokens_out", "total_tokens", "tool_calls")
     }
     known_costs = [row for row in rows if row.get("cost_usd") is not None]
     currencies = {str(row.get("cost_currency") or "USD") for row in known_costs}

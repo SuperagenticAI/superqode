@@ -22,6 +22,16 @@ DEFAULT_CANDIDATE_LEDGER_PATH = DEFAULT_SELF_IMPROVE_DIR / "candidates.jsonl"
 FAILURE_PATTERNS_FILE = "failure_patterns.yaml"
 
 
+def build_failure_record(**kwargs) -> dict[str, Any]:
+    """Normalize an adapter's structured evidence using the shared mining contract.
+
+    This pure adapter performs no source discovery, model calls or file writes.
+    """
+    record = _failure_record(**kwargs)
+    record["fingerprint"] = _failure_fingerprint(record)
+    return record
+
+
 def mine_harness_failures(
     *,
     test_result_paths: tuple[str | Path, ...] = (),

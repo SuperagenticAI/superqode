@@ -1,0 +1,44 @@
+name: Factory worker operations
+
+# Target-host execution is explicit. Authoring this workflow does not certify Linux.
+on:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  operations:
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-24.04, macos-14]
+    runs-on: ${{ matrix.os }}
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v4
+      - uses: astral-sh/setup-uv@1c37ad07a6a961277cf70c0d37d6f313000f5884 # v10.3.0
+        with:
+          version: "0.13.0"
+      - name: Install Linux protected-probe backend
+        if: runner.os == 'Linux'
+        run: sudo apt-get update && sudo apt-get install --yes bubblewrap
+      - name: Install pinned runtime
+        run: uv sync --locked --extra dev --python 3.12
+      - name: Validate actual host and bounded worker contract
+        env:
+          SUPERQODE_VERIFY_NATIVE: "1"
+          PYTHONDONTWRITEBYTECODE: "1"
+          LITELLM_LOCAL_MODEL_COST_MAP: "True"
+        run: |
+          mkdir -p .superqode/validation/test-boundary .superqode/validation/tmp
+          export TMPDIR="$PWD/.superqode/validation/tmp"
+          export GIT_CEILING_DIRECTORIES="$PWD/.superqode/validation/test-boundary"
+          export SUPERQODE_HOME="$PWD/.superqode/validation/home"
+          export SUPERQODE_STATE_DIR="$PWD/.superqode/validation/state"
+          uv run --no-sync python -m pytest tests/test_factory_operations.py tests/test_factory_versioning.py --basetemp="$PWD/.superqode/validation/test-boundary/tests" -q --junitxml=.superqode/validation/operations.xml
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: factory-operations-${{ runner.os }}
+          path: .superqode/validation/operations.xml

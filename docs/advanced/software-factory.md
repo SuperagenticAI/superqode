@@ -33,7 +33,12 @@ The primary interface is the terminal. SuperQode does not require a hosted coord
 | Quality system | Harness eval and benchmark | Comparable scorecards and regression gates across harness variants. |
 | Improvement loop | Harness candidates, `improve`, and `optimize` | Staged candidates, negative evidence, held-out gates, audit, adoption, and rollback-friendly version control. |
 
-The `factory` command group is therefore one module inside the Software Factory: it controls route intent and lineage. WorkOrders are the module that makes work finish.
+The `factory` command group is one module inside the Software Factory: it controls
+route intent and lineage, and now includes the initial versioned FactorySpec
+loader, component snapshots and dry-run compiler. Those definition commands
+produce inspectable draft plans without admitting work. WorkOrders remain the
+durable delivery machinery. See [Factory Commands](../cli-reference/factory-commands.md)
+for the foundation's supported contracts and limitations.
 
 ## Architecture
 
@@ -242,6 +247,8 @@ Ctrl+C or `SIGTERM` stops a persistent worker from claiming more tasks and lets 
 
 The current factory can:
 
+- author and version seven-layer FactorySpecs in native Factory Studio, with explicit model-assisted proposals and pinned trials
+- verify Python CLI candidates with protected probes and require candidate-bound signatures before working-tree delivery
 - define and import portable harnesses
 - run many harness and runtime families through shared contracts
 - coordinate interactive sessions, peers, forks, handoffs, and lineage

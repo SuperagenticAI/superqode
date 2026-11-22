@@ -77,6 +77,8 @@ def build_cockpit_snapshot(
                 "run_id": task.run_id,
                 "session_id": task.session_id,
                 "error": task.error,
+                "human_gate": task.metadata.get("human_gate", False),
+                "gate_digest": task.metadata.get("gate_digest", ""),
             }
         )
 
@@ -247,8 +249,10 @@ def _render_budget(snapshot: dict[str, Any]) -> str:
 def _task_symbol(status: str) -> str:
     return {
         WorkTaskStatus.PENDING.value: "○",
+        WorkTaskStatus.WAITING.value: "?",
         WorkTaskStatus.RUNNING.value: "●",
         WorkTaskStatus.SUCCEEDED.value: "✓",
+        WorkTaskStatus.SKIPPED.value: "↷",
         WorkTaskStatus.BLOCKED.value: "!",
         WorkTaskStatus.FAILED.value: "×",
         WorkTaskStatus.CANCELLED.value: "-",

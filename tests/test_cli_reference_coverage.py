@@ -396,6 +396,8 @@ def test_superqode_environment_variables_are_in_the_environment_reference():
         "SUPERQODE_ICONS",
         "SUPERQODE_REF",
         "SUPERQODE_REVIEW",
+        # Structured stage-output marker, not an environment lookup.
+        "SUPERQODE_OUTPUT",
         "SUPERQODE_SENTINEL_4",
         # Generated read-check content marker, not an environment lookup.
         "SUPERQODE_READ_CHECK_",
@@ -409,6 +411,8 @@ def test_superqode_environment_variables_are_in_the_environment_reference():
         "SUPERQODE_SYSTEMONE_API_KEY",
         # Prefix used when filtering inherited overrides.
         "SUPERQODE_SYSTEMONE_",
+        # Naming-pattern prefix for caller-declared webhook secret bindings.
+        "SUPERQODE_FACTORY_",
     }
 
     source_names = set(re.findall(r"SUPERQODE_[A-Z0-9_]+", source_text))

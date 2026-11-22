@@ -15,6 +15,13 @@ from test_desktop_service import desktop  # noqa: F401
 from superqode.desktop_service import app_setup, local_models
 
 
+def test_development_can_disable_cli_publication_without_touching_home(tmp_path, monkeypatch):
+    monkeypatch.setenv("SUPERQODE_SKIP_CLI_PUBLISH", "1")
+    app_setup.publish_cli(tmp_path / "state", home=tmp_path / "private-home")
+    assert not (tmp_path / "state").exists()
+    assert not (tmp_path / "private-home").exists()
+
+
 def test_worker_pythonpath_keeps_packages_installed_by_the_app(tmp_path):
     extras = tmp_path / "python-extras"
     extras.mkdir()

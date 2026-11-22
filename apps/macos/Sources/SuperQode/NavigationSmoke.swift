@@ -109,7 +109,7 @@ import Foundation
     @MainActor func measure(passes: Int) async throws -> [String: Any] {
       let sections = [
         "Workspace", "Files", "Review", "Terminal", "Checkpoints", "Workspace",
-        "Harness Hub", "Harness Studio", "Super Agent", "Evaluations", "Optimization",
+        "Harness Hub", "Harness Studio", "Factory Studio", "Super Agent", "Evaluations", "Optimization",
         "Models", "Tools", "Threads", "Workspace", "Harness Studio", "Workspace",
       ]
       var worstTick = 0.0

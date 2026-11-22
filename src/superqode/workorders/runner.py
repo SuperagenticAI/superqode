@@ -137,6 +137,42 @@ async def execute_claimed_task(
     isolation: str = "auto",
     retry: bool = True,
 ) -> WorkTaskExecution:
+    """Keep offline capture outside the complete Factory task execution."""
+    from contextlib import nullcontext
+    from superqode.factory.runtime import is_factory_order
+    from superqode.factory.maintenance import execution
+
+    guard = execution(order.repository) if is_factory_order(order) else nullcontext()
+    with guard:
+        return await _execute_claimed_task(
+            store,
+            order=order,
+            task=task,
+            worker_id=worker_id,
+            lease_seconds=lease_seconds,
+            provider=provider,
+            model=model,
+            runtime=runtime,
+            sandbox=sandbox,
+            isolation=isolation,
+            retry=retry,
+        )
+
+
+async def _execute_claimed_task(
+    store: WorkOrderStore,
+    *,
+    order: WorkOrder,
+    task: WorkOrderTask,
+    worker_id: str,
+    lease_seconds: int = 300,
+    provider: str = "",
+    model: str = "",
+    runtime: str = "",
+    sandbox: str = "",
+    isolation: str = "auto",
+    retry: bool = True,
+) -> WorkTaskExecution:
     """Run a previously claimed task and close its lease with evidence."""
     stop_heartbeat = asyncio.Event()
     heartbeat = asyncio.create_task(
@@ -155,6 +191,18 @@ async def execute_claimed_task(
     usage_payload: dict[str, Any] = {}
     policy_payload: dict[str, Any] = {}
     try:
+        from superqode.factory.runtime import is_factory_order, validate_factory_order
+
+        if is_factory_order(order):
+            if any((provider, model, runtime, sandbox)) or isolation == "none":
+                raise _RecoveryRequired(
+                    "Factory workers cannot override pinned inference or worktree isolation"
+                )
+            try:
+                await asyncio.to_thread(validate_factory_order, order, store=store)
+            except (ValueError, OSError) as exc:
+                raise _RecoveryRequired(str(exc)) from exc
+            isolation = "worktree"
         workspace = await _prepare_task_workspace(store, order, task, isolation=isolation)
         baseline = await asyncio.to_thread(capture_workspace_changes, workspace.path)
         prior_workspace = next(
@@ -193,6 +241,18 @@ async def execute_claimed_task(
             actor=worker_id,
         )
         timeout = _remaining_time_budget(order)
+        retry_authorization = task.metadata.get("retry_authorization", {})
+        if not isinstance(retry_authorization, dict):
+            retry_authorization = {}
+        retry_namespace = (
+            str(retry_authorization.get("id", ""))
+            if task.attempts > 1 and retry_authorization.get("failed_attempt") == task.attempts - 1
+            else ""
+        )
+        invocation_id = "harness-task-" + retry_namespace if retry_namespace else "harness-task"
+        from superqode.factory.contracts import preflight as handoff_preflight
+
+        handoffs = await asyncio.to_thread(handoff_preflight, order, task, workspace.path)
         from superqode.harness import resolve_harness
 
         resolved_spec = resolve_harness(task.harness or order.harness, root=workspace.path).spec
@@ -212,6 +272,7 @@ async def execute_claimed_task(
                 "acceptance_tests": order.acceptance_tests,
                 "resolved_spec": asdict(resolved_spec),
                 "recovery_contract": 1,
+                **({"factory_handoffs": handoffs} if task.metadata.get("factory_contract") else {}),
             }
         )
         guard = await asyncio.to_thread(
@@ -225,7 +286,7 @@ async def execute_claimed_task(
                 task.task_id,
                 worker_id=worker_id,
                 attempt=task.attempts,
-                invocation_id="harness-task",
+                invocation_id=invocation_id,
                 operation="harness.task",
                 fingerprint=fingerprint,
                 replay_safe=(
@@ -242,7 +303,14 @@ async def execute_claimed_task(
             if admission["action"] == "reuse":
                 return admission["result"]
             with recovery_scope(
-                RecoveryScope(store, order.work_order_id, task.task_id, worker_id, task.attempts)
+                RecoveryScope(
+                    store,
+                    order.work_order_id,
+                    task.task_id,
+                    worker_id,
+                    task.attempts,
+                    invocation_namespace=retry_namespace,
+                )
             ):
                 outcome = await _execute_harness_task(
                     order,
@@ -263,7 +331,7 @@ async def execute_claimed_task(
                 task.task_id,
                 worker_id=worker_id,
                 attempt=task.attempts,
-                invocation_id="harness-task",
+                invocation_id=invocation_id,
                 result=outcome,
                 workspace=end_guard,
             )
@@ -288,9 +356,16 @@ async def execute_claimed_task(
             order.work_order_id,
             usage,
             actor=worker_id,
-            invocation_id="harness-task",
+            invocation_id=invocation_id,
         )
         policy_payload = policy_decision.to_dict()
+        if is_factory_order(order):
+            try:
+                await asyncio.to_thread(
+                    validate_factory_order, store.get(order.work_order_id), store=store
+                )
+            except (ValueError, OSError) as exc:
+                raise _RecoveryRequired(str(exc)) from exc
         await _record_workspace_evidence(
             store,
             order,
@@ -462,6 +537,19 @@ async def execute_claimed_task(
                 usage=usage_payload,
                 policy=policy_payload,
             )
+        from superqode.factory.contracts import publish as publish_stage_outputs
+
+        handoff_metadata = await asyncio.to_thread(
+            publish_stage_outputs,
+            store,
+            order,
+            task,
+            result,
+            content,
+            workspace.path,
+            actor=worker_id,
+            expected_inputs=handoffs,
+        )
         integration_metadata: dict[str, Any] = {}
         if (
             task.role in _PATCH_ROLES
@@ -516,6 +604,7 @@ async def execute_claimed_task(
                 "harness_execution": result,
                 "task_integration": integration_metadata,
                 "role_result": role_metadata,
+                **handoff_metadata,
             },
         )
         return WorkTaskExecution(
@@ -710,7 +799,9 @@ async def _execute_harness_task(
     harness_ref = task.harness or order.harness
     entry = resolve_harness(harness_ref, root=repository)
     promotion_selection: dict[str, Any] = {}
-    if entry.path is not None:
+    from superqode.factory.runtime import is_factory_order
+
+    if entry.path is not None and not is_factory_order(order):
         from superqode.harness.promotion import select_harness_promotion
 
         promotion_selection = select_harness_promotion(
@@ -1020,7 +1111,19 @@ async def _enforce_role_contract(
             )
             return reason, metadata
 
-    if task.role == WorkTaskRole.REVIEWER and metadata.get("review_verdict") != "approved":
+    loop = task.metadata.get("factory_contract", {}).get("loop", {})
+    from superqode.factory.runtime import is_factory_order
+
+    intermediate_revision = (
+        is_factory_order(order)
+        and bool(loop)
+        and loop.get("iteration", 0) < loop.get("max_iterations", 0)
+    )
+    if (
+        task.role == WorkTaskRole.REVIEWER
+        and metadata.get("review_verdict") != "approved"
+        and not intermediate_revision
+    ):
         issues = metadata.get("review_issues") or ()
         detail = "; ".join(str(item) for item in issues) or str(
             metadata.get("review_summary") or "review requested changes"
@@ -1112,6 +1215,10 @@ async def _prepare_task_workspace(
     from .integration import create_tree_commit, snapshot_worktree_tree
 
     manager = GitWorktreeManager(repository)
+    from superqode.factory.runtime import is_factory_order, factory_worktree_manager
+
+    if is_factory_order(order):
+        manager = factory_worktree_manager(order)
     integration_tree = await asyncio.to_thread(snapshot_worktree_tree, integration.path)
     task_commit = await asyncio.to_thread(
         create_tree_commit,
@@ -1177,6 +1284,10 @@ def _create_integration_workspace_sync(
 
         async def create() -> WorkTaskWorkspace:
             manager = GitWorktreeManager(repository)
+            from superqode.factory.runtime import is_factory_order, factory_worktree_manager
+
+            if is_factory_order(order):
+                manager = factory_worktree_manager(order)
             if requested == "none" or not await manager.is_git_repo():
                 if requested == "worktree":
                     raise ValueError(f"Worktree isolation requires a Git repository: {repository}")
@@ -1312,6 +1423,12 @@ def _task_prompt(
         evidence = _dependency_evidence(order, task)
         if evidence:
             parts.append("Dependency evidence:\n" + evidence)
+    from superqode.factory.contracts import prompt as stage_contract_prompt
+
+    handoff = stage_contract_prompt(order, task)
+    if handoff:
+        parts.append(handoff)
+    if task.dependencies:
         from .evidence import dependency_catalog, evidence_config
 
         if evidence_config(order).get("enabled") is True:

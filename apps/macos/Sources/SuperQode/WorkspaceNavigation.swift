@@ -10,6 +10,7 @@ struct WorkbenchNavigationState: Equatable {
   var inspector = false
   var filesMounted = false
   var studioMounted = false
+  var factoryMounted = false
   var modelsMounted = false
   var toolsMounted = false
 
@@ -22,6 +23,7 @@ struct WorkbenchNavigationState: Equatable {
       if destination == "Files" { filesMounted = true }
     case "Workspace": closeExpandedDrawer()
     case "Harness Studio": studioMounted = true
+    case "Factory Studio": factoryMounted = true
     case "Models": modelsMounted = true
     case "Tools": toolsMounted = true
     default: break
@@ -57,7 +59,7 @@ struct WorkspaceNavigationGroup: Identifiable {
     .init(id: "build", title: "Build", symbol: "chevron.left.forwardslash.chevron.right",
       sections: ["Workspace", "Review", "Files", "Terminal", "Checkpoints"]),
     .init(id: "harness", title: "Harnesses", symbol: "square.stack.3d.up",
-      sections: ["Harness Hub", "Harness Studio", "Super Agent"]),
+      sections: ["Harness Hub", "Harness Studio", "Factory Studio", "Super Agent"]),
     .init(id: "quality", title: "Quality", symbol: "checkmark.seal",
       sections: ["Evaluations", "Optimization"]),
     .init(id: "local", title: "Local AI", symbol: "cpu", sections: ["Models"]),
@@ -88,7 +90,7 @@ struct WorkspaceNavigationGroup: Identifiable {
 struct WorkspaceNavigationRail: View {
   /// Main left-hand tabs. Local harnesses stay in Features → Advanced.
   static let starterSections = [
-    "Workspace", "Harness Hub", "Harness Studio", "Super Agent", "Recursive agents",
+    "Workspace", "Harness Hub", "Harness Studio", "Factory Studio", "Super Agent", "Recursive agents",
     "Evaluations", "Optimization", "Models", "Tools",
   ]
   @EnvironmentObject var app: Workspace

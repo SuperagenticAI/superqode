@@ -58,6 +58,10 @@ struct ThreadTabBar: View {
               }
             }.padding(.horizontal, 12).padding(.vertical, 5)
           }.scrollIndicators(.hidden)
+            .onAppear {
+              let identity = app.selectedConversationID
+              scroll.scrollTo(identity.isEmpty ? "new-conversation" : identity, anchor: .center)
+            }
             .onChange(of: app.selectedConversationID) { _, identity in
               scroll.scrollTo(identity.isEmpty ? "new-conversation" : identity, anchor: .center)
             }

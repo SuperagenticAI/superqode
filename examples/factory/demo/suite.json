@@ -1,0 +1,35 @@
+{
+  "format": "superqode.factory-demo/1",
+  "cases": [
+    {
+      "id": "totals",
+      "goal": "Fix app.py totals: amounts for repeated categories must accumulate instead of overwriting earlier rows. Preserve empty input and negative amounts. Change only app.py; do not modify self_check.py. Leave unrelated operations unchanged.",
+      "probes": [
+        {"input": [{"category": "a", "amount": 2}, {"category": "a", "amount": 3}], "expected": {"a": 5}},
+        {"input": [{"category": "food", "amount": 10}, {"category": "travel", "amount": 3}, {"category": "food", "amount": -4}], "expected": {"food": 6, "travel": 3}},
+        {"input": [], "expected": {}},
+        {"input": [{"category": "zero", "amount": 0}, {"category": "zero", "amount": 0}], "expected": {"zero": 0}}
+      ]
+    },
+    {
+      "id": "active",
+      "goal": "Fix app.py active: return only items whose active field is the JSON boolean true. Missing, false, null, numeric and string values must be excluded. Preserve item order. Change only app.py; do not modify self_check.py. Leave unrelated operations unchanged.",
+      "probes": [
+        {"input": [{"id": 1}, {"id": 2, "active": true}, {"id": 3, "active": false}], "expected": [{"id": 2, "active": true}]},
+        {"input": [{"active": "false"}, {"active": 1}, {"active": null}, {"active": true, "id": 8}], "expected": [{"active": true, "id": 8}]},
+        {"input": [], "expected": []},
+        {"input": [{"id": 2, "active": true}, {"id": 1, "active": true}], "expected": [{"id": 2, "active": true}, {"id": 1, "active": true}]}
+      ]
+    },
+    {
+      "id": "ordered",
+      "goal": "Fix app.py ordered: sort strings case-insensitively using Unicode casefold, preserving input order for equal casefold keys. Return a new list without changing the input. Change only app.py; do not modify self_check.py. Leave unrelated operations unchanged.",
+      "probes": [
+        {"input": ["zebra", "Apple", "banana", "Zoo"], "expected": ["Apple", "banana", "zebra", "Zoo"]},
+        {"input": ["beta", "Alpha", "alpha", "ALPHA"], "expected": ["Alpha", "alpha", "ALPHA", "beta"]},
+        {"input": [], "expected": []},
+        {"input": ["ss", "ß", "apple"], "expected": ["apple", "ss", "ß"]}
+      ]
+    }
+  ]
+}

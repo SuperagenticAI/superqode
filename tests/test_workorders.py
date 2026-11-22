@@ -565,6 +565,10 @@ def test_work_order_event_limit_returns_the_latest_events(tmp_path):
 async def test_parallel_runner_joins_non_overlapping_task_worktrees(tmp_path, monkeypatch):
     from superqode.workspace.worktree import GitWorktreeManager
 
+    # This test owns an explicit worktree root, independent of the caller's
+    # isolated SUPERQODE_HOME used by the surrounding validation run.
+    monkeypatch.delenv("SUPERQODE_HOME", raising=False)
+
     repository = _git_repository(tmp_path)
     monkeypatch.setattr(GitWorktreeManager, "WORKTREE_ROOT", tmp_path / "working")
     monkeypatch.setattr(

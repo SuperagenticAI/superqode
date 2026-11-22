@@ -595,7 +595,8 @@ async def _run_evaluator_optimizer(
         total=min(max(len(steps), 2), 3),
         fallback_id="evaluator",
     )
-    if _evaluation_passed(evaluation.content) or len(steps) < 3:
+    acceptance = kwargs.get("evaluation_acceptance", _evaluation_passed)
+    if acceptance(evaluation.content) or len(steps) < 3:
         return WorkflowResult(
             mode=WorkflowMode.EVALUATOR_OPTIMIZER,
             results=(candidate, evaluation),

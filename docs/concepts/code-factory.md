@@ -42,6 +42,8 @@ Connect an established coding agent through a native integration, SDK runtime, o
 | Interactive work | Persistent sessions, harness switching, forks, and handoffs |
 | Durable repository delivery | WorkOrders, task graphs, leases, isolated workers, checks, reviews, and acceptance |
 | Routing and lineage | `sq factory` |
+| Factory definition foundation | `sq factory validate`, `resolve` and dry-run `compile` |
+| Factory execution | `sq factory submit`, `worker`, `inspect` and durable human gates |
 | Governance | Policies, approvals, budgets, credential controls, and audit events |
 | Measurement | Harness evals, benchmarks, evidence, and scorecards |
 | Improvement | Candidate generation, held-out evaluation, adoption, and rollback |
@@ -66,7 +68,7 @@ Evaluation, policy, and delivery gates
 Verified code change
   |
   v
-Guarded harness improvement
+Guarded Factory improvement
 ```
 
 ## Terminal-first operation
@@ -114,7 +116,12 @@ sq harness optimize --spec harness.yaml --tasks tasks.yaml
 
 SuperQode provides the terminal execution, delivery, evaluation, governance, and optimization layers of a code factory. It does not require a proprietary web, mobile, or desktop client suite. It can work with established coding agents instead of requiring an organization to replace them.
 
-The `sq factory` command is one module within this product model. It manages routing and lineage. WorkOrders, harness evaluation, policy, and optimization provide the remaining delivery controls.
+The `sq factory` command is one module within this product model. It manages
+routing and lineage and includes an initial versioned definition/compiler
+foundation. Compilation produces draft WorkOrder plans; explicit submission and
+worker commands admit and execute them through WorkOrders, with durable human
+continuation gates. WorkOrders, harness evaluation, policy, and optimization provide
+the existing delivery controls. See [Factory Commands](../cli-reference/factory-commands.md).
 
 ## Next steps
 

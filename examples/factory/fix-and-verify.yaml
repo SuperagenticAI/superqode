@@ -1,0 +1,73 @@
+apiVersion: superqode.dev/v1alpha1
+kind: Factory
+metadata:
+  name: fix-and-verify
+  description: Investigate a problem, implement a small fix and prepare verification evidence.
+
+# Existing route settings keep their original locations.
+default_route: no-subscription
+routes:
+  no-subscription:
+    allow_cloud: false
+    allow_subscription_runtimes: false
+    prefer: [ollama/qwen3-coder]
+
+data_context:
+  repository: .
+  files: {}
+
+compute:
+  runner: worktree
+
+inference:
+  harnesses:
+    coder:
+      template: core
+      model: ollama/qwen3-coder
+
+improvement:
+  checks:
+    regression:
+      # Replace this with the application's acceptance command before a trial.
+      command: python -m pytest -q
+      files: []
+  optimization:
+    automatic_experiments: false
+    editable: [skills, harnesses, routes, workflow]
+    protected: [governance, improvement.checks, orchestration.acceptance_checks]
+
+orchestration:
+  stages:
+    - id: investigate
+      goal: Reproduce the reported problem and identify a bounded fix.
+      role: investigator
+      harness: coder
+    - id: implement
+      goal: Implement the smallest useful fix and its regression test.
+      role: implementer
+      harness: coder
+      depends_on: [investigate]
+      checks: [regression]
+    - id: verify
+      goal: Exercise the original failure and nearby behavior; report evidence and limitations.
+      role: tester
+      harness: coder
+      depends_on: [implement]
+      human_gate: true
+      checks: [regression]
+  acceptance_checks: [regression]
+
+access:
+  interfaces: [cli, tui, macos, api]
+
+governance:
+  permissions:
+    allow_read: true
+    allow_write: true
+    allow_shell: true
+    allow_network: false
+  budget:
+    max_workers: 1
+    max_seconds: 1800
+    max_tool_calls: 100
+  release: human

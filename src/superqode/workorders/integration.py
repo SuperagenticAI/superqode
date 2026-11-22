@@ -267,16 +267,48 @@ def prepare_integration(
     actor: str = "integration",
 ) -> IntegrationCandidate:
     """Create and validate the exact patch a human may approve for delivery."""
+    from superqode.factory.runtime import is_factory_order
+
+    if is_factory_order(store.get(reference)):
+        from superqode.factory.verification import prepare_verified_candidate
+
+        return prepare_verified_candidate(store, reference, actor=actor)
+    return _capture_candidate(store, reference, actor=actor, prepare=True)
+
+
+def capture_integration_candidate(
+    store: WorkOrderStore, reference: str, *, actor: str
+) -> IntegrationCandidate:
+    """Capture an artifact for verification without approving or preparing delivery."""
+    return _capture_candidate(store, reference, actor=actor, prepare=False)
+
+
+def _capture_candidate(
+    store: WorkOrderStore, reference: str, *, actor: str, prepare: bool
+) -> IntegrationCandidate:
     order = store.get(reference)
-    if order.status not in {
+    allowed = {
         WorkOrderStatus.REVIEWING,
         WorkOrderStatus.CHECKING,
         WorkOrderStatus.READY_TO_MERGE,
-    }:
+    }
+    if not prepare:
+        allowed.add(WorkOrderStatus.BLOCKED)
+    if order.status not in allowed:
         raise ValueError(f"Cannot prepare merge from {order.status.value}")
-    if order.acceptance_tests and not order.metadata.get("acceptance_checks_passed"):
+    if prepare and order.acceptance_tests and not order.metadata.get("acceptance_checks_passed"):
         raise ValueError("Cannot prepare merge until WorkOrder acceptance checks pass")
-    for task in order.tasks:
+    from superqode.factory.runtime import is_factory_order, validate_factory_order
+
+    reviewers = [t for t in order.tasks if t.role == WorkTaskRole.REVIEWER]
+    if is_factory_order(order):
+        validate_factory_order(order, store=store, integration_locked=True)
+        selected = {}
+        for task in reviewers:
+            if task.status.value != "skipped":
+                selected[task.metadata.get("factory_stage", task.task_id)] = task
+        reviewers = list(selected.values())
+    for task in reviewers:
         if task.role != WorkTaskRole.REVIEWER:
             continue
         review = next(
@@ -371,6 +403,8 @@ def prepare_integration(
         )
         return candidate
 
+    if not prepare:
+        return candidate
     store.mark_ready_to_merge(
         order.work_order_id,
         candidate_artifact_id=artifact.artifact_id,
@@ -385,12 +419,48 @@ def merge_integration(
     reference: str,
     *,
     actor: str = "human",
+    expected_candidate_id: str | None = None,
+    expected_candidate_digest: str | None = None,
 ) -> WorkOrder:
     """Apply only the approved patch and verify the resulting target tree."""
+    with work_order_integration_lock(store, store.get(reference).work_order_id):
+        return _merge_integration_locked(
+            store,
+            reference,
+            actor=actor,
+            expected_candidate_id=expected_candidate_id,
+            expected_candidate_digest=expected_candidate_digest,
+        )
+
+
+def _merge_integration_locked(
+    store, reference, *, actor, expected_candidate_id=None, expected_candidate_digest=None
+):
     order = store.get(reference)
+    if "factory" in order.metadata:
+        from superqode.factory.release import require_authorization
+        from superqode.factory.runtime import validate_factory_order
+
+        actor = require_authorization(order)
+        validate_factory_order(
+            order,
+            store=store,
+            check_baseline=order.status != WorkOrderStatus.MERGING,
+            integration_locked=True,
+        )
+        if (
+            order.status != WorkOrderStatus.MERGING
+            and not store.policy_decision(reference, phase="completion").allowed
+        ):
+            raise ValueError("Factory budget or policy does not permit delivery")
     if order.status not in {WorkOrderStatus.READY_TO_MERGE, WorkOrderStatus.MERGING}:
         raise ValueError(f"Cannot merge WorkOrder from {order.status.value}")
     candidate = _approved_candidate(order)
+    if expected_candidate_id is not None and (
+        candidate.artifact_id != expected_candidate_id
+        or candidate.digest != expected_candidate_digest
+    ):
+        raise ValueError("Inspected candidate changed before applying the approved change")
     patch = candidate.content
     digest = hashlib.sha256(patch.encode()).hexdigest()
     if digest != candidate.digest or digest != candidate.metadata.get("digest"):
@@ -546,6 +616,10 @@ async def cleanup_integration_workspace(
         raise ValueError("WorkOrder does not own a managed worktree")
     repository = Path(order.repository).expanduser().resolve()
     manager = GitWorktreeManager(repository)
+    from superqode.factory.runtime import is_factory_order, factory_worktree_manager
+
+    if is_factory_order(order):
+        manager = factory_worktree_manager(order)
     root = manager.worktree_base.resolve()
     removed: list[str] = []
     seen: set[Path] = set()

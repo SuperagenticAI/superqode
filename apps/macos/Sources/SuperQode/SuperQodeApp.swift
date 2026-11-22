@@ -180,12 +180,12 @@ enum Sections {
   static let names = [
     "Workspace", "Harness Hub", "Models", "Evaluations", "Optimization", "Files", "Tools",
     "Terminal", "Checkpoints", "Review", "Threads", "Agent activity", "Harness Studio", "Super Agent", "Local harnesses",
-    "Recursive agents",
+    "Recursive agents", "Factory Studio",
   ]
   static let icons = [
     "chevron.left.forwardslash.chevron.right", "square.stack.3d.up", "cpu", "checkmark.seal",
     "slider.horizontal.3", "folder", "wrench.and.screwdriver", "terminal", "clock.arrow.circlepath", "text.magnifyingglass", "bubble.left.and.bubble.right", "square.stack.3d.up", "hammer",
-    "arrow.triangle.2.circlepath", "cpu.fill", "arrow.triangle.branch",
+    "arrow.triangle.2.circlepath", "cpu.fill", "arrow.triangle.branch", "building.2",
   ]
 }
 extension Color {
@@ -306,7 +306,7 @@ struct RootView: View {
     HStack(spacing: 0) {
       WorkspaceNavigationRail()
       Divider()
-      if !app.threadsSidebarCollapsed {
+      if !app.threadsSidebarCollapsed && app.section != "Factory Studio" {
         SidebarView().frame(width: CGFloat(min(max(sidebarWidth, 200), 440))).background(Color.qPanel)
           .disabled(app.openingProject || app.restoringNavigation)
           .transition(.move(edge: .leading).combined(with: .opacity))
@@ -314,7 +314,7 @@ struct RootView: View {
       }
       VStack(spacing: 0) {
         HStack(spacing: 12) {
-          ThreadsSidebarToggle()
+          if app.section != "Factory Studio" { ThreadsSidebarToggle() }
           Button {
             app.showWelcome = true
           } label: {
@@ -329,8 +329,19 @@ struct RootView: View {
             .help("Forward (⌘])").accessibilityLabel("Forward")
           Text(Sections.title(for: app.section)).font(.system(size: 12, weight: .medium)).lineLimit(1)
           Text("/").foregroundStyle(.tertiary)
-          Text(string(app.project, "name", "No project")).font(.system(size: 12)).lineLimit(1).truncationMode(.middle).foregroundStyle(
-            .secondary)
+          if app.section == "Factory Studio" {
+            Menu {
+              Button("Open project…") { app.chooseProject(openFolder: app.openProjectInFactory) }
+              Divider()
+              ForEach(app.projects, id: \.projectRowID) { row in
+                Button(string(row, "name", "Project")) { app.openProjectInFactory(string(row, "path")) }
+              }
+            } label: { Text(string(app.project, "name", "Project")).font(.system(size: 12)).lineLimit(1) }
+              .menuStyle(.borderlessButton).fixedSize().disabled(app.openingProject || app.restoringNavigation)
+              .accessibilityLabel("Factory project")
+          } else {
+            Text(string(app.project, "name", "No project")).font(.system(size: 12)).lineLimit(1).truncationMode(.middle).foregroundStyle(.secondary)
+          }
           Spacer()
           Button(action: app.presentCommandPalette) {
             Image(systemName: "command")
@@ -351,8 +362,10 @@ struct RootView: View {
         }.padding(.horizontal, 20).padding(.vertical, 12).modifier(NavigationGlass()).padding(
           .horizontal, 12
         ).padding(.vertical, 6)
-        ThreadTabBar()
-        ForkWorkspaceBar()
+        if WorkspaceNavigationGroup.usesCodingWorkspace(app.section) {
+          ThreadTabBar()
+          ForkWorkspaceBar()
+        }
         if app.project.isEmpty && !["Agent activity", "Models"].contains(app.section) {
           GettingStartedView(draftStore: app.draftStore)
         } else {
@@ -365,6 +378,15 @@ struct RootView: View {
                   .disabled(!WorkspaceNavigationGroup.usesCodingWorkspace(app.section))
                   .allowsHitTesting(WorkspaceNavigationGroup.usesCodingWorkspace(app.section))
                   .accessibilityHidden(!WorkspaceNavigationGroup.usesCodingWorkspace(app.section))
+              }
+              if app.navigationState.factoryMounted && !app.projectID.isEmpty {
+                FactoryStudioView(library: app.factoryStudio, active: app.section == "Factory Studio")
+                  .id(app.projectID)
+                  .frame(width: geometry.size.width, height: geometry.size.height)
+                  .opacity(app.section == "Factory Studio" ? 1 : 0)
+                  .disabled(app.section != "Factory Studio")
+                  .allowsHitTesting(app.section == "Factory Studio")
+                  .accessibilityHidden(app.section != "Factory Studio")
               }
               if app.navigationState.studioMounted && !app.projectID.isEmpty {
                 HarnessStudioView(library: app.harnessStudio, active: app.section == "Harness Studio")

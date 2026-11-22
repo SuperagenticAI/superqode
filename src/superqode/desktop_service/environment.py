@@ -4,6 +4,8 @@ from superqode.tools.env_policy import is_secret_name
 
 
 def selected_providers(kind, request):
+    if kind == "factory":
+        return set(request.get("factory_providers", []))
     providers = {str(request.get("provider") or "")}
     if kind == "studio":
         route = (request.get("studio_plan") or {}).get("route") or {}

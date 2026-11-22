@@ -119,7 +119,8 @@ final class EngineFrames {
       ? bundled : root.appendingPathComponent("apps/macos/runtime")
     let python = runtime.appendingPathComponent("python/bin/python3")
     let fallback = root.appendingPathComponent(".venv/bin/python")
-    let executable = FileManager.default.fileExists(atPath: python.path) ? python : fallback
+    let developmentSource = ProcessInfo.processInfo.environment["SUPERQODE_SOURCE_ROOT"] != nil
+    let executable = developmentSource ? fallback : (FileManager.default.fileExists(atPath: python.path) ? python : fallback)
     guard FileManager.default.isExecutableFile(atPath: executable.path) else {
       throw EngineError(
         message: "Local engine is missing. Build the bundled runtime before opening SuperQode.")
@@ -136,11 +137,11 @@ final class EngineFrames {
     try FileManager.default.createDirectory(at: workingDirectory, withIntermediateDirectories: true,
       attributes: [.posixPermissions: 0o700])
     child.currentDirectoryURL = workingDirectory
-    backgroundMode = management || (background ?? (UserDefaults.standard.bool(forKey: "nativeBackgroundEngine") && !ProcessInfo.processInfo.arguments.contains("--smoke-test")))
+    backgroundMode = management || (background ?? (UserDefaults.standard.bool(forKey: "nativeBackgroundEngine") && !ProcessInfo.processInfo.arguments.contains("--smoke-test") && !ProcessInfo.processInfo.arguments.contains("--factory-smoke-test")))
     child.arguments = ["-u", "-m", backgroundMode ? "superqode.desktop_service.daemon" : "superqode.desktop_service.service", "--state", state]
     if management { child.arguments?.append("--manage") }
     var env = ProcessInfo.processInfo.environment
-    let backend =
+    let backend = developmentSource ? root.appendingPathComponent("src").path :
       FileManager.default.fileExists(atPath: runtime.appendingPathComponent("backend").path)
       ? runtime.appendingPathComponent("backend").path : root.appendingPathComponent("src").path
     let extras = workingDirectory.appendingPathComponent("python-extras")
@@ -151,6 +152,7 @@ final class EngineFrames {
     env["PYTHONPATH"] = backend
     env["SUPERQODE_STATE_DIR"] = state
     env["SUPERQODE_APP"] = "1"
+    if developmentSource { env["SUPERQODE_SKIP_CLI_PUBLISH"] = "1" }
     if let executable = Bundle.main.executableURL {
       env["SUPERQODE_APPLE_HELPER"] = executable.deletingLastPathComponent().appendingPathComponent("SuperQodeAppleModel").path
     }

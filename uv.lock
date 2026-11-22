@@ -3524,11 +3524,11 @@ wheels = [
 
 [[package]]
 name = "gepa"
-version = "0.1.1"
+version = "0.1.4"
 source = { registry = "https://pypi.org/simple" }
-sdist = { url = "https://files.pythonhosted.org/packages/e4/62/10f5a8f24c075e3b64f952be73ba8e15f0055584bbcdf9ce48d754a36679/gepa-0.1.1.tar.gz", hash = "sha256:643fda01c23de4c9f01306e01305dd69facc29bcb34ad59e4cd07e6621d34aa1", size = 272251, upload-time = "2026-03-16T10:17:53.131Z" }
+sdist = { url = "https://files.pythonhosted.org/packages/95/56/925779e5690971f1b022f7d107caf015c33ec09560261273ec137e23a8f2/gepa-0.1.4.tar.gz", hash = "sha256:6dd153a676ae5481764860d19286a9c0e8ddb5ef70d7f13044faf24978bdb6b8", size = 351343, upload-time = "2026-07-15T14:53:59.929Z" }
 wheels = [
-    { url = "https://files.pythonhosted.org/packages/dc/b7/8c72dedbb950d88a6f64588fcbc590d2a21e2b9f19b36aa6c5016c54ec75/gepa-0.1.1-py3-none-any.whl", hash = "sha256:71ead7c591eafcc727b83509cdc4182f20264800a6ddf8520d61419daeb47466", size = 244246, upload-time = "2026-03-16T10:17:51.922Z" },
+    { url = "https://files.pythonhosted.org/packages/fd/77/5b3a281cfd9caaa9e68349b434cf27f1ca448003ee0067a1ae2184dc52d1/gepa-0.1.4-py3-none-any.whl", hash = "sha256:12b971039599625c156d2231f6d72a29c31a22e9c237689459b5f1a3c353f532", size = 290167, upload-time = "2026-07-15T14:53:58.422Z" },
 ]
 
 [[package]]
@@ -31718,6 +31718,15 @@ wheels = [
 ]
 
 [[package]]
+name = "superagentic-metaharness"
+version = "0.7.0"
+source = { registry = "https://pypi.org/simple" }
+sdist = { url = "https://files.pythonhosted.org/packages/64/2c/66d811fe6c93427ebbd4c395d1418ec9928cd4cc4d697e1b835c49e0bbbf/superagentic_metaharness-0.7.0.tar.gz", hash = "sha256:08ead181df54e6c1f838404e19de00e2116d0cfef4d1972a596550d7ab2da780", size = 85314, upload-time = "2026-09-02T09:09:50.4Z" }
+wheels = [
+    { url = "https://files.pythonhosted.org/packages/b3/02/26a64f38f86ff07116fcdd2da79ed31b9b430d9bcca95ce8a3afef94799a/superagentic_metaharness-0.7.0-py3-none-any.whl", hash = "sha256:714a8ad1b065f8ca5ec0df333daf4a1494e913cd10d401e7bbe5c2b827a51c17", size = 79279, upload-time = "2026-09-02T09:09:49.252Z" },
+]
+
+[[package]]
 name = "supermemory"
 version = "3.45.0"
 source = { registry = "https://pypi.org/simple" }
@@ -31757,6 +31766,7 @@ dependencies = [
     { name = "certifi" },
     { name = "click" },
     { name = "coloraide" },
+    { name = "cryptography" },
     { name = "dnspython" },
     { name = "fastmcp" },
     { name = "fsspec" },
@@ -31870,6 +31880,7 @@ openai-agents = [
 ]
 optimization = [
     { name = "gepa" },
+    { name = "superagentic-metaharness" },
 ]
 performance = [
     { name = "locust" },
@@ -31958,6 +31969,7 @@ requires-dist = [
     { name = "coloraide", specifier = ">=8.13" },
     { name = "coverage", marker = "extra == 'dev'", specifier = ">=7.0.0" },
     { name = "coverage", marker = "extra == 'testing'", specifier = ">=7.0.0" },
+    { name = "cryptography", specifier = ">=50.0.2,<51" },
     { name = "daytona", marker = "extra == 'sandbox-cloud'", specifier = ">=0.1.0" },
     { name = "daytona", marker = "extra == 'sandbox-daytona'", specifier = ">=0.1.0" },
     { name = "deepagents", marker = "extra == 'deepagents'", specifier = ">=0.7.0,<0.8.0" },
@@ -31971,7 +31983,7 @@ requires-dist = [
     { name = "fastmcp", specifier = "==3.4.10" },
     { name = "flake8", marker = "extra == 'linters'", specifier = ">=7.1.0" },
     { name = "fsspec", specifier = ">=2026.6.0" },
-    { name = "gepa", marker = "extra == 'optimization'", specifier = ">=0.1.1" },
+    { name = "gepa", marker = "extra == 'optimization'", specifier = "==0.1.4" },
     { name = "github-copilot-sdk", marker = "extra == 'copilot-sdk'", specifier = ">=1.0.8,<2.0.0" },
     { name = "github-copilot-sdk", marker = "extra == 'vendor-sdks'", specifier = ">=1.0.8,<2.0.0" },
     { name = "google-adk", marker = "extra == 'adk'", specifier = ">=2.1.0,<3.0" },
@@ -32036,6 +32048,7 @@ requires-dist = [
     { name = "selenium", marker = "extra == 'ui-testing'", specifier = ">=4.27.0" },
     { name = "sentence-transformers", extras = ["image"], marker = "extra == 'semantic-local'", specifier = ">=6.1.0,<7" },
     { name = "starlette", specifier = ">=0.41.0" },
+    { name = "superagentic-metaharness", marker = "extra == 'optimization'", specifier = "==0.7.0" },
     { name = "supermemory", marker = "extra == 'memory-providers'", specifier = ">=3.45.0,<4.0.0" },
     { name = "supermemory", marker = "extra == 'supermemory'", specifier = ">=3.45.0,<4.0.0" },
     { name = "superopt", specifier = ">=0.1.1" },

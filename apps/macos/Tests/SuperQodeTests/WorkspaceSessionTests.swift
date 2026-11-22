@@ -965,10 +965,10 @@ final class WorkspaceSessionTests: XCTestCase {
   }
 
   @MainActor private func completeProjectOpen(_ app: Workspace, engine: Engine,
-    projectID: String, path: String, startup: Bool = false) async throws {
+    projectID: String, path: String, startup: Bool = false, landing: Workspace.ProjectLanding = .agentSpace) async throws {
     let opening = Task {
       if startup { try await app.openStartupProject(arguments: ["SuperQode", "--project", path]) }
-      else { try await app.open(path, landing: .agentSpace) }
+      else { try await app.open(path, landing: landing) }
     }
     await reply(engine, id: 1, result: ["id": projectID, "path": path])
     await reply(engine, id: 2, result: [["id": projectID, "path": path]])
@@ -996,6 +996,15 @@ final class WorkspaceSessionTests: XCTestCase {
     XCTAssertEqual(app.section, "Workspace")
     XCTAssertEqual(app.draft, "Unsent work")
     XCTAssertFalse(try XCTUnwrap(app.recoverySnapshot.lastDestination).showWelcome)
+  }
+  @MainActor func testOpeningAFactoryProjectKeepsFactoryContextAndConversationDrafts() async throws {
+    let pipe = Pipe(); let engine = Engine(requestTimeout: .seconds(2), input: pipe.fileHandleForWriting)
+    defer { engine.stop() }
+    let app = workspace(engine: engine)
+    app.section = "Factory Studio"; app.draft = "Keep this unsent conversation"
+    try await completeProjectOpen(app, engine: engine, projectID: "project", path: "/tmp/project", landing: .factory)
+    XCTAssertEqual(app.section, "Factory Studio"); XCTAssertEqual(app.draft, "Keep this unsent conversation")
+    XCTAssertFalse(app.showWelcome); XCTAssertFalse(app.openingProject)
   }
 
   @MainActor func testOpeningRecentProjectWithSavedLocalAIEntersAgentSpace() async throws {

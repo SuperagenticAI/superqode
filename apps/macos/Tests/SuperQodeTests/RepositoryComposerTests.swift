@@ -255,7 +255,7 @@ final class RepositoryComposerTests: XCTestCase {
   }
 
   @MainActor func testCreatorStaysInTheCatalogAndPermissionIsNotRecoveryState() throws {
-    XCTAssertEqual(Sections.names.last, "Recursive agents")
+    XCTAssertTrue(Sections.names.contains("Recursive agents"))
     XCTAssertTrue(Sections.names.contains("Local harnesses"))
     XCTAssertEqual(WorkspaceNavigationGroup.containing("Recursive agents").id, "recursive")
     XCTAssertFalse(WorkspaceNavigationGroup.usesCodingWorkspace("Recursive agents"))

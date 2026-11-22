@@ -130,6 +130,13 @@ class WorkOrderWorker:
         self._state_status = "starting"
 
     async def run(self, *, stop: asyncio.Event | None = None) -> WorkOrderWorkerStats:
+        """Keep offline maintenance outside the complete worker lifetime."""
+        from superqode.factory.maintenance import store_transaction
+
+        with store_transaction(self.store.path):
+            return await self._run_owned(stop=stop)
+
+    async def _run_owned(self, *, stop: asyncio.Event | None = None) -> WorkOrderWorkerStats:
         """Run until stopped, or until the queue is drained in ``once`` mode."""
         stop = stop or asyncio.Event()
         self._lock = _acquire_worker_lock(self.store, self.config.worker_id)

@@ -390,3 +390,129 @@ It needs a Developer ID Application certificate in Keychain and a notary profile
 The release build includes the [Swift MLX helper](SwiftMLX/README.md). Building it needs the macOS 27 SDK and the Xcode Metal Toolchain component. Set `SUPERQODE_INCLUDE_SWIFT_MLX=1` to include it in a development app build. On Apple Silicon with macOS 27 or later, open **Local AI → Advanced → Swift MLX** to use a cached Qwen3 model or review a starter download.
 
 For development, `swift build --package-path apps/macos` builds the executable. The packaging script selects full Xcode when available and places compiler caches inside `.build`. `CONFIGURATION=debug apps/macos/scripts/build-app.sh` packages a debug build. Open `Package.swift` in Xcode to work on the native sources.
+
+
+### Factory Studio
+
+**Factory Studio** in the Harnesses navigation group edits the same seven-layer
+FactorySpec used by `sq factory`. It provides two starters, explicit AI-assisted
+proposals, workflow preview, validation, definition diffs, revision history,
+pinned trials, stage gates and protected verification evidence. Model execution
+uses the existing desktop job engine; generation and execution require explicit
+actions. Draft edits never change an existing trial.
+
+The primary flow is **Build → Run & verify → Improve → Manage**. Each area shows
+only its relevant pages. Build has a matching-evidence setup checklist; trial
+preparation is under Run & verify. Factory Studio hides the conversation sidebar
+and conversation tabs, with a project menu in the header that keeps Factory
+context when switching repositories. Unapplied configuration fields are
+preserved and must be applied/discarded before saving or preparing a new trial.
+Architecture, signing and operational details use disclosures instead of
+competing with the first creation path. See [the developer flow](../../examples/factory/DEVELOPER-FLOW.md).
+
+Before preparing a deliverable trial, add protected evaluator probes and a pinned
+release authority. The app can explicitly enroll a Secure Enclave P-256 key,
+protected by user presence, and add its public key to the draft. Review and save
+that policy. After verification, inspect the exact candidate diff, authenticate a
+short-lived signature and explicitly apply the approved patch to the working tree.
+Commit, push and deployment remain separate actions. The Python engine verifies
+the signature; the signing UI follows Apple's
+[Secure Enclave key protection](https://developer.apple.com/documentation/security/protecting-keys-with-the-secure-enclave).
+No key is enrolled or accessed just by opening Studio.
+
+See [Factory commands](../../docs/cli-reference/factory-commands.md) for policy,
+probe format, release protocol and current execution limits. For source development,
+`SUPERQODE_SOURCE_ROOT` explicitly selects that checkout's `.venv` and `src` rather
+than a bundled runtime; packaged apps continue to use their bundled engine.
+
+
+Factory Studio's **Manage → Source control** page reviews and commits the saved definition
+and declared components, including supported ignored `.superqode` source files.
+It runs a local commit as an existing engine job, with a separate Git index so
+unrelated staged work is preserved. Runtime stores, session history, generated
+snapshots and credentials remain excluded. Review and commit sources before
+preparing a trial; existing trials keep their original HEAD baseline. Commit
+signing and hooks use the user's Git configuration. Nothing is pushed or deployed.
+See the [Factory source-control contract](../../examples/factory/README.md#version-sources-from-the-native-app).
+
+
+### Factory Trial Suites
+
+**Factory Studio → Run & verify → Trial suites** now provides reusable paired workflow replay
+and a comparison scorecard. Prepare isolated projects from committed application
+inputs, run the existing workers and protected verifier, review each gate's patch
+and evidence, and continue explicitly. Known failures have bounded operator
+retries; uncertain outcomes still require reconciliation. History preserves
+verified outcomes, usage, failures and operator decisions. No suite action signs
+or applies a candidate. See [Trial Suites](../../examples/factory/README.md#reusable-trial-suites)
+for the schema, pinned inputs, aggregate budgets and current fixture limits.
+
+Inside **Trial suites → Failures & proposals**, scan recorded failures, review
+their tentative classification and create a bounded stage-goal or model-binding
+experiment. Repeated scans deduplicate evidence and identify reused outcomes.
+Load the proposal into the suite editor, run explicitly, then link only matching
+paired results. Scanning and proposal creation make no model calls. Links retain
+ties, regressions and holds and grant no adoption or release authority. See
+[failure triage](../../examples/factory/README.md#failure-inbox-and-reviewed-experiments).
+
+### Guarded Factory improvement
+
+**Factory Studio → Build → Workflow** previews explicit input/output contracts,
+conditional stages and bounded implementation/review loops. Export a goal-only
+experiment for an entry, dependent or reviewer stage into Trial Suites, then
+prepare and run it explicitly. The scorecard exposes validated handoffs,
+candidate bindings and durable skipped-stage receipts. See
+[workflow composition](../../examples/factory/WORKFLOW-COMPOSITION.md) for the
+supported schema and limits.
+
+**Factory Studio → Improve** pins a saved Factory, selected harness, graded suite
+and disposable fixture. Choose harness instructions, an explicitly bound skill,
+a primary model route, or an ungated workflow entry-stage goal.
+Create a project skill and binding from **Create skill & bind to draft**, then
+review and save the draft before using it. Bound Markdown bodies are appended
+to harness system instructions; they grant no tools or scripts.
+Edit or import a proposal, or explicitly run native evaluator–optimizer, GEPA,
+MetaHarness or Omni portfolio search on held-in examples. Choose the engine before preparation and inspect
+shared request accounting from **Improve → Evidence → Refresh usage**.
+The adapters permit harness instruction/role/description edits, skill body
+edits with frontmatter fixed, a model from explicitly pinned choices, or one
+entry-stage goal. Tools, context paths, permissions, graph, gates, criteria and
+release policy stay fixed. Evidence-only stages must preserve the copied fixture.
+Route receipts bind each variant's actual model; stage receipts bind its native
+WorkOrder prompt. A separate held-out comparison must show a
+strictly better pass rate with no regressions and complete required budget evidence.
+
+Comparison history survives reopening. An exact completed engine job and matching
+receipt are required before adopting a proposal into the draft. Save, commit and
+new-trial preparation remain explicit. A process-group watchdog enforces the
+selected wall-time ceiling. Unknown usage holds required-budget decisions.
+No optional optimizer is installed automatically. Reflection, search scoring and
+the final comparison now share token/USD/tool accounting and one wall deadline.
+Uncertain usage stops admission and adoption; in-flight overruns remain visible.
+See [shared optimiser metering](../../examples/factory/OPTIMIZER-METERING.md).
+See [Factory improvement contracts](../../examples/factory/README.md#export-and-optimizer-contracts)
+for scope and evidence limits. This is selected-harness output evaluation, not
+whole-Factory certification; copied fixtures are not an OS sandbox.
+
+### Factory operations
+
+**Factory Studio → Manage → Operations** checks the current host, runs protected synthetic
+isolation probes, prepares disabled launchd/systemd worker packages, and creates
+verified Factory source recovery/evidence archives. Restore writes into a new
+folder and keeps historical evidence inert. Retention previews and explicitly
+deletes only generated archives, with an unchanged inventory required.
+
+Starting a generated worker requires an operator action, passing actual-host
+probes and the pinned engine, Factory and application commit. It prepares fresh
+target-local work from the selected goal, preserves gates and never imports a
+source-machine queue. No service is installed or activated by Studio. Actual
+Linux workers require actual Linux validation. The separate encrypted runtime
+checkpoint restores supported instances to their absent original path, with
+execution disarmed until host checks and reconciliation. **Runtime recovery &
+retirement** also reviews cancellation of pending work while retaining evidence. See
+[the operations runbook](../../examples/factory/CUSTOMER-OPERATIONS.md).
+
+Factory tabs retain unsaved forms and the source editor when switching pages.
+Completed background actions leave a newer tab choice in place; their recorded
+results remain available to open explicitly. Hidden editors cannot take keyboard
+focus.

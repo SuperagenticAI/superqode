@@ -1,0 +1,140 @@
+apiVersion: superqode.dev/v1alpha1
+kind: Factory
+metadata:
+  name: composed-workflow
+  description: Explicit handoffs, conditional diagnostics and a finite implement/review
+    loop.
+default_route: no-subscription
+routes:
+  no-subscription:
+    allow_cloud: false
+    allow_subscription_runtimes: false
+    prefer:
+    - ollama/qwen3-coder
+data_context:
+  repository: .
+  files: {}
+compute:
+  runner: worktree
+inference:
+  harnesses:
+    coder:
+      template: core
+      model: ollama/qwen3-coder
+improvement:
+  checks:
+    regression:
+      command: python -m pytest -q
+      files: []
+  optimization:
+    automatic_experiments: false
+    editable:
+    - skills
+    - harnesses
+    - routes
+    - workflow
+    protected:
+    - governance
+    - improvement.checks
+    - orchestration.acceptance_checks
+orchestration:
+  stages:
+  - id: investigate
+    goal: Reproduce the reported problem and identify a bounded fix. Emit SUPERQODE_OUTPUT
+      with analysis containing needs-fix (boolean) and summary (string).
+    role: investigator
+    harness: coder
+    outputs:
+      analysis:
+        type: json
+        fields:
+          needs-fix:
+            type: boolean
+          summary:
+            type: string
+  - id: diagnostic
+    role: tester
+    harness: coder
+    goal: Inspect why no fix was identified. Report evidence without writing files.
+    depends_on:
+    - investigate
+    human_gate: true
+    inputs:
+      analysis:
+        stage: investigate
+        output: analysis
+    when:
+      input: analysis
+      field: needs-fix
+      equals: false
+  - id: implement
+    goal: Implement the smallest useful fix and its regression test. Address revision-feedback
+      when supplied. Emit SUPERQODE_OUTPUT with patch containing a factual change
+      summary.
+    role: implementer
+    harness: coder
+    depends_on:
+    - investigate
+    - diagnostic
+    checks:
+    - regression
+    inputs:
+      analysis:
+        stage: investigate
+        output: analysis
+    outputs:
+      patch:
+        type: text
+  - id: review
+    role: reviewer
+    harness: coder
+    depends_on:
+    - implement
+    goal: Review the exact candidate. Emit one typed decision output and the identical
+      final SUPERQODE_REVIEW verdict, summary and issues. Approve only when the requested
+      behavior is correct; otherwise request changes with concrete issues.
+    inputs:
+      candidate:
+        stage: implement
+        output: patch
+        candidate_bound: true
+    outputs:
+      decision:
+        type: review
+  - id: verify
+    goal: Exercise the original failure and nearby behavior; report evidence and limitations.
+    role: tester
+    harness: coder
+    depends_on:
+    - review
+    human_gate: true
+    checks:
+    - regression
+    inputs:
+      review:
+        stage: review
+        output: decision
+        candidate_bound: true
+  acceptance_checks:
+  - regression
+  revision_loop:
+    implement: implement
+    review: review
+    max_iterations: 3
+access:
+  interfaces:
+  - cli
+  - tui
+  - macos
+  - api
+governance:
+  permissions:
+    allow_read: true
+    allow_write: true
+    allow_shell: true
+    allow_network: false
+  budget:
+    max_workers: 1
+    max_seconds: 1800
+    max_tool_calls: 100
+  release: human

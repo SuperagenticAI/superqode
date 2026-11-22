@@ -26,6 +26,7 @@ classifiers = [
 dependencies = [
     "pyyaml>=6.0.3",
     "click>=8.0.0",
+    "cryptography>=50.0.2,<51",
     "litellm>=1.83.14,<1.92",
     "agent-client-protocol>=0.10.0,<0.12",
     "prompt_toolkit>=3.0.52",
@@ -201,7 +202,8 @@ docs = [
     "mkdocs-minify-plugin>=0.8.0",
 ]
 optimization = [
-    "gepa>=0.1.1",
+    "gepa==0.1.4",
+    "superagentic-metaharness==0.7.0",
 ]
 observability = [
     "arize-phoenix>=17.7.0",

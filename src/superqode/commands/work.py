@@ -916,6 +916,8 @@ def work_check(
         order = store.get(work_order_id)
         if not order.acceptance_tests:
             raise ValueError("WorkOrder has no acceptance tests")
+        if "factory" in order.metadata:
+            raise ValueError("Use sq factory verify --execute for protected factory acceptance")
         check_directory = _acceptance_directory(order)
         results = [
             _run_acceptance_command(command, cwd=check_directory, timeout=timeout)

@@ -206,6 +206,8 @@ def publish_cli(root: Path, *, home: Path | None = None) -> None:
     A command that is already a real file is left alone. Failures are ignored
     so opening the app never depends on writing shell configuration.
     """
+    if os.environ.get("SUPERQODE_SKIP_CLI_PUBLISH") == "1":
+        return
     try:
         _publish_cli(root, home or Path.home())
     except OSError:

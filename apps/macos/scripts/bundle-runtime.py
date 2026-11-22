@@ -142,7 +142,7 @@ def main():
         [
             str(executable),
             "-c",
-            "from gepa.optimize_anything import OptimizeAnythingConfig, optimize_best_of;print('Omni API verified')",
+            "from gepa.optimize_anything import OptimizeAnythingConfig, optimize_best_of;from metaharness import optimize_harness;print('Optimizer APIs verified')",
         ],
         check=True,
     )

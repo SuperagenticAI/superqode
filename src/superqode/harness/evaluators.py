@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import json
+import re
 from typing import Any, Literal
 
 from pydantic import BaseModel, ConfigDict
@@ -25,6 +26,7 @@ def validate_evaluator(task: dict[str, Any]) -> None:
     kind = config.get("type")
     if kind not in {
         "decision",
+        "review",
         "contains",
         "non_empty",
         "jev_rubric",
@@ -36,6 +38,32 @@ def validate_evaluator(task: dict[str, Any]) -> None:
         from .repository_grader import validate
 
         validate(config)
+    if kind == "review":
+        if config.get("expected_verdict") not in {"approved", "changes_requested"}:
+            raise ValueError("review evaluator requires an explicit expected_verdict")
+        issues = config.get("issue_contains", [])
+        if (
+            set(config)
+            - {"type", "expected_verdict", "issue_contains", "output_names", "max_bytes"}
+            or not isinstance(issues, list)
+            or len(issues) > 8
+            or any(not isinstance(v, str) or not v.strip() or len(v) > 1000 for v in issues)
+        ):
+            raise ValueError("Invalid bounded review evaluator criteria")
+        names = config.get("output_names", [])
+        if (
+            not isinstance(names, list)
+            or len(names) > 16
+            or any(
+                not isinstance(n, str) or re.fullmatch(r"[a-z][a-z0-9-]{0,63}", n) is None
+                for n in names
+            )
+            or len(set(names)) != len(names)
+        ):
+            raise ValueError("Invalid named review outputs")
+        maximum = config.get("max_bytes", 16000)
+        if type(maximum) is not int or not 1 <= maximum <= 16000:
+            raise ValueError("Invalid review output byte limit")
     if kind == "decision" and not (isinstance(config.get("expected"), dict) and config["expected"]):
         raise ValueError("decision evaluator requires non-empty expected outputs")
     if kind in {"jev_rubric", "systemone_rubric"} and not str(config.get("rubric") or "").strip():
@@ -48,6 +76,39 @@ async def evaluate_content(content: str, task: dict[str, Any], *, spec=None) -> 
     validate_evaluator(task)
     config = task.get("evaluator") or {}
     kind = config.get("type") or ("contains" if task.get("expect_contains") else "non_empty")
+    if kind == "review":
+        from superqode.factory.contracts import check_value, parse_json
+
+        try:
+            lines = re.findall(r"^SUPERQODE_REVIEW:\s*(\{[^\n]*\})\s*$", content, re.MULTILINE)
+            if len(lines) != 1:
+                raise ValueError("Require exactly one typed review verdict")
+            review = parse_json(lines[0])
+            check_value({"type": "review", "max_bytes": config.get("max_bytes", 16000)}, review)
+            outputs = re.findall(r"^SUPERQODE_OUTPUT:\s*(\{[^\n]*\})\s*$", content, re.MULTILINE)
+            if config.get("output_names") or outputs:
+                named = parse_json(outputs[0]) if len(outputs) == 1 else None
+                if (
+                    not isinstance(named, dict)
+                    or not named
+                    or any(v != review for v in named.values())
+                    or (config.get("output_names") and set(named) != set(config["output_names"]))
+                ):
+                    raise ValueError("Missing or contradictory named review outputs")
+        except (ValueError, TypeError, AttributeError):
+            return EvaluationResult(
+                evaluator=kind, status="error", reason="Malformed or contradictory typed review"
+            )
+        issues = "\n".join(review["issues"])
+        passed = review["verdict"] == config["expected_verdict"] and all(
+            v in issues for v in config.get("issue_contains", [])
+        )
+        return EvaluationResult(
+            evaluator=kind,
+            status="passed" if passed else "failed",
+            reason="Matched labelled review" if passed else "Review differs from labelled criteria",
+            evidence={"review": review},
+        )
     if kind == "repository":
         return EvaluationResult(
             evaluator=kind,

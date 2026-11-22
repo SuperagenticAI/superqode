@@ -175,6 +175,16 @@ class SoftwareFactory:
         loaded = yaml.safe_load(self.policy_path.read_text(encoding="utf-8")) or {}
         if not isinstance(loaded, dict):
             return default_policy()
+        if "apiVersion" in loaded or "kind" in loaded:
+            from superqode.factory.definition import load_factory
+
+            root = self.policy_path.absolute().parent
+            definition = load_factory(self.policy_path.name, root=root)
+            loaded = {
+                key: definition.data[key]
+                for key in ("default_route", "routes")
+                if key in definition.data
+            }
         policy = default_policy()
         policy.update(loaded)
         routes = dict(policy.get("routes") or {})
