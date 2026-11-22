@@ -16,7 +16,7 @@ struct FactoryOperationsView: View {
   @State private var confirmation = ""
   @State private var keep = 2
   @State private var days = 30
-  @State private var recoveryExpanded = true
+  @State private var recoveryExpanded = ProcessInfo.processInfo.arguments.contains("--factory-guided-inspect") || ProcessInfo.processInfo.arguments.contains("--factory-navigation-inspect")
   @State private var recoveryDigest = ""
   private var idle: Bool { !library.busy && !studio.busy && !studio.acceptance.busy && !app.anyActive && !app.busy }
   private var package: [String: Any] { library.packages.first { string($0, "id") == selectedPackage } ?? [:] }
@@ -24,8 +24,7 @@ struct FactoryOperationsView: View {
   var body: some View {
     ScrollView {
       VStack(alignment: .leading, spacing: 14) {
-        Text("Customer operations").font(.title2.bold())
-        Text("Check this host, prepare a worker service, export selected evidence, or capture an encrypted offline runtime checkpoint. OS credentials and external dependencies require separate recovery.").foregroundStyle(.secondary)
+        Text("Check your worker host or choose a maintenance task.").foregroundStyle(.secondary)
         HStack {
           Button("Refresh") { Task { await library.refresh(app.engine) } }.disabled(!idle)
           Button("Run isolation checks…") { confirmation = "check" }.disabled(!idle)
@@ -36,7 +35,7 @@ struct FactoryOperationsView: View {
         DisclosureGroup("Host readiness") { CodeBlock(text: pretty(library.readiness)) }
         FactoryIntakeReceiptView(studio: studio, library: studio.acceptance, active: active)
         Divider()
-        DisclosureGroup("Backup & evidence handover", isExpanded: $recoveryExpanded) {
+        DisclosureGroup("Evidence & source recovery", isExpanded: $recoveryExpanded) {
         VStack(alignment: .leading, spacing: 12) {
         Picker("Include run", selection: $selectedRun) {
           Text("Factory sources only").tag("")
@@ -82,6 +81,10 @@ struct FactoryOperationsView: View {
         DisclosureGroup("Deployment (advanced)") {
         VStack(alignment: .leading, spacing: 12) {
         Text("Generates a disabled one-shot service from the selected run's goal. Restore the application checkout and Factory sources separately. Starting the service prepares fresh target-local work after protected probes pass; it never imports an old queue. Linux has not been validated by this Mac.").font(.caption).foregroundStyle(.secondary)
+        Picker("Source trial", selection: $selectedRun) {
+          Text("Choose a trial").tag("")
+          ForEach(studio.runs.map { string($0, "id") }, id: \.self) { Text($0).tag($0) }
+        }
         Picker("Target OS", selection: $targetPlatform) { Text("macOS launchd").tag("Darwin"); Text("Linux systemd").tag("Linux") }
         TextField("Absolute project path on target", text: $targetProject).textFieldStyle(.roundedBorder)
         TextField("Absolute Python executable on target", text: $python).textFieldStyle(.roundedBorder)

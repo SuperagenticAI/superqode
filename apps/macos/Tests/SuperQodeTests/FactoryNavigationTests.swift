@@ -3,12 +3,14 @@ import XCTest
 @testable import SuperQode
 
 final class FactoryNavigationTests: XCTestCase {
-  @MainActor func testFourPrimaryAreasCoverEveryPageWithoutDuplicatingThem() {
-    XCTAssertEqual(FactoryNavigation.groups.map(\.id), ["build", "run", "improve", "manage"])
+  @MainActor func testFiveSidebarSectionsKeepAllToolsDiscoverableWithoutDuplicatingPages() {
+    XCTAssertEqual(FactoryNavigation.groups.map(\.id), ["build", "run", "improve", "export", "manage"])
     let destinations = FactoryNavigation.groups.flatMap(\.destinations)
     XCTAssertEqual(Set(destinations), Set(FactoryNavigation.tabs.map(\.id)))
     XCTAssertEqual(Set(destinations).count, destinations.count)
-    XCTAssertTrue(FactoryNavigation.groups.allSatisfy { $0.destinations.count <= 3 })
+    XCTAssertTrue(FactoryNavigation.buildPages.contains("Configuration"))
+    XCTAssertTrue(FactoryNavigation.buildPages.contains("Acceptance"))
+    XCTAssertTrue(destinations.contains("ImproveEvidence")); XCTAssertTrue(destinations.contains("Export"))
   }
   @MainActor func testAreaSwitchReturnsToItsLastPageWithinTheSameProject() {
     let navigation = FactoryNavigation(); navigation.enter("first"); navigation.setActive(true)

@@ -260,7 +260,7 @@ struct RootView: View {
     .animation(
       reduceMotion || !animatedInterface ? nil : .easeInOut(duration: 0.18), value: app.showWelcome
     )
-    .background { BrandBackdrop() }.tint(.qAccent).frame(minWidth: 1120, minHeight: 740)
+    .background { BrandBackdrop() }.tint(.qAccent).frame(minWidth: app.section == "Factory Studio" ? 1024 : 1120, minHeight: 740)
     .background { CommandPaletteWindowReader(app: app).frame(width: 0, height: 0) }
     // Window-level key monitor. Zero-sized so it never takes part in the
     // workspace layout; its own guards keep it inactive outside the workspace.
@@ -304,8 +304,10 @@ struct RootView: View {
   }
   private var workspaceShell: some View {
     HStack(spacing: 0) {
-      WorkspaceNavigationRail()
-      Divider()
+      if app.section != "Factory Studio" {
+        WorkspaceNavigationRail()
+        Divider()
+      }
       if !app.threadsSidebarCollapsed && app.section != "Factory Studio" {
         SidebarView().frame(width: CGFloat(min(max(sidebarWidth, 200), 440))).background(Color.qPanel)
           .disabled(app.openingProject || app.restoringNavigation)

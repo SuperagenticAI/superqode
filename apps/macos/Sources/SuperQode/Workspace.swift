@@ -265,7 +265,7 @@ private func jobStamp(_ row: [String: Any]) -> Double {
 
   init(recoveryStore: WorkspaceRecoveryStore? = nil, preferences: UserDefaults = .standard, engine: Engine? = nil) {
     let smokeRecovery = ProcessInfo.processInfo.environment["SUPERQODE_SMOKE_RECOVERY_DIRECTORY"].map { URL(fileURLWithPath: $0) }
-    let store = recoveryStore ?? ((ProcessInfo.processInfo.arguments.contains("--smoke-test") || ProcessInfo.processInfo.arguments.contains("--factory-smoke-test") || ProcessInfo.processInfo.arguments.contains("--factory-demo-inspect") || ProcessInfo.processInfo.arguments.contains("--factory-suite-inspect") || ProcessInfo.processInfo.arguments.contains("--factory-feedback-inspect") || ProcessInfo.processInfo.arguments.contains("--factory-optimization-inspect") || ProcessInfo.processInfo.arguments.contains("--factory-operations-inspect") || ProcessInfo.processInfo.arguments.contains("--factory-navigation-inspect") || ProcessInfo.processInfo.arguments.contains("--factory-guided-inspect") || ProcessInfo.processInfo.arguments.contains("--factory-acceptance-inspect"))
+    let store = recoveryStore ?? ((ProcessInfo.processInfo.arguments.contains("--smoke-test") || ProcessInfo.processInfo.arguments.contains("--factory-smoke-test") || ProcessInfo.processInfo.arguments.contains("--factory-demo-inspect") || ProcessInfo.processInfo.arguments.contains("--factory-suite-inspect") || ProcessInfo.processInfo.arguments.contains("--factory-feedback-inspect") || ProcessInfo.processInfo.arguments.contains("--factory-optimization-inspect") || ProcessInfo.processInfo.arguments.contains("--factory-operations-inspect") || ProcessInfo.processInfo.arguments.contains("--factory-navigation-inspect") || ProcessInfo.processInfo.arguments.contains("--factory-guided-inspect") || ProcessInfo.processInfo.arguments.contains("--factory-acceptance-inspect") || ProcessInfo.processInfo.arguments.contains("--factory-export-inspect"))
       ? WorkspaceRecoveryStore(directory: smokeRecovery) : .applicationStore())
     self.recoveryStore = store
     self.preferences = preferences
@@ -913,6 +913,7 @@ private func jobStamp(_ row: [String: Any]) -> Double {
       else if args.contains("--factory-demo-inspect") { await inspectFactoryDemo() }
       else if args.contains("--factory-suite-inspect") { await inspectFactorySuite() }
       else if args.contains("--factory-feedback-inspect") { await inspectFactoryFeedback() }
+      else if args.contains("--factory-export-inspect") { await inspectFactoryExport() }
       else if args.contains("--factory-acceptance-inspect") { await inspectFactoryAcceptance() }
       else if args.contains("--factory-navigation-inspect") || args.contains("--factory-guided-inspect") { await inspectFactoryNavigation() }
       else if args.contains("--factory-operations-inspect") { await inspectFactoryOperations() }

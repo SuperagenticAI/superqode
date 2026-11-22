@@ -31,7 +31,7 @@ struct FactoryImprovementView: View {
   @State private var selectedPlan = ""
   @State private var confirmation = ""
   @State private var tabGeneration = UUID()
-  @State private var tab = ProcessInfo.processInfo.arguments.contains("--factory-optimization-inspect") || ProcessInfo.processInfo.arguments.contains("--factory-acceptance-inspect") ? "Evidence" : "Inputs"
+  private var tab: String { library.navigation.selection == "ImproveCandidate" ? "Candidate" : library.navigation.selection == "ImproveEvidence" ? "Evidence" : "Inputs" }
   private var planID: String { string(library.improvementPlan, "id") }
   private var idle: Bool { !library.busy && !library.acceptance.busy && !app.anyActive && !app.busy }
   private var compared: Bool { library.improvementPreview["compared"] as? Bool == true || !library.improvementComparisonJob.isEmpty || library.improvementPlan["compared"] as? Bool == true }
@@ -72,9 +72,6 @@ struct FactoryImprovementView: View {
         }
           .disabled(!idle || selectedPlan.isEmpty)
       }
-      Picker("Improvement workspace", selection: $tab) {
-        Text("Inputs & suite").tag("Inputs"); Text("Candidate & diff").tag("Candidate"); Text("Comparison evidence").tag("Evidence")
-      }.pickerStyle(.segmented)
       DisclosureGroup("Optimisation methods & availability") {
         ForEach((capabilities["techniques"] as? [[String: Any]] ?? []).map { string($0, "id") }, id: \.self) { identity in
           let row = (capabilities["techniques"] as? [[String: Any]] ?? []).first { string($0, "id") == identity } ?? [:]
@@ -95,11 +92,17 @@ struct FactoryImprovementView: View {
         VStack(alignment: .leading, spacing: 7) {
           Text("Pinned experiment " + String(planID.prefix(20))).font(.caption.monospaced())
           FactoryActionRow {
+          if tab == "Inputs" {
           Button("Run metered search…") { confirmation = "search" }
             .disabled(!idle || compared || !engineAvailable(string(library.improvementPlan, "optimizer_engine", "gepa")) || string(library.improvementPlan, "reflection_model").isEmpty)
+          }
+          if tab == "Candidate" {
           Button("Compare held-out outputs…") { confirmation = "compare" }
             .disabled(!idle || compared || library.improvementCandidate.isEmpty)
+          }
+          if tab == "Evidence" {
           Button("Adopt into draft…") { confirmation = "adopt" }.buttonStyle(BrandButtonStyle()).disabled(!idle || !eligible)
+          }
           }
         }
       }
@@ -311,7 +314,6 @@ struct FactoryImprovementView: View {
         candidateText = string(library.improvementPlan, "baseline_yaml"); selectedPlan = planID
       case "search", "compare":
         await library.runImprovement(engine: app.engine, search: action == "search")
-        if app.section == "Factory Studio", library.navigation.isCurrent(ticket), tabGeneration == tabToken { tab = "Evidence" }
       case "adopt":
         if await library.adoptImprovement(engine: app.engine), app.section == "Factory Studio",
           library.navigation.isCurrent(ticket), tabGeneration == tabToken { onAdopt() }

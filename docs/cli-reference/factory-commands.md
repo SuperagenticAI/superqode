@@ -694,3 +694,16 @@ Factory commands record durable intent and lineage. The active session graph rec
 `factory.next_turn`, which runtime and picker flows can consume safely on the next turn.
 
 Continue with [WorkOrder Commands](work-commands.md) when work needs a durable task graph, worker leases, isolated delivery, checks, review, and a final merge decision.
+
+## Portable source export
+
+`superqode factory export` creates an editable source ZIP, resolved snapshot,
+checksum manifest and operating instructions. Use `--project PATH` and optionally
+`--digest SNAPSHOT_DIGEST` to require a previously reviewed definition. The command
+writes only the generated package under `.superqode/factory-operations/exports/`;
+it starts no agents, workers or services.
+
+The macOS app is optional for operation. The target still needs a reviewed
+SuperQode CLI runtime, the application checkout, provider access and protected
+host setup. Other platforms require explicit adapters and fresh validation.
+Runtime sessions, credential stores, history and release approvals are excluded.

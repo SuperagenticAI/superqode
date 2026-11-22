@@ -24,6 +24,20 @@ factory.add_command(evidence)
 factory.add_command(verifier)
 
 
+@factory.command("export")
+@click.option("--project", default=".", type=click.Path(file_okay=False))
+@click.option("--digest", default="", help="Require an already reviewed snapshot digest")
+def factory_export(project, digest):
+    """Export editable sources and a pinned snapshot; no desktop app required to run."""
+    from superqode.factory import portable
+
+    try:
+        expected = digest or portable.preview(project)["snapshot_digest"]
+        click.echo(json.dumps(portable.create(project, expected=expected), indent=2))
+    except (ValueError, OSError) as exc:
+        raise click.ClickException(str(exc)) from exc
+
+
 @factory.command("suite-prepare")
 @click.option("--project", default=".", type=click.Path(file_okay=False))
 @click.option("--suite", required=True, help="Project-relative suite YAML")

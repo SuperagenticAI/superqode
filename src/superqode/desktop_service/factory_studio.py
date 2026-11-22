@@ -82,6 +82,25 @@ def handle(service, method, params):
     root = service.project(params["project"])
     _ensure(service)
     target = _target(root)
+    if method.startswith("factory.export."):
+        from superqode.factory import portable
+
+        if method == "factory.export.preview":
+            return portable.preview(root)
+        if method != "factory.export.create":
+            raise ValueError("Unknown Factory export action")
+        if params.get("confirmed") is not True:
+            raise ValueError("Confirm exporting the reviewed Factory sources")
+        from .ownership import Lease, project_lease_path
+        from .ship import assert_idle
+
+        with service.lock:
+            assert_idle(service, params["project"])
+            lease = Lease(project_lease_path(service.root, root))
+            try:
+                return portable.create(root, expected=params["digest"])
+            finally:
+                lease.close()
     if method == "factory.evidence.trace":
         from superqode.factory.evidence import trace
 

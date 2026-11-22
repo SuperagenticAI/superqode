@@ -35,7 +35,7 @@ import Foundation
         }
         throw EngineError(message: "Native acceptance control unavailable: " + identifier)
       }
-      try await press("factory.group.build"); try await press("factory.tab.Workflow")
+      try await press("factory.group.build"); try await press("factory.tab.Acceptance")
       let library = studio.acceptance
       library.checksText = try String(contentsOf: root.appendingPathComponent(".superqode/native-acceptance-fixture.json"), encoding: .utf8)
       try await press("factory.verifier.prepare")
@@ -78,10 +78,9 @@ import Foundation
         throw EngineError(message: "Native receipt or unknown-cost evidence missing")
       }
       var captures: [String] = []
-      for (group, tab) in [("build", "Workflow"), ("run", "Runs"), ("improve", "Improve"), ("manage", "Operations")] {
+      for (group, tab) in [("build", "Acceptance"), ("run", "Runs"), ("improve", "ImproveEvidence"), ("manage", "Operations")] {
         studio.navigation.selectGroup(group); studio.navigation.select(tab)
         try await Task.sleep(for: .milliseconds(150))
-        if group == "build" { try await press("factory.workflow.acceptance") }
         if group == "run" { try await press("factory.run.coverage") }
         if group == "build" {
           func editor(_ view: NSView) -> NSView? {

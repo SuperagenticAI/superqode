@@ -1,53 +1,40 @@
-# Build a Factory in the macOS app
+# Build and operate a Factory in the macOS app
 
-Factory Studio has four primary areas. Only the pages for the selected area are
-shown; there is no nine-tab strip to work through.
+Factory Studio uses a dedicated sidebar. Every tool has a named page, and the
+main workspace shows one task at a time. Home returns to the rest of SuperQode.
 
-| Area | Pages | Use it for |
-| --- | --- | --- |
-| Build | Set up, Workflow, Definition & diff | Create and review the workflow |
-| Run & verify | Single trial, Trial suites | Execute bounded work and inspect evidence |
-| Improve | Inputs & suite, Candidate & diff, Comparison evidence | Measure one proposed change |
-| Manage | Source control, History, Operations | Commit sources and maintain the Factory |
+| Section | Pages |
+| --- | --- |
+| Build | Describe, Configuration, Workflow, Acceptance checks, Definition & diff |
+| Test | Single trial, Trial suites |
+| Improve | Set up experiment, Candidate & diff, Comparison evidence, Workflow experiment |
+| Export | Portable package |
+| Manage | Source control, History, Operations |
 
-Each area remembers its last page within the project. Previously visited forms
-stay mounted. Switching pages keeps unsaved inputs and the Factory source
-editor's caret. A delayed operation cannot replace a later navigation choice.
-The conversation tabs and thread sidebar are absent from Factory Studio; the
-header's project menu switches projects while keeping the Factory context.
+Advanced tools remain visible in the sidebar. Forms and source-editor drafts
+survive page changes. A background completion cannot replace a newer selection.
 
 ## First Factory
 
-1. Open **Build → Set up**. Select a starter and load it into a draft. Loading
-   and validation make no model calls.
-2. Validate the draft. The configuration fields show the declared or inherited
-   model. Edit the name, binding, model and budget, then **Apply controls to
-   draft**. Unapplied field edits block saving and new-trial preparation; discard
-   them explicitly if you want the current definition instead.
-3. Inspect **Workflow** for stages, handoffs, conditions and human gates. In
-   **Acceptance & verification**, map requirements to contributing stages and
-   final checks. Classify checks as build, startup, health, service, security or
-   tests. Apply these edits to the draft, then validate and save the revision.
-4. Validate again, enter a revision reason and save. **Manage → Source control**
-   reviews and commits the declared Factory sources. The setup checklist checks
-   matching saved and source-review evidence; visiting pages does not mark them
-   complete.
-5. In **Run & verify → Single trial**, enter a concrete goal and prepare a trial.
-   Preparation pins inputs and queues work without invoking a model. Starting
-   ready stages is a separate explicit action that can consume inference and
-   edit isolated worktrees.
-6. Review actual stage outcomes and pending human gates. Run protected
-   verification against the exact candidate. Authenticated delivery approval and
-   applying a patch remain separate actions. Applying updates the local working
-   tree; it does not push or deploy.
-
-The checklist's last item is **prepare a bounded trial**. A queued trial is not
-shown as a successful execution. The app keeps source validation, observed
-execution, protected verification and release authority distinct.
+1. In **Build → Describe**, describe the outcome and choose a drafting model, or
+   use a starter. Model generation creates a proposal; loading and checking a
+   starter make no model calls.
+2. In **Configuration**, choose the model, budget and permissions. Apply edits
+   to the draft. Unapplied fields block saving and new trials.
+3. Review the stages in **Workflow** and map requirements to protected checks
+   in **Acceptance checks**. **Definition & diff** provides direct source editing.
+4. Choose **Check definition**, then **Save changes** and give a revision reason.
+   **Manage → Source control** versions the declared Factory sources.
+5. In **Test → Single trial**, prepare a concrete goal and explicitly run ready
+   stages. Review human gates, protected results and exact candidate evidence.
+   Source validation does not establish execution quality or release authority.
+6. Use **Export → Portable package** to take the saved definition and components
+   to your environment. The desktop app can be closed. See [portability](PORTABILITY.md)
+   for runtime requirements and other-platform adaptation.
 
 ## Configure and inspect acceptance
 
-Under **Build → Workflow → Prepare protected verifiers**, describe the expected
+Under **Build → Acceptance checks → Prepare protected verifiers**, describe the expected
 application behavior and explicitly select a drafting model, or prepare explicit
 Python probes. Review the definition diff, probe code, assumptions and expected
 outputs, mark the expectations reviewed, then save the proposed configuration.
@@ -59,14 +46,14 @@ candidate and no sockets. External services, third-party dependencies and other
 unsupported requirements need an appropriate execution contract. A check category
 alone is not evidence that the service or application was exercised.
 
-**Run & verify → Single trial → Requirements & application checks** connects the
+**Test → Single trial → Requirements & application checks** connects the
 run's pinned requirements to stages, tasks, artifacts and protected check results.
 Missing or unbound evidence remains uncovered. This historical trace does not
 grant current release approval.
 
 ## Improve a harness or skill
 
-Choose **Improve → Inputs & suite**. Pick the surface: harness instructions,
+Choose **Improve → Set up experiment**. Pick the surface: harness instructions,
 bound skill instructions, a primary model choice, or an eligible entry-stage
 goal. **Create skill & bind to draft** adds an optional reusable instruction
 asset; review/save/commit that draft before preparing its experiment.

@@ -8,7 +8,7 @@ is available once application-specific evaluator probes are declared.
 Authenticated release uses pinned P-256 signatures; the native Factory Studio
 provides explicit enrollment, review, signing and working-tree application.
 
-The macOS flow is **Build → Run & verify → Improve → Manage**. Start with
+The macOS flow is **Build, Test, Improve, Export and Manage**. Start with
 [the developer walkthrough](DEVELOPER-FLOW.md).
 
 From the SuperQode repository root:
@@ -201,7 +201,7 @@ trial. CLI users can still explicitly version an ignored definition with
 
 ## Reusable Trial Suites
 
-Open **Factory Studio → Run & verify → Trial suites** to author a paired suite, prepare its
+Open **Factory Studio → Test → Trial suites** to author a paired suite, prepare its
 isolated projects, run whole workflows, review gates and inspect the scorecard.
 The shared engine is also exposed by `factory suite-prepare`, `suite-run`,
 `suite-inspect` and `suite-gate`. See [trial-suite.yaml](trial-suite.yaml) for a

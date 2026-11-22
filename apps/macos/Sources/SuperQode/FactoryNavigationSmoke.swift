@@ -107,16 +107,17 @@ import Foundation
         }
         section = "Factory Studio"; try await settle()
         await studio.validate(engine: engine); await studio.refreshSources(engine: engine)
-        try await click("Stack")
+        try await click("Configuration")
         guard let nameField = find(NSTextField.self, matching: { $0.placeholderString == "Factory name" }),
           nameField.stringValue == string(studio.review, "name"), !nameField.stringValue.isEmpty else {
           throw EngineError(message: "Validated Factory controls were not populated")
         }
         let savedName = nameField.stringValue
         edit(nameField, "unsaved-controls-check"); try await settle()
-        try await click("Operations"); try await click("Stack")
+        try await click("Operations"); try await click("Configuration")
         guard nameField.stringValue == "unsaved-controls-check" else { throw EngineError(message: "Tab switching replaced unapplied configuration fields") }
         edit(nameField, savedName); fieldsChecked = true; try await settle()
+        try await click("Stack")
         studio.text = ""; try await settle()
         try await press("factory.setup.next")
         var continued = false

@@ -13,6 +13,7 @@ struct FactoryStudioView: View {
   @State private var goal = ""
   @State private var gateReason = ""
   @State private var confirmation = ""
+  @State private var replacingDraft = false
   @State private var factoryName = ""
   @State private var binding = "core"
   @State private var modelRef = "ollama/qwen3:8b"
@@ -23,30 +24,32 @@ struct FactoryStudioView: View {
   private var controlDraft: FactoryControlDraft { FactoryControlDraft(name: factoryName, binding: binding,
     model: modelRef, seconds: seconds, workers: workers, network: network) }
   private var controlsHaveChanges: Bool { syncedControls.map { $0 != controlDraft } ?? false }
-  private var idle: Bool { !library.busy && !library.acceptance.busy && !app.anyActive && !app.busy }
+  private var idle: Bool { !replacingDraft && !library.busy && !library.acceptance.busy && !library.portable.busy && !app.anyActive && !app.busy }
   private var order: [String: Any] { library.detail["work_order"] as? [String: Any] ?? [:] }
   private var stages: [[String: Any]] { library.review["stages"] as? [[String: Any]] ?? [] }
   private var tasks: [[String: Any]] { order["tasks"] as? [[String: Any]] ?? [] }
   private var bindings: [String: Any] { library.review["bindings"] as? [String: Any] ?? [:] }
   private var setup: FactorySetupState { FactorySetupState(text: library.text, review: library.review,
     savedDigest: library.expectedFileDigest, sources: library.sourceReview, runs: library.runs) }
-  private let layers = ["Factories-as-code", "Data and context", "Compute", "Inference", "Improvement", "Orchestration", "Access"]
-  private let descriptions = [
-    "Version the definition and capture immutable snapshots for each run.",
-    "Pin project context, skills and protected evaluator inputs.",
-    "Run isolated native worktrees within the declared budget.",
-    "Bind stages to harnesses and explicitly selected model routes.",
-    "Measure exact candidates against protected acceptance probes.",
-    "Coordinate dependent stages and explicit human gates.",
-    "Use this native app or the shared command-line engine."]
-
   var body: some View {
-    VStack(alignment: .leading, spacing: 12) {
-      PageTitle(eyebrow: "Software factory", title: "Factory Studio",
-        subtitle: "Start with one repeatable development workflow. Review its evidence before improving or releasing it.")
-      FactoryNavigationHeader(navigation: library.navigation)
+    HStack(alignment: .top, spacing: 20) {
+      FactoryNavigationHeader(navigation: library.navigation).frame(width: 172)
+      Divider()
+      VStack(alignment: .leading, spacing: 14) {
+      HStack {
+        Text(library.navigation.pageTitle).font(.title2.bold())
+        Spacer()
+        if FactoryNavigation.buildPages.contains(tab) {
+          Button("Check definition") {
+            let ticket = library.navigation.ticket()
+            Task { await library.validate(engine: app.engine); if library.navigation.isCurrent(ticket), !controlsHaveChanges { syncControls() } }
+          }.disabled(!idle || library.text.isEmpty)
+          Button("Save changes…") { confirmation = "save" }
+            .disabled(!idle || library.review.isEmpty || controlsHaveChanges || setup.saved)
+        }
+      }
       if !library.failure.isEmpty { Text(library.failure).font(.caption).foregroundStyle(.orange).textSelection(.enabled) }
-      if !library.message.isEmpty { Text("Last action: " + library.message).font(.caption).foregroundStyle(.secondary) }
+      if !library.message.isEmpty { DisclosureGroup("Latest activity") { Text(library.message).font(.caption).foregroundStyle(.secondary).textSelection(.enabled) }.font(.caption) }
       if library.busy { HStack { ProgressView().controlSize(.small); Text("Factory action in progress…").font(.caption); Spacer(); Button("Stop action") { Task { await library.cancel(engine: app.engine) } } } }
       ZStack(alignment: .topLeading) {
         if library.navigation.mounted.contains("Operations") {
@@ -57,9 +60,13 @@ struct FactoryStudioView: View {
           FactoryTrialSuiteView(studio: library, library: library.trialSuites, active: active && tab == "Suites")
             .modifier(FactoryPaneVisibility(active: active && tab == "Suites"))
         }
-        if library.navigation.mounted.contains("Improve") {
-          FactoryImprovementView(library: library, active: active && tab == "Improve", onAdopt: { library.navigation.select("Definition") })
-            .modifier(FactoryPaneVisibility(active: active && tab == "Improve"))
+        if !library.navigation.mounted.isDisjoint(with: FactoryNavigation.improvementPages) {
+          FactoryImprovementView(library: library, active: active && FactoryNavigation.improvementPages.contains(tab), onAdopt: { library.navigation.select("Definition") })
+            .modifier(FactoryPaneVisibility(active: active && FactoryNavigation.improvementPages.contains(tab)))
+        }
+        if library.navigation.mounted.contains("Export") {
+          FactoryExportView(studio: library, library: library.portable, active: active && tab == "Export")
+            .modifier(FactoryPaneVisibility(active: active && tab == "Export"))
         }
         if library.navigation.mounted.contains("Sources") {
           FactorySourceControlView(library: library, active: active && tab == "Sources")
@@ -67,31 +74,22 @@ struct FactoryStudioView: View {
         }
         if tab == "Runs" { runs }
         if tab == "Revisions" { revisions }
-        if !library.navigation.mounted.isDisjoint(with: ["Stack", "Workflow", "Definition"]) {
+        if tab == "Experiments" { ScrollView { workflowExperiment } }
+        if !library.navigation.mounted.isDisjoint(with: FactoryNavigation.buildPages) {
         VStack(alignment: .leading, spacing: 12) {
-        HStack {
-          Text(tab == "Stack" ? "Set up your workflow" : tab == "Workflow" ? "Review the workflow" : "Review the definition").font(.headline)
-          Spacer()
-          Button("Validate") {
-            let ticket = library.navigation.ticket()
-            Task { await library.validate(engine: app.engine); if library.navigation.isCurrent(ticket), !controlsHaveChanges { syncControls() } }
-          }.disabled(!idle || library.text.isEmpty)
-        }
         ZStack(alignment: .topLeading) {
           if library.navigation.mounted.contains("Stack") { stack.modifier(FactoryPaneVisibility(active: active && tab == "Stack")) }
+          if library.navigation.mounted.contains("Configuration") { configuration.modifier(FactoryPaneVisibility(active: active && tab == "Configuration")) }
           if library.navigation.mounted.contains("Workflow") { workflow.modifier(FactoryPaneVisibility(active: active && tab == "Workflow")) }
+          if library.navigation.mounted.contains("Acceptance") { ScrollView { FactoryAcceptanceSetupView(studio: library, library: library.acceptance, active: active && tab == "Acceptance") }.modifier(FactoryPaneVisibility(active: active && tab == "Acceptance")) }
           if library.navigation.mounted.contains("Definition") { definition.modifier(FactoryPaneVisibility(active: active && tab == "Definition")) }
         }
-        HStack {
-          TextField("Reason for this revision", text: $reason).textFieldStyle(.roundedBorder)
-          Button("Save revision") { Task { await library.save(engine: app.engine, reason: reason) } }
-            .buttonStyle(BrandButtonStyle()).disabled(!idle || library.review.isEmpty || controlsHaveChanges || reason.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty)
-        }
-        if controlsHaveChanges { Text("Apply or discard configuration field edits in Set up before saving or preparing a trial.").font(.caption).foregroundStyle(.secondary) }
-        }.modifier(FactoryPaneVisibility(active: active && ["Stack", "Workflow", "Definition"].contains(tab)))
+        if controlsHaveChanges { HStack { Text("Configuration has unapplied edits.").font(.caption).foregroundStyle(.orange); Button("Review configuration") { library.navigation.select("Configuration") } } }
+        }.modifier(FactoryPaneVisibility(active: active && FactoryNavigation.buildPages.contains(tab)))
         }
       }.frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
-    }.padding(24)
+      }
+    }.padding(20)
       .task(id: app.projectID + "\n" + String(active)) {
         guard active else { return }; library.enter(app.projectID)
         library.navigation.setActive(true)
@@ -105,66 +103,51 @@ struct FactoryStudioView: View {
       }
       .onChange(of: app.projectID) { _, _ in confirmation = ""; reason = ""; goal = ""; experimentStage = ""; experimentGoal = ""; experimentTask = "" }
       .alert(confirmationTitle, isPresented: Binding(get: { !confirmation.isEmpty }, set: { if !$0 { confirmation = "" } })) {
+        if confirmation == "save" { TextField("What changed?", text: $reason) }
         Button("Cancel", role: .cancel) { confirmation = "" }
         Button("Continue") { let action = confirmation; confirmation = ""; execute(action) }
+          .disabled(confirmation == "save" && reason.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty)
       } message: { Text(confirmationMessage) }
   }
 
   private var stack: some View {
-    HSplitView {
-      ScrollView {
-        VStack(alignment: .leading, spacing: 12) {
-          Text("Your first Factory").font(.headline)
-          Text("Follow this path once, then repeat it as the workflow improves.").font(.caption).foregroundStyle(.secondary)
-          let steps = ["Create a draft", "Validate & save", "Review & commit sources", "Prepare a bounded trial"]
-          ForEach(steps.indices, id: \.self) { index in
-            HStack(alignment: .top, spacing: 8) {
-              Image(systemName: index < setup.step || (index == 3 && setup.trialPrepared) ? "checkmark.circle.fill" : "\(index + 1).circle")
-                .foregroundStyle(index == setup.step ? Color.primary : Color.secondary)
-              Text(steps[index]).font(.subheadline).fixedSize(horizontal: false, vertical: true)
-            }.frame(maxWidth: .infinity, alignment: .leading).padding(10).brandSurface()
-          }
-          nativeButton("factory.setup.next", action: advanceSetup, title: setup.action) { Text(setup.action).font(.caption.weight(.semibold)) }.disabled(!idle || controlsHaveChanges)
-          Text("Preparing a trial does not call models. Running stages is a separate action.").font(.caption).foregroundStyle(.secondary)
-          Divider()
-          Text("Inner loop").font(.subheadline.bold())
-          Text("Follow the configured stages to implement changes, pause at gates, and verify results.").font(.caption).foregroundStyle(.secondary)
-          Text("Outer loop").font(.subheadline.bold())
-          Text("Measure failures → propose one change → compare on held-out tasks → review adoption.").font(.caption).foregroundStyle(.secondary)
-          DisclosureGroup("Factory architecture") {
-            ForEach(Array(layers.enumerated()), id: \.offset) { index, name in
-              VStack(alignment: .leading, spacing: 3) { Text(name).font(.caption.bold()); Text(descriptions[index]).font(.caption).foregroundStyle(.secondary) }
-                .padding(.vertical, 4)
-            }
-          }.font(.caption)
-        }.padding(.trailing, 12)
-      }.frame(minWidth: 200, idealWidth: 240, maxWidth: 280)
-      ScrollView {
-        VStack(alignment: .leading, spacing: 14) {
-          Picker("Starting workflow", selection: $preset) {
-            Text("Fix and verify").tag("fix-and-verify"); Text("Continuous outcomes").tag("continuous-outcomes")
-          }
-          FactoryActionRow {
-            Button("Load starter…") { confirmation = "template" }.disabled(!idle)
-            Button("Reload saved…") { confirmation = "reload" }.disabled(!idle)
-          }
-          Text("Describe the factory").font(.headline)
-          TextEditor(text: $library.description).font(.body).frame(minHeight: 90).brandSurface()
-            .accessibilityLabel("Factory description")
-          Text(app.provider.isEmpty || app.model.isEmpty
-            ? "Optional: select a model to generate a proposal. You can configure the starter without one."
-            : "Drafting model: \(app.provider)/\(app.model)")
-            .font(.caption).foregroundStyle(.secondary)
-          Button("Generate proposal…") { confirmation = "generate" }
-            .disabled(!idle || library.description.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty || library.text.isEmpty || app.provider.isEmpty || app.model.isEmpty || app.provider == "acp")
-          if library.canApplyProposal {
-            DisclosureGroup("Generated proposal") {
-              CodeBlock(text: pretty(library.proposal))
-              Button("Apply proposal to draft") { library.text = string(library.proposal, "yaml"); library.proposal = [:]; library.navigation.select("Definition") }
-                .disabled(!idle)
-            }
-          }
-          Divider()
+    ScrollView {
+      VStack(alignment: .leading, spacing: 18) {
+        Text("What should this Factory do?").font(.headline)
+        TextEditor(text: $library.description).font(.body).frame(height: 140).brandSurface().accessibilityLabel("Factory description")
+        HStack {
+          Text(app.provider.isEmpty || app.model.isEmpty ? "Choose a model for AI-assisted drafting." : "Drafting with \(app.provider)/\(app.model)").font(.caption).foregroundStyle(.secondary)
+          Spacer()
+          Button("Choose model…") { app.showConnection = true }
+        }
+        Button("Generate a draft…") { confirmation = "generate" }.buttonStyle(BrandButtonStyle())
+          .disabled(!idle || library.description.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty || app.provider.isEmpty || app.model.isEmpty || app.provider == "acp")
+        if library.canApplyProposal {
+          VStack(alignment: .leading, spacing: 10) {
+            Text("A proposal is ready to review.").font(.subheadline.bold())
+            ForEach(library.proposal["assumptions"] as? [String] ?? [], id: \.self) { Text($0).font(.caption).foregroundStyle(.secondary) }
+            Button("Open proposal in editor") { library.text = string(library.proposal, "yaml"); library.proposal = [:]; library.navigation.select("Definition") }
+          }.padding(14).brandSurface()
+        }
+        Divider()
+        Text("Or start from a workflow").font(.subheadline.bold())
+        Picker("Workflow", selection: $preset) { Text("Fix and verify").tag("fix-and-verify"); Text("Continuous outcomes").tag("continuous-outcomes") }
+        FactoryActionRow {
+          Button("Use this starter…") { confirmation = "template" }.disabled(!idle)
+          Button("Reload saved…") { confirmation = "reload" }.disabled(!idle)
+        }
+        Divider()
+        HStack {
+          Text(setup.hasDraft ? "Your draft is available in the pages on the left." : "Load a starter first to establish the drafting permissions and budget.").font(.caption).foregroundStyle(.secondary)
+          Spacer()
+          nativeButton("factory.setup.next", action: advanceSetup, title: setup.action) { Text(setup.action).font(.caption.weight(.semibold)) }.disabled(!idle || (controlsHaveChanges && setup.hasDraft))
+        }
+      }.frame(maxWidth: 680, alignment: .leading).frame(maxWidth: .infinity, alignment: .leading)
+    }
+  }
+  private var configuration: some View {
+    ScrollView {
+      VStack(alignment: .leading, spacing: 14) {
           Text("Harness, model & permissions").font(.headline)
           Text("Validate the definition to load its current bindings.").font(.caption).foregroundStyle(.secondary)
           VStack(alignment: .leading, spacing: 12) {
@@ -195,12 +178,8 @@ struct FactoryStudioView: View {
             .font(.caption).foregroundStyle(.secondary)
           Button("Enroll this Mac & add public key…") { confirmation = "enroll" }.disabled(!idle || library.text.isEmpty)
           }
-          Text("Reusable skills and measured harness changes are under Improve. Proposals never activate automatically.")
-            .font(.caption).foregroundStyle(.secondary)
-          Text("Configure acceptance outcomes and protected verifiers in Workflow.").font(.caption).foregroundStyle(.secondary)
-          DisclosureGroup("Validation notes") { warnings }
-        }.padding(.leading, 12)
-      }.frame(minWidth: 290)
+
+      }.frame(maxWidth: 680, alignment: .leading).frame(maxWidth: .infinity, alignment: .leading)
     }
   }
 
@@ -210,7 +189,7 @@ struct FactoryStudioView: View {
       VStack(alignment: .leading, spacing: 14) {
         HStack {
           Text("Stages and dependencies").font(.headline); Spacer()
-          nativeButton("factory.workflow.acceptance", action: { proxy.scrollTo("factory.acceptance", anchor: .top) }, title: "Acceptance & verification") { Text("Acceptance & verification").font(.caption) }
+          nativeButton("factory.workflow.acceptance", action: { library.navigation.select("Acceptance") }, title: "Acceptance & verification") { Text("Acceptance & verification").font(.caption) }
         }
         if let loop = library.review["revision_loop"] as? [String: Any], !loop.isEmpty {
           Text("Bounded revision loop").font(.subheadline)
@@ -231,9 +210,13 @@ struct FactoryStudioView: View {
         }
         warnings
         Divider()
-        FactoryAcceptanceSetupView(studio: library, library: library.acceptance, active: active && tab == "Workflow")
-          .id("factory.acceptance")
-        Divider()
+
+      }
+    }
+    }
+  }
+  private var workflowExperiment: some View {
+    VStack(alignment: .leading, spacing: 14) {
         Text("Whole-workflow instruction experiment").font(.headline)
         Text("Save and validate the Factory first. Select an entry, dependent or reviewer stage; only its goal changes. Inputs, outputs, branches, loops, checks and gates remain fixed. Preparing and running the exported paired suite are separate actions.").font(.caption).foregroundStyle(.secondary)
         Picker("Stage to compare", selection: $experimentStage) {
@@ -249,13 +232,11 @@ struct FactoryStudioView: View {
         }.disabled(!idle || experimentStage.isEmpty || experimentGoal.isEmpty || experimentTask.isEmpty || library.review.isEmpty)
         Text("Continuous outcomes prepares investigations and follow-up signals. Scheduling and deployment are separate actions.")
           .font(.caption).foregroundStyle(.secondary)
-      }
-    }
     }
   }
   private var definition: some View {
     HSplitView {
-      SourceEditor(text: $library.text, path: "factory.yaml", editable: !library.busy,
+      SourceEditor(text: $library.text, path: "factory.yaml", editable: !library.busy && !replacingDraft,
         documentID: "factory-studio:" + app.projectID, active: active && tab == "Definition").brandSurface().frame(minWidth: 280)
       ScrollView {
         VStack(alignment: .leading, spacing: 12) {
@@ -401,12 +382,13 @@ struct FactoryStudioView: View {
     string(bindings[name] as? [String: Any] ?? [:], "model", (library.review["binding_models"] as? [String: String])?[name] ?? "")
   }
   private var confirmationTitle: String {
-    ["template": "Load a starter?", "reload": "Reload saved definition?", "trial": "Prepare a pinned trial?",
+    ["save": "Save this Factory revision?", "template": "Load a starter?", "reload": "Reload saved definition?", "trial": "Prepare a pinned trial?",
      "generate": "Generate a factory proposal?", "worker": "Run ready factory stages?", "verify": "Execute protected verification?",
      "enroll": "Enroll this Mac as a release signer?", "approve": "Authenticate candidate approval?", "apply": "Apply the approved change?", "cancel": "Stop this factory run?"][confirmation] ?? "Review factory action"
   }
   private var confirmationMessage: String {
     switch confirmation {
+    case "save": return "Save the checked definition and record the reason for this revision. Existing runs keep their pinned inputs."
     case "template", "reload": return "This replaces the current draft. Saved revisions and existing trials remain available."
     case "generate": return "The selected model receives your description and draft definition. This may incur model usage. The result is a proposal for you to review."
     case "trial": return "Pin the saved definition and its inputs to a queued WorkOrder for this goal. This step makes no model calls. The application must have a clean committed baseline."
@@ -424,8 +406,16 @@ struct FactoryStudioView: View {
     Task {
       guard library.project == ticket.project else { return }
       switch action {
-      case "template": await library.load(engine: app.engine, template: preset)
-      case "reload": await library.load(engine: app.engine)
+      case "save": await library.save(engine: app.engine, reason: reason)
+      case "template", "reload":
+        replacingDraft = true; defer { replacingDraft = false }
+        await library.load(engine: app.engine, template: action == "template" ? preset : "")
+        await library.validate(engine: app.engine)
+        if library.project == ticket.project, !library.review.isEmpty { syncControls() }
+      case "generate":
+        if library.text.isEmpty { await library.load(engine: app.engine, template: preset) }
+        guard library.navigation.isCurrent(ticket), !library.text.isEmpty else { return }
+        await library.start(engine: app.engine, action: action, provider: app.provider, model: app.model)
       case "trial": await library.trial(engine: app.engine, goal: goal); if library.failure.isEmpty { follow(ticket, to: "Runs") }
       case "enroll":
         let identity = library.project; let version = library.version

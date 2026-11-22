@@ -9,14 +9,19 @@ import SwiftUI
     let id: String; let title: String; let detail: String; let destinations: [String]
   }
   static let groups: [Group] = [
-    Group(id: "build", title: "Build", detail: "Define the outcome, configure the workflow, then validate and save your Factory.", destinations: ["Stack", "Workflow", "Definition"]),
-    Group(id: "run", title: "Run & verify", detail: "Prepare a bounded trial, review gates and verification evidence, then compare repeatable trials.", destinations: ["Runs", "Suites"]),
-    Group(id: "improve", title: "Improve", detail: "Improve a harness, skill, model choice or stage instruction using measured proposals.", destinations: ["Improve"]),
+    Group(id: "build", title: "Build", detail: "Describe, configure and review your Factory.", destinations: ["Stack", "Configuration", "Workflow", "Acceptance", "Definition"]),
+    Group(id: "run", title: "Test", detail: "Run a trial and inspect its evidence.", destinations: ["Runs", "Suites"]),
+    Group(id: "improve", title: "Improve", detail: "Compare proposals before adopting changes.", destinations: ["Improve", "ImproveCandidate", "ImproveEvidence", "Experiments"]),
+    Group(id: "export", title: "Export", detail: "Take editable sources to your own environment.", destinations: ["Export"]),
     Group(id: "manage", title: "Manage", detail: "Review versions and source changes, check this host, and prepare recovery or deployment packages.", destinations: ["Sources", "Revisions", "Operations"])]
   static let tabs: [(id: String, title: String)] = [
-    ("Stack", "Set up"), ("Workflow", "Workflow"), ("Definition", "Definition & diff"),
+    ("Stack", "Describe"), ("Configuration", "Configuration"), ("Workflow", "Workflow"), ("Acceptance", "Acceptance checks"), ("Definition", "Definition & diff"),
     ("Runs", "Single trial"), ("Revisions", "History"), ("Sources", "Source control"),
-    ("Improve", "Improve"), ("Suites", "Trial suites"), ("Operations", "Operations")]
+    ("Improve", "Set up experiment"), ("ImproveCandidate", "Candidate & diff"), ("ImproveEvidence", "Comparison evidence"), ("Experiments", "Workflow experiment"),
+    ("Export", "Portable package"), ("Suites", "Trial suites"), ("Operations", "Operations")]
+  static let buildPages: Set<String> = ["Stack", "Configuration", "Workflow", "Acceptance", "Definition"]
+  static let improvementPages: Set<String> = ["Improve", "ImproveCandidate", "ImproveEvidence"]
+  var pageTitle: String { Self.tabs.first { $0.id == selection }?.title ?? "Factory" }
   private(set) var selection: String
   private(set) var mounted: Set<String>
   private(set) var project = ""
@@ -61,7 +66,7 @@ import SwiftUI
   static var initialTab: String {
     let args = ProcessInfo.processInfo.arguments
     if args.contains("--factory-operations-inspect") || args.contains("--factory-navigation-inspect") { return "Operations" }
-    if args.contains("--factory-optimization-inspect") { return "Improve" }
+    if args.contains("--factory-optimization-inspect") { return "ImproveEvidence" }
     if args.contains("--factory-suite-inspect") || args.contains("--factory-feedback-inspect") { return "Suites" }
     return args.contains("--factory-demo-inspect") ? "Runs" : "Stack"
   }

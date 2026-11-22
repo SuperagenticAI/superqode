@@ -401,14 +401,18 @@ pinned trials, stage gates and protected verification evidence. Model execution
 uses the existing desktop job engine; generation and execution require explicit
 actions. Draft edits never change an existing trial.
 
-The primary flow is **Build → Run & verify → Improve → Manage**. Each area shows
-only its relevant pages. Build has a matching-evidence setup checklist; trial
-preparation is under Run & verify. Factory Studio hides the conversation sidebar
-and conversation tabs, with a project menu in the header that keeps Factory
-context when switching repositories. Unapplied configuration fields are
-preserved and must be applied/discarded before saving or preparing a new trial.
-Architecture, signing and operational details use disclosures instead of
-competing with the first creation path. See [the developer flow](../../examples/factory/DEVELOPER-FLOW.md).
+Factory Studio has a dedicated sidebar for **Build, Test, Improve, Export and
+Manage**. Description, configuration, workflow, acceptance and source editing
+occupy separate pages. Advanced tools remain directly accessible. Saving asks
+for a revision reason only when needed. Factory mode replaces the broader
+application navigation rail; Home returns to other features. Unapplied settings
+and source drafts survive page changes. See [the developer flow](../../examples/factory/DEVELOPER-FLOW.md).
+
+**Export → Portable package** creates a plain ZIP of editable declared sources,
+the resolved snapshot, checksums and headless operating instructions. The app
+need not remain open on the target host. An appropriate reviewed SuperQode CLI
+runtime is still required; another vendor's platform needs an explicitly tested
+adapter. See [portability](../../examples/factory/PORTABILITY.md).
 
 Before preparing a deliverable trial, add protected evaluator probes and a pinned
 release authority. The app can explicitly enroll a Secure Enclave P-256 key,
@@ -438,7 +442,7 @@ See the [Factory source-control contract](../../examples/factory/README.md#versi
 
 ### Factory Trial Suites
 
-**Factory Studio → Run & verify → Trial suites** now provides reusable paired workflow replay
+**Factory Studio → Test → Trial suites** now provides reusable paired workflow replay
 and a comparison scorecard. Prepare isolated projects from committed application
 inputs, run the existing workers and protected verifier, review each gate's patch
 and evidence, and continue explicitly. Known failures have bounded operator
@@ -458,7 +462,7 @@ ties, regressions and holds and grant no adoption or release authority. See
 ### Guarded Factory improvement
 
 **Factory Studio → Build → Workflow** previews explicit input/output contracts,
-conditional stages and bounded implementation/review loops. Export a goal-only
+conditional stages and bounded implementation/review loops. **Improve → Workflow experiment** exports a goal-only
 experiment for an entry, dependent or reviewer stage into Trial Suites, then
 prepare and run it explicitly. The scorecard exposes validated handoffs,
 candidate bindings and durable skipped-stage receipts. See
@@ -473,7 +477,7 @@ review and save the draft before using it. Bound Markdown bodies are appended
 to harness system instructions; they grant no tools or scripts.
 Edit or import a proposal, or explicitly run native evaluator–optimizer, GEPA,
 MetaHarness or Omni portfolio search on held-in examples. Choose the engine before preparation and inspect
-shared request accounting from **Improve → Evidence → Refresh usage**.
+shared request accounting from **Improve → Comparison evidence → Refresh usage**.
 The adapters permit harness instruction/role/description edits, skill body
 edits with frontmatter fixed, a model from explicitly pinned choices, or one
 entry-stage goal. Tools, context paths, permissions, graph, gates, criteria and

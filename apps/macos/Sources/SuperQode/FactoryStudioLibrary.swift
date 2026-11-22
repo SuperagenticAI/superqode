@@ -5,6 +5,7 @@ import Combine
   let trialSuites = FactoryTrialSuiteLibrary()
   let operations = FactoryOperationsLibrary()
   let acceptance = FactoryAcceptanceLibrary()
+  let portable = FactoryExportLibrary()
   let navigation = FactoryNavigation(initial: FactoryNavigation.initialTab)
   @Published var text = "" { didSet { if text != oldValue { version += 1; review = [:]; acceptance.sourceChanged(text) } } }
   @Published var description = "" { didSet { if description != oldValue { version += 1 } } }
@@ -36,7 +37,7 @@ import Combine
   private var trialRequest = UUID().uuidString
   private var trialGoal = ""
   private var acceptanceChanges: AnyCancellable?
-  init() { acceptanceChanges = acceptance.objectWillChange.sink { [weak self] in self?.objectWillChange.send() } }
+  init() { acceptanceChanges = Publishers.Merge(acceptance.objectWillChange, portable.objectWillChange).sink { [weak self] in self?.objectWillChange.send() } }
   var canApplyProposal: Bool { !string(proposal, "yaml").isEmpty }
 
   @discardableResult func workflowExperiment(_ engine: Engine, stage: String, goal: String, workGoal: String) async -> Bool {
@@ -62,6 +63,7 @@ import Combine
     trialSuites.enter(identity)
     operations.enter(identity)
     acceptance.enter(identity)
+    portable.enter(identity)
     navigation.enter(identity)
     if !project.isEmpty { drafts[project] = (text, description, expectedFileDigest) }
     operation = UUID(); sourceGeneration += 1; sourceReview = [:]; busy = false; project = identity; review = [:]; detail = [:]; run = ""
