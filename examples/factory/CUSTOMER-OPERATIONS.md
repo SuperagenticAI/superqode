@@ -24,7 +24,11 @@ superqode factory operations check --project /srv/customer/project
 superqode factory operations check --project /srv/customer/project --probe --require-platform Linux
 ```
 
-Failure exits nonzero. Missing Bubblewrap, denied Linux user namespaces or a
+Linux protected probes require Bubblewrap, permitted user namespaces and
+`libseccomp.so.2` (Debian/Ubuntu package `libseccomp2`). A syscall filter denies
+socket creation, including loopback and Unix sockets, before candidate code runs;
+the filter persists across exec. A network namespace alone is insufficient.
+Failure exits nonzero. Missing isolation prerequisites or a
 failed protected probe cannot establish worker readiness. Passing probes says
 nothing about model availability, private network configuration or task quality.
 The optional target-host checks in

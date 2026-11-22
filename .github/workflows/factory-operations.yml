@@ -22,7 +22,7 @@ jobs:
           version: "0.13.0"
       - name: Install Linux protected-probe backend
         if: runner.os == 'Linux'
-        run: sudo apt-get update && sudo apt-get install --yes bubblewrap
+        run: sudo apt-get update && sudo apt-get install --yes bubblewrap libseccomp2
       - name: Install pinned runtime
         run: uv sync --locked --extra dev --python 3.12
       - name: Validate actual host and bounded worker contract

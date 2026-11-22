@@ -179,7 +179,7 @@ class HFInferenceClient:
             model: Model ID to use.
             max_tokens: Maximum tokens to generate.
             temperature: Sampling temperature.
-            top_p: Nucleus sampling threshold.
+            top_p: Cumulative probability sampling threshold.
             tools: Tool definitions for function calling.
             tool_choice: Tool choice mode ("auto", "none", "required").
             stream: Whether to stream the response (not yet implemented).

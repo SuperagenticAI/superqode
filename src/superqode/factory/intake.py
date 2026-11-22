@@ -26,6 +26,62 @@ PREFIX = ".superqode/factory-intake"
 MAX_BODY = 64000
 
 
+class IntakeRejected(ValueError):
+    def __init__(self, code, message):
+        self.code = code
+        super().__init__(message)
+
+
+def receipts(root):
+    """Bounded local decisions for authenticated events, with no external content."""
+    path = _path(root, "receipts.json")
+    value = (
+        json.loads(read(path, 256000))
+        if path.exists()
+        else {
+            "format": "superqode.factory-intake-receipts/1",
+            "decisions": [],
+        }
+    )
+    if (
+        value.get("format") != "superqode.factory-intake-receipts/1"
+        or len(value["decisions"]) > 256
+    ):
+        raise ValueError("Invalid intake decision receipts")
+    return value
+
+
+def _receipt(root, kind, raw, status, reason, run=""):
+    # Only authenticated requests reach this function. Retain hashes and fixed
+    # reason codes, never payloads, headers, delivery ids or exception strings.
+    with execution(root), _lease(root):
+        value = receipts(root)
+        fingerprint = hashlib.sha256(raw).hexdigest()
+        row = next(
+            (
+                r
+                for r in value["decisions"]
+                if (r["source"], r["fingerprint"], r["status"], r["reason"])
+                == (kind, fingerprint, status, reason)
+            ),
+            None,
+        )
+        if row is None:
+            row = {
+                "source": kind,
+                "fingerprint": fingerprint,
+                "status": status,
+                "reason": reason,
+                "run": run,
+                "count": 0,
+            }
+            value["decisions"].append(row)
+        row["count"] = min(row["count"] + 1, 1000000000)
+        row["last_received"] = time.time()
+        value["decisions"] = value["decisions"][-256:]
+        write(_path(root, "receipts.json"), canonical(value))
+
+
 def _path(root, name):
     return project_path(Path(root).resolve(), PREFIX + "/" + name)
 
@@ -39,7 +95,7 @@ def _string(value, name, limit=8000):
 def _normalize(kind, data, headers, policy):
     if kind == "github":
         if headers.get("x-github-event") != "issues":
-            raise ValueError("Only GitHub issue events are accepted")
+            raise IntakeRejected("policy_filtered", "Only GitHub issue events are accepted")
         repository = data.get("repository", {})
         issue = data.get("issue", {})
         if not isinstance(repository, dict) or not isinstance(issue, dict):
@@ -53,7 +109,7 @@ def _normalize(kind, data, headers, policy):
         timestamp = None
     elif kind == "linear":
         if data.get("type") != "Issue" or headers.get("linear-event") != "Issue":
-            raise ValueError("Only Linear Issue events are accepted")
+            raise IntakeRejected("policy_filtered", "Only Linear Issue events are accepted")
         scope = data.get("organizationId")
         issue = data.get("data", {})
         if not isinstance(issue, dict):
@@ -68,7 +124,9 @@ def _normalize(kind, data, headers, policy):
         action, identity = data.get("action"), data.get("event_id")
         timestamp = data.get("timestamp")
     if scope != policy["scope"] or action not in policy["actions"]:
-        raise ValueError("Webhook source or action is outside the saved intake policy")
+        raise IntakeRejected(
+            "policy_filtered", "Webhook source or action is outside the saved intake policy"
+        )
     identity = _string(identity, "delivery", 128)
     if not re.fullmatch(r"[A-Za-z0-9][A-Za-z0-9_.:-]{0,127}", identity):
         raise ValueError("Webhook delivery id is not a safe bounded identifier")
@@ -113,6 +171,26 @@ def receive(root, kind, raw, headers):
         expected = "sha256=" + expected
     if not isinstance(signature, str) or not hmac.compare_digest(expected, signature):
         raise ValueError("Webhook authentication failed")
+    try:
+        result = _admit(root, definition, kind, raw, headers)
+    except ValueError as exc:
+        code = exc.code if isinstance(exc, IntakeRejected) else "invalid_event"
+        _receipt(root, kind, raw, "filtered" if code == "policy_filtered" else "rejected", code)
+        raise
+    _receipt(
+        root,
+        kind,
+        raw,
+        "duplicate" if result["deduplicated"] else "queued",
+        "duplicate_delivery" if result["deduplicated"] else "admitted",
+        result["work_order_id"],
+    )
+    return result
+
+
+def _admit(root, definition, kind, raw, headers):
+    intake = definition.data["orchestration"]["intake"]
+    policy = intake["sources"][kind]
     data = _json(raw)
     if not isinstance(data, dict):
         raise ValueError("Webhook must be a JSON object")
@@ -134,7 +212,9 @@ def receive(root, kind, raw, headers):
             (value for value in events.values() if identity in value.get("aliases", [])), None
         )
         if previous and previous["fingerprint"] != fingerprint:
-            raise ValueError("Delivery id already binds a different payload")
+            raise IntakeRejected(
+                "delivery_conflict", "Delivery id already binds a different payload"
+            )
         if previous is None:
             previous = next(
                 (
@@ -167,13 +247,15 @@ def receive(root, kind, raw, headers):
             or not math.isfinite(timestamp)
             or abs(now - timestamp) > 60
         ):
-            raise ValueError("Webhook timestamp is outside its 60-second replay window")
+            raise IntakeRejected(
+                "stale_event", "Webhook timestamp is outside its 60-second replay window"
+            )
         if (
             len(events) >= 1000
             or sum(value["received"] > now - 3600 for value in events.values())
             >= intake["max_per_hour"]
         ):
-            raise ValueError("Webhook admission ledger or hourly limit exhausted")
+            raise IntakeRejected("rate_limit", "Webhook admission ledger or hourly limit exhausted")
         db = project_path(root, ".superqode/workorders/store.sqlite3")
         if db.exists():
             pending = [
@@ -182,7 +264,7 @@ def receive(root, kind, raw, headers):
                 if "factory" in o.metadata and o.status not in TERMINAL_WORK_ORDER_STATUSES
             ]
             if len(pending) >= intake["max_pending"]:
-                raise ValueError("Factory intake pending-work limit reached")
+                raise IntakeRejected("queue_limit", "Factory intake pending-work limit reached")
         snapshot = resolve_factory(definition)
         plan = compile_factory(snapshot, root=root, goal=goal)
         materialize_snapshot(plan)

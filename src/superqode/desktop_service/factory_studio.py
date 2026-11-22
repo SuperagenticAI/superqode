@@ -82,6 +82,47 @@ def handle(service, method, params):
     root = service.project(params["project"])
     _ensure(service)
     target = _target(root)
+    if method == "factory.evidence.trace":
+        from superqode.factory.evidence import trace
+
+        return trace(root, params["run"])
+    if method == "factory.evidence.outcomes":
+        from superqode.factory.evidence import outcomes
+
+        return outcomes(root)
+    if method == "factory.intake.receipts":
+        from superqode.factory.intake import receipts
+
+        return receipts(root)
+    if method == "factory.evidence.record-outcome":
+        from superqode.factory.evidence import record_outcome
+
+        if params.get("confirmed") is not True:
+            raise ValueError("Confirm recording the attributed outcome")
+        return record_outcome(
+            root,
+            params["run"],
+            observation=params["observation"],
+            outcome=params["outcome"],
+            human_minutes=params.get("human_minutes"),
+            actor="desktop",
+        )
+    if method == "factory.verifier.draft":
+        from superqode.factory.verifiers import draft
+
+        return draft(root, params["checks"], yaml_text=params.get("yaml"))
+    if method == "factory.verifier.install":
+        from superqode.factory.verifiers import install
+        from .ship import assert_idle
+
+        with service.lock:
+            assert_idle(service, params["project"])
+            return install(
+                root,
+                params["proposal"],
+                expected=params["digest"],
+                confirmed=params.get("confirmed"),
+            )
     if method.startswith("factory.operations."):
         from .factory_operations import handle as handle_operations
 
@@ -198,6 +239,8 @@ def handle(service, method, params):
             "expected_file_digest": file_digest(target),
             "warnings": warnings,
             "stages": data["orchestration"]["stages"],
+            "requirements": data["data_context"].get("requirements", {}),
+            "application_checks": data["improvement"]["checks"],
             "revision_loop": data["orchestration"].get("revision_loop", {}),
             "layers": list(LAYERS),
             "bindings": data["inference"]["harnesses"],
@@ -900,11 +943,13 @@ def validate_request(root, params, *, service=None):
             "provider": "",
             "model": "",
         }
-    if action == "generate":
+    if action in {"generate", "verifier-generate"}:
         from superqode.providers.registry import PROVIDERS
 
         data = read_mapping(params["yaml"])
         validate_definition(data)
+        if action == "verifier-generate" and data != load_factory(root=root).data:
+            raise ValueError("Save the Factory draft before proposing its verifiers")
         _credentials(data)
         from superqode.factory.generation import check_generation_route
 
@@ -998,14 +1043,24 @@ async def run(request, emit):
         from superqode.factory.versioning import commit_sources
 
         result = commit_sources(root, request["source_plan"], request["paths"], request["message"])
-    elif action == "generate":
+    elif action in {"generate", "verifier-generate"}:
         from superqode.factory.generation import generate_factory
+        from superqode.factory.verifiers import generate as generate_verifiers
 
-        result = await generate_factory(
-            description=request["description"],
-            yaml_text=request["yaml"],
-            provider=request["provider"],
-            model=request["model"],
+        result = await (
+            generate_factory(
+                description=request["description"],
+                yaml_text=request["yaml"],
+                provider=request["provider"],
+                model=request["model"],
+            )
+            if action == "generate"
+            else generate_verifiers(
+                root,
+                description=request["description"],
+                provider=request["provider"],
+                model=request["model"],
+            )
         )
     elif action == "worker":
         from superqode.workorders.worker import WorkOrderWorker, WorkOrderWorkerConfig

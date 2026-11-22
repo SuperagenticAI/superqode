@@ -158,6 +158,19 @@ SCHEMA = obj(
         "data_context": obj(
             {
                 "repository": {"const": "."},
+                "requirements": {
+                    **named(
+                        obj(
+                            {
+                                "description": {**TEXT, "maxLength": 2000},
+                                "stages": strings(NAME, 1),
+                                "checks": strings(NAME, 1),
+                            },
+                            ("description", "stages", "checks"),
+                        )
+                    ),
+                    "maxProperties": 128,
+                },
                 "files": named(
                     obj(
                         {
@@ -186,6 +199,9 @@ SCHEMA = obj(
                             "command": TEXT,
                             "files": strings(NAME),
                             "evaluator": NAME,
+                            "category": {
+                                "enum": ["test", "build", "start", "health", "service", "security"]
+                            },
                         },
                         ("command",),
                     ),
@@ -425,6 +441,11 @@ def validate_definition(data: dict) -> None:
     if len(identifiers) != len(set(identifiers)):
         raise ValueError("Factory stage ids must be unique")
     checks = data["improvement"]["checks"]
+    for requirement in data["data_context"].get("requirements", {}).values():
+        if set(requirement["stages"]) - set(identifiers):
+            raise ValueError("Requirement references an unknown stage")
+        if set(requirement["checks"]) - set(data["orchestration"]["acceptance_checks"]):
+            raise ValueError("Requirement checks must be final acceptance checks")
     assets = data["data_context"].get("files", {})
     evaluator_paths = {
         relative_path(v["path"]).as_posix() for v in assets.values() if v["purpose"] == "evaluator"

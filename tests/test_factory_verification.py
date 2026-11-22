@@ -310,6 +310,71 @@ def test_probe_environment_does_not_inherit_credentials(tmp_path, monkeypatch):
     assert result["stdout"] == "absent\n"
 
 
+@pytest.mark.skipif(
+    sys.platform != "linux" or os.environ.get("SUPERQODE_VERIFY_NATIVE") != "1",
+    reason="Explicit native Linux sandbox check",
+)
+def test_linux_protected_probe_denies_sockets_after_exec(tmp_path):
+    candidate, scratch = tmp_path / "candidate", tmp_path / "scratch"
+    candidate.mkdir()
+    scratch.mkdir()
+    checks = """
+import errno, socket
+for create in (
+    lambda: socket.socket(socket.AF_INET),
+    lambda: socket.socket(socket.AF_INET6),
+    lambda: socket.socket(socket.AF_UNIX),
+    socket.socketpair,
+):
+    try:
+        create()
+    except OSError as error:
+        assert error.errno == errno.EPERM
+    else:
+        raise AssertionError('Protected probe created a socket')
+"""
+    code = (
+        checks
+        + "\nimport os,sys\n"
+        + f"os.execv(sys.executable,[sys.executable,'-S','-c',{checks + chr(10) + 'print("READY")'!r}])"
+    )
+    result = run_python_probe(
+        ["python", "-c", code],
+        candidate=candidate,
+        scratch=scratch,
+        stdin="",
+        deadline=time.monotonic() + 5,
+    )
+    assert result["kind"] == "completed", result
+    assert result["returncode"] == 0 and result["stdout"] == "READY\n", result
+
+
+@pytest.mark.skipif(sys.platform != "linux", reason="Linux network filter")
+def test_missing_linux_network_filter_never_runs_candidate(tmp_path, monkeypatch):
+    from superqode.factory import probes
+
+    monkeypatch.setattr(
+        probes,
+        "build_verification_argv",
+        lambda argv, **kwargs: sandbox.SandboxPlan(argv, True, "test-process-control"),
+    )
+    monkeypatch.setattr(
+        probes,
+        "LINUX_NETWORK_GUARD",
+        probes.LINUX_NETWORK_GUARD.replace("libseccomp.so.2", "libseccomp-missing-test.so"),
+    )
+    result = run_python_probe(
+        ["python", "-c", "print('CANDIDATE-RAN')"],
+        candidate=tmp_path,
+        scratch=tmp_path,
+        stdin="",
+        deadline=time.monotonic() + 5,
+    )
+    assert result["returncode"] != 0
+    assert result["stdout"] == ""
+    assert "libseccomp-missing-test.so" in result["stderr"]
+
+
 @pytest.mark.parametrize("backend", ["seatbelt", "bwrap", "none"])
 def test_protected_sandbox_never_exposes_host_root_or_uses_interactive_fallback(
     tmp_path, monkeypatch, backend

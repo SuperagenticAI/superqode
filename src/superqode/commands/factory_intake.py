@@ -12,6 +12,16 @@ def intake():
     """Authenticate inbound events and queue bounded work without starting agents."""
 
 
+@intake.command("receipts")
+@project_option
+@output
+def receipts(project):
+    """Inspect bounded reason codes for authenticated intake decisions."""
+    from superqode.factory.intake import receipts
+
+    return receipts(project)
+
+
 @intake.command("receive")
 @project_option
 @click.option("--source", type=click.Choice(["github", "linear", "monitor"]), required=True)

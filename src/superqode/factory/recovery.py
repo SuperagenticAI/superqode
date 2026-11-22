@@ -155,6 +155,7 @@ def _names(root, *, directories=False):
     add_tree(".superqode/factory-operations/deployments")
     add_tree(".superqode/factory-operations/retired.json")
     add_tree(".superqode/factory-intake/ledger.json")
+    add_tree(".superqode/factory-intake/receipts.json")
     add_tree(".superqode/factory-intake/plans")
     if len(names) > MAX_FILES:
         raise ValueError("Runtime checkpoint exceeds its file count limit")

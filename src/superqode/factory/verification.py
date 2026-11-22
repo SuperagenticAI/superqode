@@ -286,10 +286,21 @@ def verify_factory(reference, *, root=".", timeout=120, actor="verifier"):
         metadata={"verification_artifact_id": artifact.artifact_id},
         actor=actor,
     )
+    from .evidence import trace
+
+    traceability = trace(root, reference)
+    store.add_artifact(
+        reference,
+        kind="factory_requirement_trace",
+        content=canonical(traceability),
+        digest=digest(canonical(traceability)),
+        actor=actor,
+    )
     return {
         "work_order": store.get(reference).to_dict(),
         "report": json.loads(artifact.content),
         "record": record,
+        "traceability": traceability,
     }
 
 

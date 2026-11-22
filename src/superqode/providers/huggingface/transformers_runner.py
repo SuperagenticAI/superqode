@@ -350,7 +350,7 @@ class TransformersRunner:
             messages: Chat messages in OpenAI format.
             max_tokens: Maximum tokens to generate.
             temperature: Sampling temperature.
-            top_p: Nucleus sampling threshold.
+            top_p: Cumulative probability sampling threshold.
             top_k: Top-k sampling.
             stop: Stop sequences.
 

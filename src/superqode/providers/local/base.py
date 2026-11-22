@@ -169,7 +169,7 @@ class GenerationConfig:
     Attributes:
         max_tokens: Maximum tokens to generate
         temperature: Sampling temperature (0.0-2.0)
-        top_p: Nucleus sampling threshold
+        top_p: Cumulative probability sampling threshold
         top_k: Top-k sampling
         stop: Stop sequences
         num_ctx: Context window size (Ollama-specific)

@@ -31,6 +31,102 @@ accepted without modification. A full definition requires
 Validation does not establish runtime readiness, evaluator independence or
 application quality. Compilation performs additional execution-contract checks.
 
+## Acceptance configuration and requirement evidence
+
+`sq factory verifier` configures protected evaluators for the existing final
+acceptance checks. `sq factory evidence` reads requirement coverage and records
+observed business outcomes. These commands use the shared Factory engine; the
+same CLI commands work through the TUI, for example
+`:factory evidence trace WORK_ID`.
+
+Declare optional requirements inside the existing data/context layer:
+
+```yaml
+data_context:
+  repository: .
+  requirements:
+    export-opens:
+      description: Exported documents open successfully
+      stages: [implement, verify]
+      checks: [regression]
+```
+
+Keep existing `data_context.files` alongside this mapping. Requirement stages
+must exist, and their checks must be final `orchestration.acceptance_checks`.
+Each check can set `category: test`, `build`, `start`, `health`, `service` or
+`security`. Categories describe application acceptance coverage; they do not
+execute checks or establish readiness by themselves.
+
+```sh
+sq factory verifier draft --checks .superqode/checks.json > .superqode/verifier-proposal.json
+sq factory verifier generate --description "Verify the export startup behavior" \
+  --provider ollama --model qwen3-coder --live > .superqode/verifier-generation.json
+sq factory verifier install --proposal .superqode/verifier-proposal.json \
+  --digest sha256:REVIEWED_DIGEST --confirm
+sq factory evidence trace WORK_ID
+sq factory intake receipts
+sq factory evidence record-outcome WORK_ID --observation pilot-task-01 \
+  --outcome met --human-minutes 12.5 --actor operator
+sq factory evidence outcomes
+```
+
+The `--checks` file maps existing acceptance check names to protected probe
+manifests. For example, for an application whose reviewed startup contract is
+printing `READY` and exiting successfully:
+
+```json
+{
+  "regression": {
+    "format": "superqode.factory-probes/1",
+    "cases": [{"id": "startup", "argv": ["python", "app.py"], "stdout": "READY\n"}]
+  }
+}
+```
+
+Review the proposed YAML, all evaluator files and expected behavior independently
+before installation. Installation also accepts the `proposal` wrapper returned
+by `verifier generate`. It checks the reviewed digest and source snapshot,
+saves content-addressed evaluator files and updates the configuration. It does
+not execute probes, approve a release, commit sources or restart a run. Create a
+fresh compiled run after saving and versioning the configuration.
+
+The protected runtime supports Python standard-library probes, a read-only
+candidate and writable `TMPDIR`. It denies sockets and network access. Use
+project-specific probes for builds and startup/health contracts that fit those
+limits. Third-party toolchains, running services and external HTTP dependencies
+need an explicit supported execution contract; a generated proposal cannot
+certify them. AI drafting returns assumptions and missing capabilities; when no
+requested check fits the runtime, it can return no proposal instead of a
+substitute passing check. Agent self-check commands retain their existing role and do not
+become protected evidence just by adding a category.
+
+`evidence trace` links each requirement to expanded stage tasks, artifacts,
+protected check results and the verification artifact. Missing evidence remains
+uncovered. Verification retains a `factory_requirement_trace` artifact, including
+application check categories. The report grants no release authority.
+
+Intake receipts retain up to 256 local authenticated decisions with fixed reason
+codes for queueing, duplicates, policy filtering, replay, delivery conflicts and
+limits. They retain hashes, counts and run references, without raw task content,
+signatures or secrets. Unauthenticated requests do not create receipt state.
+
+Outcome recording requires a finished run and a stable observation id. Retries
+are idempotent; conflicting observations and double-counting a run are rejected.
+Business outcomes are explicitly operator-reported, separate from protected
+verification. Reports group actual runs by pinned Factory revision and include
+human effort and recorded compute usage. Missing human effort or compute costs
+remain unknown. These observations do not establish causal optimization gains.
+Recorded run costs exclude optimization experiments and infrastructure costs;
+inspect the optimizer's existing usage ledger separately for those experiments.
+
+The shared desktop backend exposes `factory.verifier.draft`,
+`factory.verifier.install`, `factory.evidence.trace`, `factory.evidence.outcomes`,
+`factory.evidence.record-outcome` and `factory.intake.receipts`. Model drafting
+uses the existing background-job mechanism with `factory_action: verifier-generate`
+and explicit confirmation. The project-scoped Factory MCP server exposes the
+same operations; model generation additionally requires startup execution opt-in.
+Native visual controls depend on the macOS client consuming these interfaces.
+
 ## factory resolve
 
 Print a content-addressed configuration snapshot as JSON:

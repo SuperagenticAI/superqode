@@ -46,6 +46,39 @@ PROBE_SCHEMA = obj(
 )
 OUTPUT_LIMIT = 64_000
 
+# A private network namespace still permits loopback and Unix sockets. Install
+# this filter inside Bubblewrap, before exec, so the evaluator cannot create
+# sockets at all. libseccomp resolves syscall numbers for the host architecture;
+# failure to load/install it stops the trusted launcher before candidate code.
+LINUX_NETWORK_GUARD = """
+import ctypes, errno
+_sc = ctypes.CDLL('libseccomp.so.2')
+_sc.seccomp_init.argtypes = [ctypes.c_uint32]
+_sc.seccomp_init.restype = ctypes.c_void_p
+_sc.seccomp_syscall_resolve_name.argtypes = [ctypes.c_char_p]
+_sc.seccomp_syscall_resolve_name.restype = ctypes.c_int
+_sc.seccomp_rule_add.argtypes = [ctypes.c_void_p, ctypes.c_uint32, ctypes.c_int, ctypes.c_uint]
+_sc.seccomp_load.argtypes = [ctypes.c_void_p]
+_sc.seccomp_release.argtypes = [ctypes.c_void_p]
+_sc.seccomp_release.restype = None
+_ctx = _sc.seccomp_init(0x7fff0000)  # SCMP_ACT_ALLOW
+if not _ctx:
+    raise RuntimeError('Cannot initialize protected verification network filter')
+try:
+    for _name in (b'socket', b'socketpair', b'socketcall', b'io_uring_setup'):
+        _nr = _sc.seccomp_syscall_resolve_name(_name)
+        if _nr < 0:
+            if _name == b'socketcall':  # Absent on modern native architectures.
+                continue
+            raise RuntimeError('Unsupported protected verification network syscall')
+        if _sc.seccomp_rule_add(_ctx, 0x00050000 | errno.EPERM, _nr, 0) != 0:
+            raise RuntimeError('Cannot configure protected verification network filter')
+    if _sc.seccomp_load(_ctx) != 0:
+        raise RuntimeError('Cannot install protected verification network filter')
+finally:
+    _sc.seccomp_release(_ctx)
+"""
+
 
 def parse_probes(text: str) -> dict:
     data = read_mapping(text)
@@ -69,6 +102,7 @@ def run_python_probe(argv, *, candidate: Path, scratch: Path, stdin: str, deadli
     # engine. Candidate code receives neither evaluator code nor expectations.
     launcher = (
         "import json,os,resource,sys;"
+        f"exec({LINUX_NETWORK_GUARD!r}) if sys.platform == 'linux' else None;"
         "resource.setrlimit(resource.RLIMIT_FSIZE,(16777216,16777216));"
         "resource.setrlimit(resource.RLIMIT_NOFILE,(64,64));"
         f"resource.setrlimit(resource.RLIMIT_CPU,({max(1, math.ceil(deadline - time.monotonic()))},)*2);"

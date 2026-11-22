@@ -16,6 +16,73 @@ def build_factory_mcp_server(project, *, allow_execution=False):
     server = FastMCP("superqode-factory")
 
     @server.tool()
+    def factory_evidence_trace(work_order: str) -> dict:
+        """Trace requirements to pinned stages, checks and verification artifacts."""
+        from superqode.factory.evidence import trace
+
+        return trace(root, work_order)
+
+    @server.tool()
+    def factory_outcomes() -> dict:
+        """Compare recorded business outcomes and known costs by Factory revision."""
+        from superqode.factory.evidence import outcomes
+
+        return outcomes(root)
+
+    @server.tool()
+    def factory_record_outcome(
+        work_order: str,
+        observation: str,
+        outcome: str,
+        human_minutes: float | None = None,
+        confirmed: bool = False,
+    ) -> dict:
+        """Record an operator observation; never manufacture verifier or release evidence."""
+        from superqode.factory.evidence import record_outcome
+
+        if confirmed is not True:
+            raise ValueError("Confirm recording the attributed outcome")
+        return record_outcome(
+            root,
+            work_order,
+            observation=observation,
+            outcome=outcome,
+            human_minutes=human_minutes,
+            actor="mcp operator",
+        )
+
+    @server.tool()
+    def factory_intake_receipts() -> dict:
+        """Read bounded authenticated intake decision codes without payloads or secrets."""
+        from superqode.factory.intake import receipts
+
+        return receipts(root)
+
+    @server.tool()
+    def factory_verifier_draft(checks: dict) -> dict:
+        """Propose protected evaluator files for existing final checks, without writes."""
+        from superqode.factory.verifiers import draft
+
+        return draft(root, checks)
+
+    @server.tool()
+    def factory_verifier_install(proposal: dict, digest: str, confirmed: bool = False) -> dict:
+        """Save exact reviewed verifier configuration; no execution or release activation."""
+        from superqode.factory.verifiers import install
+
+        return install(root, proposal, expected=digest, confirmed=confirmed)
+
+    @server.tool()
+    async def factory_verifier_generate(
+        description: str, provider: str, model: str, confirmed: bool = False
+    ) -> dict:
+        """Use a selected model to draft unmeasured verifiers; live opt-in required."""
+        from superqode.factory.verifiers import generate
+
+        authorize(confirmed)
+        return await generate(root, description=description, provider=provider, model=model)
+
+    @server.tool()
     def factory_capabilities() -> dict:
         """Return implemented methods and whether live execution is enabled."""
         return {
