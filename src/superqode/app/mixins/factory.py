@@ -19,8 +19,17 @@ class FactoryMixin:
         t = Text()
         t.append("\n  Code Factory\n\n", style=f"bold {THEME['purple']}")
         commands = [
-            (":factory", "show current model/harness/route lineage"),
-            (":factory init-policy", "create .superqode/factory.yaml with local-first defaults"),
+            (":factory status", "FactorySpec, acceptance checks, release rule and recent runs"),
+            (":factory init [--template NAME] [--force]", "create a full FactorySpec"),
+            (':factory describe "<team process>" --model p/m', "draft a FactorySpec to review"),
+            (":factory describe --apply DIGEST --confirm", "save a reviewed draft"),
+            (":factory check [--application]", "readiness, with build, start and health runs"),
+            (':factory trial "<goal>"', "queue one WorkOrder from the Factory; no agent runs"),
+            (":factory run <work-order-id>", "run the queued WorkOrder with live agents"),
+            (":factory evidence <work-order-id>", "checks and requirements by status"),
+            (":factory decide <work-order-id>", "SuperGauge verdict and release blockers"),
+            (":factory session", "show current model/harness/route lineage"),
+            (":factory init-policy [--routes-only]", "create .superqode/factory.yaml"),
             (":factory policy", "show merged factory policy and policy path"),
             (
                 ":factory routes",
@@ -49,7 +58,7 @@ class FactoryMixin:
             (":factory lineage", "show model/harness/mode changes over time"),
         ]
         for command, desc in commands:
-            t.append(f"  {command:<62}", style=f"bold {THEME['cyan']}")
+            t.append(f"  {command:<52}", style=f"bold {THEME['cyan']}")
             t.append(f"{desc}\n", style=THEME["muted"])
         self._show_command_output(log, t)
 
@@ -126,12 +135,139 @@ class FactoryMixin:
 
     def _factory_init_policy(self, tokens: list[str], log: ConversationLog) -> None:
         force = any(token.lower() == "--force" for token in tokens)
+        routes_only = any(token.lower() == "--routes-only" for token in tokens)
         try:
-            path = self._factory().init_policy(force=force)
+            path = self._factory().init_policy(force=force, routes_only=routes_only)
         except Exception as exc:
             log.add_error(f"Could not initialize factory policy: {exc}")
             return
         log.add_success(f"Factory policy ready: {path}")
+
+    def _factory_lines(self, log: ConversationLog, title: str, lines: list[str]) -> None:
+        t = Text()
+        t.append(f"\n  {title}\n\n", style=f"bold {THEME['purple']}")
+        for line in lines:
+            t.append(f"  {line}\n", style=THEME["text"])
+        self._show_command_output(log, t)
+
+    def _factory_overview(self, tokens: list[str], log: ConversationLog) -> None:
+        """FactorySpec summary first, then the active session route if there is one."""
+        from pathlib import Path
+
+        from superqode.factory.summaries import overview, overview_lines
+
+        try:
+            if not (Path.cwd() / ".superqode" / "factory.yaml").exists():
+                raise FileNotFoundError
+            lines = overview_lines(overview(Path.cwd()))
+        except FileNotFoundError:
+            lines = ["➖ No Factory in this project yet. Next: :factory init"]
+        except Exception as exc:
+            lines = [f"⛔ Factory definition problem: {exc}"]
+        try:
+            meta = (self._factory().status(tokens[0] if tokens else "").get("factory")) or {}
+        except Exception:
+            meta = {}
+        if meta:
+            lines.append(
+                "   Session: "
+                + "  ".join(
+                    f"{key} {meta[key]}"
+                    for key in ("mode", "route", "model_ref", "harness")
+                    if meta.get(key)
+                )
+                + "  (:factory session for lineage)"
+            )
+        self._factory_lines(log, "Software Factory", lines)
+
+    def _factory_init_spec(self, tokens: list[str], log: ConversationLog) -> None:
+        from pathlib import Path
+
+        from superqode.factory.authoring import init_from_template
+
+        template = "fix-and-verify"
+        if "--template" in tokens:
+            index = tokens.index("--template")
+            if index + 1 >= len(tokens):
+                log.add_info("Usage: :factory init [--template fix-and-verify|continuous-outcomes]")
+                return
+            template = tokens[index + 1]
+        try:
+            result = init_from_template(Path.cwd(), template, force="--force" in tokens)
+        except Exception as exc:
+            log.add_error(f"Could not create the Factory: {exc}")
+            return
+        log.add_success(
+            f"✅ FactorySpec {result['template']} saved to {result['path']}"
+            + (" (route policy kept)" if result.get("upgraded_route_policy") else "")
+            + ". Next: :factory check"
+        )
+
+    def _factory_cli(self, subcommand: str, tokens: list[str], log: ConversationLog) -> None:
+        """Commands that may run models, agents or project processes go through the CLI."""
+        if subcommand == "run":
+            if len(tokens) != 1:
+                log.add_info("Usage: :factory run <work-order-id>")
+                return
+            parts = ["factory", "worker", tokens[0], "--live"]
+        else:
+            parts = ["factory", subcommand, *tokens]
+        self._run_cli_passthrough(parts, log, f"Factory {subcommand}")
+
+    def _factory_trial(self, tokens: list[str], log: ConversationLog) -> None:
+        from pathlib import Path
+
+        from superqode.factory.authoring import queue_trial
+
+        goal = " ".join(tokens).strip()
+        if not goal:
+            log.add_info('Usage: :factory trial "<goal>"')
+            return
+        try:
+            result = queue_trial(Path.cwd(), goal, actor="tui")
+        except Exception as exc:
+            log.add_error(f"⛔ Could not queue the trial: {exc}")
+            return
+        self._factory_lines(
+            log,
+            "Factory trial",
+            [
+                f"⏸️ Queued {result['work_order_id']} ({result['status']}); no agent has run.",
+                f"   Next: :factory run {result['work_order_id']}",
+            ],
+        )
+
+    def _factory_evidence(self, tokens: list[str], log: ConversationLog) -> None:
+        from pathlib import Path
+
+        from superqode.factory.evidence import trace
+        from superqode.factory.summaries import trace_lines
+
+        if len(tokens) != 1:
+            log.add_info("Usage: :factory evidence <work-order-id>")
+            return
+        try:
+            lines = trace_lines(trace(Path.cwd(), tokens[0]))
+        except Exception as exc:
+            log.add_error(f"Could not load Factory evidence: {exc}")
+            return
+        self._factory_lines(log, f"Factory evidence {tokens[0]}", lines)
+
+    def _factory_decide(self, tokens: list[str], log: ConversationLog) -> None:
+        from pathlib import Path
+
+        from superqode.factory.release import release_status
+        from superqode.factory.summaries import decision_lines
+
+        if len(tokens) != 1:
+            log.add_info("Usage: :factory decide <work-order-id>")
+            return
+        try:
+            lines = decision_lines(release_status(tokens[0], root=Path.cwd()))
+        except Exception as exc:
+            log.add_error(f"Could not load the release decision: {exc}")
+            return
+        self._factory_lines(log, f"Release decision {tokens[0]}", lines)
 
     def _factory_routes(self, log: ConversationLog) -> None:
         try:

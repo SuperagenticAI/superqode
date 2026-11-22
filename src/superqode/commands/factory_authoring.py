@@ -209,3 +209,27 @@ def decide(project, work_order_id, json_output):
         _lines(decision_lines(status))
     if status["blockers"]:
         raise click.exceptions.Exit(2)
+
+
+@click.command("trial")
+@_project
+@click.argument("goal")
+@click.option("--request-id", default="", help="Stable intake id; reuse it when retrying")
+@click.option("--actor", default="cli", show_default=True, help="Local audit attribution")
+@_json
+def trial(project, goal, request_id, actor, json_output):
+    """Compile the saved Factory for GOAL and queue one WorkOrder without running agents.
+
+    Run it afterwards with: sq factory worker <id> --live
+    """
+    from superqode.factory.authoring import queue_trial
+
+    try:
+        result = queue_trial(project, goal, actor=actor, request_id=request_id)
+    except (ValueError, OSError, KeyError) as exc:
+        _fail(exc)
+    if json_output:
+        click.echo(json.dumps(result, indent=2))
+        return
+    click.echo(f"⏸️ Queued {result['work_order_id']} ({result['status']}); no agent has run.")
+    click.echo(f"   Next: sq factory worker {result['work_order_id']} --live")

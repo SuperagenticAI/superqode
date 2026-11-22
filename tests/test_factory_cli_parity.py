@@ -155,3 +155,10 @@ def test_decide_lists_what_is_missing(project, monkeypatch):
     assert "⛔ Release blocked" in result.output
     assert "Protected verification has not run" in result.output
     assert "release_authority" in result.output
+
+
+def test_trial_queues_without_running_agents(project):
+    result = invoke("trial", "--project", str(project), "Fix the answer", "--json")
+    assert result.exit_code == 0, result.output
+    queued = json.loads(result.output)
+    assert queued["execution_started"] is False and queued["status"] == "queued"

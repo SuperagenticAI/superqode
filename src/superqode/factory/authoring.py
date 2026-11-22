@@ -245,3 +245,30 @@ def apply_draft(root, digest_value, *, reason, confirmed):
         reason=reason,
         expected_snapshot_digest=stored["snapshot_digest"],
     )
+
+
+def queue_trial(root, goal, *, actor, request_id=""):
+    """Compile the saved Factory for a goal and admit one WorkOrder; never start agents."""
+    import uuid
+
+    from .compiler import compile_factory, materialize_snapshot
+    from .definition import load_factory
+    from .runtime import admit_factory
+
+    root = Path(root).resolve()
+    if not str(goal).strip():
+        raise ValueError("Give the trial a goal")
+    definition = load_factory(root=root)
+    if "apiVersion" not in definition.data:
+        raise ValueError("Create a FactorySpec first: sq factory init")
+    plan = compile_factory(resolve_factory(definition), root=root, goal=str(goal).strip())
+    materialize_snapshot(plan)
+    order = admit_factory(
+        plan, request_id=request_id or f"{actor}-{uuid.uuid4().hex[:12]}", actor=actor
+    )
+    return {
+        "work_order_id": order.work_order_id,
+        "status": order.status.value,
+        "snapshot_digest": plan.snapshot.digest,
+        "execution_started": False,
+    }

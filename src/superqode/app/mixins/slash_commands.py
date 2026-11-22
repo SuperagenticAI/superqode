@@ -1576,13 +1576,25 @@ class SlashCommandMixin:
         subcommand = tokens[0].lower() if tokens else "status"
         rest = tokens[1:]
         if subcommand in {"", "status"}:
+            self._factory_overview(rest, log)
+        elif subcommand == "session":
             self._factory_status(rest, log)
         elif subcommand in {"help", "?"}:
             self._factory_help(log)
         elif subcommand in {"policy"}:
             self._factory_policy(log)
-        elif subcommand in {"init-policy", "init"}:
+        elif subcommand == "init":
+            self._factory_init_spec(rest, log)
+        elif subcommand == "init-policy":
             self._factory_init_policy(rest, log)
+        elif subcommand in {"describe", "check", "run"}:
+            self._factory_cli(subcommand, rest, log)
+        elif subcommand == "trial":
+            self._factory_trial(rest, log)
+        elif subcommand in {"evidence", "trace"}:
+            self._factory_evidence(rest, log)
+        elif subcommand in {"decide", "decision"}:
+            self._factory_decide(rest, log)
         elif subcommand in {"routes", "route", "models"}:
             self._factory_routes(log)
         elif subcommand in {"mode", "policy"}:
