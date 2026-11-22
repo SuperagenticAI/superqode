@@ -319,7 +319,8 @@ def outcomes(root):
                 }
             )
     rows = []
-    for revision in sorted(set(groups) | set(runs) | set(optimization)):
+    # Revisions with observed outcomes first, newest run first, as before.
+    for revision in dict.fromkeys([*groups, *runs, *optimization]):
         observations = groups.get(revision, [])
         attempts = runs.get(revision, [])
         experiments = optimization.get(revision, [])

@@ -22,21 +22,21 @@ struct FactoryRequirementTraceView: View {
         else if requirements.isEmpty { Text("This run declared no requirement mappings. Application checks are shown below.").font(.caption).foregroundStyle(.secondary) }
         ForEach(Array(requirements.enumerated()), id: \.offset) { _, row in
           VStack(alignment: .leading, spacing: 5) {
-            HStack { Text(string(row, "id")).font(.subheadline.bold()); Spacer(); Pill(title: string(row, "status"), color: string(row, "status") == "covered" ? .green : .orange) }
+            HStack { Text(string(row, "id")).font(.subheadline.bold()); Spacer(); Pill(title: string(row, "status"), color: requirementColor(row)) }
             Text(string(row, "description")).font(.caption)
-            ForEach(Array((row["stages"] as? [[String: Any]] ?? []).enumerated()), id: \.offset) { _, stage in
-              Text(string(stage, "stage") + " · " + (stage["completed"] as? Bool == true ? "Completed" : "Incomplete") + " · " + ((stage["tasks"] as? [[String: Any]] ?? []).map { string($0, "id") + " (" + string($0, "status") + ")" }).joined(separator: ", "))
+            ForEach(Array(stages(row).enumerated()), id: \.offset) { _, stage in
+              Text(stageSummary(stage))
                 .font(.caption).textSelection(.enabled)
-              let artifacts = stage["artifacts"] as? [String] ?? []
+              let artifacts: [String] = stageArtifacts(stage)
               if !artifacts.isEmpty { Text("Artifacts: " + artifacts.joined(separator: ", ")).font(.caption.monospaced()).foregroundStyle(.secondary).textSelection(.enabled) }
             }
-            Text("Checks: " + ((row["checks"] as? [[String: Any]] ?? []).map { string($0, "check") + " (" + string($0, "status") + ")" }).joined(separator: ", "))
+            Text(checksSummary(row))
               .font(.caption)
           }.padding(10).brandSurface()
         }
         ForEach(Array(checks.enumerated()), id: \.offset) { _, check in
           VStack(alignment: .leading, spacing: 4) {
-            HStack { Text(string(check, "check")).font(.caption.bold()); Pill(title: string(check, "category")); Spacer(); Text(string(check, "status") == "missing" ? "Not run or evidence unbound" : string(check, "status").capitalized).font(.caption) }
+            HStack { Text(string(check, "check")).font(.caption.bold()); Pill(title: string(check, "category")); Spacer(); Text(checkStatus(check)).font(.caption) }
             if !string(check, "verification_artifact").isEmpty { Text("Verification artifact: " + string(check, "verification_artifact")).font(.caption.monospaced()).textSelection(.enabled) }
           }
         }
@@ -44,6 +44,55 @@ struct FactoryRequirementTraceView: View {
         if !library.failure.isEmpty { Text(library.failure).font(.caption).foregroundStyle(.orange) }
       }.padding(.top, 8).accessibilityIdentifier("factory.acceptance.trace")
     }.task(id: refreshKey) { guard active, !studio.run.isEmpty else { return }; await library.refreshTrace(app.engine) }
+  }
+
+  // Small typed helpers keep the view body quick for the Swift type checker.
+  private func requirementColor(_ row: [String: Any]) -> Color {
+    let status: String = string(row, "status")
+    return status == "covered" ? Color.green : Color.orange
+  }
+
+  private func stages(_ row: [String: Any]) -> [[String: Any]] {
+    let value: [[String: Any]] = row["stages"] as? [[String: Any]] ?? []
+    return value
+  }
+
+  private func stageArtifacts(_ stage: [String: Any]) -> [String] {
+    let value: [String] = stage["artifacts"] as? [String] ?? []
+    return value
+  }
+
+  private func stageSummary(_ stage: [String: Any]) -> String {
+    let name: String = string(stage, "stage")
+    let completed: Bool = (stage["completed"] as? Bool) == true
+    let state: String = completed ? "Completed" : "Incomplete"
+    let tasks: [[String: Any]] = stage["tasks"] as? [[String: Any]] ?? []
+    var parts: [String] = []
+    for task in tasks {
+      let id: String = string(task, "id")
+      let status: String = string(task, "status")
+      parts.append(id + " (" + status + ")")
+    }
+    let taskText: String = parts.joined(separator: ", ")
+    return name + " · " + state + " · " + taskText
+  }
+
+  private func checksSummary(_ row: [String: Any]) -> String {
+    let rows: [[String: Any]] = row["checks"] as? [[String: Any]] ?? []
+    var parts: [String] = []
+    for check in rows {
+      let name: String = string(check, "check")
+      let status: String = string(check, "status")
+      parts.append(name + " (" + status + ")")
+    }
+    let text: String = parts.joined(separator: ", ")
+    return "Checks: " + text
+  }
+
+  private func checkStatus(_ check: [String: Any]) -> String {
+    let status: String = string(check, "status")
+    if status == "missing" || status == "never_ran" { return "Not run or evidence unbound" }
+    return status.capitalized
   }
 }
 
@@ -58,25 +107,31 @@ struct FactoryOutcomeView: View {
   private var idle: Bool { !library.busy && !studio.busy && !app.anyActive && !app.busy }
   private var finished: [[String: Any]] { studio.runs.filter { ["accepted", "merged", "rolled_back", "rejected", "failed", "cancelled"].contains(string($0, "status")) } }
   private var values: [String] { [app.projectID, studio.run, library.observation, library.outcome, library.humanMinutes] }
+  private var revisions: [[String: Any]] {
+    let value: [[String: Any]] = library.outcomes["revisions"] as? [[String: Any]] ?? []
+    return value
+  }
   var body: some View {
     DisclosureGroup("Observed outcomes & costs", isExpanded: $expanded) {
         VStack(alignment: .leading, spacing: 10) {
           Text("Record an attributed business observation after a run finishes. Compare revisions on representative tasks; these observations do not establish causality or release approval.").font(.caption).foregroundStyle(.secondary)
           Button("Refresh outcomes") { Task { await library.refreshOutcomes(app.engine) } }.disabled(!idle)
-          ForEach(Array((library.outcomes["revisions"] as? [[String: Any]] ?? []).enumerated()), id: \.offset) { _, row in
-            let counts = row["outcomes"] as? [String: Any] ?? [:]
+          ForEach(Array(revisions.enumerated()), id: \.offset) { _, row in
+            let counts: [String: Any] = row["outcomes"] as? [String: Any] ?? [:]
+            let runs: Int = row["runs"] as? Int ?? 0
+            let met: Int = counts["met"] as? Int ?? 0
+            let notMet: Int = counts["not_met"] as? Int ?? 0
+            let unknown: Int = counts["unknown"] as? Int ?? 0
             VStack(alignment: .leading, spacing: 5) {
               Text("Revision " + String(string(row, "snapshot_digest").prefix(24))).font(.caption.monospaced()).textSelection(.enabled)
-              Text("\(row["runs"] as? Int ?? 0) observed runs · Met: \(counts["met"] as? Int ?? 0) · Not met: \(counts["not_met"] as? Int ?? 0) · Unknown: \(counts["unknown"] as? Int ?? 0)").font(.caption)
-              Text("Human minutes: " + FactoryAcceptanceLibrary.measurement(row["human_minutes"], decimals: 1)
-                + " · Recorded USD: " + FactoryAcceptanceLibrary.measurement(row["cost_usd"], decimals: 2)
-                + " · Tokens: " + FactoryAcceptanceLibrary.measurement(row["total_tokens"]))
+              Text("\(runs) observed runs · Met: \(met) · Not met: \(notMet) · Unknown: \(unknown)").font(.caption)
+              Text(costSummary(row))
                 .font(.caption).accessibilityIdentifier("factory.outcomes.costs")
               DisclosureGroup("Attributed observations") { CodeBlock(text: pretty(row["observations"])) }
             }.padding(10).brandSurface()
           }
-          if (library.outcomes["revisions"] as? [[String: Any]] ?? []).isEmpty { Text("No outcome observations recorded.").font(.caption).foregroundStyle(.secondary) }
-          Text("Unknown cost or effort stays unknown. Recorded run usage is separate from optimizer experiments and infrastructure costs; do not treat it as the full engagement cost.").font(.caption).foregroundStyle(.secondary)
+          if revisions.isEmpty { Text("No outcome observations recorded.").font(.caption).foregroundStyle(.secondary) }
+          Text("Unknown cost or effort stays unknown. Revision cost includes failed and unobserved attempts and optimizer experiments run against that revision; infrastructure costs are not included.").font(.caption).foregroundStyle(.secondary)
           Divider()
           Picker("Finished run", selection: $studio.run) {
             if !finished.contains(where: { string($0, "id") == studio.run }) { Text("Choose a finished run").tag(studio.run) }
@@ -99,6 +154,13 @@ struct FactoryOutcomeView: View {
       Button("Cancel", role: .cancel) { }
       Button("Record") { guard confirmedValues == values else { return }; Task { await library.recordOutcome(app.engine) } }
     } message: { Text("Attribute this outcome and optional human effort to the selected finished run. This is an operator report, separate from protected verification and release approval.") }
+  }
+
+  private func costSummary(_ row: [String: Any]) -> String {
+    let minutes: String = FactoryAcceptanceLibrary.measurement(row["human_minutes"], decimals: 1)
+    let usd: String = FactoryAcceptanceLibrary.measurement(row["cost_usd"], decimals: 2)
+    let tokens: String = FactoryAcceptanceLibrary.measurement(row["total_tokens"])
+    return "Human minutes: " + minutes + " · Recorded USD: " + usd + " · Tokens: " + tokens
   }
 }
 

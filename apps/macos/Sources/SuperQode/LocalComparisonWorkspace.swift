@@ -167,9 +167,13 @@ struct LocalComparisonWorkspace: View {
         let config = variant["local_configuration"] as? [String: Any] ?? [:]
         let observation = config["after"] as? [String: Any] ?? [:]
         let requests = variant["model_requests"] as? [[String: Any]] ?? []
+        let passed: String = String(describing: variant["passed"] ?? 0)
+        let failed: String = String(describing: variant["failed"] ?? 0)
+        let errors: String = String(describing: variant["errors"] ?? 0)
+        let requestCount: Int = requests.count
         VStack(alignment: .leading, spacing: 8) {
           Text(string(variant, "harness")).font(.headline)
-          Text("\(variant["passed"] ?? 0) passed · \(variant["failed"] ?? 0) failed · \(variant["errors"] ?? 0) errors · \(requests.count) measured model requests").font(.caption)
+          Text("\(passed) passed · \(failed) failed · \(errors) errors · \(requestCount) measured model requests").font(.caption)
           let firstText = requests.compactMap { ($0["first_text_s"] as? NSNumber)?.doubleValue }.sorted()
           Text("Median first text: " + (firstText.isEmpty ? "Not reported" : String(format: "%.2f s", (firstText[(firstText.count - 1) / 2] + firstText[firstText.count / 2]) / 2)))
             .font(.callout)
