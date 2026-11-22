@@ -8,6 +8,7 @@ from .factory_improvement import improve
 from .factory_campaigns import campaign
 from .factory_intake import intake
 from .factory_evidence import evidence, verifier
+from .factory_authoring import init, show, describe, sources, check, decide
 
 
 @click.group()
@@ -22,6 +23,8 @@ factory.add_command(campaign)
 factory.add_command(intake)
 factory.add_command(evidence)
 factory.add_command(verifier)
+for _command in (init, show, describe, sources, check, decide):
+    factory.add_command(_command)
 
 
 @factory.command("export")
@@ -458,12 +461,15 @@ def factory_policy(json_output):
 
 @factory.command("init-policy")
 @click.option("--force", is_flag=True, help="Overwrite an existing .superqode/factory.yaml")
-def factory_init_policy(force):
-    """Create .superqode/factory.yaml with local-first defaults."""
+@click.option(
+    "--routes-only", is_flag=True, help="Write the older route-only policy instead of a FactorySpec"
+)
+def factory_init_policy(force, routes_only):
+    """Create .superqode/factory.yaml: a full FactorySpec with local-first routes."""
     from superqode.session.factory import SoftwareFactory
 
     try:
-        path = SoftwareFactory().init_policy(force=force)
+        path = SoftwareFactory().init_policy(force=force, routes_only=routes_only)
     except Exception as exc:
         raise click.ClickException(str(exc)) from exc
     click.echo(f"Factory policy: {path}")

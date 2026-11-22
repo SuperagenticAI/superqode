@@ -189,27 +189,11 @@ def handle(service, method, params):
         )
         return {**value, "review": identity}
     if method == "factory.open":
-        current = _text(target) if target.is_file() else ""
-        if params.get("template"):
-            data = factory_template(params["template"])
-            if current:
-                existing = read_mapping(current)
-                for key in ("default_route", "routes"):
-                    if key in existing:
-                        data[key] = existing[key]
-            current = yaml.safe_dump(data, sort_keys=False)
-        elif params.get("revision"):
-            revision = params["revision"]
-            if len(revision) != 64 or any(c not in "0123456789abcdef" for c in revision):
-                raise ValueError("Invalid factory revision")
-            current = _text(
-                project_path(root, f".superqode/factory-studio/revisions/{revision}.yaml")
-            )
-        return {
-            "yaml": current,
-            "expected_file_digest": file_digest(target),
-            "legacy": bool(current and "apiVersion" not in read_mapping(current)),
-        }
+        from superqode.factory.authoring import open_definition
+
+        return open_definition(
+            root, template=params.get("template", ""), revision=params.get("revision", "")
+        )
     if method == "factory.edit":
         data = read_mapping(params["yaml"])
         controls = params.get("controls", {})
@@ -246,48 +230,9 @@ def handle(service, method, params):
         validate_definition(data)
         return {"yaml": yaml.safe_dump(data, sort_keys=False)}
     if method == "factory.inspect":
-        text = params.get("yaml", "")
-        data, snapshot = _parse(root, text)
-        old = _text(target) if target.is_file() else ""
-        warnings = []
-        for name in data["orchestration"]["acceptance_checks"]:
-            if "evaluator" not in data["improvement"]["checks"][name]:
-                warnings.append(
-                    f"{name}: add protected evaluator probes before acceptance verification."
-                )
-        if not data["governance"].get("release_authority"):
-            warnings.append("No release signing authority is configured; delivery remains on hold.")
-        warnings.append(
-            "Definition validation makes no model calls and does not establish execution quality."
-        )
-        value = {
-            "yaml": text,
-            "name": data["metadata"]["name"],
-            "digest": sha(text),
-            "snapshot_digest": snapshot.digest,
-            "expected_file_digest": file_digest(target),
-            "warnings": warnings,
-            "stages": data["orchestration"]["stages"],
-            "requirements": data["data_context"].get("requirements", {}),
-            "application_checks": data["improvement"]["checks"],
-            "acceptance_checks": data["orchestration"]["acceptance_checks"],
-            "revision_loop": data["orchestration"].get("revision_loop", {}),
-            "layers": list(LAYERS),
-            "bindings": data["inference"]["harnesses"],
-            "binding_models": {
-                name: harness.get("model_policy", {}).get("primary", "")
-                for name, harness in snapshot.payload["harnesses"].items()
-            },
-            "governance": data["governance"],
-            "diff": "".join(
-                difflib.unified_diff(
-                    old.splitlines(True),
-                    text.splitlines(True),
-                    fromfile="Current factory",
-                    tofile="Proposed factory",
-                )
-            ),
-        }
+        from superqode.factory.authoring import inspect_definition
+
+        value = inspect_definition(root, params.get("yaml", ""))
         identity = sha(json.dumps(value, sort_keys=True))
         service._write(
             "INSERT OR REPLACE INTO factory_studio_reviews VALUES(?,?,?,?)",
@@ -296,6 +241,7 @@ def handle(service, method, params):
         return {**value, "review": identity}
     if method == "factory.save":
         from .ownership import Lease, project_lease_path
+        from superqode.factory.authoring import save_definition
 
         review = _review(service, params)
         reason = params.get("reason", "")
@@ -309,39 +255,18 @@ def handle(service, method, params):
                 raise ValueError("Finish active project work before changing the factory")
             lease = Lease(project_lease_path(service.root, root))
             try:
-                current = file_digest(target)
-                if (
-                    current != params.get("expected_file_digest", "")
-                    or current != review["expected_file_digest"]
-                ):
+                if params.get("expected_file_digest", "") != review["expected_file_digest"]:
                     raise ValueError("Project factory changed; reload before saving")
-                _, snapshot = _parse(root, review["yaml"])
-                if snapshot.digest != review["snapshot_digest"]:
-                    raise ValueError("Factory components changed since validation; validate again")
-                folder = project_path(root, ".superqode/factory-studio/revisions")
-                versions = [(review["digest"], review["yaml"])]
-                if current:
-                    versions.append((current, _text(target)))
-                for token, text in versions:
-                    path = project_path(
-                        root, (folder.relative_to(root) / (token + ".yaml")).as_posix()
-                    )
-                    if path.exists() and _text(path) != text:
-                        raise ValueError("Stored factory revision was modified")
-                    if not path.exists():
-                        _atomic(path, text)
-                metadata_path = project_path(
-                    root, (folder.relative_to(root) / (review["digest"] + ".json")).as_posix()
+                saved = save_definition(
+                    root,
+                    review["yaml"],
+                    expected_file_digest=review["expected_file_digest"],
+                    reason=reason,
+                    expected_snapshot_digest=review["snapshot_digest"],
                 )
-                if not metadata_path.exists():
-                    _atomic(
-                        metadata_path,
-                        json.dumps({"reason": reason, "parent": current, "created": time.time()}),
-                    )
-                _atomic(target, review["yaml"])
             finally:
                 lease.close()
-        return {"digest": review["digest"], "snapshot_digest": snapshot.digest}
+        return {"digest": saved["digest"], "snapshot_digest": saved["snapshot_digest"]}
     if method == "factory.list":
         folder = project_path(root, ".superqode/factory-studio/revisions")
         revisions = []

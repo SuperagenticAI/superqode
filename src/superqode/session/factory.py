@@ -197,13 +197,33 @@ class SoftwareFactory:
         policy["routes"] = merged_routes
         return policy
 
-    def init_policy(self, *, force: bool = False) -> Path:
+    def init_policy(
+        self, *, force: bool = False, routes_only: bool = False, template: str = "fix-and-verify"
+    ) -> Path:
+        """Create the project factory file.
+
+        By default this writes a full FactorySpec from ``template`` that keeps
+        the local-first route policy. ``routes_only`` writes the older
+        route-only policy file. An existing file is kept unless ``force``.
+        """
         if self.policy_path.exists() and not force:
             return self.policy_path
         self.policy_path.parent.mkdir(parents=True, exist_ok=True)
+        if routes_only:
+            self.policy_path.write_text(
+                yaml.safe_dump(default_policy(), sort_keys=False),
+                encoding="utf-8",
+            )
+            return self.policy_path
+        if self.policy_path.parent.name == ".superqode" and self.policy_path.name == "factory.yaml":
+            from superqode.factory.authoring import init_from_template
+
+            init_from_template(self.policy_path.parent.parent, template, force=True)
+            return self.policy_path
+        from superqode.factory.templates import factory_template
+
         self.policy_path.write_text(
-            yaml.safe_dump(default_policy(), sort_keys=False),
-            encoding="utf-8",
+            yaml.safe_dump(factory_template(template), sort_keys=False), encoding="utf-8"
         )
         return self.policy_path
 
