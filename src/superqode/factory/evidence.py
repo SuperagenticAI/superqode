@@ -8,6 +8,7 @@ import re
 import time
 from pathlib import Path
 
+from .definition import project_path
 from .runtime import factory_store, _pinned_plan
 from .snapshot import canonical, digest
 from .operations import ownership
@@ -211,7 +212,7 @@ def record_outcome(root, reference, *, observation, outcome, human_minutes=None,
             usage=_usage(order),
             verification=order.metadata.get("factory_verification", {}).get("state", "missing"),
             operator_reported=True,
-            cost_scope="Recorded run usage; optimization experiments and infrastructure are separate",
+            cost_scope="This run only; revision totals add failed attempts and optimization experiments",
             release_authorized=False,
         )
         store.add_artifact(
@@ -224,37 +225,114 @@ def record_outcome(root, reference, *, observation, outcome, human_minutes=None,
         return json.loads(canonical(value))
 
 
+PAGE = 500
+REVISION_COST_SCOPE = (
+    "Every recorded run of this revision, including failed and unobserved attempts, plus "
+    "improvement experiments run against it; infrastructure is not included"
+)
+
+
+def _pages(store):
+    offset = 0
+    while True:
+        page = store.list(limit=PAGE, offset=offset)
+        yield from page
+        if len(page) < PAGE:
+            return
+        offset += PAGE
+
+
+def _known_sum(values):
+    values = list(values)
+    return round(sum(values), 10) if all(v is not None for v in values) else None
+
+
+def _optimization_costs(root):
+    """Improvement ledger cost per baseline revision; unknown stays unknown."""
+    from . import improvement
+
+    costs, issues = {}, []
+    base = project_path(root, improvement.PREFIX)
+    if not base.is_dir():
+        return costs, issues
+    for directory in sorted(p for p in base.iterdir() if p.is_dir()):
+        try:
+            plan = improvement.load(root, directory.name)[0]
+        except (ValueError, OSError, KeyError) as exc:
+            issues.append(f"Improvement plan {directory.name} could not be read: {exc}")
+            continue
+        summary = improvement.budget_summary(root, plan)
+        known = (
+            "accounted" in summary
+            and not summary.get("unknown_requests")
+            and not summary.get("pending_operations")
+        )
+        costs.setdefault(plan["factory_digest"], []).append(
+            {
+                "plan": plan["id"],
+                "cost_usd": summary["accounted"]["cost_usd"] if known else None,
+                "tokens": summary["accounted"]["tokens"] if known else None,
+            }
+        )
+    return costs, issues
+
+
 def outcomes(root):
-    """Group observed outcomes by actual factory revision, without claiming causality."""
+    """Group observed outcomes and all spend by factory revision, without claiming causality."""
     store = factory_store(root, read_only=True)
-    groups = {}
-    orders = store.list(limit=1001)
-    if len(orders) > 1000:
-        raise ValueError("Select a project with at most 1000 runs for outcome reporting")
-    for order in orders:
+    groups, runs = {}, {}
+    optimization, issues = _optimization_costs(root)
+    for order in _pages(store):
+        if "factory" not in order.metadata:
+            continue
+        try:
+            plan = _plan(root, order)
+        except ValueError as exc:
+            if any(a.kind == "factory_outcome" for a in order.artifacts):
+                raise
+            issues.append(f"Run {order.work_order_id} is not counted: {exc}")
+            continue
+        observed = False
         for artifact in order.artifacts:
             if artifact.kind != "factory_outcome":
                 continue
             if artifact.digest != digest(artifact.content):
                 raise ValueError("Outcome evidence digest changed")
             value = json.loads(artifact.content)
-            plan = _plan(root, order)
             if (
                 value["snapshot_digest"] != plan.snapshot.digest
                 or value["run"] != order.work_order_id
             ):
                 raise ValueError("Outcome evidence differs from its pinned run")
             groups.setdefault(plan.snapshot.digest, []).append(value)
+            observed = True
+        if not observed:
+            usage = _usage(order)
+            if not usage["run_count"] and not any(t.attempts for t in order.tasks):
+                usage["cost_usd"] = usage["total_tokens"] = 0  # never started
+            runs.setdefault(plan.snapshot.digest, []).append(
+                {
+                    "run": order.work_order_id,
+                    "status": order.status.value,
+                    "cost_usd": usage["cost_usd"],
+                    "total_tokens": usage["total_tokens"],
+                }
+            )
     rows = []
-    for revision, observations in groups.items():
+    for revision in sorted(set(groups) | set(runs) | set(optimization)):
+        observations = groups.get(revision, [])
+        attempts = runs.get(revision, [])
+        experiments = optimization.get(revision, [])
 
         def total(field):
-            values = [
+            return _known_sum(
                 v["human_minutes"] if field == "human_minutes" else v["usage"][field]
                 for v in observations
-            ]
-            return sum(values) if all(v is not None for v in values) else None
+            )
 
+        observed_cost = total("cost_usd")
+        attempt_cost = _known_sum(a["cost_usd"] for a in attempts)
+        optimization_cost = _known_sum(e["cost_usd"] for e in experiments)
         rows.append(
             {
                 "snapshot_digest": revision,
@@ -264,14 +342,36 @@ def outcomes(root):
                     for k in ("met", "not_met", "unknown")
                 },
                 "human_minutes": total("human_minutes"),
-                "cost_usd": total("cost_usd"),
-                "total_tokens": total("total_tokens"),
+                "cost_usd": _known_sum([observed_cost, attempt_cost, optimization_cost]),
+                "total_tokens": _known_sum(
+                    [
+                        total("total_tokens"),
+                        _known_sum(a["total_tokens"] for a in attempts),
+                        _known_sum(e["tokens"] for e in experiments),
+                    ]
+                ),
+                "cost": {
+                    "observed_runs_usd": observed_cost,
+                    "other_attempts_usd": attempt_cost,
+                    "optimization_usd": optimization_cost,
+                },
+                "attempts": {
+                    "observed": len(observations),
+                    "failed": sum(a["status"] in {"failed", "cancelled"} for a in attempts),
+                    "unobserved": len(attempts),
+                    "optimization_plans": len(experiments),
+                },
+                "cost_scope": REVISION_COST_SCOPE,
                 "observations": observations,
+                "unobserved_runs": attempts,
+                "optimization": experiments,
             }
         )
     return {
-        "format": "superqode.factory-outcomes/1",
+        "format": "superqode.factory-outcomes/2",
         "revisions": rows,
+        "cost_scope": REVISION_COST_SCOPE,
+        "issues": issues,
         "causal_improvement_established": False,
         "release_authorized": False,
     }

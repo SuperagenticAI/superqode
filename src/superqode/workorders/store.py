@@ -547,20 +547,31 @@ class WorkOrderStore:
             )
 
     def list(
-        self, *, status: WorkOrderStatus | str | None = None, limit: int | None = None
+        self,
+        *,
+        status: WorkOrderStatus | str | None = None,
+        limit: int | None = None,
+        offset: int = 0,
     ) -> list[WorkOrder]:
+        if offset < 0:
+            raise ValueError("WorkOrder list offset must not be negative")
         query = "select payload from work_orders"
         params: tuple[Any, ...] = ()
         if status is not None:
             value = status.value if isinstance(status, WorkOrderStatus) else str(status)
             query += " where status = ?"
             params = (value,)
-        query += " order by created_at desc"
+        query += " order by created_at desc, work_order_id"
         if limit is not None:
             if limit < 1:
                 raise ValueError("WorkOrder list limit must be positive")
             query += " limit ?"
             params = (*params, limit)
+        if offset:
+            if limit is None:
+                query += " limit -1"
+            query += " offset ?"
+            params = (*params, offset)
         with closing(self._connect()) as conn:
             return [
                 WorkOrder.from_dict(json.loads(row["payload"]))

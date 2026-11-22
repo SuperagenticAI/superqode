@@ -52,11 +52,12 @@ def receipts(root):
 
 
 def _receipt(root, kind, raw, status, reason, run=""):
-    # Only authenticated requests reach this function. Retain hashes and fixed
-    # reason codes, never payloads, headers, delivery ids or exception strings.
+    # Retain hashes and fixed reason codes, never payloads, headers, delivery
+    # ids or exception strings. Unauthenticated requests pass raw=None so they
+    # coalesce into one counted row with no fingerprint of untrusted content.
     with execution(root), _lease(root):
         value = receipts(root)
-        fingerprint = hashlib.sha256(raw).hexdigest()
+        fingerprint = hashlib.sha256(raw).hexdigest() if raw is not None else ""
         row = next(
             (
                 r
@@ -78,6 +79,8 @@ def _receipt(root, kind, raw, status, reason, run=""):
             value["decisions"].append(row)
         row["count"] = min(row["count"] + 1, 1000000000)
         row["last_received"] = time.time()
+        # Keep the most recently seen decisions, not the first 256 ever created.
+        value["decisions"].sort(key=lambda r: r.get("last_received", 0))
         value["decisions"] = value["decisions"][-256:]
         write(_path(root, "receipts.json"), canonical(value))
 
@@ -170,6 +173,7 @@ def receive(root, kind, raw, headers):
     if kind != "linear":
         expected = "sha256=" + expected
     if not isinstance(signature, str) or not hmac.compare_digest(expected, signature):
+        _receipt(root, kind, None, "rejected", "authentication_failed")
         raise ValueError("Webhook authentication failed")
     try:
         result = _admit(root, definition, kind, raw, headers)
@@ -250,44 +254,108 @@ def _admit(root, definition, kind, raw, headers):
             raise IntakeRejected(
                 "stale_event", "Webhook timestamp is outside its 60-second replay window"
             )
-        if (
-            len(events) >= 1000
-            or sum(value["received"] > now - 3600 for value in events.values())
-            >= intake["max_per_hour"]
-        ):
-            raise IntakeRejected("rate_limit", "Webhook admission ledger or hourly limit exhausted")
-        db = project_path(root, ".superqode/workorders/store.sqlite3")
-        if db.exists():
-            pending = [
-                o
-                for o in factory_store(root, read_only=True).list()
-                if "factory" in o.metadata and o.status not in TERMINAL_WORK_ORDER_STATUSES
-            ]
-            if len(pending) >= intake["max_pending"]:
-                raise IntakeRejected("queue_limit", "Factory intake pending-work limit reached")
-        snapshot = resolve_factory(definition)
-        plan = compile_factory(snapshot, root=root, goal=goal)
-        materialize_snapshot(plan)
-        plan_name = "plans/" + hashlib.sha256(identity.encode()).hexdigest() + ".json"
-        request_id = "factory-intake:" + identity
-        write(_path(root, plan_name), canonical(plan.to_dict()))
-        events[identity] = {
-            "kind": kind,
-            "fingerprint": fingerprint,
-            "received": now,
-            "plan": plan_name,
-            "request_id": request_id,
-        }
-        # Persist the exact submission contract before the queue transaction.
-        write(catalog_path, canonical(catalog))
-        order = admit_factory(
-            plan, request_id=request_id, actor="authenticated " + kind + " intake"
+        return _queue_new(
+            root, definition, catalog, catalog_path, kind, identity, fingerprint, goal, now
         )
-        return {
-            "work_order_id": order.work_order_id,
-            "deduplicated": False,
-            "execution_started": False,
-        }
+
+
+def _queue_new(root, definition, catalog, catalog_path, kind, identity, fingerprint, goal, now):
+    """Apply the saved limits, pin the plan and admit one WorkOrder. Caller holds the lease."""
+    intake = definition.data["orchestration"]["intake"]
+    events = catalog["events"]
+    if (
+        len(events) >= 1000
+        or sum(value["received"] > now - 3600 for value in events.values())
+        >= intake["max_per_hour"]
+    ):
+        raise IntakeRejected("rate_limit", "Webhook admission ledger or hourly limit exhausted")
+    db = project_path(root, ".superqode/workorders/store.sqlite3")
+    if db.exists():
+        pending = [
+            o
+            for o in factory_store(root, read_only=True).list()
+            if "factory" in o.metadata and o.status not in TERMINAL_WORK_ORDER_STATUSES
+        ]
+        if len(pending) >= intake["max_pending"]:
+            raise IntakeRejected("queue_limit", "Factory intake pending-work limit reached")
+    snapshot = resolve_factory(definition)
+    plan = compile_factory(snapshot, root=root, goal=goal)
+    materialize_snapshot(plan)
+    plan_name = "plans/" + hashlib.sha256(identity.encode()).hexdigest() + ".json"
+    request_id = "factory-intake:" + identity
+    write(_path(root, plan_name), canonical(plan.to_dict()))
+    events[identity] = {
+        "kind": kind,
+        "fingerprint": fingerprint,
+        "received": now,
+        "plan": plan_name,
+        "request_id": request_id,
+    }
+    # Persist the exact submission contract before the queue transaction.
+    write(catalog_path, canonical(catalog))
+    actor = "scheduled intake" if kind == "schedule" else "authenticated " + kind + " intake"
+    order = admit_factory(plan, request_id=request_id, actor=actor)
+    return {
+        "work_order_id": order.work_order_id,
+        "deduplicated": False,
+        "execution_started": False,
+    }
+
+
+def tick(root, *, now=None):
+    """Queue each saved schedule once per interval; never starts agents."""
+    root = Path(root).resolve()
+    definition = load_factory(root=root)
+    intake = definition.data["orchestration"].get("intake", {})
+    schedules = intake.get("schedules", [])
+    if not intake.get("enabled") or not schedules:
+        raise ValueError("No schedule is enabled in the saved Factory intake")
+    if len({s["id"] for s in schedules}) != len(schedules):
+        raise ValueError("Schedule ids must be unique")
+    now = time.time() if now is None else now
+    results = []
+    for schedule in schedules:
+        slot = int(now // (schedule["interval_minutes"] * 60))
+        identity = f"schedule:{schedule['id']}:{slot}"
+        _safe_text("incoming-task.md", schedule["goal"])
+        fingerprint = hashlib.sha256(identity.encode()).hexdigest()
+        catalog_path = _path(root, "ledger.json")
+        try:
+            with execution(root), _lease(root):
+                catalog = (
+                    json.loads(read(catalog_path, 2000000))
+                    if catalog_path.exists()
+                    else {"format": "superqode.factory-intake/1", "events": {}}
+                )
+                if catalog.get("format") != "superqode.factory-intake/1":
+                    raise ValueError("Unsupported webhook admission ledger")
+                if identity in catalog["events"]:
+                    results.append({"schedule": schedule["id"], "status": "already_queued"})
+                    continue
+                result = _queue_new(
+                    root,
+                    definition,
+                    catalog,
+                    catalog_path,
+                    "schedule",
+                    identity,
+                    fingerprint,
+                    schedule["goal"],
+                    now,
+                )
+        except IntakeRejected as exc:
+            _receipt(root, "schedule", identity.encode(), "rejected", exc.code)
+            results.append({"schedule": schedule["id"], "status": "rejected", "reason": exc.code})
+            continue
+        _receipt(root, "schedule", identity.encode(), "queued", "admitted", result["work_order_id"])
+        results.append(
+            {
+                "schedule": schedule["id"],
+                "status": "queued",
+                "work_order_id": result["work_order_id"],
+            }
+        )
+    return {"ticked_at": now, "schedules": results, "execution_started": False}
 
 
 class _lease:

@@ -230,6 +230,22 @@ SCHEMA = obj(
                         "sources": obj(
                             {name: INTAKE_SOURCE for name in ("github", "linear", "monitor")}
                         ),
+                        "schedules": {
+                            "type": "array",
+                            "maxItems": 16,
+                            "items": obj(
+                                {
+                                    "id": NAME,
+                                    "goal": TEXT,
+                                    "interval_minutes": {
+                                        "type": "integer",
+                                        "minimum": 5,
+                                        "maximum": 10080,
+                                    },
+                                },
+                                ("id", "goal", "interval_minutes"),
+                            ),
+                        },
                     },
                     ("enabled", "max_pending", "max_per_hour", "sources"),
                 ),

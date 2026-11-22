@@ -173,7 +173,8 @@ def test_intake_receipts_explain_filter_duplicate_conflict_and_do_not_store_payl
     raw, headers = event()
     with pytest.raises(ValueError, match="authentication"):
         intake.receive(root, "github", raw, {})
-    assert not intake.receipts(root)["decisions"]
+    [failure] = intake.receipts(root)["decisions"]
+    assert failure["reason"] == "authentication_failed" and failure["fingerprint"] == ""
     result = intake.receive(root, "github", raw, headers)
     intake.receive(root, "github", raw, headers)
     filtered, filtered_headers = event(action="deleted")

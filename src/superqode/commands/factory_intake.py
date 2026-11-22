@@ -50,3 +50,13 @@ def serve(project, port):
     from superqode.factory.intake import serve
 
     serve(project, port=port)
+
+
+@intake.command("tick")
+@project_option
+@output
+def tick(project):
+    """Queue each saved schedule once per interval; run it from cron or a launchd timer."""
+    from superqode.factory.intake import tick
+
+    return tick(project)
