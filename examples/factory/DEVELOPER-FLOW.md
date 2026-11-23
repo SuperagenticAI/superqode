@@ -104,8 +104,9 @@ shared-budget integration of external search.
 **Improve → Observed outcomes & costs** records one attributed observation for a
 finished run and groups observations by Factory revision. Reusing an observation
 id with identical values is safe; changing it is rejected. Unknown human effort,
-tokens or costs remain unknown. Recorded run usage excludes optimizer experiments
-and infrastructure spending and must not be presented as total engagement cost.
+tokens or costs remain unknown. Revision totals include failed and unobserved runs plus improvement experiments
+run against that revision; infrastructure spending is excluded and must not be
+presented as total engagement cost.
 Comparisons are descriptive and do not establish causal improvement.
 
 ## Maintain the Factory

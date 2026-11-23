@@ -394,7 +394,8 @@ For development, `swift build --package-path apps/macos` builds the executable. 
 ### Factory Studio
 
 **Factory Studio** in the Harnesses navigation group edits the same seven-layer
-FactorySpec used by `sq factory`. It provides two starters, explicit AI-assisted
+FactorySpec used by `sq factory`. It provides seven workflow starters, description-based
+local drafting, explicit AI-assisted
 proposals, workflow preview, validation, definition diffs, revision history,
 pinned trials, stage gates and protected verification evidence. Model execution
 uses the existing desktop job engine; generation and execution require explicit

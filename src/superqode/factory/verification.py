@@ -281,7 +281,11 @@ def verify_factory(reference, *, root=".", timeout=120, actor="verifier", judges
                         passed = (
                             result.get("kind") == "completed"
                             and result.get("returncode") == row.get("returncode", 0)
-                            and result.get("stdout") == row["stdout"]
+                            and ("stdout" not in row or result.get("stdout") == row["stdout"])
+                            and (
+                                "stdout_contains" not in row
+                                or row["stdout_contains"] in (result.get("stdout") or "")
+                            )
                             and ("stderr" not in row or result.get("stderr") == row["stderr"])
                         )
                         report["results"].append(

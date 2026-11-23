@@ -419,3 +419,84 @@ def test_invalid_or_non_python_probes_are_rejected():
                 }
             )
         )
+
+
+def test_stdout_contains_probe_schema_and_verification(project, monkeypatch):
+    parsed = parse_probes(
+        json.dumps(
+            {
+                "format": "superqode.factory-probes/1",
+                "cases": [
+                    {"id": "contains", "argv": ["python", "app.py"], "stdout_contains": "43"}
+                ],
+            }
+        )
+    )
+    assert parsed["cases"][0]["stdout_contains"] == "43"
+    with pytest.raises(ValueError, match="Invalid protected probes"):
+        parse_probes(
+            json.dumps(
+                {
+                    "format": "superqode.factory-probes/1",
+                    "cases": [{"id": "empty", "argv": ["python", "app.py"], "stdout_contains": ""}],
+                }
+            )
+        )
+    with pytest.raises(ValueError, match="Invalid protected probes"):
+        parse_probes(
+            json.dumps(
+                {
+                    "format": "superqode.factory-probes/1",
+                    "cases": [{"id": "missing", "argv": ["python", "app.py"]}],
+                }
+            )
+        )
+
+    evaluator = project / "protected/contains.json"
+    evaluator.parent.mkdir()
+    evaluator.write_text(
+        json.dumps(
+            {
+                "format": "superqode.factory-probes/1",
+                "cases": [
+                    {"id": "contains-ok", "argv": ["python", "app.py"], "stdout_contains": "43"}
+                ],
+            }
+        )
+    )
+    git(project, "add", "protected/contains.json")
+    git(project, "commit", "-qm", "Contains probe")
+    rewrite(
+        project,
+        lambda d: (
+            d["data_context"]["files"].update(
+                probes={"path": "protected/contains.json", "purpose": "evaluator"}
+            ),
+            d["improvement"]["checks"]["regression"].update(evaluator="probes"),
+            d["orchestration"]["stages"][2].update(human_gate=False),
+        ),
+    )
+    _, store, order = admitted(project)
+
+    async def execute(order, task, *, working_directory, **kwargs):
+        if task.task_id == "implement":
+            (working_directory / "app.py").write_text("print('result=43')\n")
+        return {"content": "Evidence", "stopped_reason": "complete", "tool_calls": 1}
+
+    def probe(argv, *, candidate, scratch, stdin, deadline):
+        output = "superqode-verifier-ready\n" if argv[1] == "-c" else "result=43\n"
+        return {
+            "kind": "completed",
+            "backend": "simulated-for-test",
+            "returncode": 0,
+            "stdout": output,
+            "stderr": "",
+        }
+
+    monkeypatch.setattr(runner, "_execute_harness_task", execute)
+    monkeypatch.setattr(verification, "run_python_probe", probe)
+    outcomes = asyncio.run(runner.run_until_idle(store, work_order_id=order.work_order_id))
+    assert all(row.status == "succeeded" for row in outcomes)
+    result = verification.verify_factory(order.work_order_id, root=project)
+    assert result["report"]["status"] == "passed"
+    assert result["record"]["decision"]["verdict"] == "ship"

@@ -7,6 +7,18 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [2.32.3] - 2026-11-23
+
+- Factory workflow detection from natural-language descriptions now strips
+  punctuation so prompts like `"Use Kanban, please."`, `"We do scrum."` and
+  `"Build, test."` resolve cleanly to the right starter workflow.
+- Protected Factory probes now support `stdout_contains` substring expectations
+  alongside exact `stdout` matches, matching the Factory Studio Acceptance UI
+  while rejecting empty or missing output assertions.
+- Updated Factory CLI reference (`sq factory describe --apply`), macOS README
+  and developer walkthrough docs to match the seven-starter and revision-cost
+  behavior.
+
 ## [2.32.2] - 2026-11-23
 
 - Factory starters now include Build test deploy, Kanban, Scrum, XP and Lean,

@@ -24,7 +24,7 @@ sq factory init --template fix-and-verify     # full FactorySpec; keeps existing
 sq factory show                               # stages, checks, release rule, recent runs
 sq factory describe "build, test and deploy"  # starter draft; no model is required
 sq factory describe "We triage bugs, fix them and verify" --model ollama/qwen3-coder
-sq factory describe --apply sha256:DRAFT --confirm --reason "Reviewed draft"
+sq factory describe --apply DRAFT_DIGEST --confirm --reason "Reviewed draft"
 sq factory sources inspect
 sq factory sources commit --digest sha256:REVIEW --path .superqode/factory.yaml \
   --message "Version the Factory" --confirm

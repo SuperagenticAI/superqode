@@ -24,22 +24,26 @@ PROBE_SCHEMA = obj(
             "type": "array",
             "minItems": 1,
             "maxItems": 64,
-            "items": obj(
-                {
-                    "id": NAME,
-                    "argv": {
-                        "type": "array",
-                        "minItems": 2,
-                        "maxItems": 64,
-                        "items": {"type": "string", "maxLength": 4096},
+            "items": {
+                **obj(
+                    {
+                        "id": NAME,
+                        "argv": {
+                            "type": "array",
+                            "minItems": 2,
+                            "maxItems": 64,
+                            "items": {"type": "string", "maxLength": 4096},
+                        },
+                        "stdin": {"type": "string", "maxLength": 16000},
+                        "stdout": {"type": "string", "maxLength": 16000},
+                        "stdout_contains": {"type": "string", "minLength": 1, "maxLength": 16000},
+                        "stderr": {"type": "string", "maxLength": 16000},
+                        "returncode": {"type": "integer", "minimum": 0, "maximum": 255},
                     },
-                    "stdin": {"type": "string", "maxLength": 16000},
-                    "stdout": {"type": "string", "maxLength": 16000},
-                    "stderr": {"type": "string", "maxLength": 16000},
-                    "returncode": {"type": "integer", "minimum": 0, "maximum": 255},
-                },
-                ("id", "argv", "stdout"),
-            ),
+                    ("id", "argv"),
+                ),
+                "anyOf": [{"required": ["stdout"]}, {"required": ["stdout_contains"]}],
+            },
         },
     },
     ("format", "cases"),

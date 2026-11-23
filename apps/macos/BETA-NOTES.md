@@ -1,4 +1,11 @@
-# SuperQode for macOS public beta 0.4.26
+# SuperQode for macOS public beta 0.4.27
+
+Version 0.4.27 (build 53) bundles Python engine 2.32.3.
+
+- Protected probes created with **Stdout contains** in Factory Studio → Build → Acceptance checks now validate and execute cleanly during verification.
+- Workflow auto-detection in **Build → Describe** now handles punctuation (commas, periods, exclamation marks) cleanly when matching Kanban, Scrum, XP, Lean or Build, test, deploy.
+
+## 0.4.26 (build 52)
 
 Version 0.4.26 (build 52) bundles Python engine 2.32.2.
 

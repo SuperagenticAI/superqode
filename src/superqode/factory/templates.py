@@ -1,5 +1,7 @@
 """Small editable starting points, sharing one factory runtime."""
 
+import re
+
 TEMPLATE_NAMES = (
     "fix-and-verify",
     "continuous-outcomes",
@@ -239,7 +241,7 @@ def factory_template(name="fix-and-verify"):
 
 def explicit_workflow(description):
     """Return a workflow the description names, or an empty string."""
-    words = set(description.casefold().replace("-", " ").split())
+    words = set(re.findall(r"[a-z0-9]+", description.casefold()))
     if "kanban" in words:
         return "kanban"
     if "scrum" in words or "sprint" in words:

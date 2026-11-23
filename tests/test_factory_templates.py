@@ -128,3 +128,14 @@ def test_no_model_uses_the_selected_workflow():
         "check",
         "improve",
     ]
+
+
+def test_punctuation_does_not_prevent_workflow_detection():
+    assert compose_from_description("Use Kanban, please.")["metadata"]["name"] == "kanban"
+    assert compose_from_description("We do scrum.")["metadata"]["name"] == "scrum"
+    assert compose_from_description("We use XP!")["metadata"]["name"] == "xp"
+    assert compose_from_description("Keep it lean.")["metadata"]["name"] == "lean"
+    assert compose_from_description("Build, test.")["metadata"]["name"] == "build-test-deploy"
+    assert (
+        compose_from_description("Build, test, deploy")["metadata"]["name"] == "build-test-deploy"
+    )
