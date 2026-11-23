@@ -12,7 +12,7 @@ import click
 from superqode.main import cli_main
 
 
-EXPECTED_COMMAND_COUNT = 405
+EXPECTED_COMMAND_COUNT = 406
 # Rebaselined for `superqode update` (261 -> 262: exactly one command added),
 # and again for the `copilot-cli` / `grok-cli` subscription runtimes, which
 # widen the --runtime choice list without adding a Click command. The same work
@@ -189,11 +189,13 @@ EXPECTED_COMMAND_COUNT = 405
 # commands. No route outside `factory` changed. Both digests were regenerated
 # with Click 8.1.8 and 8.5.1, after confirming each reproduces the previous
 # 334-route baseline at 88d3f844.
-EXPECTED_HELP_TREE_SHA256 = "f4f6437cd03cc7b05bdbe53d05d44316b248fd5ca7c152d89af43f6ef6496cf9"
+# `factory workflows` adds one route (405 -> 406). Both renders were
+# regenerated for that command. No route outside `factory` changed.
+EXPECTED_HELP_TREE_SHA256 = "9b66ead447eb87c430e191c0f79b10dbf4380e43b58e5b84dc7530e6777f616b"
 # Click 8.5 renders optional group commands as [COMMAND] and case-insensitive
 # choices in lower case. Both verified renders expose the same command tree.
 EXPECTED_MODERN_CLICK_HELP_TREE_SHA256 = (
-    "c3e0d8af431f839dd1f11af673cabfcd4edf3182f0eccbf6deda9853f2cef3da"
+    "b625126d49c8e5b844e8ed234d21281e0a448b057f5396e77000d76b4614454c"
 )
 
 
