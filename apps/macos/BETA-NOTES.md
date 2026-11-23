@@ -1,4 +1,12 @@
-# SuperQode for macOS public beta 0.4.25
+# SuperQode for macOS public beta 0.4.26
+
+Version 0.4.26 (build 52) bundles Python engine 2.32.2.
+
+- Describe a factory and get starter settings with no model. The words you use can pick Build test deploy, Kanban, Scrum, XP or Lean.
+- Factory workflows are cards. After a definition loads, Back to workflows returns to them, and the next step tells you whether to check, save, review sources or prepare a trial.
+- Choosing a local model from Factory Studio no longer waits for the coding warm-up.
+
+## 0.4.25 (build 51)
 
 Version 0.4.25 (build 51) bundles Python engine 2.32.0.
 
