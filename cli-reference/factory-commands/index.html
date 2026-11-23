@@ -4,7 +4,7 @@ sq<span class=w> </span>factory<span class=w> </span>init<span class=w> </span>-
 sq<span class=w> </span>factory<span class=w> </span>show<span class=w>                               </span><span class=c1># stages, checks, release rule, recent runs</span>
 sq<span class=w> </span>factory<span class=w> </span>describe<span class=w> </span><span class=s2>"build, test and deploy"</span><span class=w>  </span><span class=c1># starter draft; no model is required</span>
 sq<span class=w> </span>factory<span class=w> </span>describe<span class=w> </span><span class=s2>"We triage bugs, fix them and verify"</span><span class=w> </span>--model<span class=w> </span>ollama/qwen3-coder
-sq<span class=w> </span>factory<span class=w> </span>describe<span class=w> </span>--apply<span class=w> </span>sha256:DRAFT<span class=w> </span>--confirm<span class=w> </span>--reason<span class=w> </span><span class=s2>"Reviewed draft"</span>
+sq<span class=w> </span>factory<span class=w> </span>describe<span class=w> </span>--apply<span class=w> </span>DRAFT_DIGEST<span class=w> </span>--confirm<span class=w> </span>--reason<span class=w> </span><span class=s2>"Reviewed draft"</span>
 sq<span class=w> </span>factory<span class=w> </span>sources<span class=w> </span>inspect
 sq<span class=w> </span>factory<span class=w> </span>sources<span class=w> </span>commit<span class=w> </span>--digest<span class=w> </span>sha256:REVIEW<span class=w> </span>--path<span class=w> </span>.superqode/factory.yaml<span class=w> </span><span class=se>\</span>
 <span class=w>  </span>--message<span class=w> </span><span class=s2>"Version the Factory"</span><span class=w> </span>--confirm
