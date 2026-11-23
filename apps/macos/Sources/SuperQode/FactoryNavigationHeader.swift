@@ -4,7 +4,7 @@ struct FactoryNavigationHeader: View {
   let navigation: FactoryNavigation
   var body: some View {
     VStack(alignment: .leading, spacing: 16) {
-      Text("Factory").font(.headline).padding(.horizontal, 8)
+      Text("🏭  Factory").font(.headline).padding(.horizontal, 8)
       ScrollView {
       VStack(alignment: .leading, spacing: 14) {
         ForEach(FactoryNavigation.groups) { group in
@@ -12,7 +12,10 @@ struct FactoryNavigationHeader: View {
           VStack(alignment: .leading, spacing: 3) {
           nativeButton("factory.group." + group.id, action: { navigation.selectGroup(group.id) }, padded: false,
             title: group.title + (selected ? ", selected" : "")) {
-            Text(group.title).font(.system(size: 13, weight: .semibold))
+            HStack(spacing: 6) {
+              Text(group.mark).accessibilityHidden(true)
+              Text(group.title).font(.system(size: 13, weight: .semibold))
+            }
               .frame(maxWidth: .infinity, alignment: .leading).padding(.horizontal, 8).padding(.vertical, 6)
               .background(selected && group.destinations.count == 1 ? Color.primary.opacity(0.10) : .clear, in: RoundedRectangle(cornerRadius: 6))
           }

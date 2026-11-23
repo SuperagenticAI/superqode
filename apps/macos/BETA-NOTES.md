@@ -1,4 +1,11 @@
-# SuperQode for macOS public beta 0.4.23
+# SuperQode for macOS public beta 0.4.24
+
+Version 0.4.24 (build 50) bundles Python engine 2.32.0.
+
+- Choosing a harness and model in Factory Studio returns you to Factory Studio.
+- Factory Studio marks Build, Test, Improve, Export and Manage with a few emoji.
+
+## 0.4.23 (build 49)
 
 Version 0.4.23 (build 49) bundles Python engine 2.32.0.
 

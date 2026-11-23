@@ -316,10 +316,14 @@ private func jobStamp(_ row: [String: Any]) -> Double {
   @Published var connectionStartPage = "menu:root"
   /// The Connect sheet was opened from the composer's Switch harness… button.
   @Published var connectionSwitchesHarness = false
+  /// Screen to restore after Connect chooses a harness and model.
+  /// Empty means the coding workspace, where a new thread starts.
+  @Published var connectionReturnSection = ""
 
-  func openConnections(_ page: String = "menu:root") {
+  func openConnections(_ page: String = "menu:root", returningTo section: String = "") {
     connectionStartPage = page
     connectionSwitchesHarness = false
+    connectionReturnSection = section
     showConnection = true
   }
   /// Open the existing harness chooser for the current conversation.
@@ -327,7 +331,21 @@ private func jobStamp(_ row: [String: Any]) -> Double {
   func openHarnessSwitcher() {
     connectionStartPage = "menu:harness"
     connectionSwitchesHarness = true
+    connectionReturnSection = ""
     showConnection = true
+  }
+  /// Land on the screen that opened Connect. A coding start still opens the workspace.
+  @discardableResult
+  func finishConnectionSelection() -> Bool {
+    let returning = connectionReturnSection
+    connectionReturnSection = ""
+    if !returning.isEmpty {
+      section = returning
+      showWelcome = false
+      return true
+    }
+    section = "Workspace"
+    return false
   }
   /// Local AI keeps a simple Start tab and a separate Advanced tab.
   @Published var localAITab = "start"
@@ -749,7 +767,7 @@ private func jobStamp(_ row: [String: Any]) -> Double {
     }
     chooseHarness(id)
     interactionMode = "code"
-    section = "Workspace"
+    finishConnectionSelection()
     if let verified, verifiedACPConnection(route: route, metadata: verified) {
       connectionMetadata[id] = verified
       routeStatus = ["state": "connected", "message": string(verified, "message")]
@@ -1164,7 +1182,7 @@ private func jobStamp(_ row: [String: Any]) -> Double {
     provider = "apple-foundation"
     model = "system-on-device"
     savePreferences()
-    section = "Workspace"
+    finishConnectionSelection()
   }
   func clearLocalModelBinding() async throws {
     _ = try await engine.call("local.models.clear_binding", ["project": projectID, "provider": provider, "model": model])

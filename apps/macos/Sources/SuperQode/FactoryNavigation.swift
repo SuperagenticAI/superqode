@@ -7,6 +7,16 @@ import SwiftUI
   struct Ticket: Equatable { let project: String; let generation: UUID }
   struct Group: Identifiable {
     let id: String; let title: String; let detail: String; let destinations: [String]
+    var mark: String {
+      switch id {
+      case "build": "🏗️"
+      case "run": "🧪"
+      case "improve": "✨"
+      case "export": "📦"
+      case "manage": "⚙️"
+      default: "🏭"
+      }
+    }
   }
   static let groups: [Group] = [
     Group(id: "build", title: "Build", detail: "Describe, configure and review your Factory.", destinations: ["Stack", "Configuration", "Workflow", "Acceptance", "Definition"]),

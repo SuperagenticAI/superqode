@@ -275,7 +275,7 @@ struct RootView: View {
     } message: {
       Text(app.error ?? "")
     }
-    .sheet(isPresented: $app.showConnection) {
+    .sheet(isPresented: $app.showConnection, onDismiss: { app.connectionReturnSection = "" }) {
       ConnectionView(initialPage: app.connectionStartPage, switchingHarness: app.connectionSwitchesHarness)
         .environmentObject(app)
     }

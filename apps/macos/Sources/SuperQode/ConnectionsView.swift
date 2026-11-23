@@ -637,13 +637,17 @@ struct ProviderConnectionView: View {
         try await app.configureConnection(provider: provider, model: model, key: key,
           remember: remember, workspaceEndpoint: editedEndpoint)
         self.key = ""
-        app.section = "Workspace"
+        let stayed = app.finishConnectionSelection()
         if !app.projectID.isEmpty { app.showWelcome = false }
         let thinking = (model == "qwen4-max" || model == "qwen4-max-preview")
           ? " Thinking starts at low." : ""
-        app.notice = app.projectID.isEmpty
-          ? "Provider selected. Open a project, then use Test model." + thinking
-          : "Provider selected. Use Test model to verify the connection." + thinking
+        if stayed {
+          app.notice = "Connected \(provider)/\(model). Factory Studio can draft with it." + thinking
+        } else {
+          app.notice = app.projectID.isEmpty
+            ? "Provider selected. Open a project, then use Test model." + thinking
+            : "Provider selected. Use Test model to verify the connection." + thinking
+        }
         dismiss()
       } catch { message = error.localizedDescription }
     }
@@ -779,7 +783,9 @@ struct InstalledLocalModelPicker: View {
   private var outgoingPrompt: String {
     showsPrompt ? prompt.trimmingCharacters(in: .whitespacesAndNewlines) : ""
   }
+  private var returnsToFactory: Bool { app.connectionReturnSection == "Factory Studio" }
   private var actionTitle: String {
+    if returnsToFactory { return "Use in Factory" }
     if !outgoingPrompt.isEmpty { return "Send" }
     guard let row = selectedRow else { return "Start coding" }
     if row["advertised"] as? Bool == true { return "Start coding" }
@@ -1112,9 +1118,10 @@ struct InstalledLocalModelPicker: View {
     engines = result["engines"] as? [[String: Any]] ?? []
   }
 
-  private func startCoding() async {
-    guard canStart, let row = selectedRow else { return }
+  private func startCoding() async -> Bool {
+    guard canStart, let row = selectedRow else { return false }
     let outgoing = outgoingPrompt
+    let returning = !app.connectionReturnSection.isEmpty
     busy = true
     progress = "Connecting…"
     var deliver = false
@@ -1126,14 +1133,14 @@ struct InstalledLocalModelPicker: View {
     do {
       let ready = try await bringOnline(row)
       await app.refreshJobs()
-      guard app.projectID == project, !Task.isCancelled else { return }
+      guard app.projectID == project, !Task.isCancelled else { return false }
       let otherWork = app.jobs.contains {
         string($0, "kind") != "local"
           && ["running", "needs_approval", "queued", "cancelling"].contains(string($0, "status"))
       }
       guard !otherWork else {
         failure = "Finish the current run, then connect this model."
-        return
+        return false
       }
       let result = try await app.engine.call("local.models.use", [
         "project": project,
@@ -1141,56 +1148,69 @@ struct InstalledLocalModelPicker: View {
         "model": string(ready, "model"),
         "harness": harness,
       ]) as? [String: Any] ?? [:]
-      guard app.projectID == project else { return }
+      guard app.projectID == project else { return false }
       let harnessID = string(result, "harness", harness)
       let providerID = string(result, "provider")
       let modelID = string(result, "model")
       guard !harnessID.isEmpty, !modelID.isEmpty else {
         failure = "The model connected, but Agent Space did not receive it. Choose the harness and model again."
-        return
+        return false
       }
-      progress = "Warming the model so your first question is ready…"
+      progress = returning
+        ? "Warming the model for Factory Studio…"
+        : "Warming the model so your first question is ready…"
       try await app.warmLocalModel(
         endpoint: string(result, "endpoint"),
         model: modelID,
         server: string(ready, "engine")
       )
-      guard app.projectID == project, !Task.isCancelled else { return }
-      // Leave the old thread first. Opening it restores that thread's route and
-      // leaves Send disabled when this Mac has no connection yet.
-      app.selectJob("", restoreConnection: false)
+      guard app.projectID == project, !Task.isCancelled else { return false }
+      // A coding start leaves the old thread first. Opening it restores that
+      // thread's route and leaves Send disabled when this Mac has no connection yet.
+      // Factory Studio keeps the open thread and returns to the studio.
+      if !returning {
+        app.selectJob("", restoreConnection: false)
+      }
       app.checkingConnection = false
       if let route = result["route"] as? [String: Any] {
         app.chooseConnection(route)
-        guard app.harness == string(route, "id") else { return }
+        guard app.harness == string(route, "id") else { return false }
         app.provider = providerID
         app.model = modelID
         app.savePreferences()
       } else {
         app.chooseHarness(harnessID)
         app.chooseModelRoute(providerID, modelID)
+        if returning { app.finishConnectionSelection() }
       }
       guard !app.connectionDisconnected, !app.model.isEmpty else {
         failure = "The model connected, but Agent Space did not keep it. Choose the harness and model again."
-        return
+        return false
       }
-      app.section = "Workspace"
       app.showWelcome = false
       let model = modelID
       let harnessName = selectable.first { string($0, "id") == harnessID }
         .map { string($0, "name") } ?? harnessID
-      if outgoing.isEmpty {
-        app.notice = "Connected \(model) with \(harnessName). Type your request, then press Send."
+      if returning {
+        if !app.connectionReturnSection.isEmpty { app.finishConnectionSelection() }
+        app.notice = "Connected \(model) with \(harnessName). Factory Studio can draft with it."
       } else {
-        prompt = ""
-        app.draft = outgoing
-        deliver = true
+        app.section = "Workspace"
+        if outgoing.isEmpty {
+          app.notice = "Connected \(model) with \(harnessName). Type your request, then press Send."
+        } else {
+          prompt = ""
+          app.draft = outgoing
+          deliver = true
+        }
       }
       if dismissOnUse { dismiss() }
+      return true
     } catch is CancellationError {
-      return
+      return false
     } catch {
       failure = error.localizedDescription
+      return false
     }
   }
 
@@ -1856,7 +1876,7 @@ extension InstalledLocalModelPicker {
           .buttonStyle(BrandButtonStyle()).disabled(busy || project.isEmpty)
           .accessibilityIdentifier("local.install")
       } else {
-        Button("Start coding") { startSelected() }
+        Button(returnsToFactory ? "Use in Factory" : "Start coding") { startSelected() }
           .buttonStyle(BrandButtonStyle()).disabled(startBlocker != nil || busy)
           .accessibilityIdentifier("local.startCoding")
       }
@@ -1902,12 +1922,9 @@ extension InstalledLocalModelPicker {
     let model = string(row, "model")
     let name = string(row, "name", model)
     let chosen = harness
-    let workspace = app
-    let draft = form
     Task {
-      await startCoding()
-      if draft.failure.isEmpty && !workspace.connectionDisconnected && !workspace.model.isEmpty
-        && workspace.section == "Workspace" {
+      let connected = await startCoding()
+      if connected {
         LocalAISetupMemory.save(engine: engine, model: model, name: name, harness: chosen)
       }
     }
@@ -1916,12 +1933,17 @@ extension InstalledLocalModelPicker {
   /// Apple's system model needs no server or warm-up, so it connects at once.
   private func startApple() {
     let workspace = app
-    workspace.selectJob("", restoreConnection: false)
+    let returning = !workspace.connectionReturnSection.isEmpty
+    if !returning {
+      workspace.selectJob("", restoreConnection: false)
+    }
     workspace.checkingConnection = false
     let chosen = appleHarness
     workspace.chooseAppleModel(development: true, codingHarness: chosen)
     workspace.showWelcome = false
-    workspace.notice = "Connected Apple's on-device model. Type your request, then press Send."
+    workspace.notice = returning
+      ? "Connected Apple's on-device model. Factory Studio can draft with it."
+      : "Connected Apple's on-device model. Type your request, then press Send."
     LocalAISetupMemory.save(engine: "apple", model: "system-on-device", name: "Apple on-device model", harness: chosen)
     LocalAISetupMemory.saveAppleHarness(chosen, project: project)
     if dismissOnUse { dismiss() }

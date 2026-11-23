@@ -200,7 +200,7 @@ struct LocalQuickStartView: View {
         Button("Re-detect engines") { Task { await load() } }.disabled(busy)
         Button("Check again") { Task { await refresh() } }.disabled(busy || selection.isEmpty || project.isEmpty || !validProject)
         if state == "ready" {
-          Button(onReady == nil ? "Start coding" : "Choose harness") {
+          Button(app.connectionReturnSection.isEmpty ? (onReady == nil ? "Start coding" : "Choose harness") : "Use in Factory") {
             if let onReady { onReady() }
             else { Task { await useModel() } }
           }.buttonStyle(.borderedProminent).disabled(busy || app.anyActive || !validProject)
@@ -418,7 +418,14 @@ struct LocalQuickStartView: View {
       app.chooseHarness(string(result, "harness")); app.chooseModelRoute(string(result, "provider"), string(result, "model"))
       try await app.warmLocalModel(
         endpoint: string(result, "endpoint"), model: string(result, "model"), server: string(result, "provider"))
-      app.section = "Workspace"; closed = true; dismiss()
+      if app.connectionReturnSection.isEmpty {
+        app.section = "Workspace"
+      } else {
+        app.finishConnectionSelection()
+        app.notice = "Connected \(app.provider)/\(app.model). Factory Studio can draft with it."
+        app.showConnection = false
+      }
+      closed = true; dismiss()
     } catch { if !Task.isCancelled { failure = error.localizedDescription } }
   }
   private func connect(_ requested: String) async throws -> [String: Any] {

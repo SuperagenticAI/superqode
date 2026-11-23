@@ -202,6 +202,34 @@ final class FactoryStudioTests: XCTestCase {
     XCTAssertTrue(state.factoryMounted)
     XCTAssertFalse(WorkspaceNavigationGroup.usesCodingWorkspace("Factory Studio"))
   }
+  @MainActor func testChoosingAHarnessFromFactoryStudioReturnsThere() {
+    let app = Workspace(recoveryStore: WorkspaceRecoveryStore(directory: nil))
+    app.section = "Factory Studio"
+    app.selectedJob = "existing-thread"
+    app.draft = "Keep this unsent conversation"
+    app.openConnections(returningTo: "Factory Studio")
+    XCTAssertTrue(app.showConnection)
+    XCTAssertEqual(app.connectionStartPage, "menu:root")
+    XCTAssertFalse(app.connectionSwitchesHarness)
+    XCTAssertEqual(app.connectionReturnSection, "Factory Studio")
+    app.chooseConnection(["id": "core", "name": "Core"])
+    XCTAssertEqual(app.section, "Factory Studio")
+    XCTAssertEqual(app.harness, "core")
+    XCTAssertEqual(app.selectedJob, "existing-thread")
+    XCTAssertEqual(app.draft, "Keep this unsent conversation")
+    XCTAssertTrue(app.connectionReturnSection.isEmpty)
+    app.connectionReturnSection = "Factory Studio"
+    app.harnesses += [
+      ["id": "apple-local", "name": "Apple on-device", "runtime": "builtin"],
+    ]
+    app.chooseAppleModel(development: true)
+    XCTAssertEqual(app.section, "Factory Studio")
+    XCTAssertEqual(app.provider, "apple-foundation")
+    XCTAssertEqual(app.model, "system-on-device")
+    XCTAssertEqual(app.selectedJob, "existing-thread")
+    app.chooseConnection(["id": "core", "name": "Core"])
+    XCTAssertEqual(app.section, "Workspace")
+  }
   @MainActor func testSourceReviewRejectsPreviousProjectResponse() async {
     let pipe = Pipe(); let engine = Engine(input: pipe.fileHandleForWriting)
     defer { engine.stop() }

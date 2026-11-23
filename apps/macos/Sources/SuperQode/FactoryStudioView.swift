@@ -37,7 +37,7 @@ struct FactoryStudioView: View {
       Divider()
       VStack(alignment: .leading, spacing: 14) {
       HStack {
-        Text(library.navigation.pageTitle).font(.title2.bold())
+        Text(library.navigation.group.mark + "  " + library.navigation.pageTitle).font(.title2.bold())
         Spacer()
         if FactoryNavigation.buildPages.contains(tab) {
           Button("Check definition") {
@@ -113,12 +113,12 @@ struct FactoryStudioView: View {
   private var stack: some View {
     ScrollView {
       VStack(alignment: .leading, spacing: 18) {
-        Text("What should this Factory do?").font(.headline)
+        Text("🏭  What should this Factory do?").font(.headline)
         TextEditor(text: $library.description).font(.body).frame(height: 140).brandSurface().accessibilityLabel("Factory description")
         HStack {
-          Text(app.provider.isEmpty || app.model.isEmpty ? "Choose a model for AI-assisted drafting." : "Drafting with \(app.provider)/\(app.model)").font(.caption).foregroundStyle(.secondary)
+          Text(app.provider.isEmpty || app.model.isEmpty ? "Choose a harness and model for AI-assisted drafting." : "Drafting with \(app.provider)/\(app.model)").font(.caption).foregroundStyle(.secondary)
           Spacer()
-          Button("Choose model…") { app.showConnection = true }
+          Button("Choose harness and model…") { app.openConnections(returningTo: "Factory Studio") }
         }
         Button("Generate a draft…") { confirmation = "generate" }.buttonStyle(BrandButtonStyle())
           .disabled(!idle || library.description.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty || app.provider.isEmpty || app.model.isEmpty || app.provider == "acp")
@@ -130,8 +130,8 @@ struct FactoryStudioView: View {
           }.padding(14).brandSurface()
         }
         Divider()
-        Text("Or start from a workflow").font(.subheadline.bold())
-        Picker("Workflow", selection: $preset) { Text("Fix and verify").tag("fix-and-verify"); Text("Continuous outcomes").tag("continuous-outcomes") }
+        Text("✨  Or start from a workflow").font(.subheadline.bold())
+        Picker("Workflow", selection: $preset) { Text("🔧  Fix and verify").tag("fix-and-verify"); Text("🔁  Continuous outcomes").tag("continuous-outcomes") }
         FactoryActionRow {
           Button("Use this starter…") { confirmation = "template" }.disabled(!idle)
           Button("Reload saved…") { confirmation = "reload" }.disabled(!idle)
