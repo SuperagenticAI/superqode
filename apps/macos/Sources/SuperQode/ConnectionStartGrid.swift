@@ -1,7 +1,7 @@
 import SwiftUI
 
-/// A front door to existing connection workflows, without changing a route
-/// until the user explicitly chooses one in Connect.
+/// A front door to existing connection workflows. Build your factory opens
+/// Factory Studio. The other tiles open Connect.
 struct ConnectionStartGrid: View {
   @EnvironmentObject var app: Workspace
   private struct Tile: Identifiable {
@@ -20,6 +20,7 @@ struct ConnectionStartGrid: View {
     Tile(id: "acp", title: "ACP agent", detail: "A coding agent you run as a local process.", symbol: "link", page: "acp"),
     Tile(id: "protocols", title: "Protocols", detail: "Reach an agent over ACP, A2A or UHP.", symbol: "network", page: "menu:protocols"),
     Tile(id: "builder", title: "Build your harness", detail: "Import a config, use presets or start with the wizard.", symbol: "hammer", page: "builder"),
+    Tile(id: "factory", title: "Build your factory", detail: "Describe a factory, then configure and improve it.", symbol: "building.2", page: "factory"),
   ]
 
   var body: some View {
@@ -34,7 +35,7 @@ struct ConnectionStartGrid: View {
   private var tileGrid: some View {
     LazyVGrid(columns: [GridItem(.adaptive(minimum: 198), spacing: 12, alignment: .top)], spacing: 12) {
       ForEach(Self.tiles) { tile in
-        Button { app.openConnections(tile.page) } label: {
+        Button { open(tile) } label: {
           VStack(alignment: .leading, spacing: 6) {
             HStack {
               Image(systemName: tile.symbol).font(.title3).foregroundStyle(Color.qAccent)
@@ -56,5 +57,18 @@ struct ConnectionStartGrid: View {
         .accessibilityLabel(tile.title + ". " + tile.detail)
       }
     }.disabled(app.connectionPickerDisabled)
+  }
+
+  private func open(_ tile: Tile) {
+    guard tile.page == "factory" else {
+      app.openConnections(tile.page)
+      return
+    }
+    if app.project.isEmpty {
+      app.chooseProject(openFolder: app.openProjectInFactory)
+    } else {
+      app.showWelcome = false
+      app.section = "Factory Studio"
+    }
   }
 }
