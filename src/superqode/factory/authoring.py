@@ -17,12 +17,12 @@ import yaml
 
 from .definition import FactoryDefinition, LAYERS, project_path, read_mapping, validate_definition
 from .snapshot import resolve_factory
-from .templates import factory_template
+from .templates import TEMPLATE_NAMES, factory_template
 
 TARGET = ".superqode/factory.yaml"
 REVISIONS = ".superqode/factory-studio/revisions"
 DRAFTS = ".superqode/factory-studio/drafts"
-TEMPLATES = ("fix-and-verify", "continuous-outcomes")
+TEMPLATES = TEMPLATE_NAMES
 
 
 def _helpers():
@@ -163,7 +163,7 @@ def init_from_template(root, name="fix-and-verify", *, force=False):
     """Create a full FactorySpec. Existing route policy is kept; nothing else is overwritten."""
     _, _, file_digest, _ = _helpers()
     if name not in TEMPLATES:
-        raise ValueError("Choose fix-and-verify or continuous-outcomes")
+        raise ValueError("Choose a built-in factory workflow")
     root = Path(root).resolve()
     path = target(root)
     upgraded = False
@@ -184,19 +184,10 @@ def init_from_template(root, name="fix-and-verify", *, force=False):
     return {**result, "template": name, "upgraded_route_policy": upgraded}
 
 
-async def draft(root, description, *, provider, model, gateway=None):
-    """Ask a model for a FactorySpec draft. Stores a draft for review, never the definition."""
-    from .generation import generate_factory
-
-    atomic, _, _, sha = _helpers()
+def _store_draft(root, proposal):
+    """Store a reviewable draft. Never writes the Factory definition."""
+    atomic, _, _, _sha = _helpers()
     root = Path(root).resolve()
-    path = target(root)
-    base = read_text(path) if path.is_file() else ""
-    if not base or "apiVersion" not in read_mapping(base):
-        base = template_text(root, "fix-and-verify")
-    proposal = await generate_factory(
-        description=description, yaml_text=base, provider=provider, model=model, gateway=gateway
-    )
     review = inspect_definition(root, proposal["yaml"])
     folder = project_path(root, DRAFTS)
     stored = {
@@ -220,6 +211,42 @@ async def draft(root, description, *, provider, model, gateway=None):
         "proposal_only": True,
         "written": False,
     }
+
+
+def draft_from_description(root, description, workflow=""):
+    """Build starter settings from the description. No model call and no save."""
+    from .generation import proposal_from_description
+
+    return _store_draft(root, proposal_from_description(description, workflow=workflow))
+
+
+async def draft(root, description, *, provider, model, gateway=None, workflow=""):
+    """Ask a model for a FactorySpec draft. Stores a draft for review, never the definition.
+
+    A private route that rejects a cloud model falls back to the same local starter
+    the description-only path uses. Other model errors still surface.
+    """
+    from .generation import generate_factory, proposal_from_description
+
+    root = Path(root).resolve()
+    path = target(root)
+    base = read_text(path) if path.is_file() else ""
+    if not base or "apiVersion" not in read_mapping(base):
+        starter = workflow if workflow in TEMPLATES else "fix-and-verify"
+        base = template_text(root, starter)
+    try:
+        proposal = await generate_factory(
+            description=description,
+            yaml_text=base,
+            provider=provider,
+            model=model,
+            gateway=gateway,
+        )
+    except ValueError as exc:
+        if "local drafting model" not in str(exc):
+            raise
+        proposal = proposal_from_description(description, workflow=workflow)
+    return _store_draft(root, proposal)
 
 
 def apply_draft(root, digest_value, *, reason, confirmed):

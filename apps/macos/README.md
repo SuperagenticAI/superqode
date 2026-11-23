@@ -29,10 +29,9 @@ ACP session after setup exits successfully.
 
 **Apple Silicon · macOS 14 or later · Signed and notarized · Python engine included**
 
-<picture>
-  <source media="(prefers-color-scheme: light)" srcset="../../assets/superqode-macos-welcome-light.png">
-  <img src="../../assets/superqode-macos-welcome.png" alt="SuperQode native Mac app welcome screen" width="960">
-</picture>
+<img src="../../assets/SuperQode_landing.jpg" alt="SuperQode for macOS with Factory Studio in the sidebar and Build your factory on the connect screen" width="960">
+
+On the welcome guide, **Build your factory** opens Factory Studio for the project you already have open. With no project open, it asks you to choose a folder first.
 
 ## Start coding
 

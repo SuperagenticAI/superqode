@@ -141,7 +141,22 @@ def test_generation_request_strips_runtime_overrides(studio):
         ),
     )
     assert safe["factory_providers"] == ["ollama"]
+    assert safe["workflow"] == ""
     assert "harness" not in safe and "cwd" not in safe and "_desktop_api_key" not in safe
+    starter = validate_request(
+        root,
+        dict(
+            factory_action="generate",
+            confirmed=True,
+            yaml=text,
+            description="Ship the next slice",
+            provider="acp",
+            model="ignored",
+            workflow="kanban",
+        ),
+    )
+    assert starter["provider"] == "" and starter["model"] == ""
+    assert starter["factory_providers"] == [] and starter["workflow"] == "kanban"
     with pytest.raises(ValueError, match="confirm"):
         validate_request(root, {"factory_action": "generate"})
 

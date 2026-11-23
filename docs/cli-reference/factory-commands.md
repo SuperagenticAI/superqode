@@ -18,8 +18,11 @@ The macOS app is the primary Factory interface. The CLI and TUI use the same
 engine and can run the whole flow on their own:
 
 ```bash
+sq factory workflows                          # fix-and-verify, continuous-outcomes,
+                                              # build-test-deploy, kanban, scrum, xp, lean
 sq factory init --template fix-and-verify     # full FactorySpec; keeps existing routes
 sq factory show                               # stages, checks, release rule, recent runs
+sq factory describe "build, test and deploy"  # starter draft; no model is required
 sq factory describe "We triage bugs, fix them and verify" --model ollama/qwen3-coder
 sq factory describe --apply sha256:DRAFT --confirm --reason "Reviewed draft"
 sq factory sources inspect
@@ -38,11 +41,19 @@ that file is upgraded in place and its `default_route` and `routes` are kept;
 an existing FactorySpec is replaced only with `--force`. Every save is kept as a
 revision under `.superqode/factory-studio/revisions`, the same store the app uses.
 
-`describe` sends the description and current definition to the chosen model with
-no tools and prints a draft with its diff, assumptions and missing capabilities.
-It writes nothing to `factory.yaml`. The draft is stored by digest, and
+`workflows` lists the seven starters and their stages: Fix and verify,
+Continuous outcomes, Build test deploy, Kanban, Scrum, XP and Lean.
+
+`describe` can build those starter settings from the description alone. Words
+in the description pick the workflow (kanban, scrum or sprint, xp, lean, or
+build plus test or deploy). `--workflow NAME` is used when the description
+does not name one. Pass `--model provider/model` to ask that model instead.
+The model receives the description and current definition, has no tools, and
+cannot change the release authority. A private route that rejects a cloud
+drafting model falls back to the same starter. Either way, `describe` writes
+nothing to `factory.yaml`. The draft is stored by digest, and
 `describe --apply DIGEST --confirm` saves it only if the Factory has not changed
-since the draft was made. Release authority cannot be changed by a draft.
+since the draft was made.
 
 `sources inspect` lists the saved definition and its declared components with
 diffs against HEAD. `sources commit` creates a local commit of the chosen paths,
@@ -58,8 +69,9 @@ In the TUI, the same flow is:
 | TUI command | Does |
 | --- | --- |
 | `:factory` or `:factory status` | Factory overview, recent runs and the session route |
+| `:factory workflows` | List the starter workflows |
 | `:factory init [--template NAME] [--force]` | Create a FactorySpec |
-| `:factory describe "<process>" --model p/m` | Draft a FactorySpec for review (runs the CLI) |
+| `:factory describe "<process>"` | Draft a starter with no model, or pass `--model p/m` (runs the CLI) |
 | `:factory check [--application]` | Readiness (runs the CLI) |
 | `:factory trial "<goal>"` | Queue one WorkOrder; no agent runs |
 | `:factory run WORK_ID` | Run it with live agents (`sq factory worker WORK_ID --live`) |
@@ -529,12 +541,15 @@ Other customer-managed P-256 signers can use the same CLI challenge protocol.
 ## Native Factory Studio
 
 Open a project and select **Factory Studio** in the Harnesses navigation group.
-The Stack view exposes all seven layers and crosscutting governance. Start with
-**Fix and verify** or **Continuous outcomes**, or edit the shared YAML definition.
-Describe the intended process and explicitly generate a model-assisted proposal
-with the app's selected model. The model receives the description and definition,
-has no tools, and cannot change the release authority. Generation is an explicit
-model call; applying its proposal, validating and saving are separate actions.
+The Stack view exposes all seven layers and crosscutting governance. Start from
+a workflow: **Fix and verify**, **Continuous outcomes**, **Build test deploy**,
+**Kanban**, **Scrum**, **XP** or **Lean**. A description can draft starter
+settings with no model. Words in the description pick the workflow. A model can
+still draft a proposal; it receives the description and definition, has no
+tools, and cannot change the release authority. A private route that rejects a
+cloud model falls back to the same starter. Applying a proposal, validating
+and saving are separate actions. Nothing runs until the revision is saved and
+a trial is started.
 
 Review the workflow, model bindings, warnings and definition diff; save a revision
 with a reason. Revisions can be loaded back into the draft and explicitly saved

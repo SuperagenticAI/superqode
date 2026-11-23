@@ -178,7 +178,7 @@ import Combine
       guard project == identity, run == selected else { return }; await inspect(engine: engine)
     } catch { if project == identity { failure = error.localizedDescription } }
   }
-  func start(engine: Engine, action: String, provider: String = "", model: String = "", extra: [String: Any] = [:]) async {
+  func start(engine: Engine, action: String, provider: String = "", model: String = "", workflow: String = "", extra: [String: Any] = [:]) async {
     guard !busy else { return }
     let identity = project; let token = version; let selected = run
     let op = UUID(); operation = op; busy = true; failure = ""
@@ -187,7 +187,7 @@ import Combine
       "factory_action": action, "run": selected]
     if ["source-commit", "improvement-search", "improvement-compare", "campaign-run", "campaign-worker"].contains(action) { params.merge(extra) { _, value in value } }
     if action == "generate" { params.merge(["yaml": text, "description": description,
-      "provider": provider, "model": model]) { _, value in value } }
+      "provider": provider, "model": model, "workflow": workflow]) { _, value in value } }
     if action == "apply" { params["candidate_id"] = detail["candidate_id"]; params["candidate_digest"] = detail["candidate_digest"] }
     do {
       let started = try await rpc(engine, "action.start", params)
@@ -217,9 +217,16 @@ import Combine
             if action == "generate" {
               let result = current["result"] as? [String: Any] ?? [:]
               proposal = result
-              // Always require an explicit application of a generated proposal.
-              message = version == token ? "Proposal ready. Review assumptions and apply it to the draft."
-                : "Draft changed during generation. Your edits are preserved; compare the proposal before applying it."
+              let localStarter = (result["assumptions"] as? [String] ?? []).contains { $0.contains("No model was called") }
+              if localStarter, version == token, !string(result, "yaml").isEmpty {
+                text = string(result, "yaml")
+                proposal = [:]
+                message = "Starter settings are in the draft. Check the definition before saving."
+              } else {
+                // A model proposal stays separate until the user applies it.
+                message = version == token ? "Proposal ready. Review assumptions and apply it to the draft."
+                  : "Draft changed during generation. Your edits are preserved; compare the proposal before applying it."
+              }
             }
           } else { failure = "Factory action \(string(current, "status")): \(pretty(current["result"]))" }
           if action == "source-commit" { await refreshSources(engine: engine) }

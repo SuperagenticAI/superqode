@@ -346,6 +346,14 @@ struct ConnectionView: View {
       VStack(alignment: .leading, spacing: 10) {
         Text(catalogTitle).font(.title2.weight(.semibold)).accessibilityAddTraits(.isHeader)
         if !subtitle.isEmpty { Text(subtitle).font(.callout).foregroundStyle(.secondary) }
+        if app.connectionReturnSection == "Factory Studio" && (page == "menu:models" || page == "menu:key-models") {
+          Text("A model is optional. Factory Studio builds starter settings from your description. Choose a model only for a richer draft.")
+            .font(.callout).foregroundStyle(.secondary)
+          Button("Continue in Factory without a model") {
+            app.finishConnectionSelection()
+            dismiss()
+          }.buttonStyle(BrandButtonStyle())
+        }
         if (page == "menu:root" || page == "menu:plan") && search.isEmpty {
           modelStudioHint
         }
@@ -545,6 +553,9 @@ struct ConnectionView: View {
       return "Choose a local coding agent. It keeps its own harness, model and sign-in."
     }
     if page == "harnesses" { return "Choose the harness first. Connect its model next." }
+    if app.connectionReturnSection == "Factory Studio" && (page == "menu:models" || page == "menu:key-models") {
+      return "Factory Studio does not need a local model to get started."
+    }
     if page == "runtimes" {
       return "Explore all registered agent runtimes and harness backends. Each entry shows its setup status and supported selection path."
     }

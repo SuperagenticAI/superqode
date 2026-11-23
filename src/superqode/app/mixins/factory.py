@@ -20,8 +20,9 @@ class FactoryMixin:
         t.append("\n  Code Factory\n\n", style=f"bold {THEME['purple']}")
         commands = [
             (":factory status", "FactorySpec, acceptance checks, release rule and recent runs"),
+            (":factory workflows", "list Kanban, Scrum, XP, Lean and the other starters"),
             (":factory init [--template NAME] [--force]", "create a full FactorySpec"),
-            (':factory describe "<team process>" --model p/m', "draft a FactorySpec to review"),
+            (':factory describe "<process>"', "draft a starter; add --model p/m to ask a model"),
             (":factory describe --apply DIGEST --confirm", "save a reviewed draft"),
             (":factory check [--application]", "readiness, with build, start and health runs"),
             (':factory trial "<goal>"', "queue one WorkOrder from the Factory; no agent runs"),
@@ -161,7 +162,7 @@ class FactoryMixin:
                 raise FileNotFoundError
             lines = overview_lines(overview(Path.cwd()))
         except FileNotFoundError:
-            lines = ["➖ No Factory in this project yet. Next: :factory init"]
+            lines = ["➖ No Factory in this project yet. Next: :factory workflows"]
         except Exception as exc:
             lines = [f"⛔ Factory definition problem: {exc}"]
         try:
@@ -189,7 +190,9 @@ class FactoryMixin:
         if "--template" in tokens:
             index = tokens.index("--template")
             if index + 1 >= len(tokens):
-                log.add_info("Usage: :factory init [--template fix-and-verify|continuous-outcomes]")
+                from superqode.factory.authoring import TEMPLATES
+
+                log.add_info("Usage: :factory init [--template " + "|".join(TEMPLATES) + "]")
                 return
             template = tokens[index + 1]
         try:
@@ -202,6 +205,17 @@ class FactoryMixin:
             + (" (route policy kept)" if result.get("upgraded_route_policy") else "")
             + ". Next: :factory check"
         )
+
+    def _factory_workflows(self, log: ConversationLog) -> None:
+        from superqode.factory.templates import workflow_catalog
+
+        lines = []
+        for row in workflow_catalog():
+            lines.append(f"{row['name']}: {row['summary']}")
+            lines.append("   stages: " + " → ".join(row["stages"]))
+        lines.append('Next: :factory describe "<how the team works>"')
+        lines.append("      or :factory init --template NAME")
+        self._factory_lines(log, "Factory workflows", lines)
 
     def _factory_cli(self, subcommand: str, tokens: list[str], log: ConversationLog) -> None:
         """Commands that may run models, agents or project processes go through the CLI."""

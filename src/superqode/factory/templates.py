@@ -1,19 +1,32 @@
 """Small editable starting points, sharing one factory runtime."""
 
+TEMPLATE_NAMES = (
+    "fix-and-verify",
+    "continuous-outcomes",
+    "build-test-deploy",
+    "kanban",
+    "scrum",
+    "xp",
+    "lean",
+)
 
-def factory_template(name="fix-and-verify"):
-    if name not in {"fix-and-verify", "continuous-outcomes"}:
-        raise ValueError("Choose Fix and verify or Continuous outcomes")
-    outcome = name == "continuous-outcomes"
+
+def _stage(stage_id, goal, role, *, depends_on=(), gate=False):
+    stage = {"id": stage_id, "goal": goal, "role": role, "harness": "coder"}
+    if depends_on:
+        stage["depends_on"] = list(depends_on)
+        stage["checks"] = ["regression"]
+    if gate:
+        stage["human_gate"] = True
+        stage["checks"] = ["regression"]
+    return stage
+
+
+def _factory(name, description, stages):
     return {
         "apiVersion": "superqode.dev/v1alpha1",
         "kind": "Factory",
-        "metadata": {
-            "name": name,
-            "description": "Investigate an outcome, deliver a small change and retain feedback."
-            if outcome
-            else "Investigate, implement and verify a small repository fix.",
-        },
+        "metadata": {"name": name, "description": description},
         "default_route": "no-subscription",
         "data_context": {"repository": ".", "files": {}},
         "compute": {"runner": "worktree"},
@@ -30,36 +43,7 @@ def factory_template(name="fix-and-verify"):
                 ],
             },
         },
-        "orchestration": {
-            "stages": [
-                {
-                    "id": "investigate",
-                    "goal": "Clarify the accountable owner's desired outcome and inspect permitted signals."
-                    if outcome
-                    else "Reproduce the reported problem and identify a bounded fix.",
-                    "role": "investigator",
-                    "harness": "coder",
-                },
-                {
-                    "id": "implement",
-                    "goal": "Implement a small change and its regression case.",
-                    "role": "implementer",
-                    "harness": "coder",
-                    "depends_on": ["investigate"],
-                    "checks": ["regression"],
-                },
-                {
-                    "id": "verify",
-                    "goal": "Exercise the failing path, report evidence and identify follow-up signals.",
-                    "role": "tester",
-                    "harness": "coder",
-                    "depends_on": ["implement"],
-                    "human_gate": True,
-                    "checks": ["regression"],
-                },
-            ],
-            "acceptance_checks": ["regression"],
-        },
+        "orchestration": {"stages": stages, "acceptance_checks": ["regression"]},
         "access": {"interfaces": ["macos", "cli", "tui", "api"]},
         "governance": {
             "permissions": {
@@ -72,3 +56,234 @@ def factory_template(name="fix-and-verify"):
             "release": "human",
         },
     }
+
+
+def factory_template(name="fix-and-verify"):
+    if name not in TEMPLATE_NAMES:
+        raise ValueError("Choose a built-in factory workflow")
+    if name == "continuous-outcomes":
+        return _factory(
+            name,
+            "Investigate an outcome, deliver a small change and retain feedback.",
+            [
+                _stage(
+                    "investigate",
+                    "Clarify the accountable owner's desired outcome and inspect permitted signals.",
+                    "investigator",
+                ),
+                _stage(
+                    "implement",
+                    "Implement a small change and its regression case.",
+                    "implementer",
+                    depends_on=["investigate"],
+                ),
+                _stage(
+                    "verify",
+                    "Exercise the failing path, report evidence and identify follow-up signals.",
+                    "tester",
+                    depends_on=["implement"],
+                    gate=True,
+                ),
+            ],
+        )
+    if name == "build-test-deploy":
+        return _factory(
+            name,
+            "Build the change, test it, and stop before a person releases the deployment.",
+            [
+                _stage("build", "Produce the change the owner described.", "implementer"),
+                _stage(
+                    "test",
+                    "Run the project checks and record what failed.",
+                    "tester",
+                    depends_on=["build"],
+                ),
+                _stage(
+                    "deploy",
+                    "Prepare the reviewed delivery and wait for a person.",
+                    "reviewer",
+                    depends_on=["test"],
+                    gate=True,
+                ),
+            ],
+        )
+    if name == "kanban":
+        return _factory(
+            name,
+            "Move one work item across a Kanban board, from selection to a reviewed finish.",
+            [
+                _stage("select", "Choose the next item and write its acceptance.", "investigator"),
+                _stage(
+                    "build",
+                    "Implement that item and nothing beyond it.",
+                    "implementer",
+                    depends_on=["select"],
+                ),
+                _stage(
+                    "review",
+                    "Show the change and its check, then wait for a person.",
+                    "reviewer",
+                    depends_on=["build"],
+                    gate=True,
+                ),
+            ],
+        )
+    if name == "scrum":
+        return _factory(
+            name,
+            "Run one Scrum slice: refine the goal, build it, review it, and note the next improvement.",
+            [
+                _stage(
+                    "refine", "Turn the sprint goal into one bounded backlog item.", "investigator"
+                ),
+                _stage(
+                    "build",
+                    "Implement the item agreed in refinement.",
+                    "implementer",
+                    depends_on=["refine"],
+                ),
+                _stage(
+                    "review",
+                    "Show the increment and wait for a person.",
+                    "reviewer",
+                    depends_on=["build"],
+                    gate=True,
+                ),
+                _stage(
+                    "retro",
+                    "Record one improvement for the next slice.",
+                    "investigator",
+                    depends_on=["review"],
+                ),
+            ],
+        )
+    if name == "xp":
+        return _factory(
+            name,
+            "Use an XP loop: name the story, write the check, implement it, then integrate.",
+            [
+                _stage("story", "Write the story and the example that proves it.", "investigator"),
+                _stage(
+                    "test",
+                    "Add the failing check before the implementation.",
+                    "tester",
+                    depends_on=["story"],
+                ),
+                _stage(
+                    "implement",
+                    "Make that check pass with a small change.",
+                    "implementer",
+                    depends_on=["test"],
+                ),
+                _stage(
+                    "integrate",
+                    "Integrate the change and wait for a person.",
+                    "reviewer",
+                    depends_on=["implement"],
+                    gate=True,
+                ),
+            ],
+        )
+    if name == "lean":
+        return _factory(
+            name,
+            "Keep one lean slice: name the value, build only that, check it, then improve the flow.",
+            [
+                _stage("value", "Name the value this slice must deliver.", "investigator"),
+                _stage(
+                    "build",
+                    "Build only the named value.",
+                    "implementer",
+                    depends_on=["value"],
+                ),
+                _stage(
+                    "check",
+                    "Check the result and wait for a person.",
+                    "reviewer",
+                    depends_on=["build"],
+                    gate=True,
+                ),
+                _stage(
+                    "improve",
+                    "Record one waste to remove next time.",
+                    "investigator",
+                    depends_on=["check"],
+                ),
+            ],
+        )
+    return _factory(
+        "fix-and-verify",
+        "Investigate, implement and verify a small repository fix.",
+        [
+            _stage(
+                "investigate",
+                "Reproduce the reported problem and identify a bounded fix.",
+                "investigator",
+            ),
+            _stage(
+                "implement",
+                "Implement a small change and its regression case.",
+                "implementer",
+                depends_on=["investigate"],
+            ),
+            _stage(
+                "verify",
+                "Exercise the failing path, report evidence and identify follow-up signals.",
+                "tester",
+                depends_on=["implement"],
+                gate=True,
+            ),
+        ],
+    )
+
+
+def explicit_workflow(description):
+    """Return a workflow the description names, or an empty string."""
+    words = set(description.casefold().replace("-", " ").split())
+    if "kanban" in words:
+        return "kanban"
+    if "scrum" in words or "sprint" in words:
+        return "scrum"
+    if "xp" in words or {"extreme", "programming"} <= words:
+        return "xp"
+    if "lean" in words:
+        return "lean"
+    if "deploy" in words or {"build", "test"} <= words:
+        return "build-test-deploy"
+    return ""
+
+
+def workflow_for_description(description):
+    """Pick a built-in workflow from the words the user already wrote."""
+    return explicit_workflow(description) or "fix-and-verify"
+
+
+def compose_from_description(description, workflow=""):
+    text = " ".join(description.split())
+    if not text or len(text) > 8000:
+        raise ValueError("Describe the factory in 8,000 characters or fewer")
+    named = explicit_workflow(text)
+    if named:
+        choice = named
+    elif workflow in TEMPLATE_NAMES:
+        choice = workflow
+    else:
+        choice = "fix-and-verify"
+    data = factory_template(choice)
+    data["metadata"]["description"] = text[:500]
+    return data
+
+
+def workflow_catalog():
+    """Name, summary and stage ids for every built-in starter."""
+    rows = []
+    for name in TEMPLATE_NAMES:
+        data = factory_template(name)
+        rows.append(
+            {
+                "name": name,
+                "summary": data["metadata"]["description"],
+                "stages": [stage["id"] for stage in data["orchestration"]["stages"]],
+            }
+        )
+    return rows

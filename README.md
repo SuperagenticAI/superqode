@@ -37,10 +37,7 @@
 </p>
 
 <p align="center">
-  <picture>
-    <source media="(prefers-color-scheme: light)" srcset="assets/superqode-macos-welcome-light.png">
-    <img src="assets/superqode-macos-welcome.png" alt="SuperQode native Mac app welcome screen" width="960">
-  </picture>
+  <img src="assets/SuperQode_landing.jpg" alt="SuperQode for macOS with Factory Studio in the sidebar and Build your factory on the connect screen" width="960">
 </p>
 
 ## Start with the Mac app
@@ -52,13 +49,14 @@
 
 The app bundles its Python engine. You do not need to install Python, use the App Store or create a SuperQode account. External agents and local model servers may require their own setup. Provider subscriptions and usage charges still apply.
 
-**Public beta 0.4.11** supports Apple Silicon Macs running macOS 14 or later. Some integrations and advanced workflows are experimental. Updates are manual. See the [beta notes](apps/macos/BETA-NOTES.md) and [download checksum](https://superqode.dev/downloads/macos/latest/SuperQode-arm64.dmg.sha256).
+**Public beta 0.4.25** supports Apple Silicon Macs running macOS 14 or later. Some integrations and advanced workflows are experimental. Updates are manual. See the [beta notes](apps/macos/BETA-NOTES.md) and [download checksum](https://superqode.dev/downloads/macos/latest/SuperQode-arm64.dmg.sha256).
 
 ## Code, measure and improve in one workspace
 
 - **Code and review:** stream agent responses, approve tools, edit source, inspect Git changes and use the integrated terminal.
 - **Bring your connection:** connect existing agents, subscription-backed routes, provider keys or supported local models. Availability depends on the selected runtime and account.
 - **Continue across agents:** keep your local conversation when changing agents, with bounded context handoffs and compatible session resume where supported.
+- **Factory Studio:** build a software factory, configure its harness and model, compare an improvement, and export it. On the welcome guide, **Build your factory** opens Factory Studio.
 - **Harness Hub:** explore shared harness definitions and choose the setup for your task.
 - **Evaluate:** compare baseline and candidate results, per-task outcomes, cost and regressions.
 - **Optimize:** run bounded optimization, review candidate diffs and adopt a validated harness revision.

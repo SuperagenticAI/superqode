@@ -106,9 +106,95 @@ def test_describe_draft_is_rejected_when_the_factory_changed(project):
         authoring.apply_draft(project, draft["digest"], reason="Save", confirmed=True)
 
 
-def test_describe_requires_a_model(project):
-    result = invoke("describe", "--project", str(project), "Build a factory")
-    assert result.exit_code != 0 and "--model" in result.output
+def test_describe_without_a_model_stores_a_starter(project):
+    path = project / ".superqode/factory.yaml"
+    before = path.read_text()
+    result = invoke(
+        "describe",
+        "--project",
+        str(project),
+        "build me software factory for build test and deploy workflow",
+        "--json",
+    )
+    assert result.exit_code == 0, result.output
+    draft = json.loads(result.output)
+    assert draft["written"] is False and "No model was called" in draft["assumptions"][0]
+    assert yaml.safe_load(draft["yaml"])["metadata"]["name"] == "build-test-deploy"
+    assert path.read_text() == before
+    saved = invoke(
+        "describe",
+        "--project",
+        str(project),
+        "--apply",
+        draft["digest"],
+        "--confirm",
+        "--reason",
+        "Reviewed starter",
+    )
+    assert saved.exit_code == 0, saved.output
+    assert yaml.safe_load(path.read_text())["metadata"]["name"] == "build-test-deploy"
+
+
+def test_describe_uses_the_workflow_flag_and_rejects_a_bare_model(project):
+    missing = invoke("describe", "--project", str(project))
+    assert missing.exit_code != 0 and "sq factory workflows" in missing.output
+    bare = invoke("describe", "--project", str(project), "Ship the next slice", "--model", "ollama")
+    assert bare.exit_code != 0 and "provider/model" in bare.output
+    selected = invoke(
+        "describe",
+        "--project",
+        str(project),
+        "Ship the next slice",
+        "--workflow",
+        "lean",
+        "--json",
+    )
+    assert selected.exit_code == 0, selected.output
+    assert yaml.safe_load(json.loads(selected.output)["yaml"])["metadata"]["name"] == "lean"
+
+
+def test_workflows_lists_every_starter():
+    result = invoke("workflows")
+    assert result.exit_code == 0, result.output
+    for name in (
+        "fix-and-verify",
+        "continuous-outcomes",
+        "build-test-deploy",
+        "kanban",
+        "scrum",
+        "xp",
+        "lean",
+    ):
+        assert name in result.output
+
+
+def test_a_private_route_cloud_model_falls_back_in_the_cli_engine(project, monkeypatch):
+    async def rejected(**kwargs):
+        raise ValueError("This factory's private route requires a local drafting model")
+
+    monkeypatch.setattr("superqode.factory.generation.generate_factory", rejected)
+    draft = asyncio.run(
+        authoring.draft(
+            project,
+            "Use a Kanban board",
+            provider="openai",
+            model="gpt-4o",
+            workflow="scrum",
+        )
+    )
+    assert yaml.safe_load(draft["yaml"])["metadata"]["name"] == "kanban"
+    assert "No model was called" in draft["assumptions"][0]
+
+
+def test_other_model_errors_still_surface(project, monkeypatch):
+    async def rejected(**kwargs):
+        raise ValueError("Model must return a JSON factory proposal")
+
+    monkeypatch.setattr("superqode.factory.generation.generate_factory", rejected)
+    with pytest.raises(ValueError, match="JSON factory proposal"):
+        asyncio.run(
+            authoring.draft(project, "Ship the next slice", provider="ollama", model="qwen3:8b")
+        )
 
 
 def test_sources_commit_requires_review_digest_and_confirmation(project):

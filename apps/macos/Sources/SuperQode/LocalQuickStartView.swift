@@ -413,12 +413,16 @@ struct LocalQuickStartView: View {
     defer { busy = false }
     do {
       let requested = app.harness.isEmpty ? "core" : app.harness
+      let returning = !app.connectionReturnSection.isEmpty
       let result = try await connect(requested)
       guard validProject, !app.anyActive else { return }
       app.chooseHarness(string(result, "harness")); app.chooseModelRoute(string(result, "provider"), string(result, "model"))
-      try await app.warmLocalModel(
-        endpoint: string(result, "endpoint"), model: string(result, "model"), server: string(result, "provider"))
-      if app.connectionReturnSection.isEmpty {
+      // Factory drafting does not need a warmed coding session.
+      if !returning {
+        try await app.warmLocalModel(
+          endpoint: string(result, "endpoint"), model: string(result, "model"), server: string(result, "provider"))
+      }
+      if !returning {
         app.section = "Workspace"
       } else {
         app.finishConnectionSelection()

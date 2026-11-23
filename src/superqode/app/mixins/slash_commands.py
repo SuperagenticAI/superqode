@@ -1585,6 +1585,8 @@ class SlashCommandMixin:
             self._factory_policy(log)
         elif subcommand == "init":
             self._factory_init_spec(rest, log)
+        elif subcommand == "workflows":
+            self._factory_workflows(log)
         elif subcommand == "init-policy":
             self._factory_init_policy(rest, log)
         elif subcommand in {"describe", "check", "run"}:

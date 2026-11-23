@@ -61,6 +61,13 @@ def test_tui_factory_flow_status_trial_run_evidence_and_decide(project, monkeypa
     assert host.passthrough[-1] == ["factory", "check", "--application"]
     host.factory('describe "We fix bugs" --model ollama/qwen3:8b')
     assert host.passthrough[-1][:3] == ["factory", "describe", "We fix bugs"]
+    host.factory("workflows")
+    shown = host.shown[-1]
+    for name in ("kanban", "scrum", "xp", "lean", "build-test-deploy"):
+        assert name in shown
+    host.factory('describe "build test and deploy"')
+    assert host.passthrough[-1][:3] == ["factory", "describe", "build test and deploy"]
+    assert "--model" not in host.passthrough[-1]
 
 
 def test_tui_init_creates_spec_and_route_commands_still_work(tmp_path, monkeypatch):

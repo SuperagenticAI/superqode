@@ -116,12 +116,12 @@ struct FactoryStudioView: View {
         Text("🏭  What should this Factory do?").font(.headline)
         TextEditor(text: $library.description).font(.body).frame(height: 140).brandSurface().accessibilityLabel("Factory description")
         HStack {
-          Text(app.provider.isEmpty || app.model.isEmpty ? "Choose a harness and model for AI-assisted drafting." : "Drafting with \(app.provider)/\(app.model)").font(.caption).foregroundStyle(.secondary)
+          Text(app.provider.isEmpty || app.model.isEmpty || app.provider == "acp" ? "Generate starter settings from this description. No model is required." : "Drafting with \(app.provider)/\(app.model). If that model cannot draft, starter settings are built here.").font(.caption).foregroundStyle(.secondary)
           Spacer()
           Button("Choose harness and model…") { app.openConnections(returningTo: "Factory Studio") }
         }
         Button("Generate a draft…") { confirmation = "generate" }.buttonStyle(BrandButtonStyle())
-          .disabled(!idle || library.description.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty || app.provider.isEmpty || app.model.isEmpty || app.provider == "acp")
+          .disabled(!idle || library.description.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty)
         if library.canApplyProposal {
           VStack(alignment: .leading, spacing: 10) {
             Text("A proposal is ready to review.").font(.subheadline.bold())
@@ -130,21 +130,62 @@ struct FactoryStudioView: View {
           }.padding(14).brandSurface()
         }
         Divider()
-        Text("✨  Or start from a workflow").font(.subheadline.bold())
-        Picker("Workflow", selection: $preset) { Text("🔧  Fix and verify").tag("fix-and-verify"); Text("🔁  Continuous outcomes").tag("continuous-outcomes") }
-        FactoryActionRow {
-          Button("Use this starter…") { confirmation = "template" }.disabled(!idle)
-          Button("Reload saved…") { confirmation = "reload" }.disabled(!idle)
-        }
+        Text("Start from a workflow").font(.subheadline.bold())
+        Text("Click a card to load its settings. A model is not required.").font(.caption).foregroundStyle(.secondary)
+        workflowGrid
+        Button("Reload saved…") { confirmation = "reload" }.disabled(!idle)
         Divider()
         HStack {
           Text(setup.hasDraft ? "Your draft is available in the pages on the left." : "Load a starter first to establish the drafting permissions and budget.").font(.caption).foregroundStyle(.secondary)
           Spacer()
           nativeButton("factory.setup.next", action: advanceSetup, title: setup.action) { Text(setup.action).font(.caption.weight(.semibold)) }.disabled(!idle || (controlsHaveChanges && setup.hasDraft))
         }
-      }.frame(maxWidth: 680, alignment: .leading).frame(maxWidth: .infinity, alignment: .leading)
+      }.frame(maxWidth: .infinity, alignment: .leading)
     }
   }
+
+  private struct WorkflowCard: Identifiable {
+    let id: String
+    let title: String
+    let detail: String
+  }
+
+  private static let workflowCards: [WorkflowCard] = [
+    WorkflowCard(id: "fix-and-verify", title: "Fix and verify", detail: "Investigate a problem, make a small fix, and check it."),
+    WorkflowCard(id: "continuous-outcomes", title: "Continuous outcomes", detail: "Deliver a change and keep the feedback."),
+    WorkflowCard(id: "build-test-deploy", title: "Build, test, deploy", detail: "Build the change, test it, and wait before release."),
+    WorkflowCard(id: "kanban", title: "Kanban", detail: "Move one item from selection to a reviewed finish."),
+    WorkflowCard(id: "scrum", title: "Scrum", detail: "Refine, build, review, then note the next improvement."),
+    WorkflowCard(id: "xp", title: "XP", detail: "Name the story, write the check, then implement it."),
+    WorkflowCard(id: "lean", title: "Lean", detail: "Name the value, build only that, then improve the flow."),
+  ]
+
+  private var workflowGrid: some View {
+    LazyVGrid(columns: [GridItem(.adaptive(minimum: 220), spacing: 8)], spacing: 8) {
+      ForEach(Self.workflowCards) { card in
+        Button { chooseWorkflow(card.id) } label: {
+          ConnectionCardLabel(title: card.title, subtitle: card.detail) {
+            FactoryWorkflowMark(id: card.id).frame(width: 36, height: 36)
+          }
+        }
+        .buttonStyle(ConnectionChoiceStyle(selected: preset == card.id))
+        .disabled(!idle)
+        .accessibilityIdentifier("factory.workflow." + card.id)
+        .accessibilityLabel(card.title + ". " + card.detail)
+      }
+    }
+  }
+
+  private func chooseWorkflow(_ id: String) {
+    guard idle else { return }
+    preset = id
+    if library.text.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
+      execute("template")
+    } else {
+      confirmation = "template"
+    }
+  }
+
   private var configuration: some View {
     ScrollView {
       VStack(alignment: .leading, spacing: 14) {
@@ -235,6 +276,65 @@ struct FactoryStudioView: View {
     }
   }
   private var definition: some View {
+    VStack(alignment: .leading, spacing: 10) {
+      definitionGuide
+      definitionEditor
+    }
+  }
+
+  private var definitionGuide: some View {
+    VStack(alignment: .leading, spacing: 6) {
+      HStack(spacing: 12) {
+        Button { library.navigation.select("Stack") } label: {
+          Label("Back to workflows", systemImage: "chevron.left")
+        }
+        .accessibilityIdentifier("factory.definition.back")
+        Spacer(minLength: 8)
+        Button(definitionNextTitle) { continueFromDefinition() }
+          .buttonStyle(BrandButtonStyle())
+          .disabled(!idle || library.text.isEmpty)
+          .accessibilityIdentifier("factory.definition.next")
+      }
+      Text(definitionNextDetail).font(.caption).foregroundStyle(.secondary).fixedSize(horizontal: false, vertical: true)
+    }
+  }
+
+  private var definitionNextTitle: String {
+    if controlsHaveChanges { return "Review configuration" }
+    if !setup.validated { return "Check definition" }
+    if !setup.saved { return "Save this revision…" }
+    if !setup.committed { return "Review source changes" }
+    return setup.trialPrepared ? "Open the trial" : "Prepare a trial"
+  }
+
+  private var definitionNextDetail: String {
+    if controlsHaveChanges { return "Apply the configuration edits, then come back and check this definition." }
+    if !setup.validated { return "This is a draft. Read it, then check it. Nothing runs until you save and start a trial." }
+    if !setup.saved { return "The check matches this draft. Save the revision when it looks right." }
+    if !setup.committed { return "The revision is saved. Review the source changes before a trial." }
+    if !setup.trialPrepared { return "Sources are ready. Prepare a trial when you want this factory to run." }
+    return "A trial is already prepared. Open it when you want to run the stages."
+  }
+
+  private func continueFromDefinition() {
+    if controlsHaveChanges {
+      library.navigation.select("Configuration")
+    } else if !setup.validated {
+      let ticket = library.navigation.ticket()
+      Task {
+        await library.validate(engine: app.engine)
+        if library.navigation.isCurrent(ticket), !controlsHaveChanges { syncControls() }
+      }
+    } else if !setup.saved {
+      confirmation = "save"
+    } else if !setup.committed {
+      library.navigation.select("Sources")
+    } else {
+      library.navigation.select("Runs")
+    }
+  }
+
+  private var definitionEditor: some View {
     HSplitView {
       SourceEditor(text: $library.text, path: "factory.yaml", editable: !library.busy && !replacingDraft,
         documentID: "factory-studio:" + app.projectID, active: active && tab == "Definition").brandSurface().frame(minWidth: 280)
@@ -378,11 +478,14 @@ struct FactoryStudioView: View {
     factoryName = string(library.review, "name")
     syncedControls = controlDraft
   }
+  private func workflowTitle(_ id: String) -> String {
+    Self.workflowCards.first { $0.id == id }?.title ?? "this starter"
+  }
   private func modelForBinding(_ name: String) -> String {
     string(bindings[name] as? [String: Any] ?? [:], "model", (library.review["binding_models"] as? [String: String])?[name] ?? "")
   }
   private var confirmationTitle: String {
-    ["save": "Save this Factory revision?", "template": "Load a starter?", "reload": "Reload saved definition?", "trial": "Prepare a pinned trial?",
+    ["save": "Save this Factory revision?", "template": "Load \(workflowTitle(preset))?", "reload": "Reload saved definition?", "trial": "Prepare a pinned trial?",
      "generate": "Generate a factory proposal?", "worker": "Run ready factory stages?", "verify": "Execute protected verification?",
      "enroll": "Enroll this Mac as a release signer?", "approve": "Authenticate candidate approval?", "apply": "Apply the approved change?", "cancel": "Stop this factory run?"][confirmation] ?? "Review factory action"
   }
@@ -390,7 +493,9 @@ struct FactoryStudioView: View {
     switch confirmation {
     case "save": return "Save the checked definition and record the reason for this revision. Existing runs keep their pinned inputs."
     case "template", "reload": return "This replaces the current draft. Saved revisions and existing trials remain available."
-    case "generate": return "The selected model receives your description and draft definition. This may incur model usage. The result is a proposal for you to review."
+    case "generate": return app.provider.isEmpty || app.model.isEmpty || app.provider == "acp"
+      ? "This builds starter factory settings from your description on this Mac. No model is called."
+      : "The selected model receives your description and draft definition. This may incur model usage. If that model cannot draft, starter settings are built here instead. The result is a proposal for you to review."
     case "trial": return "Pin the saved definition and its inputs to a queued WorkOrder for this goal. This step makes no model calls. The application must have a clean committed baseline."
     case "worker": return "Execute ready stages using this run’s pinned harnesses and model routes. Model calls may incur cost and stages may edit isolated worktrees. Human gates pause execution."
     case "verify": return "Execute the exact candidate in the required OS sandbox against pinned protected Python probes. Passing checks supplies acceptance evidence; it does not approve delivery."
@@ -412,10 +517,16 @@ struct FactoryStudioView: View {
         await library.load(engine: app.engine, template: action == "template" ? preset : "")
         await library.validate(engine: app.engine)
         if library.project == ticket.project, !library.review.isEmpty { syncControls() }
+        if action == "template", library.navigation.isCurrent(ticket), library.failure.isEmpty, !library.text.isEmpty {
+          library.navigation.select("Definition")
+        }
       case "generate":
         if library.text.isEmpty { await library.load(engine: app.engine, template: preset) }
         guard library.navigation.isCurrent(ticket), !library.text.isEmpty else { return }
-        await library.start(engine: app.engine, action: action, provider: app.provider, model: app.model)
+        await library.start(engine: app.engine, action: action, provider: app.provider, model: app.model, workflow: preset)
+        if library.navigation.isCurrent(ticket), library.failure.isEmpty, library.message.hasPrefix("Starter settings") {
+          library.navigation.select("Definition")
+        }
       case "trial": await library.trial(engine: app.engine, goal: goal); if library.failure.isEmpty { follow(ticket, to: "Runs") }
       case "enroll":
         let identity = library.project; let version = library.version

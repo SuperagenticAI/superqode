@@ -25,7 +25,8 @@ hide:
   <a href="https://superqode.dev"><img src="https://img.shields.io/badge/website-superqode.dev-7c3aed?style=flat-square" alt="Website"></a>
 </p>
 
-[Jev Tool Routing](advanced/jev-tool-routing.md){ .md-button .md-button--primary }
+[Build your factory](advanced/software-factory.md){ .md-button .md-button--primary }
+[Jev Tool Routing](advanced/jev-tool-routing.md){ .md-button }
 [Jev Integration](advanced/systemone.md){ .md-button }
 [SystemOne Harness](advanced/systemone.md){ .md-button }
 [Progressive tool discovery](advanced/progressive-tool-discovery.md){ .md-button }
@@ -106,6 +107,18 @@ harness command or editing its persistent configuration.
 
 [Read the complete guide](advanced/jev-tool-routing.md){ .md-button .md-button--primary }
 [Reproduce the benchmarks](cli-reference/optimize-commands.md#reproduce-the-benchmarks){ .md-button }
+
+---
+
+## Build your factory
+
+Factory Studio in the Mac app is where you design a software factory, configure its harness and model, and compare an improvement before you save it. The same definition runs from the CLI and the TUI.
+
+<p align="center">
+  <img src="assets/SuperQode_landing.jpg" alt="SuperQode for macOS with Factory Studio in the sidebar and Build your factory on the connect screen" width="960">
+</p>
+
+[Software Factory guide](advanced/software-factory.md){ .md-button .md-button--primary }
 
 ---
 

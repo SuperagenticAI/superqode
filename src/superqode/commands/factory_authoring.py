@@ -9,7 +9,9 @@ import json
 
 import click
 
-TEMPLATE_CHOICE = click.Choice(["fix-and-verify", "continuous-outcomes"])
+from superqode.factory.authoring import TEMPLATES
+
+TEMPLATE_CHOICE = click.Choice(list(TEMPLATES))
 
 
 def _project(function):
@@ -72,17 +74,42 @@ def show(project, json_output):
         _lines(overview_lines(value))
 
 
+@click.command("workflows")
+@_json
+def workflows(json_output):
+    """List built-in factory workflows and the stages each one runs."""
+    from superqode.factory.templates import workflow_catalog
+
+    rows = workflow_catalog()
+    if json_output:
+        click.echo(json.dumps(rows, indent=2))
+        return
+    for row in rows:
+        click.echo(f"{row['name']}: {row['summary']}")
+        click.echo("   stages: " + " → ".join(row["stages"]))
+    click.echo('Next: sq factory describe "how the team works" [--workflow NAME]')
+    click.echo("      or sq factory init --template NAME")
+
+
 @click.command("describe")
 @_project
 @click.argument("description", required=False)
-@click.option("--model", "model_ref", default="", help="Drafting model as provider/model")
+@click.option("--model", "model_ref", default="", help="Optional drafting model as provider/model")
+@click.option(
+    "--workflow",
+    type=TEMPLATE_CHOICE,
+    default=None,
+    help="Starter when the description does not name one",
+)
 @click.option("--apply", "apply_digest", default="", help="Save a reviewed draft by its digest")
 @click.option("--reason", default="", help="Why the reviewed draft is being saved")
 @click.option("--confirm", is_flag=True, help="Confirm saving the reviewed draft")
 @_json
-def describe(project, description, model_ref, apply_digest, reason, confirm, json_output):
-    """Describe how your team works and get an AI FactorySpec draft to review.
+def describe(project, description, model_ref, workflow, apply_digest, reason, confirm, json_output):
+    """Describe how the team works and draft a FactorySpec to review.
 
+    With no --model, SuperQode builds starter settings on this machine.
+    Words in the description pick the workflow. --workflow is the fallback.
     Drafting writes nothing to the Factory. Save a reviewed draft with
     --apply DIGEST --reason TEXT --confirm.
     """
@@ -103,11 +130,26 @@ def describe(project, description, model_ref, apply_digest, reason, confirm, jso
         else:
             click.echo(f"✅ Saved reviewed draft {apply_digest[:12]} to {result['path']}")
         return
-    if not description or not model_ref or "/" not in model_ref:
-        raise click.ClickException("Give a description and --model provider/model")
-    provider, model = model_ref.split("/", 1)
+    if not description or not description.strip():
+        raise click.ClickException(
+            "Give a description of the factory. A model is optional. See: sq factory workflows"
+        )
+    if model_ref and "/" not in model_ref:
+        raise click.ClickException("Write --model as provider/model")
     try:
-        result = asyncio.run(authoring.draft(project, description, provider=provider, model=model))
+        if model_ref:
+            provider, model = model_ref.split("/", 1)
+            result = asyncio.run(
+                authoring.draft(
+                    project,
+                    description,
+                    provider=provider,
+                    model=model,
+                    workflow=workflow or "",
+                )
+            )
+        else:
+            result = authoring.draft_from_description(project, description, workflow=workflow or "")
     except (ValueError, OSError, KeyError, asyncio.TimeoutError) as exc:
         _fail(exc)
     if json_output:

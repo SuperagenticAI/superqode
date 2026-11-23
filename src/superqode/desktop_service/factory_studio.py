@@ -910,21 +910,26 @@ def validate_request(root, params, *, service=None):
         if action == "verifier-generate" and data != load_factory(root=root).data:
             raise ValueError("Save the Factory draft before proposing its verifiers")
         _credentials(data)
-        from superqode.factory.generation import check_generation_route
+        description = params.get("description")
+        if not isinstance(description, str) or not 0 < len(description) <= 8000:
+            raise ValueError("Describe the factory")
+        provider = str(params.get("provider", ""))
+        model = str(params.get("model", ""))
+        if not model or provider not in PROVIDERS or PROVIDERS[provider].harness_only:
+            provider, model = "", ""
+        from superqode.factory.templates import TEMPLATE_NAMES
 
-        check_generation_route(data, str(params.get("provider", "")), str(params.get("model", "")))
-        if (
-            params.get("provider") not in PROVIDERS
-            or PROVIDERS[params["provider"]].harness_only
-            or not params.get("model")
-            or not isinstance(params.get("description"), str)
-            or not 0 < len(params["description"]) <= 8000
-        ):
-            raise ValueError("Choose a model provider and describe the factory")
+        workflow = params.get("workflow", "")
+        if workflow not in TEMPLATE_NAMES:
+            workflow = ""
         return {
             **common,
-            **{key: params[key] for key in ("yaml", "description", "provider", "model")},
-            "factory_providers": [params["provider"]],
+            "yaml": params.get("yaml", ""),
+            "description": description,
+            "provider": provider,
+            "model": model,
+            "workflow": workflow,
+            "factory_providers": [provider] if provider else [],
         }
     if action not in {"worker", "verify", "apply"}:
         raise ValueError("Unsupported factory action")
@@ -1003,24 +1008,34 @@ async def run(request, emit):
 
         result = commit_sources(root, request["source_plan"], request["paths"], request["message"])
     elif action in {"generate", "verifier-generate"}:
-        from superqode.factory.generation import generate_factory
+        from superqode.factory.generation import generate_factory, proposal_from_description
         from superqode.factory.verifiers import generate as generate_verifiers
 
-        result = await (
-            generate_factory(
-                description=request["description"],
-                yaml_text=request["yaml"],
-                provider=request["provider"],
-                model=request["model"],
-            )
-            if action == "generate"
-            else generate_verifiers(
+        if action == "verifier-generate":
+            result = await generate_verifiers(
                 root,
                 description=request["description"],
                 provider=request["provider"],
                 model=request["model"],
             )
-        )
+        elif not (request.get("provider") and request.get("model")):
+            result = proposal_from_description(
+                request["description"], workflow=request.get("workflow", "")
+            )
+        else:
+            try:
+                result = await generate_factory(
+                    description=request["description"],
+                    yaml_text=request["yaml"],
+                    provider=request["provider"],
+                    model=request["model"],
+                )
+            except ValueError as exc:
+                if "local drafting model" not in str(exc):
+                    raise
+                result = proposal_from_description(
+                    request["description"], workflow=request.get("workflow", "")
+                )
     elif action == "worker":
         from superqode.workorders.worker import WorkOrderWorker, WorkOrderWorkerConfig
 

@@ -7,6 +7,17 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [2.32.1] - 2026-11-23
+
+- Factory starters now include Build test deploy, Kanban, Scrum, XP and Lean,
+  alongside Fix and verify and Continuous outcomes. `sq factory workflows` and
+  `:factory workflows` list each starter and its stages.
+- `sq factory describe` and `:factory describe` draft starter settings from a
+  description with no model. Words in the description pick the workflow, and
+  `--workflow NAME` is used when they do not. A private route that rejects a
+  cloud drafting model falls back to that starter. Nothing is written to
+  `factory.yaml` until `describe --apply DIGEST --confirm`.
+
 ## [2.32.0] - 2026-11-22
 
 - New Software Factory: describe how your team works and SuperQode builds a

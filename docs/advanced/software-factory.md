@@ -19,6 +19,8 @@ Improve the Factory under held-out gates
 
 The macOS app is the primary interface. The CLI and TUI are fully capable on their own: every step above, from creating a Factory to the release decision, has a `sq factory` command and a `:factory` TUI command that use the same engine and the same files. No hosted coordination server is required.
 
+![SuperQode for macOS with Factory Studio in the sidebar and Build your factory on the connect screen](../assets/SuperQode_landing.jpg)
+
 ## The seven layers
 
 A FactorySpec (`.superqode/factory.yaml`) has seven layers, with governance across all of them:
@@ -51,7 +53,9 @@ Factory definition commands compile a saved FactorySpec into a pinned plan, admi
 ## From definition to release
 
 ```bash
+sq factory workflows
 sq factory init --template fix-and-verify
+sq factory describe "build, test and deploy"
 sq factory check --application
 sq factory trial "Fix the export freeze"
 sq factory worker WORK_ID --live

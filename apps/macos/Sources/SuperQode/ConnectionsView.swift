@@ -1156,14 +1156,16 @@ struct InstalledLocalModelPicker: View {
         failure = "The model connected, but Agent Space did not receive it. Choose the harness and model again."
         return false
       }
-      progress = returning
-        ? "Warming the model for Factory Studio…"
-        : "Warming the model so your first question is ready…"
-      try await app.warmLocalModel(
-        endpoint: string(result, "endpoint"),
-        model: modelID,
-        server: string(ready, "engine")
-      )
+      // Factory drafting does not need a warmed coding session. Waiting here
+      // leaves the connect sheet spinning until a local server finishes loading.
+      if !returning {
+        progress = "Warming the model so your first question is ready…"
+        try await app.warmLocalModel(
+          endpoint: string(result, "endpoint"),
+          model: modelID,
+          server: string(ready, "engine")
+        )
+      }
       guard app.projectID == project, !Task.isCancelled else { return false }
       // A coding start leaves the old thread first. Opening it restores that
       // thread's route and leaves Send disabled when this Mac has no connection yet.
@@ -1715,6 +1717,14 @@ extension InstalledLocalModelPicker {
         Text("Models").font(.title3.weight(.semibold)).accessibilityAddTraits(.isHeader)
         Spacer()
         Button("Download a model…") { openDownload(choice: "") }.disabled(busy)
+      }
+      if returnsToFactory {
+        Text("You can go back and generate starter settings without a model. Use in Factory skips the coding warm-up.")
+          .font(.caption).foregroundStyle(.secondary)
+        Button("Back to Factory") {
+          app.finishConnectionSelection()
+          dismiss()
+        }
       }
       if visibleModels.count > 8 {
         ConnectionSearchField(title: "Search models", text: $modelSearch)

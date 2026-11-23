@@ -4,7 +4,24 @@ import asyncio
 from dataclasses import asdict
 import json
 
+import yaml
+
 from .definition import SCHEMA, read_mapping, validate_definition
+from .templates import compose_from_description
+
+
+def proposal_from_description(description, workflow=""):
+    """A reviewable FactorySpec built on this Mac from the description alone."""
+    data = compose_from_description(description, workflow=workflow)
+    validate_definition(data)
+    return {
+        "yaml": yaml.safe_dump(data, sort_keys=False),
+        "assumptions": [
+            "Built on this Mac from your description. No model was called, and nothing has run."
+        ],
+        "missing_capabilities": [],
+        "proposal_only": True,
+    }
 
 
 def check_generation_route(data, provider, model):
