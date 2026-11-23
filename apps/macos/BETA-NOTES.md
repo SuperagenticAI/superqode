@@ -1,4 +1,10 @@
-# SuperQode for macOS public beta 0.4.24
+# SuperQode for macOS public beta 0.4.25
+
+Version 0.4.25 (build 51) bundles Python engine 2.32.0.
+
+- The welcome guide adds Build your factory, which opens Factory Studio.
+
+## 0.4.24 (build 50)
 
 Version 0.4.24 (build 50) bundles Python engine 2.32.0.
 
