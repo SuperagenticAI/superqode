@@ -155,14 +155,56 @@ struct ReviewWorkspaceView: View {
     }.disabled(commentStore.drafts.isEmpty || applying)
   }
 
+  private func changeBadgeInfo(_ change: String) -> (code: String, color: Color) {
+    let lower = change.lowercased()
+    if lower.contains("add") || lower.contains("new") || lower.contains("untracked") {
+      return ("A", Color(red: 0.14, green: 0.64, blue: 0.42))
+    }
+    if lower.contains("del") || lower.contains("rem") {
+      return ("D", Color(red: 0.86, green: 0.24, blue: 0.28))
+    }
+    if lower.contains("ren") {
+      return ("R", Color(red: 0.20, green: 0.50, blue: 0.88))
+    }
+    return ("M", Brand.orange)
+  }
+
   private var fileList: some View {
     VStack(alignment: .leading, spacing: 8) {
-      Text("CHANGED FILES").font(.caption.monospaced()).foregroundStyle(.secondary)
+      HStack {
+        Text("CHANGED FILES").font(.caption.monospaced()).foregroundStyle(.secondary)
+        if let count = listing?.files.count, count > 0 {
+          Text("\(count)")
+            .font(.caption2.weight(.semibold).monospacedDigit())
+            .foregroundStyle(.secondary)
+            .padding(.horizontal, 6)
+            .padding(.vertical, 1.5)
+            .background(Color.primary.opacity(0.06), in: Capsule())
+        }
+        Spacer()
+      }
       List(selection: $app.reviewSelection.fileID) {
         ForEach(listing?.files ?? []) { file in
-          VStack(alignment: .leading, spacing: 4) {
-            Text(file.path).font(.system(size: 12, design: .monospaced)).lineLimit(2)
-            Text(file.layerTitle + " · " + file.change).font(.caption).foregroundStyle(.secondary)
+          let badge = changeBadgeInfo(file.change)
+          HStack(alignment: .top, spacing: 8) {
+            Text(badge.code)
+              .font(.system(size: 10, weight: .bold, design: .monospaced))
+              .foregroundStyle(badge.color)
+              .frame(width: 18, height: 18)
+              .background(badge.color.opacity(0.14), in: RoundedRectangle(cornerRadius: 4, style: .continuous))
+              .padding(.top, 1)
+            VStack(alignment: .leading, spacing: 3) {
+              Text(file.path).font(.system(size: 12, design: .monospaced)).lineLimit(2)
+              HStack(spacing: 5) {
+                Text(file.layerTitle)
+                  .font(.system(size: 10, weight: .medium))
+                  .foregroundStyle(.secondary)
+                  .padding(.horizontal, 5.5)
+                  .padding(.vertical, 1.5)
+                  .background(Color.primary.opacity(0.05), in: Capsule())
+                Text(file.change).font(.caption2).foregroundStyle(.secondary)
+              }
+            }
           }.tag(file.id).padding(.vertical, 3)
         }
       }.scrollContentBackground(.hidden).disabled(loadingList || applying)

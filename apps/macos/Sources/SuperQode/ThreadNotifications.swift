@@ -59,12 +59,29 @@ func threadNotificationText(_ status: String, thread: String = "", duration: Tim
   func consume(_ result: [String: Any], selected: String, jobs: [[String: Any]] = []) {
     let next = result["cursor"] as? Int ?? cursor
     if next != cursor { cursor = next; preferences.set(cursor, forKey: "threadAlertCursor") }
+    let rows = result["items"] as? [[String: Any]] ?? []
+    if !rows.isEmpty {
+      var soundCue: FactorySoundEngine.Cue?
+      for row in rows {
+        switch string(row, "status") {
+        case "failed", "interrupted":
+          soundCue = .failed
+        case "needs_approval":
+          if soundCue != .failed { soundCue = .needsAttention }
+        case "completed":
+          if soundCue == nil { soundCue = .succeeded }
+        default:
+          break
+        }
+      }
+      if let soundCue { FactorySoundEngine.play(soundCue) }
+    }
     guard enabled, Bundle.main.bundleIdentifier != nil, !ProcessInfo.processInfo.arguments.contains("--smoke-test") else { return }
     let count = result["attention_count"] as? Int ?? 0
     NSApp.dockTile.badgeLabel = count > 0 ? String(count) : nil
     let center = UNUserNotificationCenter.current()
     center.delegate = self
-    for row in result["items"] as? [[String: Any]] ?? [] {
+    for row in rows {
       if NSApp.isActive && string(row, "job") == selected { continue }
       let job = jobs.first { string($0, "id") == string(row, "job") } ?? [:]
       let thread = string(job, "conversation_title", string(job, "title"))

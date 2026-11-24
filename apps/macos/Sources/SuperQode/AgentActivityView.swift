@@ -51,9 +51,9 @@ struct AgentFleetView: View {
   private var appThreads: some View {
     VStack(alignment: .leading, spacing: 18) {
       HStack(spacing: 12) {
-        metric("Needs attention", key: "attention", color: .orange)
-        metric("Working", key: "working", color: .blue)
-        metric("Completed", key: "done", color: .green)
+        metric("Needs attention", key: "attention", color: Brand.orange, filterTag: "attention")
+        metric("Working", key: "working", color: Brand.purple, filterTag: "working")
+        metric("Completed", key: "done", color: Color(red: 0.14, green: 0.64, blue: 0.42), filterTag: "done")
       }
       ThreadAlertControls(alerts: app.threadNotifications)
       HStack {
@@ -89,8 +89,7 @@ struct AgentFleetView: View {
                   HStack {
                     Text(string(row, "conversation_title", string(row, "title"))).font(.headline).lineLimit(2)
                     Spacer()
-                    Label(activityTitle(row), systemImage: activitySymbol(row))
-                      .font(.caption).foregroundStyle(activityColor(row))
+                    FactoryStatusBadge(raw: string(row, "status"))
                   }
                   Text((row["fork_origin"] as? [String: Any]).map { string($0, "title") } ?? string(row, "project_name")).font(.caption).foregroundStyle(.secondary)
                   if let fork = row["fork_origin"] as? [String: Any] {
@@ -125,11 +124,37 @@ struct AgentFleetView: View {
         }
       }
   }
-  private func metric(_ title: String, key: String, color: Color) -> some View {
-    VStack(alignment: .leading, spacing: 6) {
-      Text(String(library.counts[key] as? Int ?? 0)).font(.title2.monospacedDigit()).foregroundStyle(color)
-      Text(title).font(.caption).foregroundStyle(.secondary)
-    }.padding(16).frame(maxWidth: .infinity, alignment: .leading).brandSurface()
+  private func metric(_ title: String, key: String, color: Color, filterTag: String) -> some View {
+    let selected = view == filterTag
+    let value = library.counts[key] as? Int ?? 0
+    return Button {
+      view = selected ? "all" : filterTag
+    } label: {
+      HStack(spacing: 10) {
+        RoundedRectangle(cornerRadius: 2, style: .continuous)
+          .fill(color.opacity(selected || value > 0 ? 0.9 : 0.3))
+          .frame(width: 3, height: 34)
+        VStack(alignment: .leading, spacing: 4) {
+          Text(String(value))
+            .font(.title2.weight(.semibold).monospacedDigit())
+            .foregroundStyle(value > 0 || selected ? color : Color.primary)
+          Text(title)
+            .font(.caption.weight(selected ? .semibold : .regular))
+            .foregroundStyle(selected ? Color.primary : .secondary)
+        }
+        Spacer(minLength: 0)
+      }
+      .padding(14)
+      .frame(maxWidth: .infinity, alignment: .leading)
+      .brandSurface()
+      .overlay(
+        RoundedRectangle(cornerRadius: 14, style: .continuous)
+          .strokeBorder(selected ? color.opacity(0.55) : Color.clear, lineWidth: 1.4)
+          .allowsHitTesting(false)
+      )
+    }
+    .buttonStyle(.plain)
+    .help(selected ? "Show all threads" : "Filter by \(title.lowercased())")
   }
   private func reload(more: Bool = false) async {
     await library.load(engine: app.engine, project: scope, query: query, view: view, more: more)
@@ -146,23 +171,6 @@ func activityTitle(_ row: [String: Any]) -> String {
   case "completed": return "Completed"
   case "cancelled": return "Stopped"
   default: return string(row, "status", "Unknown")
-  }
-}
-private func activitySymbol(_ row: [String: Any]) -> String {
-  switch string(row, "status") {
-  case "needs_approval": return "hand.raised"
-  case "failed", "interrupted": return "exclamationmark.circle"
-  case "running", "queued", "cancelling": return "circle.dotted"
-  case "completed": return "checkmark.circle"
-  default: return "circle"
-  }
-}
-private func activityColor(_ row: [String: Any]) -> Color {
-  switch string(row, "status") {
-  case "needs_approval", "failed", "interrupted": return .orange
-  case "running", "queued", "cancelling": return .blue
-  case "completed": return .green
-  default: return .secondary
   }
 }
 

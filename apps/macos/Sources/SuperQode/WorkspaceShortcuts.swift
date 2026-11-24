@@ -7,13 +7,19 @@ import SwiftUI
 /// focused view, so every rule below declines unless the workspace itself
 /// (the message box or the conversation) has focus and nothing modal is open.
 @MainActor extension Workspace {
-  /// The approval request shown above the conversation, if any.
-  var pendingApprovalRequestID: String? {
+  /// The latest pending approval event data shown above the composer, if any.
+  var pendingApprovalData: [String: Any]? {
     guard string(detail, "status") == "needs_approval",
       let latest = events.last(where: { string($0, "type") == "approval" })
     else { return nil }
-    let id = string(latest["data"] as? [String: Any] ?? [:], "request_id")
-    return id.isEmpty ? nil : id
+    let data = latest["data"] as? [String: Any] ?? [:]
+    let id = string(data, "request_id")
+    return id.isEmpty ? nil : data
+  }
+
+  /// The approval request shown above the conversation, if any.
+  var pendingApprovalRequestID: String? {
+    pendingApprovalData.map { string($0, "request_id") }
   }
 
   func toggleTerminalDrawer() {
