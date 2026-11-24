@@ -136,14 +136,20 @@ struct FactoryAcceptanceSetupView: View {
     .onChange(of: string(library.proposal, "digest")) { _, _ in reviewed = false; confirmation = "" }
     .onChange(of: active) { _, value in if !value { confirmation = "" } }
     .onChange(of: app.projectID) { _, _ in confirmation = ""; loadRequirement(""); categoryCheck = ""; probeCheck = ""; expectedOutput = ""; reviewed = false }
-    .alert(confirmation == "install" ? "Save reviewed verifier configuration?" : confirmation == "remove" ? "Remove this requirement mapping?" : "Generate a verifier proposal?", isPresented: Binding(get: { !confirmation.isEmpty }, set: { if !$0 { confirmation = "" } })) {
-      Button("Cancel", role: .cancel) { confirmation = "" }
-      Button("Continue") { let action = confirmation; confirmation = ""; execute(action) }
-    } message: {
-      Text(confirmation == "install" ? "Save exactly the reviewed protected probes and definition. Existing runs keep their pinned inputs; prepare a new trial to test this configuration."
+    .factoryConfirmation(
+      isPresented: Binding(get: { !confirmation.isEmpty }, set: { if !$0 { confirmation = "" } }),
+      title: confirmation == "install" ? "Save reviewed verifier configuration?" : confirmation == "remove" ? "Remove this requirement mapping?" : "Generate a verifier proposal?",
+      message: confirmation == "install" ? "Save exactly the reviewed protected probes and definition. Existing runs keep their pinned inputs; prepare a new trial to test this configuration."
         : confirmation == "remove" ? "Remove the selected mapping from the draft. Save the revision explicitly after reviewing it."
-        : "The selected model receives your description and saved Factory. This incurs model usage and produces an unexecuted proposal. Review its expectations independently.")
-    }
+        : "The selected model receives your description and saved Factory. This incurs model usage and produces an unexecuted proposal. Review its expectations independently.",
+      kind: confirmation == "install" ? .superGauge : confirmation == "remove" ? .caution : .draft,
+      badges: confirmation == "install"
+        ? [FactoryConfirmBadge(label: "Protected probes", symbol: "lock.shield", color: Color(red: 0.14, green: 0.62, blue: 0.42))]
+        : [],
+      confirmTitle: confirmation == "install" ? "Save verifiers" : confirmation == "remove" ? "Remove mapping" : "Generate proposal",
+      onCancel: { confirmation = "" },
+      onConfirm: { let action = confirmation; confirmation = ""; execute(action) }
+    )
   }
   private func membership(_ value: String, in selection: Binding<Set<String>>) -> Binding<Bool> {
     Binding(get: { selection.wrappedValue.contains(value) }, set: { if $0 { selection.wrappedValue.insert(value) } else { selection.wrappedValue.remove(value) } })

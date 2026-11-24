@@ -130,10 +130,20 @@ struct FactoryImprovementView: View {
     .onChange(of: tab) { _, _ in tabGeneration = UUID(); confirmation = "" }
     .onChange(of: library.project) { _, _ in confirmation = ""; creatingSkill = false; capabilities = [:]; skill = ""; stage = ""; routeModelsText = ""; suiteText = ""; candidateText = ""; selectedPlan = "" }
     .sheet(isPresented: $creatingSkill) { skillForm }
-    .alert(confirmationTitle, isPresented: Binding(get: { !confirmation.isEmpty }, set: { if !$0 { confirmation = "" } })) {
-      Button("Cancel", role: .cancel) {}
-      Button("Continue") { let action = confirmation; confirmation = ""; execute(action) }
-    } message: { Text(confirmationMessage) }
+    .factoryConfirmation(
+      isPresented: Binding(get: { !confirmation.isEmpty }, set: { if !$0 { confirmation = "" } }),
+      title: confirmationTitle,
+      message: confirmationMessage,
+      kind: confirmation == "adopt" ? .save : .improve,
+      badges: confirmation == "external-import"
+        ? [FactoryConfirmBadge(label: "No model call", symbol: "desktopcomputer", color: .green)]
+        : confirmation == "adopt"
+          ? [FactoryConfirmBadge(label: "Loads into draft", symbol: "doc.badge.plus", color: Brand.purple)]
+          : [FactoryConfirmBadge(label: "Shared plan budget", symbol: "gauge.with.dots.needle.67percent", color: Brand.pink)],
+      confirmTitle: confirmation == "adopt" ? "Adopt into draft" : "Continue",
+      onCancel: { confirmation = "" },
+      onConfirm: { let action = confirmation; confirmation = ""; execute(action) }
+    )
   }
 
   private var inputs: some View {
@@ -177,11 +187,40 @@ struct FactoryImprovementView: View {
             .font(.caption).foregroundStyle(.secondary)
           Stepper("Optimizer metric calls: \(maxEvals)", value: $maxEvals, in: 1...20)
           Stepper("Shared experiment time: \(seconds) seconds", value: $seconds, in: 10...600, step: 10)
-          Picker("Optimizer engine", selection: $optimizerEngine) {
-            Text("Native evaluator–optimizer").tag("evaluator-optimizer")
-            Text("GEPA (optional dependency)").tag("gepa")
-            Text("MetaHarness (metered gateway)").tag("metaharness")
-            Text("Omni portfolio (native + GEPA + MetaHarness)").tag("omni")
+          Text("Optimizer engine").font(.caption.weight(.semibold))
+          LazyVGrid(columns: [GridItem(.flexible(), spacing: 8), GridItem(.flexible(), spacing: 8)], spacing: 8) {
+            FactoryOptimizerCard(
+              id: "evaluator-optimizer",
+              title: "Native",
+              subtitle: "Built-in evaluator–optimizer loop",
+              symbol: "wand.and.stars",
+              available: engineAvailable("evaluator-optimizer"),
+              selected: optimizerEngine == "evaluator-optimizer"
+            ) { optimizerEngine = "evaluator-optimizer" }
+            FactoryOptimizerCard(
+              id: "gepa",
+              title: "GEPA",
+              subtitle: "Genetic-Pareto prompt evolution",
+              symbol: "waveform.path.ecg",
+              available: engineAvailable("gepa"),
+              selected: optimizerEngine == "gepa"
+            ) { optimizerEngine = "gepa" }
+            FactoryOptimizerCard(
+              id: "metaharness",
+              title: "MetaHarness",
+              subtitle: "Metered gateway harness search",
+              symbol: "cpu",
+              available: engineAvailable("metaharness"),
+              selected: optimizerEngine == "metaharness"
+            ) { optimizerEngine = "metaharness" }
+            FactoryOptimizerCard(
+              id: "omni",
+              title: "Omni",
+              subtitle: "Portfolio across Native, GEPA & MetaHarness",
+              symbol: "sparkles",
+              available: engineAvailable("omni"),
+              selected: optimizerEngine == "omni"
+            ) { optimizerEngine = "omni" }
           }
           Toggle("Prepare metered search", isOn: $enableSearch).disabled(!engineAvailable(optimizerEngine))
           Text("Evaluation model comes from the pinned harness. Reflection model: \(reflection)").font(.caption).foregroundStyle(.secondary)
@@ -270,14 +309,15 @@ struct FactoryImprovementView: View {
           Text("Run a comparison for measured evidence. An imported or generated proposal has no adoption authority.")
             .foregroundStyle(.secondary)
         } else {
-          Pill(title: eligible ? "Eligible for draft review" : "Hold", color: eligible ? .green : .orange)
           if let before = library.improvementResult["baseline_score"] as? Double,
             let after = library.improvementResult["candidate_score"] as? Double {
-            Text(String(format: "Held-out pass rate: %.0f%% baseline → %.0f%% candidate", before * 100, after * 100)).font(.headline)
+            FactoryScoreDeltaCard(baseline: before, candidate: after, eligible: eligible)
+          } else {
+            Pill(title: eligible ? "Eligible for draft review" : "Hold", color: eligible ? .green : .orange)
           }
           Text("Eligibility requires a strictly higher pass rate with no baseline successes regressed and complete pinned grading and required budget evidence.")
             .font(.caption).foregroundStyle(.secondary)
-          CodeBlock(text: pretty(library.improvementResult))
+          DisclosureGroup("Raw comparison receipt") { CodeBlock(text: pretty(library.improvementResult)) }.font(.caption)
         }
         if !library.job.isEmpty { DisclosureGroup("Latest engine job") { CodeBlock(text: pretty(library.job)) } }
         Text("Adoption loads a Factory draft; harness and skill proposals also create an immutable component. Review the diff, save a revision, commit sources and prepare a new trial explicitly. Application release approval remains separate.")

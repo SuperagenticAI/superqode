@@ -63,12 +63,18 @@ struct FactoryCampaignView: View {
     .onChange(of: source) { _, _ in library.clearPreview() }
     .onChange(of: app.projectID) { _, _ in confirmation = ""; library.enter(app.projectID) }
     .onChange(of: active) { _, value in if !value { confirmation = "" } }
-    .alert("Confirm bounded automation", isPresented: Binding(get: { !confirmation.isEmpty }, set: { if !$0 { confirmation = "" } })) {
-      Button("Cancel", role: .cancel) { confirmation = "" }
-      Button("Continue") { let action = confirmation; confirmation = ""; execute(action) }
-    } message: {
-      Text(["run", "worker"].contains(confirmation) ? "Enable bounded model execution for admitted events? The worker stops at the campaign deadline, hold or review boundary. No adoption or release is authorized." : confirmation == "stop" ? "Stop admitting further experiments? The current action may finish within its budget; use Cancel active Factory job to interrupt it." : confirmation == "enqueue" ? "Queue this exact reviewed source and digest? Queuing makes no model calls." : "Pin the saved Factory's enabled policy and experiment budget? This does not start models.")
-    }
+    .factoryConfirmation(
+      isPresented: Binding(get: { !confirmation.isEmpty }, set: { if !$0 { confirmation = "" } }),
+      title: "Confirm bounded automation",
+      message: ["run", "worker"].contains(confirmation) ? "Enable bounded model execution for admitted events? The worker stops at the campaign deadline, hold or review boundary. No adoption or release is authorized." : confirmation == "stop" ? "Stop admitting further experiments? The current action may finish within its budget; use Cancel active Factory job to interrupt it." : confirmation == "enqueue" ? "Queue this exact reviewed source and digest? Queuing makes no model calls." : "Pin the saved Factory's enabled policy and experiment budget? This does not start models.",
+      kind: confirmation == "stop" ? .caution : .improve,
+      badges: ["run", "worker"].contains(confirmation)
+        ? [FactoryConfirmBadge(label: "Bounded budget", symbol: "gauge.with.dots.needle.67percent", color: Brand.pink)]
+        : [FactoryConfirmBadge(label: "No model calls", symbol: "bolt.slash", color: Color(red: 0.14, green: 0.62, blue: 0.42))],
+      confirmTitle: "Continue",
+      onCancel: { confirmation = "" },
+      onConfirm: { let action = confirmation; confirmation = ""; execute(action) }
+    )
   }
   private func execute(_ action: String) {
     let identity = app.projectID

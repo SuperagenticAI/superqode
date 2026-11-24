@@ -100,10 +100,18 @@ struct FactoryExportView: View {
     .task(id: app.projectID + "\n" + String(active)) { guard active else { return }; library.enter(app.projectID); await library.refresh(app.engine) }
     .onChange(of: active) { _, value in if !value { confirmation = false } }
     .onChange(of: app.projectID) { _, _ in confirmation = false; savedPath = "" }
-    .alert("Export the reviewed Factory sources?", isPresented: $confirmation) {
-      Button("Cancel", role: .cancel) { }
-      Button("Export") { guard reviewedDigest == string(library.preview, "snapshot_digest"), current else { return }; Task { await library.create(app.engine) } }
-    } message: { Text("Create a ZIP containing the saved definitions, referenced components and pinned snapshot. Review private context and evaluators before sharing it. Exporting starts no agents or services.") }
+    .factoryConfirmation(
+      isPresented: $confirmation,
+      title: "Export the reviewed Factory sources?",
+      message: "Create a ZIP containing the saved definitions, referenced components and pinned snapshot. Review private context and evaluators before sharing it. Exporting starts no agents or services.",
+      kind: .export,
+      badges: [
+        FactoryConfirmBadge(label: "Portable ZIP", symbol: "shippingbox", color: Color(red: 0.18, green: 0.48, blue: 0.84)),
+        FactoryConfirmBadge(label: "No agents started", symbol: "bolt.slash", color: Color(red: 0.14, green: 0.62, blue: 0.42))
+      ],
+      confirmTitle: "Create package",
+      onConfirm: { guard reviewedDigest == string(library.preview, "snapshot_digest"), current else { return }; Task { await library.create(app.engine) } }
+    )
   }
   private func saveCopy() {
     let panel = NSSavePanel(); panel.allowedContentTypes = [.zip]

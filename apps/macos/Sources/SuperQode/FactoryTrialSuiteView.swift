@@ -70,9 +70,20 @@ struct FactoryTrialSuiteView: View {
     .onChange(of: studio.project) { _, value in confirmation = ""; gate = [:]; library.enter(value) }
     .onChange(of: active) { _, visible in if !visible { confirmation = ""; gate = [:] } }
     .onChange(of: tab) { _, _ in tabGeneration = UUID(); confirmation = ""; gate = [:] }
-    .alert(confirmation == "run" ? "Run the pinned Factory suite?" : confirmation == "retry" ? "Retry the recorded failed stage?" : "Approve this workflow gate?", isPresented: Binding(get: { !confirmation.isEmpty }, set: { if !$0 { confirmation = "" } })) {
-      Button("Cancel", role: .cancel) {}
-      Button("Continue") {
+    .factoryConfirmation(
+      isPresented: Binding(get: { !confirmation.isEmpty }, set: { if !$0 { confirmation = "" } }),
+      title: confirmation == "run" ? "Run the pinned Factory suite?" : confirmation == "retry" ? "Retry the recorded failed stage?" : "Approve this workflow gate?",
+      message: confirmation == "run" ? "Execute model-driven stages, controller self-checks and protected probes in the prepared paired projects. Provider charges may apply. Token, tool and cost budgets are divided across runs; wall time is shared. Execution stops at human gates and never signs or applies an application change. Interrupted invocations may require WorkOrder recovery."
+        : confirmation == "retry" ? "Authorize another attempt of this recorded failure after reviewing its evidence. Actions may repeat and provider charges may apply. Attempt and budget limits still apply; uncertain invocations require reconciliation. Earlier failures and their usage remain recorded. Continue the suite separately to execute."
+        : "Continue the selected stage after reviewing its candidate patch and evidence. This is a workflow continuation decision; application acceptance and signed release remain separate.",
+      kind: confirmation == "run" ? .trial : confirmation == "retry" ? .caution : .save,
+      badges: confirmation == "run"
+        ? [FactoryConfirmBadge(label: "Paired projects", symbol: "square.split.2x1", color: Brand.purple),
+           FactoryConfirmBadge(label: "Stops at human gates", symbol: "lock.fill", color: .orange)]
+        : [],
+      confirmTitle: confirmation == "run" ? "Run suite" : confirmation == "retry" ? "Authorize retry" : "Approve gate",
+      onCancel: { confirmation = "" },
+      onConfirm: {
         let action = confirmation; let approved = gate; confirmation = ""
         let ticket = studio.navigation.ticket(); let token = tabGeneration
         Task {
@@ -82,11 +93,7 @@ struct FactoryTrialSuiteView: View {
           else { await library.gate(app.engine, stage: string(approved, "stage"), digest: string(approved, "digest"), decision: "approve", reason: reason) }
         }
       }
-    } message: {
-      Text(confirmation == "run" ? "Execute model-driven stages, controller self-checks and protected probes in the prepared paired projects. Provider charges may apply. Token, tool and cost budgets are divided across runs; wall time is shared. Execution stops at human gates and never signs or applies an application change. Interrupted invocations may require WorkOrder recovery."
-        : confirmation == "retry" ? "Authorize another attempt of this recorded failure after reviewing its evidence. Actions may repeat and provider charges may apply. Attempt and budget limits still apply; uncertain invocations require reconciliation. Earlier failures and their usage remain recorded. Continue the suite separately to execute."
-        : "Continue the selected stage after reviewing its candidate patch and evidence. This is a workflow continuation decision; application acceptance and signed release remain separate.")
-    }
+    )
   }
   private var inputs: some View {
     VStack(alignment: .leading, spacing: 10) {

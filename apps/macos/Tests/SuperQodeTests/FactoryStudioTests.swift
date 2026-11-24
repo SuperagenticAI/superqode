@@ -353,4 +353,70 @@ final class FactoryStudioTests: XCTestCase {
       Data("changed candidate".utf8) as CFData, signature as CFData, &error))
     XCTAssertEqual((SecKeyCopyExternalRepresentation(publicKey, &error) as Data?)?.count, 65)
   }
+
+  func testSuperGaugeSnapshotParsesShipRecordWithJudgesAndAssurance() throws {
+    let record: [String: Any] = [
+      "profile": ["id": "sg/coding-agent", "version": "0.1", "tier": "T1"],
+      "task_set": ["held_out": 4, "sealed": true],
+      "subject": ["authority": ["sandbox": "seatbelt"]],
+      "measures": [
+        ["name": "task.completion", "value": 1.0],
+        ["name": "assurance.evidence_complete", "value": true],
+      ],
+      "gates": [
+        ["name": "safety.isolation", "status": "pass"],
+        ["name": "assurance.evaluator_hidden", "status": "pass"],
+        ["name": "assurance.contamination", "status": "pass"],
+      ],
+      "decision": [
+        "verdict": "ship",
+        "reasons": [],
+        "judges": [["id": "review", "verdict": "ship", "model": "ollama/qwen3.5:9b"]],
+      ],
+    ]
+    let json = String(data: try JSONSerialization.data(withJSONObject: record), encoding: .utf8)!
+    let snapshot = SuperGaugeSnapshot.parse(detail: [
+      "evidence": [["kind": "factory_quality_record", "content": json]]
+    ])
+    XCTAssertEqual(snapshot.verdict, .ship)
+    XCTAssertEqual(snapshot.profileLabel, "sg/coding-agent · T1")
+    XCTAssertEqual(snapshot.passedCases, 4)
+    XCTAssertEqual(snapshot.totalCases, 4)
+    XCTAssertEqual(snapshot.sandbox, "seatbelt")
+    XCTAssertEqual(snapshot.isolationPassed, true)
+    XCTAssertEqual(snapshot.evaluatorsHidden, true)
+    XCTAssertFalse(snapshot.contaminationDetected)
+    XCTAssertEqual(snapshot.judges.count, 1)
+    XCTAssertEqual(snapshot.judges.first?.id, "review")
+    XCTAssertTrue(snapshot.hasRecord)
+  }
+
+  func testSuperGaugeSnapshotParsesRejectHoldReasonsAndPendingFallback() throws {
+    let empty = SuperGaugeSnapshot.parse(detail: [:])
+    XCTAssertEqual(empty.verdict, .pending)
+    XCTAssertFalse(empty.hasRecord)
+
+    let record: [String: Any] = [
+      "task_set": ["held_out": 2],
+      "measures": [["name": "task.completion", "value": 0.5]],
+      "gates": [
+        ["name": "safety.isolation", "status": "pass"],
+        ["name": "assurance.evaluator_hidden", "status": "fail"],
+      ],
+      "decision": [
+        "verdict": "reject",
+        "reject_reasons": ["acceptance cases failed: unit/c2"],
+        "hold_reasons": ["evaluator files were not hidden from every worker"],
+      ],
+    ]
+    let json = String(data: try JSONSerialization.data(withJSONObject: record), encoding: .utf8)!
+    let snapshot = SuperGaugeSnapshot.parse(detail: [
+      "evidence": [["kind": "factory_quality_record", "content": json]]
+    ])
+    XCTAssertEqual(snapshot.verdict, .reject)
+    XCTAssertEqual(snapshot.passedCases, 1)
+    XCTAssertEqual(snapshot.totalCases, 2)
+    XCTAssertEqual(snapshot.evaluatorsHidden, false)
+    XCTAssertEqual(snapshot.reasons.count, 2)
+  }
 }

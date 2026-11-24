@@ -150,10 +150,15 @@ struct FactoryOutcomeView: View {
     .task(id: app.projectID + "\n" + String(active)) { guard active else { return }; await library.refreshOutcomes(app.engine) }
     .onChange(of: active) { _, value in if !value { confirmation = false } }
     .onChange(of: values) { _, _ in confirmation = false }
-    .alert("Record this business observation?", isPresented: $confirmation) {
-      Button("Cancel", role: .cancel) { }
-      Button("Record") { guard confirmedValues == values else { return }; Task { await library.recordOutcome(app.engine) } }
-    } message: { Text("Attribute this outcome and optional human effort to the selected finished run. This is an operator report, separate from protected verification and release approval.") }
+    .factoryConfirmation(
+      isPresented: $confirmation,
+      title: "Record this business observation?",
+      message: "Attribute this outcome and optional human effort to the selected finished run. This is an operator report, separate from protected verification and release approval.",
+      kind: .save,
+      badges: [FactoryConfirmBadge(label: "Operator report", symbol: "note.text", color: Brand.purple)],
+      confirmTitle: "Record observation",
+      onConfirm: { guard confirmedValues == values else { return }; Task { await library.recordOutcome(app.engine) } }
+    )
   }
 
   private func costSummary(_ row: [String: Any]) -> String {

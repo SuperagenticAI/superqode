@@ -2,9 +2,21 @@ import SwiftUI
 
 struct FactoryNavigationHeader: View {
   let navigation: FactoryNavigation
+  @Environment(\.colorScheme) private var scheme
+  @Environment(\.colorSchemeContrast) private var contrast
   var body: some View {
     VStack(alignment: .leading, spacing: 16) {
-      Text("🏭  Factory").font(.headline).padding(.horizontal, 8)
+      HStack(spacing: 8) {
+        FactoryStudioEmblem(size: 22)
+        Text("Factory Studio")
+          .font(.headline.weight(.bold))
+          .foregroundStyle(
+            contrast == .increased
+              ? AnyShapeStyle(Color.primary)
+              : AnyShapeStyle(Brand.wordmarkGradient(scheme))
+          )
+      }
+      .padding(.horizontal, 8)
       ScrollView {
       VStack(alignment: .leading, spacing: 14) {
         ForEach(FactoryNavigation.groups) { group in
@@ -12,8 +24,8 @@ struct FactoryNavigationHeader: View {
           VStack(alignment: .leading, spacing: 3) {
           nativeButton("factory.group." + group.id, action: { navigation.selectGroup(group.id) }, padded: false,
             title: group.title + (selected ? ", selected" : "")) {
-            HStack(spacing: 6) {
-              Text(group.mark).accessibilityHidden(true)
+            HStack(spacing: 8) {
+              FactoryGroupMark(id: group.id, selected: selected, size: 20)
               Text(group.title).font(.system(size: 13, weight: .semibold))
             }
               .frame(maxWidth: .infinity, alignment: .leading).padding(.horizontal, 8).padding(.vertical, 6)

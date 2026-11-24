@@ -13,6 +13,7 @@ struct FactoryStudioView: View {
   @State private var goal = ""
   @State private var gateReason = ""
   @State private var confirmation = ""
+  @State private var activeAction = ""
   @State private var replacingDraft = false
   @State private var factoryName = ""
   @State private var binding = "core"
@@ -21,6 +22,9 @@ struct FactoryStudioView: View {
   @State private var workers = 2
   @State private var network = false
   @State private var syncedControls: FactoryControlDraft?
+  private static let inlineConfirmActions: Set<String> = ["generate", "template", "reload", "save", "trial"]
+  private var showingInlineConfirm: Bool { Self.inlineConfirmActions.contains(confirmation) }
+  private var showingSheetConfirm: Bool { !confirmation.isEmpty && !showingInlineConfirm }
   private var controlDraft: FactoryControlDraft { FactoryControlDraft(name: factoryName, binding: binding,
     model: modelRef, seconds: seconds, workers: workers, network: network) }
   private var controlsHaveChanges: Bool { syncedControls.map { $0 != controlDraft } ?? false }
@@ -33,24 +37,63 @@ struct FactoryStudioView: View {
     savedDigest: library.expectedFileDigest, sources: library.sourceReview, runs: library.runs) }
   var body: some View {
     HStack(alignment: .top, spacing: 20) {
-      FactoryNavigationHeader(navigation: library.navigation).frame(width: 172)
+      FactoryNavigationHeader(navigation: library.navigation).frame(width: 178)
       Divider()
       VStack(alignment: .leading, spacing: 14) {
-      HStack {
-        Text(library.navigation.group.mark + "  " + library.navigation.pageTitle).font(.title2.bold())
+      HStack(spacing: 10) {
+        FactoryGroupMark(id: library.navigation.group.id, selected: true, size: 26)
+        Text(library.navigation.pageTitle).font(.title2.bold())
         Spacer()
         if FactoryNavigation.buildPages.contains(tab) {
           Button("Check definition") {
             let ticket = library.navigation.ticket()
-            Task { await library.validate(engine: app.engine); if library.navigation.isCurrent(ticket), !controlsHaveChanges { syncControls() } }
+            activeAction = "validate"
+            Task {
+              defer { if activeAction == "validate" { activeAction = "" } }
+              await library.validate(engine: app.engine)
+              if library.navigation.isCurrent(ticket), !controlsHaveChanges { syncControls() }
+            }
           }.disabled(!idle || library.text.isEmpty)
-          Button("Save changes…") { confirmation = "save" }
+          Button("Save changes…") { requestConfirmation("save") }
             .disabled(!idle || library.review.isEmpty || controlsHaveChanges || setup.saved)
         }
       }
-      if !library.failure.isEmpty { Text(library.failure).font(.caption).foregroundStyle(.orange).textSelection(.enabled) }
-      if !library.message.isEmpty { DisclosureGroup("Latest activity") { Text(library.message).font(.caption).foregroundStyle(.secondary).textSelection(.enabled) }.font(.caption) }
-      if library.busy { HStack { ProgressView().controlSize(.small); Text("Factory action in progress…").font(.caption); Spacer(); Button("Stop action") { Task { await library.cancel(engine: app.engine) } } } }
+      if showingInlineConfirm {
+        FactoryInlineConfirmCard(
+          title: confirmationTitle,
+          message: confirmationMessage,
+          kind: confirmationKind,
+          workflowID: confirmation == "template" ? preset : nil,
+          badges: confirmationBadges,
+          confirmTitle: confirmationActionTitle,
+          confirmDisabled: confirmation == "save" && reason.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty,
+          inputLabel: confirmation == "save" ? "What changed?" : nil,
+          inputText: confirmation == "save" ? $reason : nil,
+          onCancel: { dismissConfirmation() },
+          onConfirm: {
+            let action = confirmation
+            dismissConfirmation()
+            execute(action)
+          }
+        )
+        .id(confirmation + ":" + preset)
+      }
+      if !library.failure.isEmpty {
+        FactoryNoticeBanner(text: library.failure, isFailure: true)
+      }
+      if !library.message.isEmpty && !library.busy {
+        FactoryNoticeBanner(text: library.message, isFailure: false)
+      }
+      if library.busy || replacingDraft {
+        FactoryActivityBanner(
+          title: activityTitle,
+          detail: activityDetail,
+          kind: activityKind,
+          stopTitle: "Stop action",
+          onStop: library.busy ? { Task { await library.cancel(engine: app.engine) } } : nil
+        )
+        .transition(.opacity.combined(with: .scale(scale: 0.98)))
+      }
       ZStack(alignment: .topLeading) {
         if library.navigation.mounted.contains("Operations") {
           FactoryOperationsView(studio: library, library: library.operations, active: active && tab == "Operations")
@@ -101,26 +144,37 @@ struct FactoryStudioView: View {
       .onChange(of: string(library.review, "snapshot_digest")) { _, value in
         if !value.isEmpty, !controlsHaveChanges { syncControls() }
       }
-      .onChange(of: app.projectID) { _, _ in confirmation = ""; reason = ""; goal = ""; experimentStage = ""; experimentGoal = ""; experimentTask = "" }
-      .alert(confirmationTitle, isPresented: Binding(get: { !confirmation.isEmpty }, set: { if !$0 { confirmation = "" } })) {
-        if confirmation == "save" { TextField("What changed?", text: $reason) }
-        Button("Cancel", role: .cancel) { confirmation = "" }
-        Button("Continue") { let action = confirmation; confirmation = ""; execute(action) }
-          .disabled(confirmation == "save" && reason.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty)
-      } message: { Text(confirmationMessage) }
+      .onChange(of: app.projectID) { _, _ in confirmation = ""; activeAction = ""; reason = ""; goal = ""; experimentStage = ""; experimentGoal = ""; experimentTask = "" }
+      .factoryConfirmation(
+        isPresented: Binding(get: { showingSheetConfirm }, set: { if !$0 { dismissConfirmation() } }),
+        title: confirmationTitle,
+        message: confirmationMessage,
+        kind: confirmationKind,
+        badges: confirmationBadges,
+        confirmTitle: confirmationActionTitle,
+        onCancel: { dismissConfirmation() },
+        onConfirm: {
+          let action = confirmation
+          dismissConfirmation()
+          execute(action)
+        }
+      )
   }
 
   private var stack: some View {
     ScrollView {
       VStack(alignment: .leading, spacing: 18) {
-        Text("🏭  What should this Factory do?").font(.headline)
+        HStack(spacing: 8) {
+          FactoryStudioEmblem(size: 22)
+          Text("What should this Factory do?").font(.headline)
+        }
         TextEditor(text: $library.description).font(.body).frame(height: 140).brandSurface().accessibilityLabel("Factory description")
         HStack {
           Text(app.provider.isEmpty || app.model.isEmpty || app.provider == "acp" ? "Generate starter settings from this description. No model is required." : "Drafting with \(app.provider)/\(app.model). If that model cannot draft, starter settings are built here.").font(.caption).foregroundStyle(.secondary)
           Spacer()
           Button("Choose harness and model…") { app.openConnections(returningTo: "Factory Studio") }
         }
-        Button("Generate a draft…") { confirmation = "generate" }.buttonStyle(BrandButtonStyle())
+        Button("Generate a draft…") { requestConfirmation("generate") }.buttonStyle(BrandButtonStyle())
           .disabled(!idle || library.description.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty)
         if library.canApplyProposal {
           VStack(alignment: .leading, spacing: 10) {
@@ -133,7 +187,7 @@ struct FactoryStudioView: View {
         Text("Start from a workflow").font(.subheadline.bold())
         Text("Click a card to load its settings. A model is not required.").font(.caption).foregroundStyle(.secondary)
         workflowGrid
-        Button("Reload saved…") { confirmation = "reload" }.disabled(!idle)
+        Button("Reload saved…") { requestConfirmation("reload") }.disabled(!idle)
         Divider()
         HStack {
           Text(setup.hasDraft ? "Your draft is available in the pages on the left." : "Load a starter first to establish the drafting permissions and budget.").font(.caption).foregroundStyle(.secondary)
@@ -182,7 +236,7 @@ struct FactoryStudioView: View {
     if library.text.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
       execute("template")
     } else {
-      confirmation = "template"
+      requestConfirmation("template")
     }
   }
 
@@ -217,7 +271,9 @@ struct FactoryStudioView: View {
           DisclosureGroup("Advanced: release signing") {
           Text("Enroll a user-presence protected Secure Enclave key on this Mac, then review and save its public key in the factory policy before preparing a trial.")
             .font(.caption).foregroundStyle(.secondary)
-          Button("Enroll this Mac & add public key…") { confirmation = "enroll" }.disabled(!idle || library.text.isEmpty)
+          Button { requestConfirmation("enroll") } label: {
+            Label("Enroll this Mac & add public key…", systemImage: "touchid")
+          }.disabled(!idle || library.text.isEmpty)
           }
 
       }.frame(maxWidth: 680, alignment: .leading).frame(maxWidth: .infinity, alignment: .leading)
@@ -237,17 +293,69 @@ struct FactoryStudioView: View {
           CodeBlock(text: pretty(loop))
         }
         if stages.isEmpty { Text("Validate a definition to preview its workflow.").foregroundStyle(.secondary) }
-        ForEach(Array(stages.enumerated()), id: \.offset) { _, stage in
-          VStack(alignment: .leading, spacing: 6) {
-            HStack { Text(string(stage, "id")).font(.headline); Pill(title: string(stage, "role")); if stage["human_gate"] as? Bool == true { Pill(title: "Human gate", color: .orange) } }
-            Text("Harness: \(string(stage, "harness")) · After: \((stage["depends_on"] as? [String] ?? []).joined(separator: ", "))")
-              .font(.caption).foregroundStyle(.secondary)
-            Text(string(stage, "goal")).font(.caption).textSelection(.enabled)
-            if stage["inputs"] != nil || stage["outputs"] != nil {
-              DisclosureGroup("Input and output contracts") { CodeBlock(text: pretty(["inputs": stage["inputs"] ?? [:], "outputs": stage["outputs"] ?? [:]])) }
+        VStack(alignment: .leading, spacing: 0) {
+          ForEach(Array(stages.enumerated()), id: \.offset) { index, stage in
+            let deps = stage["depends_on"] as? [String] ?? []
+            let gated = stage["human_gate"] as? Bool == true
+            VStack(alignment: .leading, spacing: 8) {
+              HStack(spacing: 8) {
+                Text("\(index + 1)")
+                  .font(.caption2.weight(.bold).monospacedDigit())
+                  .foregroundStyle(.white)
+                  .frame(width: 20, height: 20)
+                  .background(gated ? Color.orange : Brand.purple, in: Circle())
+                Text(string(stage, "id")).font(.headline)
+                Pill(title: string(stage, "role"))
+                if gated {
+                  Label("Human gate", systemImage: "lock.fill")
+                    .font(.caption2.weight(.semibold))
+                    .foregroundStyle(.orange)
+                    .padding(.horizontal, 8)
+                    .padding(.vertical, 3)
+                    .background(Color.orange.opacity(0.14), in: Capsule())
+                }
+                Spacer(minLength: 4)
+                Label(string(stage, "harness"), systemImage: "cpu")
+                  .font(.caption2.monospaced())
+                  .foregroundStyle(.secondary)
+                  .padding(.horizontal, 7)
+                  .padding(.vertical, 3)
+                  .background(Color.primary.opacity(0.05), in: Capsule())
+              }
+              if !deps.isEmpty {
+                Label("After: " + deps.joined(separator: ", "), systemImage: "arrow.turn.down.right")
+                  .font(.caption)
+                  .foregroundStyle(.secondary)
+              }
+              Text(string(stage, "goal")).font(.caption).textSelection(.enabled)
+              if stage["inputs"] != nil || stage["outputs"] != nil {
+                DisclosureGroup("Input and output contracts") { CodeBlock(text: pretty(["inputs": stage["inputs"] ?? [:], "outputs": stage["outputs"] ?? [:]])) }
+              }
+              if stage["when"] != nil { Text("Conditional stage: " + pretty(stage["when"])).font(.caption.monospaced()) }
             }
-            if stage["when"] != nil { Text("Conditional stage: " + pretty(stage["when"])).font(.caption.monospaced()) }
-          }.frame(maxWidth: .infinity, alignment: .leading).padding(14).brandSurface()
+            .frame(maxWidth: .infinity, alignment: .leading)
+            .padding(14)
+            .brandSurface()
+            .overlay(
+              RoundedRectangle(cornerRadius: 14, style: .continuous)
+                .strokeBorder(gated ? Color.orange.opacity(0.32) : Color.clear, lineWidth: 1)
+                .allowsHitTesting(false)
+            )
+
+            if index < stages.count - 1 {
+              HStack {
+                VStack(spacing: 0) {
+                  Rectangle().fill(Brand.purple.opacity(0.35)).frame(width: 2, height: 12)
+                  Image(systemName: "chevron.down")
+                    .font(.system(size: 9, weight: .bold))
+                    .foregroundStyle(Brand.purple.opacity(0.65))
+                }
+                .padding(.leading, 22)
+                Spacer()
+              }
+              .padding(.vertical, 2)
+            }
+          }
         }
         warnings
         Divider()
@@ -326,7 +434,7 @@ struct FactoryStudioView: View {
         if library.navigation.isCurrent(ticket), !controlsHaveChanges { syncControls() }
       }
     } else if !setup.saved {
-      confirmation = "save"
+      requestConfirmation("save")
     } else if !setup.committed {
       library.navigation.select("Sources")
     } else {
@@ -365,7 +473,7 @@ struct FactoryStudioView: View {
       }
       HStack {
         TextField("Goal for this trial", text: $goal).textFieldStyle(.roundedBorder).accessibilityIdentifier("factory.trial.goal")
-        Button("Prepare trial…") { confirmation = "trial" }
+        Button("Prepare trial…") { requestConfirmation("trial") }
           .disabled(!idle || !setup.saved || controlsHaveChanges || goal.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty)
       }
       Text("Preparation pins inputs without model calls. Run ready stages explicitly; release remains a separate reviewed action.")
@@ -390,21 +498,42 @@ struct FactoryStudioView: View {
       ScrollView {
         VStack(alignment: .leading, spacing: 12) {
           if !order.isEmpty {
-            Text(string(order, "goal")).font(.headline); Pill(title: string(order, "status"))
             let metadata = order["metadata"] as? [String: Any] ?? [:]
             let factory = metadata["factory"] as? [String: Any] ?? [:]
+            let gaugeSnapshot = SuperGaugeSnapshot.parse(detail: library.detail)
+            HStack(spacing: 8) {
+              Text(string(order, "goal")).font(.headline)
+              Spacer(minLength: 6)
+              Pill(title: string(order, "status"))
+              if gaugeSnapshot.hasRecord {
+                SuperGaugeBadge(verdict: gaugeSnapshot.verdict, showWordmark: false)
+              }
+            }
             Text("Run snapshot: \(string(factory, "snapshot_digest"))").font(.caption.monospaced()).textSelection(.enabled)
             Text("Editing the draft does not change this run.").font(.caption).foregroundStyle(.secondary)
             FactoryActionRow {
-              Button("Run ready stages…") { confirmation = "worker" }.disabled(!idle)
-              Button("Verify candidate…") { confirmation = "verify" }.disabled(!idle)
-              Button("Stop run") { confirmation = "cancel" }.disabled(library.run.isEmpty)
+              Button("Run ready stages…") { requestConfirmation("worker") }.disabled(!idle)
+              Button { requestConfirmation("verify") } label: {
+                HStack(spacing: 5) {
+                  SuperGaugeMark(verdict: gaugeSnapshot.verdict, size: 15, animating: false)
+                  Text("Verify candidate…")
+                }
+              }.disabled(!idle)
+              Button("Stop run") { requestConfirmation("cancel") }.disabled(library.run.isEmpty)
               nativeButton("factory.run.coverage", action: { proxy.scrollTo("factory.requirements", anchor: .top) }, title: "Requirement coverage") { Text("Requirement coverage") }
             }
             ForEach(tasks, id: \.description) { task in
+              let taskStatus = string(task, "status")
               VStack(alignment: .leading, spacing: 6) {
-                HStack { Text(string(task, "task_id")); Pill(title: string(task, "status")) }
-                if string(task, "status") == "waiting_for_human" {
+                HStack {
+                  Image(systemName: taskStatus == "completed" ? "checkmark.circle.fill" : taskStatus == "failed" ? "xmark.circle.fill" : taskStatus == "waiting_for_human" ? "lock.fill" : "circle.dotted")
+                    .font(.caption)
+                    .foregroundStyle(taskStatus == "completed" ? Color.green : taskStatus == "failed" ? Color.red : taskStatus == "waiting_for_human" ? Color.orange : Color.secondary)
+                  Text(string(task, "task_id")).font(.subheadline.weight(.medium))
+                  Spacer()
+                  Pill(title: taskStatus, color: taskStatus == "completed" ? .green : taskStatus == "waiting_for_human" ? .orange : taskStatus == "failed" ? .red : .secondary)
+                }
+                if taskStatus == "waiting_for_human" {
                   TextField("Gate decision reason", text: $gateReason).textFieldStyle(.roundedBorder)
                   HStack {
                     Button("Approve stage gate") { Task { await library.gate(engine: app.engine, task: task, decision: "approve", reason: gateReason) } }.disabled(!idle || gateReason.isEmpty)
@@ -413,19 +542,26 @@ struct FactoryStudioView: View {
                 }
               }.padding(10).brandSurface()
             }
+            SuperGaugeVerdictCard(
+              snapshot: gaugeSnapshot,
+              isVerifying: library.busy && activeAction == "verify",
+              rawEvidence: library.detail["evidence"]
+            )
             DisclosureGroup("Run evidence & budget") { CodeBlock(text: pretty(library.detail["cockpit"])) }
             DisclosureGroup("Protected verification receipt") { CodeBlock(text: pretty(metadata["factory_verification"])) }
             FactoryRequirementTraceView(studio: library, library: library.acceptance, active: active && tab == "Runs")
               .id("factory.requirements")
-            DisclosureGroup("Recorded evidence & SuperGauge") { CodeBlock(text: pretty(library.detail["evidence"])) }
             if !string(library.detail, "candidate_id").isEmpty {
               Text("Verified candidate diff").font(.headline)
               CodeBlock(text: string(library.detail, "candidate_diff"))
               if library.detail["diff_truncated"] as? Bool == true { Text("Diff exceeds the native review limit. Review the complete candidate with the CLI before approval.").foregroundStyle(.orange) }
               HStack {
-                Button("Authenticate approval…") { confirmation = "approve" }
+                Button { requestConfirmation("approve") } label: {
+                  Label("Authenticate approval…", systemImage: "touchid")
+                }
+                  .buttonStyle(BrandButtonStyle())
                   .disabled(!idle || library.detail["diff_truncated"] as? Bool == true || string(library.detail, "candidate_diff").isEmpty)
-                Button("Apply approved change…") { confirmation = "apply" }.disabled(!idle)
+                Button("Apply approved change…") { requestConfirmation("apply") }.disabled(!idle)
               }
               Text("Delivery applies this patch to the working tree. It does not commit, push or deploy. Verification evidence remains distinct from release approval.")
                 .font(.caption).foregroundStyle(.secondary)
@@ -439,10 +575,15 @@ struct FactoryStudioView: View {
     }
   }
   private func advanceSetup() {
-    if !setup.hasDraft { confirmation = "template" }
+    if !setup.hasDraft { requestConfirmation("template") }
     else if !setup.validated {
       let ticket = library.navigation.ticket()
-      Task { await library.validate(engine: app.engine); if library.navigation.isCurrent(ticket) { syncControls(); await library.refreshSources(engine: app.engine) } }
+      activeAction = "validate"
+      Task {
+        defer { if activeAction == "validate" { activeAction = "" } }
+        await library.validate(engine: app.engine)
+        if library.navigation.isCurrent(ticket) { syncControls(); await library.refreshSources(engine: app.engine) }
+      }
     } else if !setup.saved { library.navigation.select("Definition") }
     else if !setup.committed { library.navigation.select("Sources") }
     else { library.navigation.select("Runs") }
@@ -506,9 +647,111 @@ struct FactoryStudioView: View {
     default: return "Review this action before continuing."
     }
   }
+  private func requestConfirmation(_ action: String) {
+    confirmation = action
+  }
+  private func dismissConfirmation() {
+    confirmation = ""
+  }
+  private var confirmationKind: FactoryVisualKind {
+    switch confirmation {
+    case "generate": return .draft
+    case "template", "reload": return .workflow
+    case "save": return .save
+    case "trial": return .trial
+    case "worker": return .run
+    case "verify": return .superGauge
+    case "enroll", "approve": return .touchID
+    case "apply": return .save
+    case "cancel": return .caution
+    default: return .factory
+    }
+  }
+  private var confirmationActionTitle: String {
+    switch confirmation {
+    case "save": return "Save revision"
+    case "template": return "Load \(workflowTitle(preset))"
+    case "reload": return "Reload saved"
+    case "generate": return "Generate draft"
+    case "trial": return "Prepare trial"
+    case "worker": return "Run stages"
+    case "verify": return "Run SuperGauge"
+    case "enroll": return "Enroll Touch ID"
+    case "approve": return "Sign with Touch ID"
+    case "apply": return "Apply change"
+    case "cancel": return "Stop run"
+    default: return "Continue"
+    }
+  }
+  private var confirmationBadges: [FactoryConfirmBadge] {
+    let noModel = app.provider.isEmpty || app.model.isEmpty || app.provider == "acp"
+    switch confirmation {
+    case "generate":
+      return noModel
+        ? [FactoryConfirmBadge(label: "Built on this Mac", symbol: "desktopcomputer", color: Color(red: 0.14, green: 0.62, blue: 0.42)),
+           FactoryConfirmBadge(label: "No model call", symbol: "bolt.slash", color: Brand.purple)]
+        : [FactoryConfirmBadge(label: "\(app.provider)/\(app.model)", symbol: "sparkles", color: Brand.pink)]
+    case "template", "reload":
+      return [FactoryConfirmBadge(label: "Draft only", symbol: "doc.text", color: Brand.purple),
+              FactoryConfirmBadge(label: "No model call", symbol: "bolt.slash", color: Color(red: 0.14, green: 0.62, blue: 0.42))]
+    case "save":
+      return [FactoryConfirmBadge(label: "Pinned revision", symbol: "checkmark.seal", color: Color(red: 0.14, green: 0.62, blue: 0.42))]
+    case "trial":
+      return [FactoryConfirmBadge(label: "No model call", symbol: "bolt.slash", color: Color(red: 0.14, green: 0.62, blue: 0.42)),
+              FactoryConfirmBadge(label: "Pinned inputs", symbol: "pin.fill", color: Brand.purple)]
+    case "worker":
+      return [FactoryConfirmBadge(label: "Isolated worktrees", symbol: "arrow.triangle.branch", color: Brand.purple),
+              FactoryConfirmBadge(label: "Hidden evaluators", symbol: "eye.slash", color: Brand.pink)]
+    case "verify":
+      return [FactoryConfirmBadge(label: "SuperGauge", symbol: "gauge.with.dots.needle.67percent", color: Color(red: 0.14, green: 0.62, blue: 0.42)),
+              FactoryConfirmBadge(label: "OS Sandbox", symbol: "lock.shield", color: Brand.purple)]
+    case "enroll", "approve":
+      return [FactoryConfirmBadge(label: "Secure Enclave", symbol: "touchid", color: Brand.purple)]
+    default:
+      return []
+    }
+  }
+  private var activityTitle: String {
+    if replacingDraft { return "Loading workflow starter…" }
+    switch activeAction {
+    case "generate": return "Drafting Factory settings…"
+    case "validate": return "Checking Factory definition…"
+    case "save": return "Saving pinned Factory revision…"
+    case "trial": return "Preparing pinned trial…"
+    case "worker": return "Running Factory stages in isolated worktrees…"
+    case "verify": return "Verifying candidate with SuperGauge…"
+    case "enroll": return "Enrolling Secure Enclave key…"
+    case "approve": return "Waiting for Touch ID approval…"
+    case "apply": return "Applying verified candidate…"
+    default: return "Factory action in progress…"
+    }
+  }
+  private var activityDetail: String {
+    switch activeAction {
+    case "generate": return app.provider.isEmpty || app.model.isEmpty || app.provider == "acp" ? "Building starter settings locally on this Mac." : "Drafting with \(app.provider)/\(app.model)."
+    case "verify": return "Running pinned protected probes inside the OS sandbox."
+    case "worker": return "Hidden evaluator files are masked from workers."
+    case "approve": return "Authenticate on this Mac to sign the exact verified candidate."
+    default: return "You can stop this action at any time."
+    }
+  }
+  private var activityKind: FactoryVisualKind {
+    if replacingDraft { return .workflow }
+    switch activeAction {
+    case "generate": return .draft
+    case "save", "apply": return .save
+    case "trial": return .trial
+    case "worker": return .run
+    case "verify": return .superGauge
+    case "enroll", "approve": return .touchID
+    default: return .factory
+    }
+  }
   private func execute(_ action: String) {
     let ticket = library.navigation.ticket()
+    activeAction = action
     Task {
+      defer { if activeAction == action { activeAction = "" } }
       guard library.project == ticket.project else { return }
       switch action {
       case "save": await library.save(engine: app.engine, reason: reason)

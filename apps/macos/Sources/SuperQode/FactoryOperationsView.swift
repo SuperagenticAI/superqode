@@ -114,12 +114,19 @@ struct FactoryOperationsView: View {
     }
     .onChange(of: app.projectID) { _, _ in confirmation = ""; selectedRun = ""; selectedImprovement = ""; selectedPackage = ""; python = ""; targetProject = ""; recoveryDigest = "" }
     .onChange(of: active) { _, value in if !value { confirmation = "" } }
-    .alert("Confirm Factory operation", isPresented: Binding(get: { !confirmation.isEmpty }, set: { if !$0 { confirmation = "" } })) {
-      Button("Cancel", role: .cancel) { confirmation = "" }
-      Button("Continue") { let action = confirmation; confirmation = ""; execute(action) }
-    } message: {
-      Text(confirmationMessage)
-    }
+    .factoryConfirmation(
+      isPresented: Binding(get: { !confirmation.isEmpty }, set: { if !$0 { confirmation = "" } }),
+      title: "Confirm Factory operation",
+      message: confirmationMessage,
+      kind: ["retire", "retention.apply"].contains(confirmation) ? .caution : confirmation == "check" ? .superGauge : .factory,
+      badges: confirmation == "check"
+        ? [FactoryConfirmBadge(label: "Synthetic probes", symbol: "lock.shield", color: Color(red: 0.14, green: 0.62, blue: 0.42)),
+           FactoryConfirmBadge(label: "No model calls", symbol: "bolt.slash", color: Brand.purple)]
+        : [],
+      confirmTitle: "Continue",
+      onCancel: { confirmation = "" },
+      onConfirm: { let action = confirmation; confirmation = ""; execute(action) }
+    )
   }
   private func execute(_ action: String) {
     let identity = app.projectID

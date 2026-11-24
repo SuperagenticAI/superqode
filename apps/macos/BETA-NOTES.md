@@ -1,4 +1,13 @@
-# SuperQode for macOS public beta 0.4.27
+# SuperQode for macOS public beta 0.4.28
+
+Version 0.4.28 (build 54) bundles Python engine 2.32.3.
+
+- Replaced modal system alerts across Factory Studio with animated inline confirmation drawers and branded native confirmation sheets.
+- Added animated Factory activity banners (matching Local AI's warm-up orb and thinking bar) for drafting, validation, stage runs, SuperGauge verification and Touch ID approval.
+- Added a dedicated SuperGauge vector logo, animated precision dial and verdict card (`SHIP`, `HOLD`, `REJECT`) showing acceptance check counts, evaluator isolation, OS sandbox status and advisory model judges.
+- Replaced Factory Studio navigation emojis with crisp vector marks, upgraded the Workflow view to a connected stage pipeline, and added visual cards for Native, GEPA, MetaHarness and Omni optimizers plus held-out pass rate deltas.
+
+## 0.4.27 (build 53)
 
 Version 0.4.27 (build 53) bundles Python engine 2.32.3.
 

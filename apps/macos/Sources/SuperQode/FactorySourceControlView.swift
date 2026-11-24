@@ -109,12 +109,18 @@ struct FactorySourceControlView: View {
     }
     .onChange(of: active) { _, visible in if !visible { confirmCommit = false } }
     .onChange(of: library.project) { _, _ in selected = []; focused = ""; commitMessage = ""; confirmCommit = false }
-    .alert("Commit reviewed Factory sources?", isPresented: $confirmCommit) {
-      Button("Cancel", role: .cancel) {}
-      Button("Commit") { commit() }
-    } message: {
-      Text("Create a local commit on \(branch) containing the \(selected.count) selected Factory source files. The engine rechecks the saved files, dependencies, branch and HEAD. Unrelated staged work is kept separate. Nothing is pushed or deployed.")
-    }
+    .factoryConfirmation(
+      isPresented: $confirmCommit,
+      title: "Commit reviewed Factory sources?",
+      message: "Create a local commit on \(branch) containing the \(selected.count) selected Factory source files. The engine rechecks the saved files, dependencies, branch and HEAD. Unrelated staged work is kept separate. Nothing is pushed or deployed.",
+      kind: .source,
+      badges: [
+        FactoryConfirmBadge(label: branch.isEmpty ? "Local Git" : branch, symbol: "arrow.triangle.branch", color: Color(red: 0.18, green: 0.48, blue: 0.84)),
+        FactoryConfirmBadge(label: "\(selected.count) files", symbol: "doc.on.doc", color: Brand.purple)
+      ],
+      confirmTitle: "Commit sources",
+      onConfirm: { commit() }
+    )
   }
   private func selectChanged() {
     selected = Set(changed.filter { $0["diff_truncated"] as? Bool != true }.map { string($0, "path") })
