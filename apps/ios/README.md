@@ -2,7 +2,7 @@
 
 The companion controls SuperQode running on your own Mac over private Tailscale HTTPS. It uses no hosted SuperQode backend. The Mac keeps execution, provider credentials, project files and recorded job history. Prompts and results travel between authorized devices over the private connection. Cloud agents still use their configured providers.
 
-Version 0.1.0 (build 2) is prepared for App Store submission. It needs a SuperQode Mac build that includes Private remote access. The app runs on iOS 17 or newer, on iPhone and iPad. Building it needs Xcode 26 or newer with the iOS 26 SDK, which App Store Connect requires for uploads. See [APP_STORE.md](APP_STORE.md) for store metadata, review notes, screenshots and signing.
+Version 0.1.0 (build 3) is prepared for App Store submission. It needs a SuperQode Mac build that includes Private remote access. The app runs on iOS 17 or newer, on iPhone and iPad. Building it needs Xcode 26 or newer with the iOS 26 SDK, which App Store Connect requires for uploads. See [APP_STORE.md](APP_STORE.md) for store metadata, review notes, screenshots and signing.
 
 ## Build
 

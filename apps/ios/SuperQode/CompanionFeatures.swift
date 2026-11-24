@@ -1,7 +1,7 @@
 import SwiftUI
 
 enum DeveloperWorkflow: String, CaseIterable, Identifiable, Codable {
-  case code = "Code", review = "Review", evaluate = "Evaluate", optimize = "Optimize"
+  case code = "Code", review = "Review", evaluate = "Evaluate", optimize = "Optimize", factory = "Factory"
   case conversations = "Conversations", files = "Project files", workorders = "WorkOrders", queue = "Task queue", checkpoints = "Checkpoints"
   case connections = "Shared connections", activity = "Activity"
   var id: String { rawValue }
@@ -11,6 +11,7 @@ enum DeveloperWorkflow: String, CaseIterable, Identifiable, Codable {
     case .review: return "text.magnifyingglass"
     case .evaluate: return "checkmark.seal"
     case .optimize: return "slider.horizontal.3"
+    case .factory: return "building.2"
     case .conversations: return "bubble.left.and.bubble.right"
     case .files: return "folder"
     case .workorders: return "person.3"
@@ -26,21 +27,49 @@ enum DeveloperWorkflow: String, CaseIterable, Identifiable, Codable {
     case .review: return "Inspect revisions and give feedback"
     case .evaluate: return "Measure harness outcomes"
     case .optimize: return "Stage an evidence-backed improvement"
+    case .factory: return "Inspect runs, SuperGauge & gates"
     default: return "Open " + rawValue.lowercased()
     }
   }
 }
 
 struct DeveloperShortcuts: View {
+  @Environment(\.horizontalSizeClass) private var sizeClass
   @State private var selected: DeveloperWorkflow?
   var body: some View {
     VStack(alignment: .leading, spacing: 14) {
       Text("Build. Verify. Improve.").font(.title3.bold())
-      VStack(spacing: 12) {
-        HStack(spacing: 12) { shortcut(.code); shortcut(.review) }
-        HStack(spacing: 12) { shortcut(.evaluate); shortcut(.optimize) }
+      if sizeClass == .regular {
+        LazyVGrid(columns: [GridItem(.adaptive(minimum: 170), spacing: 12)], spacing: 12) {
+          shortcut(.code); shortcut(.review); shortcut(.factory); shortcut(.evaluate); shortcut(.optimize)
+        }
+      } else {
+        VStack(spacing: 12) {
+          HStack(spacing: 12) { shortcut(.code); shortcut(.review) }
+          HStack(spacing: 12) { shortcut(.evaluate); shortcut(.optimize) }
+          factoryBanner
+        }
       }
     }.navigationDestination(item: $selected) { WorkflowProjectPicker(workflow: $0) }
+  }
+  private var factoryBanner: some View {
+    Button { selected = .factory } label: {
+      HStack(spacing: 12) {
+        FactoryStudioEmblem(size: 34)
+        VStack(alignment: .leading, spacing: 3) {
+          Text("Factory & SuperGauge").font(.headline).foregroundStyle(.primary)
+          Text("Inspect Factory runs, verdicts and pending gates").font(.caption).foregroundStyle(.secondary)
+        }
+        Spacer(minLength: 4)
+        Image(systemName: "chevron.right").font(.caption).foregroundStyle(.secondary)
+      }
+      .padding(14)
+      .frame(maxWidth: .infinity, alignment: .leading)
+      .background(CompanionTheme.panel, in: RoundedRectangle(cornerRadius: 18))
+      .overlay(RoundedRectangle(cornerRadius: 18).strokeBorder(CompanionTheme.accent.opacity(0.25)))
+    }
+    .buttonStyle(.plain)
+    .accessibilityIdentifier("workflow.factory")
   }
   private func shortcut(_ workflow: DeveloperWorkflow) -> some View {
     Button { selected = workflow } label: {
@@ -83,6 +112,7 @@ struct WorkflowProjectPicker: View {
     case .review: ProjectReviewScreen(project: project.id)
     case .evaluate: EvaluationScreen(project: project.id)
     case .optimize: EvaluationScreen(project: project.id, intent: .optimize)
+    case .factory: FactoryRunsScreen(project: project.id)
     case .conversations: ProjectScreen(project: project)
     case .files: FilesScreen(project: project.id)
     case .workorders: ProjectInspectionScreen(project: project.id, kind: .workorders)
@@ -103,9 +133,9 @@ struct ProjectToolsScreen: View {
         tool(.code); tool(.review); tool(.files)
         NavigationLink("Working-tree overview") { ChangesScreen(project: project.id) }
       }
-      Section("Harness quality") { tool(.evaluate); tool(.optimize) }
+      Section("Harness quality") { tool(.factory); tool(.evaluate); tool(.optimize) }
       Section("Execution and history") { tool(.workorders); tool(.queue); tool(.checkpoints) }
-      Section { NavigationLink("What you can do on iPhone") { AllFeaturesScreen() }.accessibilityIdentifier("features.all") }
+      Section { NavigationLink(CompanionDevice.whatYouCanDoTitle) { AllFeaturesScreen() }.accessibilityIdentifier("features.all") }
     }.navigationTitle("Project tools").scrollContentBackground(.hidden).background(CompanionTheme.background)
   }
   private func tool(_ workflow: DeveloperWorkflow) -> some View {
@@ -141,7 +171,7 @@ struct AllFeaturesScreen: View {
   }
   var body: some View {
     List {
-      Section { Text("Everything you can do from this iPhone. Inspect means read-only. Setup, installs and other workflows stay in SuperQode on your Mac.").font(.footnote).foregroundStyle(.secondary) }
+      Section { Text("Everything you can do from this \(CompanionDevice.name). Inspect means read-only. Setup, installs and other workflows stay in SuperQode on your Mac.").font(.footnote).foregroundStyle(.secondary) }
       ForEach(groups, id: \.self) { group in
         let items = visible.filter { $0.group == group }
         if !items.isEmpty {
@@ -157,7 +187,7 @@ struct AllFeaturesScreen: View {
           }
         }
       }
-    }.navigationTitle("On this iPhone").searchable(text: $query, placement: .navigationBarDrawer(displayMode: .always), prompt: "Find a developer workflow")
+    }.navigationTitle(CompanionDevice.onThisDeviceTitle).searchable(text: $query, placement: .navigationBarDrawer(displayMode: .always), prompt: "Find a developer workflow")
       .scrollContentBackground(.hidden).background(CompanionTheme.background)
   }
 }

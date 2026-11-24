@@ -1,4 +1,4 @@
-# SuperQode for iPhone and iPad: Support
+# SuperQode Mobile Companion: Support
 
 Publish this text at https://superqode.dev/support.
 
@@ -11,31 +11,31 @@ Publish this text at https://superqode.dev/support.
 
 ## What you need
 
-- SuperQode on a Mac, with Private remote access available in Settings.
-- The free Tailscale app on the Mac and on your iPhone or iPad, signed in to the same account.
+- SuperQode for macOS, with Private remote access available in Settings.
+- The free Tailscale app on both your desktop and your mobile device, signed in to the same account.
 - iOS or iPadOS 17 or newer.
 
-## Connect your iPhone
+## Connect your device
 
-1. On the Mac, install Tailscale and sign in.
-2. In SuperQode on the Mac, open Settings, Private remote access, and click Connect this Mac.
-3. Share at least one project, choose which projects this phone may open, and create an invitation.
-4. On the iPhone, install Tailscale and sign in to the same account. Open SuperQode and tap Scan Mac invitation, or enter the invitation by hand.
-5. Approve the iPhone on the Mac.
+1. On your desktop, install Tailscale and sign in.
+2. In SuperQode, open Settings, Private remote access, and click Connect this Mac.
+3. Share at least one project, choose which projects this device may open, and create an invitation.
+4. On your mobile device, install Tailscale and sign in to the same account. Open SuperQode and tap Scan invitation, or enter the invitation by hand.
+5. Approve the device in SuperQode on your desktop.
 
 ## Common questions
 
-**The iPhone cannot reach the Mac.** Check that Tailscale is on and signed in on both devices, and that the Mac is awake, online and has SuperQode open. Then tap Check connection in Settings.
+**The mobile app cannot reach my computer.** Check that Tailscale is on and signed in on both devices, and that your computer is awake, online and has SuperQode open. Then tap Check connection in Settings.
 
-**The invitation expired.** Invitations last five minutes and work once. Create a new one on the Mac.
+**The invitation expired.** Invitations last five minutes and work once. Create a new one in SuperQode on your desktop.
 
-**I don't see a project.** On the Mac, share the project and turn on Show on iPhone for it.
+**I don't see a project.** In SuperQode on your desktop, share the project and enable mobile access for it.
 
-**A harness or model is missing.** The phone lists what the Mac has connected and allowed. Set it up in SuperQode on the Mac.
+**A harness or model is missing.** The companion lists what your desktop has connected and allowed. Set it up in SuperQode on your desktop.
 
-**How do I remove a phone?** Revoke it on the Mac in Private remote access, or tap Disconnect this iPhone in the app's Settings.
+**How do I remove a device?** Revoke it in SuperQode under Private remote access, or tap Disconnect in the mobile app's Settings.
 
-**Can I try the app without a Mac?** Yes. On the first screen, tap Explore the app with sample data.
+**Can I try the app without pairing first?** Yes. On the first screen, tap Explore the app with sample data.
 
 ## Privacy
 

@@ -25,12 +25,18 @@ import SwiftUI
 struct CompanionRootView: View {
   @EnvironmentObject private var store: CompanionStore
   @Environment(\.scenePhase) private var scenePhase
+  private var pendingApprovals: Int {
+    store.jobs.filter { $0.text("status") == "needs_approval" }.count
+  }
   var body: some View {
     Group {
       if store.paired {
         TabView(selection: $store.selectedTab) {
           NavigationStack { ProjectsScreen() }.tabItem { Label("Workspaces", systemImage: "square.grid.2x2") }.tag(0)
-          NavigationStack { ActivityScreen() }.tabItem { Label("Activity", systemImage: "waveform.path") }.tag(1)
+          NavigationStack { ActivityScreen() }
+            .tabItem { Label("Activity", systemImage: "waveform.path") }
+            .badge(pendingApprovals)
+            .tag(1)
           NavigationStack { HarnessLabScreen() }.tabItem { Label("Harness lab", systemImage: "sparkles") }.tag(2)
           NavigationStack { CompanionSettingsScreen() }.tabItem { Label("Settings", systemImage: "slider.horizontal.3") }.tag(3)
         }
@@ -58,7 +64,7 @@ struct ConnectionStatus: View {
     switch store.phase {
     case .connected: return "Private connection to \(store.macName)"
     case .connecting: return "Connecting to your Mac…"
-    case .authorizationExpired: return "Pair this iPhone again"
+    case .authorizationExpired: return "Pair this \(CompanionDevice.name) again"
     default: return "Your Mac is currently unavailable"
     }
   }
@@ -84,6 +90,7 @@ struct ConnectionStatus: View {
 
 struct ProjectsScreen: View {
   @EnvironmentObject private var store: CompanionStore
+  @Environment(\.horizontalSizeClass) private var sizeClass
   @State private var showingDrafts = false
   @State private var draftCount = 0
   private var working: Int { store.jobs.filter(\.active).count }
@@ -116,11 +123,21 @@ struct ProjectsScreen: View {
           Spacer()
           Button { showingDrafts = true } label: { Label(draftCount > 0 ? "Drafts · \(draftCount)" : "Drafts", systemImage: "square.and.pencil") }.font(.subheadline)
         }
-        VStack(spacing: 16) {
-          ForEach(store.projects) { project in
-            NavigationLink { ProjectScreen(project: project) } label: { projectCard(project) }
-              .buttonStyle(.plain)
-              .accessibilityIdentifier("workspace." + project.id)
+        if sizeClass == .regular && store.projects.count > 1 {
+          LazyVGrid(columns: [GridItem(.flexible(), spacing: 16), GridItem(.flexible(), spacing: 16)], spacing: 16) {
+            ForEach(store.projects) { project in
+              NavigationLink { ProjectScreen(project: project) } label: { projectCard(project) }
+                .buttonStyle(.plain)
+                .accessibilityIdentifier("workspace." + project.id)
+            }
+          }
+        } else {
+          VStack(spacing: 16) {
+            ForEach(store.projects) { project in
+              NavigationLink { ProjectScreen(project: project) } label: { projectCard(project) }
+                .buttonStyle(.plain)
+                .accessibilityIdentifier("workspace." + project.id)
+            }
           }
         }
         if store.projects.isEmpty {
@@ -131,7 +148,7 @@ struct ProjectsScreen: View {
           .font(.caption).foregroundStyle(.secondary)
       }.padding(20).frame(maxWidth: 1000).frame(maxWidth: .infinity)
     }.background(CompanionTheme.background).navigationTitle("Workspaces").companionNavigationBrand()
-      .toolbar { ToolbarItem(placement: .topBarTrailing) { NavigationLink { AllFeaturesScreen() } label: { Image(systemName: "square.grid.2x2") }.accessibilityLabel("What you can do on iPhone").accessibilityIdentifier("features.toolbar") } }
+      .toolbar { ToolbarItem(placement: .topBarTrailing) { NavigationLink { AllFeaturesScreen() } label: { Image(systemName: "square.grid.2x2") }.accessibilityLabel(CompanionDevice.whatYouCanDoTitle).accessibilityIdentifier("features.toolbar") } }
       .sheet(isPresented: $showingDrafts, onDismiss: { Task { await refreshDraftCount() } }) { NavigationStack { DraftsScreen() } }
       .task { await refreshDraftCount() }
       .refreshable { await store.refresh(); await refreshDraftCount() }
@@ -215,6 +232,13 @@ struct JobRow: View {
       HStack {
         Text(job.text("status").replacingOccurrences(of: "_", with: " ").capitalized)
           .foregroundStyle(job.text("status") == "needs_approval" ? CompanionTheme.warning : job.text("status") == "failed" ? Color.red : Color.secondary)
+        if let waiting = CompanionRunStats.waitingSince(job.raw) {
+          LiveElapsedText(prefix: "· ", since: waiting, compact: true)
+            .foregroundStyle(CompanionTheme.warning)
+        } else if job.active, let started = CompanionRunStats.startDate(job.raw) {
+          LiveElapsedText(prefix: "· ", since: started, compact: true)
+            .foregroundStyle(.secondary)
+        }
         Spacer()
         if !job.text("harness").isEmpty { HarnessBadge(name: job.text("harness")) }
       }.font(.caption)
@@ -246,7 +270,7 @@ struct CompanionSettingsScreen: View {
         if let expires = store.deviceExpires { LabeledContent("Authorization expires", value: expires.formatted(date: .abbreviated, time: .omitted)) }
         Button("Check connection") { Task { await store.refresh() } }.accessibilityIdentifier("settings.check")
         if store.isPreview { Button("Connect my own Mac") { store.exitExploreMode() } }
-        else { Button("Disconnect this iPhone", role: .destructive) { disconnect = true }.accessibilityIdentifier("settings.disconnect") }
+        else { Button("Disconnect this \(CompanionDevice.name)", role: .destructive) { disconnect = true }.accessibilityIdentifier("settings.disconnect") }
       }.listRowBackground(CompanionTheme.panel)
       Section("Appearance") {
         Picker("Theme", selection: $appearance) { ForEach(CompanionAppearance.allCases, id: \.rawValue) { Text($0.title).tag($0.rawValue) } }
@@ -255,12 +279,12 @@ struct CompanionSettingsScreen: View {
       Section("Your data") {
         Label("Provider credentials stay on your Mac", systemImage: "desktopcomputer")
         Label("Device authorization stays in Keychain", systemImage: "key.fill")
-        Text("Unsent drafts use protected storage on this iPhone and are excluded from backups. Completed job history stays on the Mac; requested output is displayed here.").font(.footnote).foregroundStyle(.secondary)
-        Button("Delete saved drafts on this iPhone", role: .destructive) { clearDrafts = true }.disabled(store.isPreview)
+        Text("Unsent drafts use protected storage on this \(CompanionDevice.name) and are excluded from backups. Completed job history stays on the Mac; requested output is displayed here.").font(.footnote).foregroundStyle(.secondary)
+        Button("Delete saved drafts on this \(CompanionDevice.name)", role: .destructive) { clearDrafts = true }.disabled(store.isPreview)
         if !issue.isEmpty { Text(issue).foregroundStyle(CompanionTheme.warning) }
       }.listRowBackground(CompanionTheme.panel)
       Section("Help & about") {
-        NavigationLink("What you can do on iPhone") { AllFeaturesScreen() }
+        NavigationLink(CompanionDevice.whatYouCanDoTitle) { AllFeaturesScreen() }
         NavigationLink("Setup guide and privacy") { CompanionSetupGuide() }
         Link("Privacy policy", destination: URL(string: "https://superqode.dev/privacy")!)
           .accessibilityIdentifier("settings.privacy")
@@ -268,15 +292,15 @@ struct CompanionSettingsScreen: View {
           .accessibilityIdentifier("settings.support")
         Link("Tailscale Serve guide", destination: URL(string: "https://tailscale.com/docs/features/tailscale-serve")!)
         Link("Source repository", destination: URL(string: "https://github.com/SuperagenticAI/superqode")!)
-        Text("Keep the Mac awake and online. Providers can use their own cloud services. What you can do on iPhone lists the workflows available here. Everything else stays in SuperQode on your Mac.").font(.footnote).foregroundStyle(.secondary)
+        Text("Keep the Mac awake and online. Providers can use their own cloud services. \(CompanionDevice.whatYouCanDoTitle) lists the workflows available here. Everything else stays in SuperQode on your Mac.").font(.footnote).foregroundStyle(.secondary)
         LabeledContent("Version", value: appVersion)
       }.listRowBackground(CompanionTheme.panel)
     }.scrollContentBackground(.hidden).background(CompanionTheme.background).navigationTitle("Settings").companionNavigationBrand()
-      .confirmationDialog("Disconnect this iPhone?", isPresented: $disconnect, titleVisibility: .visible) {
+      .confirmationDialog("Disconnect this \(CompanionDevice.name)?", isPresented: $disconnect, titleVisibility: .visible) {
         Button("Disconnect", role: .destructive) { Task { await store.disconnect() } }
-      } message: { Text("Tasks keep running on the Mac. Revoke this device there to invalidate its authorization. Saved drafts remain on this iPhone.") }
+      } message: { Text("Tasks keep running on the Mac. Revoke this device there to invalidate its authorization. Saved drafts remain on this \(CompanionDevice.name).") }
       .confirmationDialog("Delete all saved drafts?", isPresented: $clearDrafts, titleVisibility: .visible) {
         Button("Delete drafts", role: .destructive) { Task { do { try await store.drafts.clear(); issue = "" } catch { issue = error.localizedDescription } } }
-      } message: { Text("This removes unsent text and saved request IDs from this iPhone. It does not cancel any task on the Mac.") }
+      } message: { Text("This removes unsent text and saved request IDs from this \(CompanionDevice.name). It does not cancel any task on the Mac.") }
   }
 }

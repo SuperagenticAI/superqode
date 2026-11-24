@@ -2,7 +2,7 @@
 
 Generated from `SuperQode/FeatureParity.json`. The iOS app lists only the Available and Partial entries, on its What you can do on iPhone screen.
 
-The inventory accounts for all 14 Mac navigation areas and 24 typed Tools categories. This is inventory coverage, not a claim of complete mobile functionality.
+The inventory accounts for all 17 Mac navigation areas and 24 typed Tools categories. This is inventory coverage, not a claim of complete mobile functionality.
 
 ## Finding
 
@@ -16,14 +16,14 @@ The home screen promotes Code, Review, Evaluate and Optimize. Harness Lab opens 
 
 | Workflow | Phone parity | Current behavior and gaps | Mac entry point |
 | --- | --- | --- | --- |
-| Coding and planning | Partial | Fresh conversations, explicit shared connections, supported Code/Plan/Direct Chat, protected drafts and recovery of interrupted submissions. Native phone tasks use Ask; Auto-edit and Full overrides remain Mac controls. | Threads workspace → composer |
+| Coding and planning | Partial | Fresh conversations, explicit shared connections, supported Code/Plan/Direct Chat, live agent plan checklists, timing and reported token usage, one-tap private copy, per-turn changed files with guarded undo, protected drafts and recovery of interrupted submissions. Native mobile tasks use Ask; Auto-edit and Full overrides remain Mac controls. | Threads workspace → composer |
 | Conversation library | Available | Search, paginate, rename, pin, archive and continue recorded project conversations. | Threads workspace |
 | Contextual review | Available | Review uncommitted, branch or completed-turn changes. Prepare line-bound feedback. Staging requires a separate permission approved on the Mac. | Features → Review |
 | Project files | Available | Read highlighted project source, create files and save edits against the exact loaded revision with a separately approved editing grant. Conflicting saves can be compared with current Mac content before an explicit new save. | Features → Files |
 | Reference files | Available | Attach up to ten non-sensitive UTF-8 files to Code/Plan and check their context before sending. | Threads workspace → attach files |
 | Images and screenshots | Available | Attach up to four PNG, JPEG, GIF or WebP images. Other photo formats are converted on the phone. Image drafts are protected locally; uploads are private, idempotent and bound to this device and project. Model image support still applies. | Threads workspace → attach images |
 | Thread handoff | Available | Review bounded visible thread context, share it or prepare a fresh conversation with no inherited connection, permissions, images or private reasoning. Export recorded evidence as Markdown, JSON or HTML. | Threads workspace → handoff |
-| Windows, tabs and command palette | Mac only | Multiple workspace windows, persistent thread tabs, layout controls and the full command palette remain Mac features. The phone uses native navigation and a searchable What you can do on iPhone list. | Workspace windows / thread tabs / command palette |
+| Windows, tabs and command palette | Mac only | Multiple workspace windows, persistent thread tabs, layout controls and the full command palette remain Mac features. The mobile app uses native navigation and a searchable workflow directory. | Workspace windows / thread tabs / command palette |
 
 ### Harness quality
 
@@ -38,6 +38,8 @@ The home screen promotes Code, Review, Evaluate and Optimize. Harness Lab opens 
 | Candidate promotion | Mac only | Review adoption gates, stage, canary, activate or roll back candidates on the Mac. Evidence on the phone never authorizes promotion. | Optimization → adoption / Tools → Harness workflows |
 | Skill optimization | Mac only | Use the Mac Tools forms for skill optimization and its evidence. This is separate from staged harness optimization. | Tools → Skill optimization |
 | Agent factory and Creator Mode | Mac preview | Author, inspect, save and enable reviewed agent drafts on the Mac. Experimental Creator/Super Agent interfaces are not finished mobile features. | Super Agent / Tools → Agent factory |
+| Factory Studio & SuperGauge | Partial | Inspect Factory runs, SuperGauge verification verdicts, acceptance check traces and candidate diffs, and decide pending human workflow gates with approval permission. Factory authoring, verification runs and cryptographic release signing remain on the Mac. | Factory Studio |
+| Recursive agents | Mac only | Inspect recursive agent trees, child runs and RLM budgets in the Mac workspace. | Recursive agents |
 
 ### Execution and recovery
 
@@ -65,6 +67,7 @@ The home screen promotes Code, Review, Evaluate and Optimize. Harness Lab opens 
 | Trust, policy and sandboxes | Mac only | Configure project trust, tool permissions, sandbox policy and execution recovery on the Mac. Native phone tasks use Ask; they cannot override the policy. | Tools → Project trust / Policy / Sandboxes |
 | Runtime diagnostics | Mac only | Inspect and repair runtime readiness using Mac diagnostics and doctor workflows. | Tools → Runtime diagnostics / Diagnostics |
 | Plugins and A2A credentials | Mac only | Install plugins and configure A2A credentials on the Mac. Existing supported connections can be explicitly shared. | Tools → Plugins / A2A credentials |
+| Local harnesses | Mac only | Configure, preflight and launch advanced local harness adapters on the Mac. Shared local connections can be used from mobile once configured. | Local harnesses |
 
 ## Next implementation priorities
 

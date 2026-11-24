@@ -23,7 +23,7 @@ enum MacConnectionPhase: Equatable {
   @Published var message = ""
   @Published var address = ""
   @Published var pairingCode = ""
-  @Published var deviceName = "My iPhone"
+  @Published var deviceName = CompanionDevice.defaultDeviceName
   @Published var selectedTab = 0
   @Published var activityFilter = "All"
   let drafts: DraftRepository

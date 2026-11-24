@@ -246,3 +246,172 @@ def test_revision_bound_review_feedback_and_opt_in_staging(companion):
         == b"changed again\n"
     )
     assert (root / "hello.txt").read_text() == "changed again\n"
+
+
+def test_turn_changes_projection_filters_sensitive_paths_and_enforces_project_scope(
+    companion, monkeypatch
+):
+    service, project, root, profile, access = companion
+    _, device = pair(access, profile, ["read"])
+    outside = root.parent / "other-turn-project"
+    outside.mkdir()
+    other = service.open_project(str(outside))
+    service._write(
+        "INSERT INTO jobs(id,project,kind,title,status,request,result,created,updated) VALUES(?,?,?,?,?,?,?,?,?)",
+        ("job-shared", project["id"], "task", "Shared", "completed", "{}", "{}", 1.0, 2.0),
+    )
+    service._write(
+        "INSERT INTO jobs(id,project,kind,title,status,request,result,created,updated) VALUES(?,?,?,?,?,?,?,?,?)",
+        ("job-other", other["id"], "task", "Other", "completed", "{}", "{}", 1.0, 2.0),
+    )
+    with pytest.raises(PermissionError, match="not in a shared project"):
+        access.rpc(device, "turns.changes", {"project": project["id"], "job": "job-other"})
+
+    original = service.dispatch
+
+    def dispatch(method, params):
+        if method == "turns.changes":
+            return {
+                "available": True,
+                "checkpoint": "cp-1",
+                "live": False,
+                "running": False,
+                "file_count": 2,
+                "added": 4,
+                "removed": 1,
+                "can_restore": True,
+                "later_turns": 0,
+                "conflicts": ["Sources/App.swift", ".env"],
+                "files": [
+                    {"path": "Sources/App.swift", "change": "modified", "added": 4, "removed": 1, "binary": False},
+                    {"path": ".env", "change": "modified", "added": 1, "removed": 0, "binary": False},
+                ],
+            }
+        return original(method, params)
+
+    monkeypatch.setattr(service, "dispatch", dispatch)
+    result = access.rpc(device, "turns.changes", {"project": project["id"], "job": "job-shared"})
+    assert result["available"] is True
+    assert result["file_count"] == 1
+    assert result["excluded_count"] == 1
+    assert [row["path"] for row in result["files"]] == ["Sources/App.swift"]
+    assert result["conflicts"] == ["Sources/App.swift"]
+    assert ".env" not in json.dumps(result)
+
+
+def test_factory_inspection_is_bounded_and_gates_require_approve_permission(
+    companion, monkeypatch
+):
+    service, project, _, profile, access = companion
+    _, reader = pair(access, profile, ["read"])
+    _, approver = pair(access, profile, ["read", "approve"])
+    original = service.dispatch
+    gate_calls = []
+
+    def dispatch(method, params):
+        if method == "factory.list":
+            return {
+                "revisions": [{"digest": "rev-1", "intact": True}],
+                "runs": [
+                    {
+                        "id": "wo-1",
+                        "goal": "Ship safely",
+                        "status": "needs_review",
+                        "factory_digest": "snap-1",
+                        "repository": "/private/repo",
+                    }
+                ],
+            }
+        if method == "factory.run.inspect":
+            return {
+                "work_order": {
+                    "work_order_id": "wo-1",
+                    "goal": "Ship safely",
+                    "status": "needs_review",
+                    "repository": "/private/repo",
+                    "metadata": {
+                        "factory": {"snapshot_digest": "snap-1", "secret_env": "hidden"},
+                        "factory_verification": {"state": "passed", "sandbox": "docker", "isolation_applied": True},
+                    },
+                    "tasks": [
+                        {
+                            "task_id": "stage-review",
+                            "title": "Human review",
+                            "role": "reviewer",
+                            "status": "blocked",
+                            "metadata": {
+                                "human_gate": True,
+                                "gate_digest": "gate-123",
+                                "factory_stage": "review",
+                                "worker_secret": "hidden-task",
+                            },
+                        }
+                    ],
+                },
+                "evidence": [
+                    {
+                        "id": "art-1",
+                        "kind": "factory_quality_record",
+                        "task_id": "verify",
+                        "content": json.dumps({"decision": {"verdict": "ship"}}),
+                        "truncated": False,
+                    }
+                ],
+                "candidate_diff": "+ok\n",
+                "diff_truncated": False,
+                "candidate_id": "cand-1",
+                "candidate_digest": "dig-1",
+                "cockpit": {"status": "needs_review", "elapsed_seconds": 12.5, "workers": [{"secret": "no"}]},
+            }
+        if method == "factory.evidence.trace":
+            return {
+                "format": "superqode.factory-trace/2",
+                "run": "wo-1",
+                "snapshot_digest": "snap-1",
+                "verification_bound_to_current": True,
+                "missing_evidence": [],
+                "summary": {"checks": {"passed": 2, "failed": 0, "blocked": 0, "never_ran": 0}, "requirements": {}},
+                "application_checks": [
+                    {"check": "unit", "category": "test", "status": "passed", "reason": "All passed", "cases": ["c1"], "failed_cases": []}
+                ],
+                "requirements": [],
+                "release_authorized": False,
+            }
+        if method == "factory.gate":
+            gate_calls.append(params)
+            return {"id": params["run"], "status": "running"}
+        return original(method, params)
+
+    monkeypatch.setattr(service, "dispatch", dispatch)
+    listed = access.rpc(reader, "factory.list", {"project": project["id"]})
+    assert listed["revision_count"] == 1
+    assert listed["runs"][0]["id"] == "wo-1"
+    assert "/private/repo" not in json.dumps(listed)
+
+    inspected = access.rpc(reader, "factory.run.inspect", {"project": project["id"], "run": "wo-1"})
+    assert inspected["work_order"]["tasks"][0]["metadata"]["gate_digest"] == "gate-123"
+    for leaked in ["/private/repo", "hidden", "hidden-task", "secret"]:
+        assert leaked not in json.dumps(inspected)
+
+    traced = access.rpc(reader, "factory.evidence.trace", {"project": project["id"], "run": "wo-1"})
+    assert traced["summary"]["checks"]["passed"] == 2
+
+    gate_params = {
+        "project": project["id"],
+        "run": "wo-1",
+        "stage": "stage-review",
+        "gate_digest": "gate-123",
+        "decision": "approve",
+        "reason": "Looks good",
+    }
+    with pytest.raises(PermissionError):
+        access.rpc(reader, "factory.gate", gate_params, "gate-no-perm")
+    with pytest.raises(ValueError, match="approve or hold"):
+        access.rpc(approver, "factory.gate", {**gate_params, "decision": "release"}, "gate-bad")
+    assert access.rpc(approver, "factory.gate", gate_params, "gate-ok") == {
+        "id": "wo-1",
+        "status": "running",
+    }
+    assert gate_calls[0]["decision"] == "approve"
+    with pytest.raises(PermissionError, match="not available"):
+        access.rpc(approver, "factory.release.authorize", {"project": project["id"], "run": "wo-1"}, "no-release")

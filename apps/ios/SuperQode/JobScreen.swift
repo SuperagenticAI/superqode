@@ -40,6 +40,8 @@ struct JobScreen: View {
   @State private var confirmStop = false
   @State private var showComparison = false
   @State private var comparisonData: [String: JSONValue] = [:]
+  @State private var scrolledInitial = false
+  @State private var scrollToAnchor = ""
   private var job: RemoteRecord { RemoteRecord(raw: detail) }
   private var approvalRequest: [String: JSONValue] { detail.object("pending_approval") }
   private var failureMessage: String {
@@ -57,83 +59,119 @@ struct JobScreen: View {
     return "Open run activity for the recorded details, or inspect this run on your Mac."
   }
   private var showWorking: Bool {
-    job.active || acting || (!pending.isEmpty && !pendingHold)
+    (job.active && !detail.flag("answered")) || acting || (!pending.isEmpty && !pendingHold)
   }
   private var workingStatus: String {
     let status = job.text("status")
     if ["needs_approval", "cancelling", "running", "queued"].contains(status) { return status }
     return "running"
   }
-  /// One current action under the working bar, the same place the Mac shows it.
+  private var activePlan: [PlanItem] {
+    job.text("kind") == "task" ? PlanSnapshot.latest(events) : []
+  }
+  private var currentStats: CompanionRunStats {
+    CompanionRunStats(detail: detail, response: assistantText)
+  }
+  /// One current action under the working bar, matching the macOS activity parser.
   private var currentActivity: String {
     let starts = ["tool_call", "tool_start", "tool.requested", "tool.started", "tool.start", "tool_execution_start"]
     let updates = ["tool_update", "tool_call_update", "tool.updated", "tool.update", "tool_execution_update"]
     let ends = ["tool_result", "tool_end", "tool.completed", "tool.result", "tool.end", "tool_execution_end"]
     let terminal = ["completed", "failed", "cancelled", "canceled", "error", "done", "success", "succeeded", "interrupted"]
-    var pending: [String: String] = [:]
+    var activeTools: [String: String] = [:]
     var order: [String] = []
     var finished = ""
     for event in events {
       let data = event.raw.object("data")
       let name = data.text("event", event.text("type"))
-      if ["thinking", "reasoning", "delta", "model_delta", "message.delta", "answer"].contains(name) {
+      if ["thinking", "reasoning", "model.thinking", "model.reasoning"].contains(name) {
+        finished = "Thinking…"
+      }
+      if ["delta", "model_delta", "message.delta", "message", "answer"].contains(name) {
         finished = ""
       }
       guard (starts + updates + ends).contains(name) else { continue }
       let payload = data.object("payload").isEmpty ? data : data.object("payload")
-      let id = payload.text("toolCallId", payload.text("tool_call_id", payload.text("id", payload.text("tool_name", "anonymous"))))
+      let id = payload.text("toolCallId", payload.text("tool_call_id", payload.text("call_id", payload.text("id", payload.text("tool_name", "anonymous")))))
       let action = toolAction(payload)
       let status = payload.text("status").lowercased()
       let done = terminal.contains(status) || (ends.contains(name) && (name != "tool.completed" || status.isEmpty))
       if done {
-        pending.removeValue(forKey: id)
+        let prior = activeTools.removeValue(forKey: id) ?? ""
         order.removeAll { $0 == id }
-        if !action.isEmpty {
-          let prefix = ["failed", "error"].contains(status) ? "Failed · " : ["cancelled", "canceled", "interrupted"].contains(status) ? "Stopped · " : "Finished · "
-          finished = prefix + action
+        let label = action.isEmpty ? prior : action
+        if !label.isEmpty {
+          let failed = ["failed", "error"].contains(status) || payload["success"] == .bool(false)
+          let prefix = failed ? "Failed · " : ["cancelled", "canceled", "interrupted"].contains(status) ? "Stopped · " : "Finished · "
+          finished = prefix + label
         }
       } else if !action.isEmpty {
-        if pending[id] == nil { order.append(id) }
-        pending[id] = action
+        if activeTools[id] == nil { order.append(id) }
+        activeTools[id] = action
       }
     }
-    if let id = order.last, let action = pending[id] { return action }
+    if let id = order.last, let action = activeTools[id] { return action }
     return finished
   }
   private func toolAction(_ payload: [String: JSONValue]) -> String {
-    let arguments = payload.object("arguments").isEmpty ? payload.object("args") : payload.object("arguments")
-    let raw = payload.object("rawInput").isEmpty ? payload.object("raw_input") : payload.object("rawInput")
-    let sources = [arguments, raw, payload]
-    for source in sources {
-      for key in ["command", "cmd", "command_line", "shell_command"] {
-        let value = source.text(key)
-        if !value.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty { return value }
+    var sources = [payload]
+    for key in ["rawInput", "raw_input", "arguments", "args", "input"] {
+      let object = payload.object(key)
+      if !object.isEmpty {
+        sources.insert(object, at: 0)
+        for nested in ["parameters", "arguments", "input"] {
+          let inner = object.object(nested)
+          if !inner.isEmpty { sources.insert(inner, at: 0) }
+        }
       }
     }
-    for source in sources {
-      for key in ["title", "tool_name", "name", "path", "file_path"] {
-        let value = source.text(key)
-        if !value.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty { return value }
+    func value(_ keys: [String]) -> String {
+      for source in sources {
+        for key in keys {
+          let candidate = source.text(key)
+          if !candidate.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty { return candidate }
+        }
       }
+      return ""
     }
-    return ""
+    let command = value(["command", "cmd", "command_line", "shell_command", "script"])
+    if !command.isEmpty { return command }
+    let title = value(["title", "tool_name", "name"])
+    let path = value(["path", "file_path", "filePath", "target_file", "notebook_path"])
+    if !path.isEmpty { return (title.isEmpty ? "File" : title) + " · " + path }
+    let query = value(["query", "pattern", "url"])
+    if !query.isEmpty { return title.isEmpty ? query : title + " · " + query }
+    return title
   }
   private var assistantText: String {
-    events.compactMap { event -> String? in
+    var parts: [String] = []
+    for event in events {
       let data = event.raw.object("data")
-      if event.text("type") == "answer" { return data.text("text") }
-      if event.text("type") == "harness_event", ["delta", "model_delta", "message.delta"].contains(data.text("event")) {
-        let payload = data.object("payload")
-        return payload.text("text", payload.text("content"))
+      if event.text("type") == "answer" {
+        parts.append(data.text("text"))
+        continue
       }
-      return nil
-    }.joined()
+      guard event.text("type") == "harness_event" else { continue }
+      let payload = data.object("payload")
+      let text = payload.text("text", payload.text("content"))
+      let name = data.text("event")
+      if ["delta", "model_delta", "message.delta"].contains(name) {
+        parts.append(text)
+      } else if name == "message", !text.isEmpty {
+        let joined = parts.joined()
+        if joined.isEmpty { parts.append(text) }
+        else if text.hasPrefix(joined) { parts = [text] }
+        else if !joined.hasPrefix(text) { parts.append(text) }
+      }
+    }
+    return parts.joined()
   }
 
   var body: some View {
-    ScrollView {
-      LazyVStack(alignment: .leading, spacing: 18) {
-        ConnectionStatus()
+    ScrollViewReader { proxy in
+      ScrollView {
+        LazyVStack(alignment: .leading, spacing: 18) {
+          ConnectionStatus()
         if acting { ProgressView("Sending…") }
         if !issue.isEmpty { Label(issue, systemImage: "exclamationmark.triangle").font(.subheadline).foregroundStyle(CompanionTheme.warning) }
         CompanionCard {
@@ -159,34 +197,78 @@ struct JobScreen: View {
         }
         if !historyCursor.isEmpty { Button("Load earlier turns") { Task { await loadHistory(before: historyCursor) } } }
         ForEach(earlier) { turn in
+          let turnStats = CompanionRunStats(turn: turn)
           CompanionCard {
-            Label("You", systemImage: "person.crop.circle").font(.caption).foregroundStyle(.secondary)
+            HStack {
+              Label("You", systemImage: "person.crop.circle").font(.caption).foregroundStyle(.secondary)
+              Spacer()
+              PrivateCopyButton(label: "Copy prompt") { turn.text("prompt") }
+            }
             Text(turn.text("prompt")).textSelection(.enabled)
-            Divider()
-            AssistantText(text: turn.text("response")).equatable()
+            SentTimeLabel(date: turnStats.sent)
+            if !turn.text("response").isEmpty {
+              Divider()
+              HStack {
+                Label(turn.text("harness", "Agent"), systemImage: "sparkles").font(.caption).foregroundStyle(CompanionTheme.accent)
+                Spacer()
+                PrivateCopyButton(label: "Copy response") { turn.text("response") }
+              }
+              AssistantText(text: turn.text("response")).equatable()
+            }
+            CompanionRunStatsFooter(stats: turnStats)
+          }
+          if !detail.text("project").isEmpty && !turn.id.isEmpty {
+            CompanionTurnChangesCard(project: detail.text("project"), job: turn.id, status: turn.text("status"))
           }
         }
         if !detail.object("request").text("prompt").isEmpty {
+          let currentPrompt = detail.object("request").text("prompt")
           CompanionCard {
-            Label("You", systemImage: "person.crop.circle").font(.caption).foregroundStyle(.secondary)
-            Text(detail.object("request").text("prompt")).textSelection(.enabled)
+            HStack {
+              Label("You", systemImage: "person.crop.circle").font(.caption).foregroundStyle(.secondary)
+              Spacer()
+              PrivateCopyButton(label: "Copy prompt") { currentPrompt }
+            }
+            Text(currentPrompt).textSelection(.enabled)
+            SentTimeLabel(date: currentStats.sent)
           }
+        }
+        if !activePlan.isEmpty {
+          CompanionPlanCard(items: activePlan)
         }
         if !approvalRequest.isEmpty {
           approvalCard
+            .id("approval")
         } else if job.text("status") == "needs_approval" {
           Label("Loading the exact approval request…", systemImage: "hourglass").foregroundStyle(CompanionTheme.warning)
+            .id("approval")
+        }
+        if !assistantText.isEmpty {
+          let currentAnswer = assistantText
+          CompanionCard {
+            HStack {
+              Label("Agent", systemImage: "sparkles").font(.caption).foregroundStyle(CompanionTheme.accent)
+              Spacer()
+              PrivateCopyButton(label: "Copy response") { currentAnswer }
+            }
+            AssistantText(text: currentAnswer).equatable()
+            CompanionRunStatsFooter(stats: currentStats, active: job.active && !detail.flag("answered"))
+          }
+        }
+        if !detail.text("project").isEmpty && job.text("kind") == "task" {
+          CompanionTurnChangesCard(
+            project: detail.text("project"),
+            job: shownID,
+            status: job.text("status"),
+            active: job.active
+          ) {
+            Task { await load() }
+          }
         }
         if !detail.text("project").isEmpty {
           CompanionCard {
             NavigationLink("Export recorded evidence") { RecordedEvidenceExportScreen(project: detail.text("project"), job: shownID) }
             if job.text("kind") == "task", !job.active { NavigationLink("Handoff to a new thread") { ThreadHandoffScreen(project: detail.text("project"), job: shownID) } }
-          }
-        }
-        if !assistantText.isEmpty {
-          CompanionCard {
-            Label("Agent", systemImage: "sparkles").font(.caption).foregroundStyle(CompanionTheme.accent)
-            AssistantText(text: assistantText).equatable()
           }
         }
         ForEach(pending) { item in
@@ -226,18 +308,33 @@ struct JobScreen: View {
             }.disabled(acting || !store.canMutate || steering.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty)
           }
         }
-        if !events.isEmpty {
-          DisclosureGroup("Run activity and details") {
+        let activityEvents = events.filter { event in
+          event.text("type") != "answer" && !(event.text("type") == "harness_event" && ["delta", "model_delta", "message.delta"].contains(event.raw.object("data").text("event")))
+        }
+        if !activityEvents.isEmpty {
+          DisclosureGroup("Run activity and details (\(activityEvents.count))") {
             LazyVStack(alignment: .leading, spacing: 10) {
-              ForEach(events.filter { event in
-                event.text("type") != "answer" && !(event.text("type") == "harness_event" && ["delta", "model_delta", "message.delta"].contains(event.raw.object("data").text("event")))
-              }) { event in
-                VStack(alignment: .leading, spacing: 4) {
-                  Text(event.text("type").replacingOccurrences(of: "_", with: " ").capitalized).font(.caption.bold())
-                  let data = event.raw.object("data")
-                  if !data.text("message").isEmpty { Text(data.text("message")).font(.caption).foregroundStyle(.secondary) }
-                  JSONDetails(title: "Details", value: .object(data))
-                }.padding(.vertical, 4)
+              ForEach(activityEvents) { event in
+                let summary = activityEventSummary(event)
+                VStack(alignment: .leading, spacing: 5) {
+                  HStack(alignment: .firstTextBaseline, spacing: 8) {
+                    Image(systemName: summary.symbol)
+                      .font(.caption)
+                      .foregroundStyle(summary.tint)
+                    Text(summary.title)
+                      .font(.caption.weight(.semibold))
+                      .lineLimit(2)
+                  }
+                  if !summary.subtitle.isEmpty {
+                    Text(summary.subtitle)
+                      .font(.caption.monospaced())
+                      .foregroundStyle(.secondary)
+                      .lineLimit(3)
+                      .textSelection(.enabled)
+                  }
+                  JSONDetails(title: "Details", value: .object(event.raw.object("data")))
+                }
+                .padding(.vertical, 4)
               }
             }
           }.font(.subheadline)
@@ -248,14 +345,31 @@ struct JobScreen: View {
         if job.active, store.permissions.contains("cancel") {
           Button("Stop run", role: .destructive) { confirmStop = true }.disabled(acting || !store.canMutate)
         }
-      }.padding(20)
+        Color.clear.frame(height: 1).id("bottom")
+        }.padding(20)
+      }
+      .onChange(of: scrollToAnchor) { _, anchor in
+        guard !anchor.isEmpty else { return }
+        withAnimation(.easeOut(duration: 0.22)) { proxy.scrollTo(anchor, anchor: .bottom) }
+        scrollToAnchor = ""
+      }
+      .onChange(of: approvalRequest.text("request_id")) { _, requestID in
+        guard !requestID.isEmpty else { return }
+        withAnimation(.easeOut(duration: 0.22)) { proxy.scrollTo("approval", anchor: .center) }
+      }
     }
     .scrollDismissesKeyboard(.interactively)
     .background(CompanionTheme.background)
       .safeAreaInset(edge: .bottom, spacing: 0) {
         VStack(spacing: 0) {
           if showWorking {
-            CompanionWorkingCard(status: workingStatus, activity: currentActivity)
+            CompanionWorkingCard(
+              status: workingStatus,
+              activity: currentActivity,
+              started: CompanionRunStats.startDate(detail),
+              waitingSince: CompanionRunStats.waitingSince(detail),
+              planSummary: PlanSnapshot.compactLine(activePlan)
+            )
               .padding(.horizontal, 12)
               .padding(.top, 8)
               .padding(.bottom, 8)
@@ -267,7 +381,14 @@ struct JobScreen: View {
       .navigationTitle(job.text("conversation_title", job.text("title", "Run")))
       .navigationBarTitleDisplayMode(.inline)
       .toolbar {
-        ToolbarItem(placement: .primaryAction) {
+        ToolbarItemGroup(placement: .primaryAction) {
+          if !approvalRequest.isEmpty {
+            Button { scrollToAnchor = "approval" } label: { Image(systemName: "hand.raised.fill").foregroundStyle(CompanionTheme.warning) }
+              .accessibilityLabel("Jump to approval")
+          } else if !earlier.isEmpty || !assistantText.isEmpty {
+            Button { scrollToAnchor = "bottom" } label: { Image(systemName: "arrow.down.circle") }
+              .accessibilityLabel("Jump to latest")
+          }
           Button("New thread") { showNewThread = true }
             .disabled(job.text("project").isEmpty || !store.permissions.contains("tasks"))
         }
@@ -288,11 +409,21 @@ struct JobScreen: View {
       .confirmationDialog("Approve this exact action on your Mac?", isPresented: $confirmApproval, titleVisibility: .visible) {
         Button("Approve once") {
           let request = approvalSnapshot.text("request_id")
-          Task { _ = await act("jobs.approve", ["id": .string(shownID), "request_id": .string(request), "allow": .bool(true)], key: "approve:\(shownID):\(request)") }
+          Task {
+            if await act("jobs.approve", ["id": .string(shownID), "request_id": .string(request), "allow": .bool(true)], key: "approve:\(shownID):\(request)") {
+              CompanionHaptics.notify(.success)
+            }
+          }
         }
       } message: { Text("Approve \(approvalSnapshot.object("tool").text("tool", approvalSnapshot.object("tool").text("name", "this action"))) once. If the pending request changed, the Mac will reject this decision.") }
       .confirmationDialog("Stop this run?", isPresented: $confirmStop, titleVisibility: .visible) {
-        Button("Stop run", role: .destructive) { Task { _ = await act("jobs.cancel", ["id": .string(shownID)], key: "cancel:\(shownID)") } }
+        Button("Stop run", role: .destructive) {
+          Task {
+            if await act("jobs.cancel", ["id": .string(shownID)], key: "cancel:\(shownID)") {
+              CompanionHaptics.notify(.warning)
+            }
+          }
+        }
       } message: { Text("Stopping cannot undo edits or commands already completed on the Mac.") }
       .sheet(isPresented: $showNewThread) {
         NavigationStack { ComposeTaskScreen(project: job.text("project")) }
@@ -345,6 +476,7 @@ struct JobScreen: View {
         Button { Task { await sendReply() } } label: {
           Text("Send").font(.body.weight(.semibold))
         }
+        .keyboardShortcut(.return, modifiers: .command)
         .accessibilityLabel("Send")
         .accessibilityIdentifier("thread.send")
         .disabled(acting || detail.isEmpty || !store.canMutate || !store.permissions.contains("tasks") || reply.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty)
@@ -468,10 +600,12 @@ struct JobScreen: View {
     UIApplication.shared.sendAction(#selector(UIResponder.resignFirstResponder), to: nil, from: nil, for: nil)
     let text = reply.trimmingCharacters(in: .whitespacesAndNewlines)
     guard !text.isEmpty, !detail.isEmpty else { return }
+    CompanionHaptics.impact(.light)
     pending.append(PendingSend(id: UUID().uuidString, text: text))
     reply = ""
     pendingHold = false
     issue = ""
+    scrollToAnchor = "bottom"
     await deliverPending()
   }
 
@@ -539,14 +673,24 @@ struct JobScreen: View {
       let tool = snapshot.object("tool")
       Text(tool.text("tool", tool.text("name", "Agent action"))).font(.headline)
       let arguments = tool.object("arguments").isEmpty ? tool.object("args") : tool.object("arguments")
-      if !arguments.text("command").isEmpty { Text(arguments.text("command")).font(.system(.caption, design: .monospaced)).textSelection(.enabled) }
-      if !arguments.text("path").isEmpty { Text(arguments.text("path")).font(.caption).textSelection(.enabled) }
+      let command = arguments.text("command", arguments.text("cmd", arguments.text("command_line")))
+      if !command.isEmpty {
+        MobileCodeBlock(code: command, language: "bash")
+      }
+      let targetPath = arguments.text("path", arguments.text("file_path"))
+      if !targetPath.isEmpty {
+        Label(targetPath, systemImage: "doc.text").font(.caption.monospaced()).textSelection(.enabled)
+      }
       JSONDetails(title: "Action details", value: .object(tool))
       HStack {
         Button("Approve once") { approvalSnapshot = snapshot; confirmApproval = true }.buttonStyle(CompanionPrimaryButton())
         Button("Deny", role: .destructive) {
           let request = snapshot.text("request_id")
-          Task { _ = await act("jobs.approve", ["id": .string(shownID), "request_id": .string(request), "allow": .bool(false)], key: "deny:\(shownID):\(request)") }
+          Task {
+            if await act("jobs.approve", ["id": .string(shownID), "request_id": .string(request), "allow": .bool(false)], key: "deny:\(shownID):\(request)") {
+              CompanionHaptics.notify(.warning)
+            }
+          }
         }
       }.disabled(acting || !store.canMutate || !store.permissions.contains("approve"))
     }
@@ -574,6 +718,10 @@ struct JobScreen: View {
       events = merged
       eventCursor = cursor
       detail = page
+      if !scrolledInitial && !page.isEmpty {
+        scrolledInitial = true
+        if !page.object("pending_approval").isEmpty { scrollToAnchor = "approval" }
+      }
       if !pendingHold { issue = "" }
       await deliverPending()
     } catch is CancellationError { }
@@ -639,6 +787,68 @@ struct EvaluationResultCard: View {
       Text("Optimization candidates remain staged. Review and adoption happen on the Mac.").font(.caption).foregroundStyle(.secondary)
     }
   }
+}
+
+struct ActivityEventSummary: Equatable {
+  let title: String
+  let subtitle: String
+  let symbol: String
+  let tint: Color
+}
+
+func activityEventSummary(_ event: RemoteRecord) -> ActivityEventSummary {
+  let type = event.text("type")
+  let data = event.raw.object("data")
+  let name = data.text("event", type)
+  let payload = data.object("payload").isEmpty ? data : data.object("payload")
+  let status = payload.text("status").lowercased()
+  if type == "error" || ["error", "failure", "failed"].contains(name) {
+    return ActivityEventSummary(
+      title: "Error",
+      subtitle: data.text("message", payload.text("message", payload.text("text"))),
+      symbol: "exclamationmark.triangle.fill",
+      tint: CompanionTheme.warning)
+  }
+  if type == "approval" {
+    let tool = data.object("tool")
+    return ActivityEventSummary(
+      title: "Approval requested · " + tool.text("tool", tool.text("name", "Action")),
+      subtitle: tool.object("arguments").text("command", tool.object("arguments").text("path")),
+      symbol: "hand.raised.fill",
+      tint: CompanionTheme.warning)
+  }
+  if name == "plan" {
+    let count = payload["entries"]?.array.count ?? 0
+    return ActivityEventSummary(
+      title: "Plan updated",
+      subtitle: count > 0 ? "\(count) step\(count == 1 ? "" : "s")" : "",
+      symbol: "checklist",
+      tint: CompanionTheme.accent)
+  }
+  if ["thinking", "reasoning", "model.thinking", "model.reasoning"].contains(name) {
+    return ActivityEventSummary(
+      title: "Reasoning",
+      subtitle: payload.text("text", data.text("message")),
+      symbol: "brain",
+      tint: .secondary)
+  }
+  let toolName = payload.text("title", payload.text("tool_name", payload.text("name")))
+  let args = payload.object("arguments").isEmpty ? payload.object("args") : payload.object("arguments")
+  let detail = args.text("command", args.text("path", args.text("file_path", payload.text("path", data.text("message")))))
+  if !toolName.isEmpty {
+    let failed = ["failed", "error"].contains(status) || payload["success"] == .bool(false)
+    let done = ["completed", "done", "success", "succeeded"].contains(status) || name.hasSuffix("end") || name.hasSuffix("result")
+    return ActivityEventSummary(
+      title: toolName,
+      subtitle: detail,
+      symbol: failed ? "xmark.circle.fill" : done ? "checkmark.circle.fill" : "wrench.and.screwdriver",
+      tint: failed ? .red : done ? Color(red: 0.14, green: 0.64, blue: 0.42) : CompanionTheme.accent)
+  }
+  return ActivityEventSummary(
+    title: name.replacingOccurrences(of: "_", with: " ").replacingOccurrences(of: ".", with: " ").capitalized,
+    subtitle: data.text("message"),
+    symbol: "circle.fill",
+    tint: .secondary)
 }
 
 struct JSONDetails: View {

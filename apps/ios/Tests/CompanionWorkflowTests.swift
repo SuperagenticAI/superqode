@@ -86,12 +86,102 @@ final class CompanionWorkflowTests: XCTestCase {
     XCTAssertEqual(restored.first { $0.id == queued.id }?.enqueue, true)
   }
   func testFeatureInventoryLoadsAndDoesNotClaimMacOnlyFeaturesAreMobile() {
-    XCTAssertEqual(CompanionFeature.all.count, 34)
+    XCTAssertEqual(CompanionFeature.all.count, 37)
     let terminal = CompanionFeature.all.first { $0.id == "terminal" }
     XCTAssertEqual(terminal?.parity, "mac_only")
     XCTAssertNil(terminal?.workflow)
     XCTAssertEqual(CompanionFeature.all.first { $0.id == "pro" }?.parity, "preview")
     XCTAssertEqual(CompanionFeature.all.first { $0.id == "review" }?.workflow, .review)
+    XCTAssertEqual(CompanionFeature.all.first { $0.id == "factory_studio" }?.workflow, .factory)
+  }
+  func testRunStatsFormatsDurationTokensAndEstimatesOnlyWhenUnreported() {
+    let reported = CompanionRunStats(
+      sent: Date(timeIntervalSince1970: 1000),
+      finished: Date(timeIntervalSince1970: 1042),
+      model: "qwen3-coder:30b",
+      usage: ["tokens_in": .number(1500), "tokens_out": .number(300), "cost": .number(0.0123)],
+      status: "completed",
+      response: "Hello world")
+    XCTAssertEqual(reported.duration, 42)
+    XCTAssertTrue(reported.summaryParts.contains("Worked for 42s"))
+    XCTAssertTrue(reported.summaryParts.contains("1.5k in / 300 out"))
+    XCTAssertNil(reported.estimatedTokensOut)
+
+    let unreported = CompanionRunStats(
+      sent: nil, finished: nil, model: "", usage: nil, status: "completed", response: String(repeating: "a", count: 80))
+    XCTAssertEqual(unreported.estimatedTokensOut, 20)
+  }
+  func testPlanSnapshotParsesACPPlanAndTodoCalls() {
+    let planEvent = RemoteRecord(raw: [
+      "type": .string("harness_event"),
+      "data": .object([
+        "event": .string("plan"),
+        "payload": .object([
+          "entries": .array([
+            .object(["id": .string("1"), "content": .string("Inspect tests"), "status": .string("done")]),
+            .object(["id": .string("2"), "content": .string("Apply fix"), "status": .string("in_progress")]),
+          ])
+        ]),
+      ]),
+    ])
+    let items = PlanSnapshot.latest([planEvent])
+    XCTAssertEqual(items.count, 2)
+    XCTAssertEqual(items[0].status, "completed")
+    XCTAssertEqual(items[1].status, "in_progress")
+    XCTAssertEqual(PlanSnapshot.compactLine(items), "Plan 1 of 2 done · Apply fix")
+  }
+  func testSuperGaugeSnapshotParsesSampleFactoryQualityRecord() async throws {
+    let detail = try await ExploreTransport().rpc("factory.run.inspect", ["project": .string(ExploreWorkspace.project), "run": .string("sample-factory-run")]).object
+    let snapshot = SuperGaugeSnapshot.parse(detail: detail)
+    XCTAssertTrue(snapshot.hasRecord)
+    XCTAssertEqual(snapshot.verdict, .ship)
+    XCTAssertEqual(snapshot.passedCases, 4)
+    XCTAssertEqual(snapshot.totalCases, 4)
+    XCTAssertEqual(snapshot.isolationPassed, true)
+    XCTAssertEqual(snapshot.evaluatorsHidden, true)
+    XCTAssertEqual(snapshot.evidenceComplete, true)
+  }
+  func testTurnChangesParsesSampleFilesAndCounts() async throws {
+    let raw = try await ExploreTransport().rpc("turns.changes", ["project": .string(ExploreWorkspace.project), "job": .string(ExploreWorkspace.conversation)]).object
+    let summary = CompanionTurnChanges(raw)
+    XCTAssertTrue(summary.available)
+    XCTAssertEqual(summary.fileCount, 2)
+    XCTAssertEqual(summary.added, 14)
+    XCTAssertEqual(summary.removed, 3)
+    XCTAssertTrue(summary.canRestore)
+  }
+  @MainActor func testReviewCommentBatchCombinesMultipleCommentsAndClears() {
+    let batch = ReviewCommentBatch()
+    XCTAssertEqual(batch.combinedPrompt, "")
+    batch.add(path: "Sources/A.swift", rangeLabel: "rows 1-3", summary: "Fix guard", feedbackText: "Feedback A")
+    XCTAssertEqual(batch.combinedPrompt, "Feedback A")
+    batch.add(path: "Sources/B.swift", rangeLabel: "row 10", summary: "Add test", feedbackText: "Feedback B")
+    let combined = batch.combinedPrompt
+    XCTAssertTrue(combined.contains("2 review comments"))
+    XCTAssertTrue(combined.contains("Sources/A.swift (rows 1-3)"))
+    XCTAssertTrue(combined.contains("Feedback B"))
+    batch.remove(batch.items[0].id)
+    XCTAssertEqual(batch.items.count, 1)
+    XCTAssertEqual(batch.combinedPrompt, "Feedback B")
+    batch.clear()
+    XCTAssertTrue(batch.items.isEmpty)
+  }
+  func testActivityEventSummaryFormatsToolAndPlanEvents() {
+    let toolEvent = RemoteRecord(raw: [
+      "type": .string("harness_event"),
+      "data": .object([
+        "event": .string("tool.completed"),
+        "payload": .object([
+          "tool_name": .string("Run checks"),
+          "status": .string("completed"),
+          "arguments": .object(["command": .string("pytest -q")]),
+        ]),
+      ]),
+    ])
+    let summary = activityEventSummary(toolEvent)
+    XCTAssertEqual(summary.title, "Run checks")
+    XCTAssertEqual(summary.subtitle, "pytest -q")
+    XCTAssertEqual(summary.symbol, "checkmark.circle.fill")
   }
   func testComparisonUsesEngineRegressionsAndKeepsUnknownCostDistinctFromZero() {
     let comparison = ExploreWorkspace.result.object.object("comparison")

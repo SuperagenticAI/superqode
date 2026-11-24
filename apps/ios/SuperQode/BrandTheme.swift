@@ -158,6 +158,9 @@ struct WorkingStatusText: View {
 struct CompanionWorkingCard: View {
   let status: String
   var activity = ""
+  var started: Date? = nil
+  var waitingSince: Date? = nil
+  var planSummary = ""
   var body: some View {
     let waiting = status == "needs_approval"
     let stopping = status == "cancelling"
@@ -165,12 +168,30 @@ struct CompanionWorkingCard: View {
     HStack(alignment: .top, spacing: 12) {
       SuperQodeMark(size: 25)
       VStack(alignment: .leading, spacing: 8) {
-        if waiting || stopping {
-          Text(label).font(.footnote.weight(.semibold)).modifier(CompanionBrandText())
-        } else {
-          WorkingStatusText().font(.footnote.weight(.semibold)).modifier(CompanionBrandText())
+        HStack(spacing: 8) {
+          if waiting || stopping {
+            Text(label).font(.footnote.weight(.semibold)).modifier(CompanionBrandText())
+          } else {
+            WorkingStatusText().font(.footnote.weight(.semibold)).modifier(CompanionBrandText())
+          }
+          Spacer(minLength: 4)
+          if waiting, let since = waitingSince {
+            LiveElapsedText(prefix: "Waiting ", since: since, compact: true)
+              .font(.caption2.weight(.medium))
+              .foregroundStyle(CompanionTheme.warning)
+          } else if let since = started {
+            LiveElapsedText(prefix: "", since: since)
+              .font(.caption2.weight(.medium))
+              .foregroundStyle(.secondary)
+          }
         }
         if !waiting { ThinkingBar() }
+        if !planSummary.isEmpty && !waiting {
+          Text(planSummary)
+            .font(.caption)
+            .foregroundStyle(.secondary)
+            .lineLimit(1)
+        }
         if waiting || stopping || !activity.isEmpty {
           Text(waiting ? "Waiting for your approval" : stopping ? "Waiting for the agent to stop" : activity)
             .font(.caption.monospaced())

@@ -177,6 +177,7 @@ struct ComposeTaskScreen: View {
         Label(draft.enqueue == true ? "Add to queue" : "Send", systemImage: "arrow.up")
       }
       .buttonStyle(CompanionPrimaryButton())
+      .keyboardShortcut(.return, modifiers: .command)
       .accessibilityIdentifier("composer.send")
       .accessibilityLabel(draft.enqueue == true ? "Add to queue" : "Send")
       .disabled(!canSend || submitting)

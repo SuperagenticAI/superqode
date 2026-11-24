@@ -3,8 +3,8 @@
     "id": "coding",
     "title": "Coding and planning",
     "group": "Daily development",
-    "status": "On iPhone",
-    "detail": "Fresh conversations, explicit shared connections, supported Code/Plan/Direct Chat, protected drafts and recovery of interrupted submissions. Native phone tasks use Ask; Auto-edit and Full overrides remain Mac controls.",
+    "status": "On device",
+    "detail": "Fresh conversations, explicit shared connections, supported Code/Plan/Direct Chat, live agent plan checklists, timing and reported token usage, one-tap private copy, per-turn changed files with guarded undo, protected drafts and recovery of interrupted submissions. Native mobile tasks use Ask; Auto-edit and Full overrides remain Mac controls.",
     "workflow": "Code",
     "mac_sections": [
       "Workspace"
@@ -446,10 +446,50 @@
     "title": "Windows, tabs and command palette",
     "group": "Daily development",
     "status": "On Mac",
-    "detail": "Multiple workspace windows, persistent thread tabs, layout controls and the full command palette remain Mac features. The phone uses native navigation and a searchable What you can do on iPhone list.",
+    "detail": "Multiple workspace windows, persistent thread tabs, layout controls and the full command palette remain Mac features. The mobile app uses native navigation and a searchable workflow directory.",
     "mac_sections": [],
     "mac_tools": [],
     "macRoute": "Workspace windows / thread tabs / command palette",
+    "parity": "mac_only"
+  },
+  {
+    "id": "factory_studio",
+    "title": "Factory Studio & SuperGauge",
+    "group": "Harness quality",
+    "status": "Inspect & gates",
+    "detail": "Inspect Factory runs, SuperGauge verification verdicts, acceptance check traces and candidate diffs, and decide pending human workflow gates with approval permission. Factory authoring, verification runs and cryptographic release signing remain on the Mac.",
+    "workflow": "Factory",
+    "mac_sections": [
+      "Factory Studio"
+    ],
+    "mac_tools": [],
+    "macRoute": "Factory Studio",
+    "parity": "partial"
+  },
+  {
+    "id": "local_harnesses",
+    "title": "Local harnesses",
+    "group": "Connections and setup",
+    "status": "On Mac",
+    "detail": "Configure, preflight and launch advanced local harness adapters on the Mac. Shared local connections can be used from mobile once configured.",
+    "mac_sections": [
+      "Local harnesses"
+    ],
+    "mac_tools": [],
+    "macRoute": "Local harnesses",
+    "parity": "mac_only"
+  },
+  {
+    "id": "recursive_agents",
+    "title": "Recursive agents",
+    "group": "Harness quality",
+    "status": "On Mac",
+    "detail": "Inspect recursive agent trees, child runs and RLM budgets in the Mac workspace.",
+    "mac_sections": [
+      "Recursive agents"
+    ],
+    "mac_tools": [],
+    "macRoute": "Recursive agents",
     "parity": "mac_only"
   }
 ]

@@ -19,7 +19,7 @@ struct PairMacScreen: View {
             .font(.subheadline).foregroundStyle(.secondary)
           Text("Your Mac. Your models. Your harnesses.")
             .font(.title3.weight(.semibold))
-          Text("Private by design. Your iPhone connects straight to your own Mac over your own Tailscale network. SuperQode runs no cloud relay for your prompts, files or results.")
+          Text("Private by design. This \(CompanionDevice.name) connects straight to your own Mac over your own Tailscale network. SuperQode runs no cloud relay for your prompts, files or results.")
             .font(.subheadline).foregroundStyle(.secondary)
         }
         if store.waitingForApproval {
@@ -27,16 +27,16 @@ struct PairMacScreen: View {
         } else {
           CompanionCard {
             Label("Connect your workspace", systemImage: "lock.shield").font(.headline)
-            Text("Install Tailscale on this iPhone and on your Mac, then sign in to the same account on both.")
+            Text("Install Tailscale on this \(CompanionDevice.name) and on your Mac, then sign in to the same account on both.")
               .font(.subheadline).foregroundStyle(.secondary)
-            Link("Get Tailscale for iPhone", destination: URL(string: "https://apps.apple.com/app/tailscale/id1470499037")!)
+            Link("Get Tailscale", destination: URL(string: "https://apps.apple.com/app/tailscale/id1470499037")!)
               .font(.subheadline)
             Text("On your Mac, open SuperQode Settings → Private remote access, click Connect this Mac, and create an invitation.")
               .font(.subheadline).foregroundStyle(.secondary)
             if invitationReady {
               Label("Invitation ready", systemImage: "checkmark.circle.fill").foregroundStyle(CompanionTheme.accent)
               Text(store.address).font(.caption.monospaced()).textSelection(.enabled)
-              TextField("Name this iPhone", text: $store.deviceName).textFieldStyle(.roundedBorder)
+              TextField("Name this \(CompanionDevice.name)", text: $store.deviceName).textFieldStyle(.roundedBorder)
               Button { store.beginPairing() } label: { HStack { if store.connecting { ProgressView().tint(.white) }; Text(store.connecting ? "Connecting…" : "Request Mac approval") } }
                 .buttonStyle(CompanionPrimaryButton()).disabled(store.connecting || store.deviceName.trimmingCharacters(in: .whitespaces).isEmpty)
             } else {

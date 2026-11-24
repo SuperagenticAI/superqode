@@ -14,7 +14,7 @@ struct MobileImageAttachments: View {
   var body: some View {
     CompanionCard {
       Label("Images and screenshots", systemImage: "photo.on.rectangle").font(.headline)
-      Text("Up to four images, 4 MB each. Draft images stay protected on this iPhone until you send them to your Mac. Model and agent image support still applies.").font(.caption).foregroundStyle(.secondary)
+      Text("Up to four images, 4 MB each. Draft images stay protected on this \(CompanionDevice.name) until you send them to your Mac. Model and agent image support still applies.").font(.caption).foregroundStyle(.secondary)
       ForEach(draft.images ?? []) { image in
         HStack {
           Label(image.name, systemImage: "photo").lineLimit(1)

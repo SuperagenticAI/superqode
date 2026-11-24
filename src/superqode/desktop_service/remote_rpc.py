@@ -9,9 +9,13 @@ import time
 from .remote_access import digest, text
 from .remote_project import (
     context_paths,
+    factory_list_snapshot,
+    factory_run_snapshot,
+    factory_trace_snapshot,
     project_path,
     queue_snapshot,
     checkpoint_snapshot,
+    turn_changes_snapshot,
     workorder_snapshot,
 )
 
@@ -22,6 +26,7 @@ READS = {
     "threads.get": {"project", "id"},
     "jobs.get": {"id", "after"},
     "conversations.get": {"id", "before"},
+    "turns.changes": {"project", "job"},
     "git.status": {"project"},
     "files.list": {"project"},
     "files.read": {"project", "path"},
@@ -45,6 +50,9 @@ READS = {
     "checkpoints.diff": {"project", "id", "path"},
     "queue.list": {"project"},
     "workorders.snapshot": {"project"},
+    "factory.list": {"project"},
+    "factory.run.inspect": {"project", "run"},
+    "factory.evidence.trace": {"project", "run"},
     "context.preview": {"profile", "prompt", "context_files", "interaction_mode"},
 }
 WRITES = {
@@ -63,6 +71,7 @@ WRITES = {
     "jobs.approve": ("approve", {"id", "request_id", "allow"}),
     "jobs.cancel": ("cancel", {"id"}),
     "jobs.steer": ("steer", {"id", "text"}),
+    "factory.gate": ("approve", {"project", "run", "stage", "gate_digest", "decision", "reason"}),
 }
 
 
@@ -155,7 +164,9 @@ def dispatch(access, device, method, params, key):
                 "terminal": False,
                 "provider_setup": "On the Mac",
                 "push_notifications": False,
-                "project_inspection": ["review", "checkpoints", "queue", "workorders"],
+                "project_inspection": ["review", "checkpoints", "queue", "workorders", "factory"],
+                "turn_changes": True,
+                "factory_gates": True,
                 "context_files": True,
                 "editing": True,
                 "image_upload": True,
@@ -204,6 +215,7 @@ def dispatch(access, device, method, params, key):
     if (
         method
         in {
+            "turns.changes",
             "review.list",
             "review.diff",
             "review.feedback",
@@ -212,10 +224,34 @@ def dispatch(access, device, method, params, key):
             "checkpoints.diff",
             "queue.list",
             "workorders.snapshot",
+            "factory.list",
+            "factory.run.inspect",
+            "factory.evidence.trace",
+            "factory.gate",
         }
         and "project" not in request
     ):
         raise ValueError("Choose a shared project")
+    if method == "turns.changes":
+        turn_id = text(request.get("job"), "a turn ID")
+        found = service._all("SELECT project FROM jobs WHERE id=?", (turn_id,))
+        if not found or found[0]["project"] not in projects:
+            raise PermissionError("This run is not in a shared project")
+        if found[0]["project"] != request["project"]:
+            raise PermissionError("This run belongs to another project")
+        request["job"] = turn_id
+    if method in {"factory.run.inspect", "factory.evidence.trace"}:
+        request["run"] = text(request.get("run"), "a factory run ID", 200)
+    if method == "factory.gate":
+        request["run"] = text(request.get("run"), "a factory run ID", 200)
+        request["stage"] = text(request.get("stage"), "a factory stage ID", 200)
+        request["gate_digest"] = text(request.get("gate_digest"), "a gate digest", 200)
+        if request.get("decision") not in {"approve", "hold"}:
+            raise ValueError("Choose approve or hold for this factory gate")
+        reason = request.get("reason", "")
+        if not isinstance(reason, str) or len(reason) > 1000:
+            raise ValueError("Enter a gate reason using at most 1000 characters")
+        request["reason"] = reason.strip()
     if "id" in request and not (
         method.startswith("checkpoints.")
         or method.startswith("queue.")
@@ -394,6 +430,14 @@ def dispatch(access, device, method, params, key):
         }
     if method == "context.preview":
         result = {k: result.get(k) for k in ("prompt", "files", "image_count")}
+    elif method == "turns.changes" and isinstance(result, dict):
+        result = turn_changes_snapshot(result)
+    elif method == "factory.list" and isinstance(result, dict):
+        result = factory_list_snapshot(result)
+    elif method == "factory.run.inspect" and isinstance(result, dict):
+        result = factory_run_snapshot(result)
+    elif method == "factory.evidence.trace" and isinstance(result, dict):
+        result = factory_trace_snapshot(result)
     elif method.startswith("queue.") and isinstance(result, dict) and "items" in result:
         result = queue_snapshot(result)
     elif method == "workorders.snapshot":

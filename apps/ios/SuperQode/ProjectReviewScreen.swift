@@ -1,16 +1,64 @@
 import SwiftUI
 
+struct ReviewCommentItem: Identifiable, Equatable {
+  let id = UUID().uuidString
+  let path: String
+  let rangeLabel: String
+  let summary: String
+  let feedbackText: String
+}
+
+/// Collects multiple inline review comments across hunks and files so they can
+/// be sent to the agent in a single follow-up draft.
+@MainActor final class ReviewCommentBatch: ObservableObject {
+  @Published private(set) var items: [ReviewCommentItem] = []
+
+  func add(path: String, rangeLabel: String, summary: String, feedbackText: String) {
+    items.append(ReviewCommentItem(path: path, rangeLabel: rangeLabel, summary: summary, feedbackText: feedbackText))
+  }
+
+  func remove(_ id: String) {
+    items.removeAll { $0.id == id }
+  }
+
+  func clear() {
+    items.removeAll()
+  }
+
+  var combinedPrompt: String {
+    guard !items.isEmpty else { return "" }
+    if items.count == 1 { return items[0].feedbackText }
+    let header = "Address the following \(items.count) review comments:\n\n"
+    let body = items.enumerated().map { index, item in
+      "--- Comment \(index + 1): \(item.path) (\(item.rangeLabel)) ---\n" + item.feedbackText
+    }.joined(separator: "\n\n")
+    return header + body
+  }
+}
+
+private struct ReviewFileTarget: Identifiable, Hashable {
+  let record: RemoteRecord
+  var id: String { record.id }
+  static func == (lhs: Self, rhs: Self) -> Bool { lhs.record == rhs.record }
+  func hash(into hasher: inout Hasher) { hasher.combine(record.id) }
+}
+
 struct ProjectReviewScreen: View {
   let project: String
   var job: String? = nil
+  var preferredPath: String? = nil
   @EnvironmentObject private var store: CompanionStore
+  @StateObject private var batch = ReviewCommentBatch()
   @State private var scope = "uncommitted"
   @State private var base = "main"
   @State private var listing: [String: JSONValue] = [:]
   @State private var loading = false
   @State private var issue = ""
-  init(project: String, job: String? = nil) {
-    self.project = project; self.job = job
+  @State private var autoOpenedFile: ReviewFileTarget?
+  @State private var didAutoOpen = false
+  @State private var batchDraft: LocalDraft?
+  init(project: String, job: String? = nil, preferredPath: String? = nil) {
+    self.project = project; self.job = job; self.preferredPath = preferredPath
     _scope = State(initialValue: job == nil ? "uncommitted" : "turn")
   }
   private var params: [String: JSONValue] {
@@ -31,10 +79,36 @@ struct ProjectReviewScreen: View {
         if scope == "branch" { TextField("Base branch or commit", text: $base).textInputAutocapitalization(.never).autocorrectionDisabled() }
         Text(listing.text("label", "Review exact file revisions before requesting changes or staging.")).font(.footnote).foregroundStyle(.secondary)
       }.listRowBackground(CompanionTheme.panel)
+      if !batch.items.isEmpty {
+        Section("Review batch (\(batch.items.count))") {
+          ForEach(batch.items) { item in
+            HStack(alignment: .top, spacing: 8) {
+              VStack(alignment: .leading, spacing: 3) {
+                Text(item.path + " · " + item.rangeLabel).font(.caption.monospaced()).foregroundStyle(.secondary)
+                Text(item.summary).font(.subheadline).lineLimit(2)
+              }
+              Spacer()
+              Button(role: .destructive) { batch.remove(item.id) } label: { Image(systemName: "xmark.circle.fill") }
+                .buttonStyle(.borderless)
+                .accessibilityLabel("Remove comment")
+            }
+          }
+          Button {
+            var draft = LocalDraft(project: project, parent: scope == "turn" ? job : nil)
+            draft.prompt = batch.combinedPrompt
+            draft.origin = store.address
+            batchDraft = draft
+          } label: {
+            Label("Send \(batch.items.count) comment\(batch.items.count == 1 ? "" : "s") to agent", systemImage: "paperplane.fill")
+          }
+          .buttonStyle(CompanionPrimaryButton())
+          Button("Clear batch", role: .destructive) { batch.clear() }.font(.caption)
+        }.listRowBackground(CompanionTheme.panel)
+      }
       if !issue.isEmpty { Text(issue).foregroundStyle(CompanionTheme.warning) }
       if loading { ProgressView("Loading changes…") }
       ForEach(listing.records("files")) { file in
-        NavigationLink { ReviewedFileScreen(file: file, params: params, parent: scope == "turn" ? job : nil) } label: {
+        NavigationLink { ReviewedFileScreen(file: file, params: params, parent: scope == "turn" ? job : nil, batch: batch) } label: {
           VStack(alignment: .leading, spacing: 5) {
             Text(file.text("path")).font(.subheadline.monospaced())
             Text(file.text("layer").capitalized + " · " + file.text("change")).font(.caption).foregroundStyle(.secondary)
@@ -45,6 +119,12 @@ struct ProjectReviewScreen: View {
       if listing.number("excluded_count") > 0 { Text("Sensitive paths are excluded from review.").font(.caption).foregroundStyle(.secondary) }
       if listing.flag("truncated") { Text("This view is limited to 500 files. Narrow the review on your Mac.").font(.caption).foregroundStyle(.secondary) }
     }.scrollContentBackground(.hidden).background(CompanionTheme.background).navigationTitle("Review changes")
+      .navigationDestination(item: $autoOpenedFile) { target in
+        ReviewedFileScreen(file: target.record, params: params, parent: scope == "turn" ? job : nil, batch: batch)
+      }
+      .sheet(item: $batchDraft, onDismiss: { batch.clear() }) { draft in
+        NavigationStack { ComposeTaskScreen(project: project, parent: scope == "turn" ? job : nil, restored: draft) }
+      }
       .task(id: scope + ":" + base) {
         do { try await Task.sleep(for: .milliseconds(250)); try Task.checkCancellation(); await load() } catch { }
       }.refreshable { await load() }
@@ -60,6 +140,12 @@ struct ProjectReviewScreen: View {
       try Task.checkCancellation()
       guard request == params else { return }
       listing = next; issue = ""
+      if !didAutoOpen, let preferredPath, !preferredPath.isEmpty,
+        let match = next.records("files").first(where: { $0.text("path") == preferredPath })
+      {
+        didAutoOpen = true
+        autoOpenedFile = ReviewFileTarget(record: match)
+      }
     } catch is CancellationError { }
     catch { if request == params { issue = error.localizedDescription } }
   }
@@ -69,6 +155,7 @@ struct ReviewedFileScreen: View {
   let file: RemoteRecord
   let params: [String: JSONValue]
   let parent: String?
+  @ObservedObject var batch: ReviewCommentBatch
   @EnvironmentObject private var store: CompanionStore
   @Environment(\.dismiss) private var dismiss
   @State private var document: [String: JSONValue] = [:]
@@ -98,6 +185,7 @@ struct ReviewedFileScreen: View {
           MobileCodeBlock(code: render(item.raw), language: "diff")
         }
         if document.flag("truncated") { Text("The diff is incomplete. Review the complete file on the Mac before staging.").foregroundStyle(CompanionTheme.warning) }
+        if !batch.items.isEmpty { batchTray }
         if complete && !hunks.isEmpty { feedback }
         if complete && document.flag("can_stage") {
           CompanionCard {
@@ -118,8 +206,40 @@ struct ReviewedFileScreen: View {
         }
       } message: { Text("This updates the Git index with the reviewed file. If its revision changed, the Mac refuses the request. It does not commit or merge changes.") }
   }
-  private var feedback: some View {
+  private var batchTray: some View {
     CompanionCard {
+      HStack {
+        Label("Queued review comments (\(batch.items.count))", systemImage: "tray.full")
+          .font(.subheadline.weight(.semibold))
+        Spacer()
+        Button("Clear", role: .destructive) { batch.clear() }.font(.caption)
+      }
+      ForEach(batch.items) { item in
+        HStack(alignment: .top, spacing: 8) {
+          VStack(alignment: .leading, spacing: 2) {
+            Text(item.path + " · " + item.rangeLabel).font(.caption2.monospaced()).foregroundStyle(.secondary)
+            Text(item.summary).font(.caption).lineLimit(2)
+          }
+          Spacer()
+          Button(role: .destructive) { batch.remove(item.id) } label: { Image(systemName: "xmark.circle.fill").font(.caption) }
+            .buttonStyle(.plain)
+        }
+      }
+      Button {
+        var draft = LocalDraft(project: params.text("project"), parent: parent)
+        draft.prompt = batch.combinedPrompt
+        draft.origin = store.address
+        batch.clear()
+        feedbackDraft = draft
+      } label: {
+        Label("Send \(batch.items.count) comment\(batch.items.count == 1 ? "" : "s") as one follow-up", systemImage: "paperplane.fill")
+      }
+      .buttonStyle(CompanionPrimaryButton())
+    }
+  }
+  private var feedback: some View {
+    let invalid = working || !store.reachable || comment.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty || comment.count > 4000 || lastRow - firstRow >= 80 || lines.isEmpty
+    return CompanionCard {
       Label("Request a change", systemImage: "text.bubble").font(.headline)
       Picker("Hunk", selection: $selectedHunk) { ForEach(Array(hunks.enumerated()), id: \.offset) { index, item in Text(item.text("header")).tag(index) } }
       Stepper("First displayed row: \(firstRow)", value: $firstRow, in: 1...max(1, lines.count))
@@ -131,9 +251,14 @@ struct ReviewedFileScreen: View {
         }.joined(separator: "\n"), language: "Selected rows")
       }
       TextField("What should change?", text: $comment, axis: .vertical).lineLimit(3...7)
-      Button("Prepare feedback draft") { Task { await prepare() } }
-        .disabled(working || !store.reachable || comment.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty || comment.count > 4000 || lastRow - firstRow >= 80 || lines.isEmpty)
-      Text("Creates a draft with exact file revisions and quoted lines. Choose a connection and send explicitly; nothing runs automatically.").font(.caption).foregroundStyle(.secondary)
+      HStack(spacing: 12) {
+        Button("Add to batch") { Task { await prepare(enqueueToBatch: true) } }
+          .disabled(invalid)
+        Spacer()
+        Button("Prepare feedback draft") { Task { await prepare(enqueueToBatch: false) } }
+          .disabled(invalid)
+      }
+      Text("Add multiple comments across hunks or files, then send them together—or prepare a single draft now. Nothing runs automatically.").font(.caption).foregroundStyle(.secondary)
     }.disabled(working)
       .onChange(of: selectedHunk) { _, _ in firstRow = 1; lastRow = 1 }
       .onChange(of: firstRow) { _, start in lastRow = max(start, lastRow) }
@@ -156,7 +281,7 @@ struct ReviewedFileScreen: View {
     catch { issue = error.localizedDescription }
     loading = false
   }
-  private func prepare() async {
+  private func prepare(enqueueToBatch: Bool) async {
     guard let api = store.api, complete, !working else { return }
     working = true; issue = ""
     defer { working = false }
@@ -164,16 +289,31 @@ struct ReviewedFileScreen: View {
       let values = request.merging(["snapshot_id": .string(document.text("snapshot_id")), "hunk_id": .number(hunk.number("id")), "start": .number(Double(firstRow - 1)), "end": .number(Double(lastRow - 1)), "comment": .string(comment)]) { _, new in new }
       let result = try await api.rpc("review.feedback", values).object
       guard !result.text("text").isEmpty else { throw CompanionError("The Mac returned no feedback text. Refresh the reviewed file.") }
-      var draft = LocalDraft(project: params.text("project"), parent: parent)
-      draft.prompt = result.text("text"); draft.origin = store.address
-      feedbackDraft = draft
+      if enqueueToBatch {
+        let rangeLabel = firstRow == lastRow ? "row \(firstRow)" : "rows \(firstRow)-\(lastRow)"
+        batch.add(
+          path: file.text("path"),
+          rangeLabel: rangeLabel,
+          summary: comment.trimmingCharacters(in: .whitespacesAndNewlines),
+          feedbackText: result.text("text"))
+        comment = ""
+        CompanionHaptics.impact(.light)
+      } else {
+        var draft = LocalDraft(project: params.text("project"), parent: parent)
+        draft.prompt = result.text("text"); draft.origin = store.address
+        feedbackDraft = draft
+      }
     } catch { issue = error.localizedDescription }
   }
   private func stage(_ snapshot: [String: JSONValue]) async {
     guard let api = store.api, store.canMutate, store.permissions.contains("review"), !working else { return }
     working = true; issue = ""
     defer { working = false }
-    do { _ = try await api.rpc("review.stage", snapshot, key: stageKey); dismiss() }
+    do {
+      _ = try await api.rpc("review.stage", snapshot, key: stageKey)
+      CompanionHaptics.notify(.success)
+      dismiss()
+    }
     catch { issue = error.localizedDescription }
   }
 }

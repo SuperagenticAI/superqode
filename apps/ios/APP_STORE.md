@@ -1,6 +1,6 @@
 # App Store submission
 
-This is the working checklist for submitting the SuperQode iOS companion, version 0.1.0 (build 2), bundle ID `dev.superqode.companion`. Nothing here uploads or publishes the app. Signing and upload are done by hand in Xcode and App Store Connect.
+This is the working checklist for submitting the SuperQode iOS companion, version 0.1.0 (build 3), bundle ID `dev.superqode.companion`. Nothing here uploads or publishes the app. Signing and upload are done by hand in Xcode and App Store Connect.
 
 ## Before you upload
 
@@ -8,14 +8,15 @@ This is the working checklist for submitting the SuperQode iOS companion, versio
 | --- | --- |
 | Toolchain | Xcode 26 or newer with the iOS 26 SDK. App Store Connect has required it for uploads since 28 April 2026. |
 | Deployment target | iOS 17.0, iPhone and iPad (`TARGETED_DEVICE_FAMILY = 1,2`). |
-| Version | `MARKETING_VERSION = 0.1.0`, `CURRENT_PROJECT_VERSION = 2`. Raise the build number for every new upload. |
+| Version | `MARKETING_VERSION = 0.1.0`, `CURRENT_PROJECT_VERSION = 3`. Raise the build number for every new upload. |
 | Encryption | `ITSAppUsesNonExemptEncryption = NO` in `Resources/Info.plist`. The app uses only Apple's HTTPS and Keychain. |
 | Privacy manifest | `SuperQode/PrivacyInfo.xcprivacy` declares UserDefaults (reason `CA92.1`), no tracking and no collected data. |
 | Permissions | Camera only, requested when Scan is tapped. Photos use the system picker, which needs no permission. |
 | App icon | Committed 1024 px PNGs without alpha: light (black field), dark (deep plum field) and tinted (grayscale). No build script generates icons. |
-| Third-party logos | Not shown. `SQGenericHarnessIcons` is `YES` in `Resources/Info.plist`, or the build uses the `STORE_GENERIC_HARNESS_ICONS` Swift flag, so harnesses the user connected on the Mac render with a generic symbol. Set the key to `NO` (and omit the flag) to show the bundled logos instead. |
+| Third-party logos | Not shown. `SQGenericHarnessIcons` is `YES` in `Resources/Info.plist`, or the build uses the `STORE_GENERIC_HARNESS_ICONS` Swift flag, so harnesses the user connected on the desktop render with a generic symbol. Set the key to `NO` (and omit the flag) to show the bundled logos instead. |
 | Privacy and support | In-app links in Settings, Help & about and in the Get started guide: https://superqode.dev/privacy and https://superqode.dev/support. Publish both pages before submitting; the text is in `store/privacy.md` and `store/support.md`. |
-| Feature list | The in-app "What you can do on iPhone" list shows only workflows the phone can use. Mac-only work is described as staying on the Mac. |
+| Feature list | The in-app feature list ("On this iPhone" / "On this iPad") shows only workflows this device can use. Desktop-only work is described as staying on the desktop. |
+| Apple trademark compliance (5.2.5) | Subtitle and Keywords contain no Apple product names ("Mac", "iPhone", "iPad") and no possessive Apple trademarks ("Mac's"). Compatibility with macOS is stated strictly referentially in the Description. |
 
 ## Signing and upload
 
@@ -33,7 +34,7 @@ This is the working checklist for submitting the SuperQode iOS companion, versio
 | Field | Draft |
 | --- | --- |
 | Name (30) | SuperQode |
-| Subtitle (30) | Your Mac's coding agents |
+| Subtitle (30) | Private coding agent companion |
 | Category | Developer Tools (secondary: Productivity) |
 | Price | Free, no in-app purchases |
 | Copyright | 2026 Superagentic AI |
@@ -44,36 +45,36 @@ This is the working checklist for submitting the SuperQode iOS companion, versio
 
 Promotional text (170):
 
-> Start, steer and review coding agents running on your own Mac. Private by design: your iPhone talks straight to your Mac over your own Tailscale network.
+> Start, steer and review coding agents running on your workstation. Private by design: connect directly over your own Tailscale network with no cloud relay.
 
 Keywords (100):
 
-> coding,agent,harness,developer,code review,evaluation,mac,remote,tailscale,ai,llm,local model,git
+> coding,agent,harness,developer,code review,evaluation,factory,remote,tailscale,ai,llm,local,git
 
 Description:
 
-> SuperQode on iPhone is the companion to SuperQode on your Mac. Pick up your coding work from your phone: start a task, follow an agent as it works, approve or deny the exact action it asks for, steer it, or stop it.
+> SuperQode is the mobile companion to SuperQode for macOS. Pick up your coding work from anywhere: start a task, follow an agent's live plan and timing as it works, approve or deny the exact action it asks for, inspect changed files, steer it, or stop it.
 >
-> Your Mac does the work. Projects, provider keys and job history stay on your Mac. The iPhone connects straight to it over your own Tailscale network. SuperQode runs no cloud relay for your prompts, files or results.
+> Your workstation does the work. Projects, provider keys and job history stay on your desktop. The mobile app connects directly to it over your own Tailscale private network. SuperQode runs no cloud relay for your prompts, files or results.
 >
-> What you can do on iPhone:
-> - Code and plan: start a conversation with any harness and model the Mac has shared, attach project files and screenshots, and continue the thread later.
-> - Review: read working-tree and branch diffs, leave line feedback and, with permission, stage files.
-> - Evaluate: run a bundled suite against a harness and compare baseline and candidate results task by task.
-> - Optimize: stage an optimization run within the limits set on the Mac, then inspect its evidence.
-> - Keep track: activity, approvals, task queue, checkpoints and WorkOrders from the same Mac.
+> What you can do on the go:
+> - Code and plan: start a conversation with any harness and model you have shared, follow live agent plans, elapsed time and token usage, attach project files and screenshots, and copy prompts or answers with one tap.
+> - Review and undo: inspect per-turn changed files, read working-tree and branch diffs, leave line-bound feedback, stage reviewed files with permission, or undo a sealed turn.
+> - Factory and SuperGauge: inspect Factory runs, SuperGauge verification verdicts, acceptance check traces and candidate diffs, and decide pending human workflow gates.
+> - Evaluate and optimize: run a bundled evaluation suite, compare baseline and candidate results task by task, or stage an optimization run within explicit budgets.
+> - Keep track: live activity, approvals, task queue, checkpoints, file editing and WorkOrders from the same workspace.
 >
 > Private and in your control:
-> - Pairing uses a one-time invitation you approve on the Mac.
-> - Each iPhone gets its own grant, which expires after 30 days and can be revoked from the Mac at any time.
-> - Drafts stay protected on the phone and are excluded from backups.
+> - Pairing uses a one-time invitation you approve on the desktop.
+> - Each device gets its own grant, which expires after 30 days and can be revoked at any time.
+> - Drafts stay protected on the device and are excluded from backups.
 > - Choose Local only when you want a verified local model to do the work.
 >
-> Requires SuperQode on a Mac with Private remote access turned on, and Tailscale on both devices. Cloud models receive prompts from the providers you configure on the Mac. Not on a Mac yet? Tap "Explore the app with sample data" to look around.
+> Requires SuperQode for macOS with Private remote access turned on, and Tailscale on both devices. Cloud models receive prompts from the providers you configure on your desktop. Not paired yet? Tap "Explore the app with sample data" to look around.
 
 What's New (0.1.0):
 
-> First release of the SuperQode iPhone and iPad companion.
+> First release of the SuperQode mobile companion for iOS and iPadOS.
 
 ## Age rating
 
@@ -87,19 +88,21 @@ Choose **Data Not Collected**. The developer receives no data from the app. Prom
 
 Paste into App Review Information, Notes:
 
-> SuperQode for iPhone is a companion to SuperQode running on the user's own Mac. It has no hosted backend and no accounts of its own. The phone connects only to the user's Mac over the user's own Tailscale private network, and the Mac must approve each iPhone.
+> Thank you for the review feedback on Guideline 5.2.5. We have updated the App Store subtitle to "Private coding agent companion" and removed all Apple product terms from the subtitle, keywords and promotional text.
 >
-> To review without a Mac: on the first screen, scroll down and tap "Explore the app with sample data". Explore mode is clearly labelled, runs offline with built-in sample data, and cannot start real work. Suggested path:
-> 1. Projects: open the "SuperQode Studio" sample workspace on "Studio Mac".
+> SuperQode is a companion to SuperQode for macOS running on the user's own computer. It has no hosted backend and no accounts of its own. The app connects only to the user's desktop over the user's own Tailscale private network, and the desktop must approve each device.
+>
+> To review without a paired desktop: on the first screen, scroll down and tap "Explore the app with sample data". Explore mode is clearly labelled, runs offline with built-in sample data, and cannot start real work. Suggested path:
+> 1. Workspaces: open the "SuperQode Studio" sample workspace.
 > 2. Tap New thread to see the composer, the harness and model picker, and the Code, Plan and Chat modes.
-> 3. Open a sample conversation to see streamed output, a code diff and an action waiting for approval.
-> 4. Open Harness lab to see evaluation results and a staged optimization.
+> 3. Open a sample conversation to see streamed output, live agent plan checklist, per-turn changed files, timing/usage stats, a code diff and an action waiting for approval.
+> 4. Open Harness lab to see Factory & SuperGauge verification verdicts, evaluation comparisons and a staged optimization.
 > 5. Open Settings to see the connection, appearance, data controls and the privacy and support links.
-> 6. Tap the grid button on Projects to see "What you can do on iPhone".
+> 6. Tap the grid button on Workspaces to see the complete list of supported mobile workflows.
 >
-> Real use needs SuperQode on a Mac with Private remote access turned on and the free Tailscale app on both devices. The camera is used only to scan the pairing QR code shown on the Mac. A screen recording of a real Mac and iPhone pairing and running a task is available on request, and we can join a call if that helps.
+> Real use needs SuperQode for macOS with Private remote access turned on and the free Tailscale app on both devices. The camera is used only to scan the pairing QR code shown on the desktop. A screen recording of pairing and running a task is available on request, and we can join a call if that helps.
 >
-> Harness names are shown only for tools the user has installed and connected on their own Mac, to identify them.
+> Harness names are shown only for tools the user has installed and connected on their own workstation, to identify them.
 
 No demo account is needed: the app has no sign-in. Leave "Sign-in required" unchecked.
 

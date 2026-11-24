@@ -40,7 +40,7 @@ struct ProjectScreen: View {
   @State private var renaming: RemoteRecord?
   @State private var renameTitle = ""
   @State private var tool: ProjectTool?
-  private enum ProjectTool: Hashable { case files, review }
+  private enum ProjectTool: Hashable { case files, review, factory }
   private var canOrganize: Bool {
     store.canMutate && store.permissions.contains("tasks")
       && (store.features["threads"]?.array.contains(.string("rename")) == true)
@@ -49,14 +49,18 @@ struct ProjectScreen: View {
   var body: some View {
     List {
       Section {
-        HStack(spacing: 12) {
-          Button { tool = .files } label: { Label("Files", systemImage: "doc.text") }
-            .accessibilityIdentifier("project.files")
-          Button { tool = .review } label: { Label("Review", systemImage: "text.magnifyingglass") }
-            .accessibilityIdentifier("project.review")
-          Button { evaluate = true } label: { Label("Evaluate", systemImage: "chart.bar.xaxis") }
-            .disabled(!store.permissions.contains("evaluate") && !store.permissions.contains("optimize"))
-        }.font(.subheadline).buttonStyle(.borderless)
+        ScrollView(.horizontal, showsIndicators: false) {
+          HStack(spacing: 14) {
+            Button { tool = .files } label: { Label("Files", systemImage: "doc.text") }
+              .accessibilityIdentifier("project.files")
+            Button { tool = .review } label: { Label("Review", systemImage: "text.magnifyingglass") }
+              .accessibilityIdentifier("project.review")
+            Button { tool = .factory } label: { Label("Factory", systemImage: "building.2") }
+              .accessibilityIdentifier("project.factory")
+            Button { evaluate = true } label: { Label("Evaluate", systemImage: "chart.bar.xaxis") }
+              .disabled(!store.permissions.contains("evaluate") && !store.permissions.contains("optimize"))
+          }.font(.subheadline).buttonStyle(.borderless)
+        }
         NavigationLink("All project tools") { ProjectToolsScreen(project: project) }
       }.listRowBackground(CompanionTheme.panel)
       Section {
@@ -92,6 +96,7 @@ struct ProjectScreen: View {
         switch choice {
         case .files: FilesScreen(project: project.id)
         case .review: ProjectReviewScreen(project: project.id)
+        case .factory: FactoryRunsScreen(project: project.id)
         }
       }
       .sheet(isPresented: $compose, onDismiss: { Task { await load() } }) { NavigationStack { ComposeTaskScreen(project: project.id) } }
@@ -133,7 +138,7 @@ struct DraftsScreen: View {
   var body: some View {
     List {
       Section {
-        Text("Unsent text is saved only on this iPhone, with device protection and backup exclusion. Drafts never start work automatically.")
+        Text("Unsent text is saved only on this \(CompanionDevice.name), with device protection and backup exclusion. Drafts never start work automatically.")
           .font(.footnote).foregroundStyle(.secondary)
       }.listRowBackground(Color.clear)
       if !issue.isEmpty { Text(issue).foregroundStyle(CompanionTheme.warning) }

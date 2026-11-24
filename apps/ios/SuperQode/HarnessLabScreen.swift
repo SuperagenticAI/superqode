@@ -18,11 +18,43 @@ struct HarnessLabScreen: View {
           Text("Your harnesses, local models and evaluation results, together.").font(.subheadline).foregroundStyle(.secondary)
         }.padding(.top, 12)
         Picker("Harness lab", selection: $section) {
-          Text("Evaluate & improve").tag("Experiments"); Text("Connections").tag("Connections")
+          Text("Evaluate").tag("Experiments")
+          Text("Factory").tag("Factory")
+          Text("Connections").tag("Connections")
         }.pickerStyle(.segmented)
         if section == "Connections" {
           ForEach(store.profiles) { profile in connection(profile) }
           if store.profiles.isEmpty { ContentUnavailableView("Bring your harnesses", systemImage: "sparkles", description: Text("Configure and share a connection from your Mac. Credentials stay there.")) }
+        } else if section == "Factory" {
+          Picker("Workspace", selection: $project) {
+            Text("Choose a workspace").tag("")
+            ForEach(store.projects) { Text($0.text("name")).tag($0.id) }
+          }
+          CompanionCard {
+            HStack(spacing: 12) {
+              FactoryStudioEmblem(size: 36)
+              VStack(alignment: .leading, spacing: 4) {
+                Text("Factory Studio & SuperGauge").font(.headline)
+                SuperGaugeBadge(verdict: .ship)
+              }
+            }
+            Text("Inspect Factory runs, SuperGauge verification verdicts, acceptance check traces, candidate diffs and pending human workflow gates.")
+              .font(.subheadline).foregroundStyle(.secondary)
+            if !project.isEmpty {
+              NavigationLink {
+                FactoryRunsScreen(project: project)
+              } label: {
+                Label("Open Factory runs", systemImage: "building.2")
+                  .frame(maxWidth: .infinity)
+              }
+              .buttonStyle(CompanionPrimaryButton())
+              .accessibilityIdentifier("lab.factory.open")
+            } else {
+              Text("Choose a shared workspace first.").font(.caption).foregroundStyle(.secondary)
+            }
+            Text("Factory authoring, verification runs and cryptographic release signing stay on your Mac.")
+              .font(.caption).foregroundStyle(.secondary)
+          }
         } else {
           Picker("Workspace", selection: $project) {
             Text("Choose a workspace").tag("")
