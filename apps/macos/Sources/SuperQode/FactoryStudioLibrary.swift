@@ -39,6 +39,35 @@ import Combine
   private var acceptanceChanges: AnyCancellable?
   init() { acceptanceChanges = Publishers.Merge(acceptance.objectWillChange, portable.objectWillChange).sink { [weak self] in self?.objectWillChange.send() } }
   var canApplyProposal: Bool { !string(proposal, "yaml").isEmpty }
+  var isAnyRunActive: Bool {
+    if busy && !actionRun.isEmpty { return true }
+    return runs.contains { FactoryStatus(raw: string($0, "status")).isActive }
+  }
+  var pendingGateCount: Int {
+    let order = detail["work_order"] as? [String: Any] ?? [:]
+    let tasks = order["tasks"] as? [[String: Any]] ?? []
+    let taskGates = tasks.filter { FactoryStatus(raw: string($0, "status")) == .waitingHuman }.count
+    if taskGates > 0 { return taskGates }
+    return runs.filter { FactoryStatus(raw: string($0, "status")) == .waitingHuman }.count
+  }
+  var readyToShipCandidate: Bool {
+    guard !string(detail, "candidate_id").isEmpty else { return false }
+    let order = detail["work_order"] as? [String: Any] ?? [:]
+    let status = FactoryStatus(raw: string(order, "status"))
+    guard status != .shipped else { return false }
+    return SuperGaugeSnapshot.parse(detail: detail).verdict == .ship
+  }
+
+  private func taskStatusMap(from detailPayload: [String: Any]) -> [String: String] {
+    let order = detailPayload["work_order"] as? [String: Any] ?? [:]
+    let tasks = order["tasks"] as? [[String: Any]] ?? []
+    var map: [String: String] = [:]
+    for task in tasks {
+      let id = string(task, "task_id")
+      if !id.isEmpty { map[id] = string(task, "status") }
+    }
+    return map
+  }
 
   @discardableResult func workflowExperiment(_ engine: Engine, stage: String, goal: String, workGoal: String) async -> Bool {
     guard !busy else { return false }; busy = true
@@ -131,6 +160,7 @@ import Combine
       run = string(result["work_order"] as? [String: Any] ?? [:], "work_order_id")
       trialRequest = UUID().uuidString
       await refresh(engine: engine); await inspect(engine: engine)
+      FactorySoundEngine.play(.started)
       message = "Trial prepared. Run ready stages explicitly to make model calls."
     } catch { if project == identity { failure = error.localizedDescription } }
   }
@@ -175,7 +205,9 @@ import Combine
       _ = try await rpc(engine, "gate", ["run": selected, "stage": string(task, "task_id"),
         "gate_digest": string(task["metadata"] as? [String: Any] ?? [:], "gate_digest"),
         "decision": decision, "reason": reason])
-      guard project == identity, run == selected else { return }; await inspect(engine: engine)
+      guard project == identity, run == selected else { return }
+      FactorySoundEngine.play(decision == "approve" ? .stageCompleted : .cancelled)
+      await inspect(engine: engine)
     } catch { if project == identity { failure = error.localizedDescription } }
   }
   func start(engine: Engine, action: String, provider: String = "", model: String = "", workflow: String = "", extra: [String: Any] = [:]) async {
@@ -194,11 +226,15 @@ import Combine
       let id = string(started, "id")
       guard project == identity, operation == op else { return }
       job = started; actionRun = ["generate", "source-commit", "improvement-search", "improvement-compare", "campaign-run", "campaign-worker"].contains(action) ? "" : selected
+      FactorySoundEngine.play(.started)
+      var previousTasks: [String: String] = actionRun.isEmpty ? [:] : taskStatusMap(from: detail)
+      var pollTicks = 0
       while project == identity, operation == op, !Task.isCancelled {
         let current = try await engine.call("jobs.get", ["id": id]) as? [String: Any] ?? [:]
         guard project == identity, operation == op else { return }; job = current
         if !["queued", "running", "cancelling", "needs_approval"].contains(string(current, "status")) {
-          if string(current, "status") == "completed" {
+          let jobStatus = string(current, "status")
+          if jobStatus == "completed" {
             if action == "source-commit" {
               let result = current["result"] as? [String: Any] ?? [:]
               message = "Committed Factory sources: " + string(result, "sha") + ". " + string(result, "notice")
@@ -228,11 +264,41 @@ import Combine
                   : "Draft changed during generation. Your edits are preserved; compare the proposal before applying it."
               }
             }
-          } else { failure = "Factory action \(string(current, "status")): \(pretty(current["result"]))" }
+          } else { failure = "Factory action \(jobStatus): \(pretty(current["result"]))" }
           if action == "source-commit" { await refreshSources(engine: engine) }
           await refresh(engine: engine)
           if run == selected { await inspect(engine: engine) }
+          if jobStatus == "cancelled" || jobStatus == "canceled" {
+            FactorySoundEngine.play(.cancelled)
+          } else if jobStatus != "completed" {
+            FactorySoundEngine.play(.failed)
+          } else if !actionRun.isEmpty && run == selected {
+            let order = detail["work_order"] as? [String: Any] ?? [:]
+            let latestTasks = order["tasks"] as? [[String: Any]] ?? []
+            if let cue = FactorySoundEngine.cueForTaskTransitions(previous: previousTasks, current: latestTasks) {
+              FactorySoundEngine.play(cue == .stageCompleted ? .succeeded : cue)
+            } else if action == "verify" {
+              let verdict = SuperGaugeSnapshot.parse(detail: detail).verdict
+              FactorySoundEngine.play(verdict == .ship ? .succeeded : verdict == .reject ? .failed : .needsAttention)
+            } else {
+              FactorySoundEngine.play(.succeeded)
+            }
+          } else {
+            FactorySoundEngine.play(.succeeded)
+          }
           return
+        }
+        pollTicks += 1
+        if !actionRun.isEmpty && run == selected && pollTicks % 2 == 0 {
+          await inspect(engine: engine)
+          if project == identity && operation == op && run == selected {
+            let order = detail["work_order"] as? [String: Any] ?? [:]
+            let latestTasks = order["tasks"] as? [[String: Any]] ?? []
+            if let cue = FactorySoundEngine.cueForTaskTransitions(previous: previousTasks, current: latestTasks) {
+              FactorySoundEngine.play(cue)
+            }
+            previousTasks = taskStatusMap(from: detail)
+          }
         }
         try await Task.sleep(for: .seconds(1))
       }
@@ -244,7 +310,9 @@ import Combine
     do {
       if !selected.isEmpty { _ = try await rpc(engine, "cancel", ["run": selected]) }
       if !id.isEmpty { _ = try await engine.call("jobs.cancel", ["id": id]) }
-      guard project == identity else { return }; await refresh(engine: engine); await inspect(engine: engine)
+      guard project == identity else { return }
+      FactorySoundEngine.play(.cancelled)
+      await refresh(engine: engine); await inspect(engine: engine)
     } catch { if project == identity { failure = error.localizedDescription } }
   }
   func approve(engine: Engine) async {
@@ -263,6 +331,7 @@ import Combine
       guard project == identity, run == selected else { return }
       _ = try await rpc(engine, "release.authorize", ["run": selected,
         "proof": ["challenge_id": string(payload, "id"), "signature": signature]])
+      FactorySoundEngine.play(.succeeded)
       await inspect(engine: engine); message = "Exact candidate approved. Apply it before this short-lived approval expires."
     } catch { if project == identity { failure = error.localizedDescription } }
   }

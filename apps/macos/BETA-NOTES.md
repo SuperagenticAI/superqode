@@ -4,6 +4,7 @@ Version 0.4.29 (build 55) bundles Python engine 2.32.4.
 
 - Gemini 4 Neon and Gemma models now route to the optimized **CodeGem** harness by default in the Connect flow, while explicit harness selections are preserved.
 - Added a **Thinking** effort picker (`Low`, `Medium`, `High`, `XHigh` / model-appropriate tiers) directly in the chat composer with persisted preferences.
+- Upgraded **Factory Studio** and **WorkOrders** to a decluttered Mission Control UI: unified semantic colors and pulsing status indicators for pending, queued, running, human-gate, completed (`succeeded`) and failed stages; a live 4-step lifecycle stepper (`Prepare → Run Stages → Verify → Ship`); connected stage pipeline cards with live mid-run polling; segmented `Pipeline / Changes & Checks / Diagnostics` tabs; live sidebar status dots; and subtle macOS sound + Trackpad haptic cues with a header mute toggle.
 - Antigravity CLI connections now stream live thinking, tool activity and text immediately, keep warm multi-turn sessions alive, and probe available models without spawning per-model language servers.
 - Bundled engine `2.32.4` enables HTTP/2 keep-alive pooling, live streamed tool output, parallel read-only tool batches, and Gemini 4-aware context compaction.
 

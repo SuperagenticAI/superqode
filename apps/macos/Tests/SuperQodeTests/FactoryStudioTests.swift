@@ -419,4 +419,43 @@ final class FactoryStudioTests: XCTestCase {
     XCTAssertEqual(snapshot.evaluatorsHidden, false)
     XCTAssertEqual(snapshot.reasons.count, 2)
   }
+
+  func testFactoryStatusMapsWorkOrderAndTaskStatesAccurately() {
+    XCTAssertEqual(FactoryStatus(raw: "pending"), .pending)
+    XCTAssertEqual(FactoryStatus(raw: "queued"), .queued)
+    XCTAssertEqual(FactoryStatus(raw: "running"), .running)
+    XCTAssertEqual(FactoryStatus(raw: "checking"), .verifying)
+    XCTAssertEqual(FactoryStatus(raw: "waiting_for_human"), .waitingHuman)
+    XCTAssertEqual(FactoryStatus(raw: "succeeded"), .succeeded)
+    XCTAssertEqual(FactoryStatus(raw: "completed"), .succeeded)
+    XCTAssertEqual(FactoryStatus(raw: "ready_to_merge"), .readyToShip)
+    XCTAssertEqual(FactoryStatus(raw: "merged"), .shipped)
+    XCTAssertEqual(FactoryStatus(raw: "blocked"), .blocked)
+    XCTAssertEqual(FactoryStatus(raw: "failed"), .failed)
+    XCTAssertEqual(FactoryStatus(raw: "cancelled"), .cancelled)
+    XCTAssertEqual(FactoryStatus(raw: "skipped"), .skipped)
+    XCTAssertTrue(FactoryStatus(raw: "running").isPulsing)
+    XCTAssertTrue(FactoryStatus(raw: "waiting_for_human").isPulsing)
+    XCTAssertFalse(FactoryStatus(raw: "pending").isPulsing)
+    XCTAssertTrue(FactoryStatus(raw: "succeeded").isComplete)
+  }
+
+  @MainActor func testFactorySoundEnginePrioritizesTaskTransitions() {
+    XCTAssertEqual(FactorySoundEngine.cueForTransition(from: "pending", to: "running"), .started)
+    XCTAssertEqual(FactorySoundEngine.cueForTransition(from: "running", to: "succeeded"), .stageCompleted)
+    XCTAssertEqual(FactorySoundEngine.cueForTransition(from: "running", to: "waiting_for_human"), .needsAttention)
+    XCTAssertEqual(FactorySoundEngine.cueForTransition(from: "running", to: "failed"), .failed)
+    XCTAssertNil(FactorySoundEngine.cueForTransition(from: "running", to: "running"))
+
+    let previous = ["stage-1": "running", "stage-2": "pending", "stage-3": "running"]
+    let current: [[String: Any]] = [
+      ["task_id": "stage-1", "status": "succeeded"],
+      ["task_id": "stage-2", "status": "running"],
+      ["task_id": "stage-3", "status": "waiting_for_human"],
+    ]
+    XCTAssertEqual(
+      FactorySoundEngine.cueForTaskTransitions(previous: previous, current: current),
+      .needsAttention
+    )
+  }
 }

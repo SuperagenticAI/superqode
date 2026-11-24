@@ -22,6 +22,7 @@ struct FactoryStudioView: View {
   @State private var workers = 2
   @State private var network = false
   @State private var syncedControls: FactoryControlDraft?
+  @State private var runDetailTab = ProcessInfo.processInfo.arguments.contains("--factory-acceptance-inspect") ? "checks" : "pipeline"
   private static let inlineConfirmActions: Set<String> = ["generate", "template", "reload", "save", "trial"]
   private var showingInlineConfirm: Bool { Self.inlineConfirmActions.contains(confirmation) }
   private var showingSheetConfirm: Bool { !confirmation.isEmpty && !showingInlineConfirm }
@@ -35,9 +36,18 @@ struct FactoryStudioView: View {
   private var bindings: [String: Any] { library.review["bindings"] as? [String: Any] ?? [:] }
   private var setup: FactorySetupState { FactorySetupState(text: library.text, review: library.review,
     savedDigest: library.expectedFileDigest, sources: library.sourceReview, runs: library.runs) }
+  private var sidebarBadges: FactorySidebarBadges {
+    FactorySidebarBadges(
+      isRunning: library.isAnyRunActive,
+      pendingGates: library.pendingGateCount,
+      readyToShip: library.readyToShipCandidate,
+      hasUnappliedControls: controlsHaveChanges,
+      hasUnsavedDraft: setup.hasDraft && !setup.saved
+    )
+  }
   var body: some View {
     HStack(alignment: .top, spacing: 20) {
-      FactoryNavigationHeader(navigation: library.navigation).frame(width: 178)
+      FactoryNavigationHeader(navigation: library.navigation, badges: sidebarBadges).frame(width: 178)
       Divider()
       VStack(alignment: .leading, spacing: 14) {
       HStack(spacing: 10) {
@@ -57,6 +67,7 @@ struct FactoryStudioView: View {
           Button("Save changes…") { requestConfirmation("save") }
             .disabled(!idle || library.review.isEmpty || controlsHaveChanges || setup.saved)
         }
+        FactorySoundToggleButton()
       }
       if showingInlineConfirm {
         FactoryInlineConfirmCard(
@@ -466,112 +477,372 @@ struct FactoryStudioView: View {
   }
   private var runs: some View {
     VStack(alignment: .leading, spacing: 12) {
-      Text("Prepare → run stages → verify evidence → review delivery").font(.subheadline.bold())
-      if !setup.saved || controlsHaveChanges {
-        HStack { Text("Apply configuration fields, then validate and save the Factory before a new trial.").font(.caption).foregroundStyle(.secondary)
-          Button("Open Build") { library.navigation.select("Stack") } }
+      runComposerBar
+      HSplitView {
+        runListPane
+          .frame(minWidth: 220, idealWidth: 264, maxWidth: 310)
+        ScrollViewReader { proxy in
+          ScrollView {
+            runDetailContent(proxy: proxy)
+              .padding(.leading, 14)
+          }
+          .frame(minWidth: 320)
+        }
       }
-      HStack {
-        TextField("Goal for this trial", text: $goal).textFieldStyle(.roundedBorder).accessibilityIdentifier("factory.trial.goal")
+    }
+  }
+
+  private var runComposerBar: some View {
+    VStack(alignment: .leading, spacing: 8) {
+      if !setup.saved || controlsHaveChanges {
+        HStack(spacing: 8) {
+          Image(systemName: "info.circle.fill").foregroundStyle(Brand.orange)
+          Text("Save your Factory definition before starting a new trial.")
+            .font(.caption).foregroundStyle(.secondary)
+          Spacer()
+          Button("Open Build") { library.navigation.select("Stack") }
+            .controlSize(.small)
+        }
+        .padding(.horizontal, 12)
+        .padding(.vertical, 8)
+        .background(Brand.orange.opacity(0.08), in: RoundedRectangle(cornerRadius: 10, style: .continuous))
+      }
+      HStack(spacing: 8) {
+        TextField("Describe the goal for a new trial…", text: $goal)
+          .textFieldStyle(.roundedBorder)
+          .accessibilityIdentifier("factory.trial.goal")
         Button("Prepare trial…") { requestConfirmation("trial") }
+          .buttonStyle(BrandButtonStyle())
           .disabled(!idle || !setup.saved || controlsHaveChanges || goal.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty)
       }
-      Text("Preparation pins inputs without model calls. Run ready stages explicitly; release remains a separate reviewed action.")
-        .font(.caption).foregroundStyle(.secondary)
-    HSplitView {
-      ScrollView {
-        VStack(alignment: .leading, spacing: 8) {
-          Button("Refresh runs") { Task { await library.refresh(engine: app.engine); await library.inspect(engine: app.engine) } }
-          if library.runs.isEmpty { Text("No trials yet. Save a validated revision and prepare a trial.").font(.caption).foregroundStyle(.secondary) }
-          ForEach(library.runs, id: \.description) { row in
-            Button { library.run = string(row, "id"); Task { await library.inspect(engine: app.engine) } } label: {
-              VStack(alignment: .leading, spacing: 5) {
-                Text(string(row, "goal")).lineLimit(3); Pill(title: string(row, "status"))
-                Text(String(string(row, "id").prefix(18))).font(.caption2.monospaced())
-              }.frame(maxWidth: .infinity, alignment: .leading).padding(10)
-                .background(library.run == string(row, "id") ? Color.qAccent.opacity(0.12) : Color.clear, in: RoundedRectangle(cornerRadius: 8))
-            }.buttonStyle(.plain)
+    }
+  }
+
+  private var runListPane: some View {
+    ScrollView {
+      VStack(alignment: .leading, spacing: 8) {
+        HStack {
+          Text("Trials")
+            .font(.caption.weight(.semibold))
+            .foregroundStyle(.secondary)
+          if !library.runs.isEmpty {
+            Text("\(library.runs.count)")
+              .font(.caption2.weight(.semibold).monospacedDigit())
+              .foregroundStyle(.secondary)
+              .padding(.horizontal, 6)
+              .padding(.vertical, 1.5)
+              .background(Color.primary.opacity(0.06), in: Capsule())
           }
-        }.padding(.trailing, 12)
-      }.frame(minWidth: 210, idealWidth: 260, maxWidth: 300)
-      ScrollViewReader { proxy in
-      ScrollView {
-        VStack(alignment: .leading, spacing: 12) {
-          if !order.isEmpty {
-            let metadata = order["metadata"] as? [String: Any] ?? [:]
-            let factory = metadata["factory"] as? [String: Any] ?? [:]
-            let gaugeSnapshot = SuperGaugeSnapshot.parse(detail: library.detail)
-            HStack(spacing: 8) {
-              Text(string(order, "goal")).font(.headline)
-              Spacer(minLength: 6)
-              Pill(title: string(order, "status"))
+          Spacer()
+          Button {
+            Task { await library.refresh(engine: app.engine); await library.inspect(engine: app.engine) }
+          } label: {
+            Image(systemName: "arrow.clockwise")
+              .font(.system(size: 11, weight: .semibold))
+          }
+          .buttonStyle(.plain)
+          .help("Refresh runs")
+          .accessibilityLabel("Refresh runs")
+        }
+        .padding(.horizontal, 2)
+        if library.runs.isEmpty {
+          VStack(alignment: .leading, spacing: 6) {
+            Text("No trials yet")
+              .font(.subheadline.weight(.medium))
+            Text("Enter a goal above to pin a new trial without making model calls.")
+              .font(.caption)
+              .foregroundStyle(.secondary)
+          }
+          .padding(12)
+          .frame(maxWidth: .infinity, alignment: .leading)
+          .brandSurface(radius: 10)
+        }
+        ForEach(library.runs, id: \.description) { row in
+          let rowID = string(row, "id")
+          let isSelected = library.run == rowID
+          Button {
+            library.run = rowID
+            Task { await library.inspect(engine: app.engine) }
+          } label: {
+            FactoryRunListCard(
+              row: row,
+              selected: isSelected,
+              activeRunBusy: isSelected && library.busy && (activeAction == "worker" || activeAction == "verify")
+            )
+          }
+          .buttonStyle(.plain)
+        }
+      }
+      .padding(.trailing, 12)
+    }
+  }
+
+  @ViewBuilder
+  private func runDetailContent(proxy: ScrollViewProxy) -> some View {
+    if order.isEmpty {
+      VStack(spacing: 10) {
+        FactoryStudioEmblem(size: 38)
+        Text("Select a trial to inspect its pipeline")
+          .font(.headline)
+        Text("Track stage progress, SuperGauge checks, diffs and delivery approvals here.")
+          .font(.caption)
+          .foregroundStyle(.secondary)
+      }
+      .frame(maxWidth: .infinity)
+      .padding(.vertical, 48)
+    } else {
+      let metadata = order["metadata"] as? [String: Any] ?? [:]
+      let factory = metadata["factory"] as? [String: Any] ?? [:]
+      let gaugeSnapshot = SuperGaugeSnapshot.parse(detail: library.detail)
+      let orderStatus = FactoryStatus(raw: string(order, "status"))
+      let candidateID = string(library.detail, "candidate_id")
+      let doneCount = tasks.filter { FactoryStatus(raw: string($0, "status")).isComplete }.count
+
+      VStack(alignment: .leading, spacing: 14) {
+        HStack(alignment: .top, spacing: 10) {
+          VStack(alignment: .leading, spacing: 5) {
+            Text(string(order, "goal"))
+              .font(.headline)
+              .fixedSize(horizontal: false, vertical: true)
+            HStack(spacing: 6) {
+              FactoryStatusBadge(status: orderStatus)
+              if !tasks.isEmpty {
+                Text("\(doneCount)/\(tasks.count) stages")
+                  .font(.caption2.weight(.semibold).monospacedDigit())
+                  .foregroundStyle(.secondary)
+                  .padding(.horizontal, 7)
+                  .padding(.vertical, 3.5)
+                  .background(Color.primary.opacity(0.05), in: Capsule())
+              }
               if gaugeSnapshot.hasRecord {
                 SuperGaugeBadge(verdict: gaugeSnapshot.verdict, showWordmark: false)
               }
             }
-            Text("Run snapshot: \(string(factory, "snapshot_digest"))").font(.caption.monospaced()).textSelection(.enabled)
-            Text("Editing the draft does not change this run.").font(.caption).foregroundStyle(.secondary)
-            FactoryActionRow {
-              Button("Run ready stages…") { requestConfirmation("worker") }.disabled(!idle)
-              Button { requestConfirmation("verify") } label: {
-                HStack(spacing: 5) {
-                  SuperGaugeMark(verdict: gaugeSnapshot.verdict, size: 15, animating: false)
-                  Text("Verify candidate…")
-                }
-              }.disabled(!idle)
-              Button("Stop run") { requestConfirmation("cancel") }.disabled(library.run.isEmpty)
-              nativeButton("factory.run.coverage", action: { proxy.scrollTo("factory.requirements", anchor: .top) }, title: "Requirement coverage") { Text("Requirement coverage") }
-            }
-            ForEach(tasks, id: \.description) { task in
-              let taskStatus = string(task, "status")
-              VStack(alignment: .leading, spacing: 6) {
-                HStack {
-                  Image(systemName: taskStatus == "completed" ? "checkmark.circle.fill" : taskStatus == "failed" ? "xmark.circle.fill" : taskStatus == "waiting_for_human" ? "lock.fill" : "circle.dotted")
-                    .font(.caption)
-                    .foregroundStyle(taskStatus == "completed" ? Color.green : taskStatus == "failed" ? Color.red : taskStatus == "waiting_for_human" ? Color.orange : Color.secondary)
-                  Text(string(task, "task_id")).font(.subheadline.weight(.medium))
-                  Spacer()
-                  Pill(title: taskStatus, color: taskStatus == "completed" ? .green : taskStatus == "waiting_for_human" ? .orange : taskStatus == "failed" ? .red : .secondary)
-                }
-                if taskStatus == "waiting_for_human" {
-                  TextField("Gate decision reason", text: $gateReason).textFieldStyle(.roundedBorder)
-                  HStack {
-                    Button("Approve stage gate") { Task { await library.gate(engine: app.engine, task: task, decision: "approve", reason: gateReason) } }.disabled(!idle || gateReason.isEmpty)
-                    Button("Hold stage") { Task { await library.gate(engine: app.engine, task: task, decision: "hold", reason: gateReason) } }.disabled(!idle || gateReason.isEmpty)
-                  }
-                }
-              }.padding(10).brandSurface()
-            }
-            SuperGaugeVerdictCard(
-              snapshot: gaugeSnapshot,
-              isVerifying: library.busy && activeAction == "verify",
-              rawEvidence: library.detail["evidence"]
-            )
-            DisclosureGroup("Run evidence & budget") { CodeBlock(text: pretty(library.detail["cockpit"])) }
-            DisclosureGroup("Protected verification receipt") { CodeBlock(text: pretty(metadata["factory_verification"])) }
-            FactoryRequirementTraceView(studio: library, library: library.acceptance, active: active && tab == "Runs")
-              .id("factory.requirements")
-            if !string(library.detail, "candidate_id").isEmpty {
-              Text("Verified candidate diff").font(.headline)
-              CodeBlock(text: string(library.detail, "candidate_diff"))
-              if library.detail["diff_truncated"] as? Bool == true { Text("Diff exceeds the native review limit. Review the complete candidate with the CLI before approval.").foregroundStyle(.orange) }
-              HStack {
-                Button { requestConfirmation("approve") } label: {
-                  Label("Authenticate approval…", systemImage: "touchid")
-                }
-                  .buttonStyle(BrandButtonStyle())
-                  .disabled(!idle || library.detail["diff_truncated"] as? Bool == true || string(library.detail, "candidate_diff").isEmpty)
-                Button("Apply approved change…") { requestConfirmation("apply") }.disabled(!idle)
-              }
-              Text("Delivery applies this patch to the working tree. It does not commit, push or deploy. Verification evidence remains distinct from release approval.")
-                .font(.caption).foregroundStyle(.secondary)
-            }
-            if !library.job.isEmpty { DisclosureGroup("Latest factory action") { CodeBlock(text: pretty(library.job)) } }
-          } else { Text("Select a trial to inspect its stages and evidence.").foregroundStyle(.secondary) }
-        }.padding(.leading, 12)
-      }.frame(minWidth: 290)
+          }
+          Spacer(minLength: 6)
+        }
+
+        FactoryPipelineStepper(
+          orderStatus: orderStatus,
+          tasks: tasks,
+          gaugeVerdict: gaugeSnapshot.verdict,
+          hasCandidate: !candidateID.isEmpty,
+          isBusy: library.busy,
+          activeAction: activeAction
+        )
+
+        runActionBar(
+          proxy: proxy,
+          orderStatus: orderStatus,
+          gaugeSnapshot: gaugeSnapshot,
+          hasCandidate: !candidateID.isEmpty,
+          allStagesDone: !tasks.isEmpty && doneCount == tasks.count
+        )
+
+        Picker("Run detail view", selection: $runDetailTab) {
+          Text("Pipeline").tag("pipeline")
+          Text("Changes & Checks").tag("checks")
+          Text("Diagnostics").tag("diagnostics")
+        }
+        .pickerStyle(.segmented)
+        .labelsHidden()
+        .frame(maxWidth: 360)
+
+        if runDetailTab == "pipeline" {
+          runPipelinePane(gaugeSnapshot: gaugeSnapshot)
+        } else if runDetailTab == "checks" {
+          runChecksAndDiffPane(candidateID: candidateID)
+        } else {
+          runDiagnosticsPane(factory: factory, metadata: metadata)
+        }
       }
     }
+  }
+
+  private func runActionBar(
+    proxy: ScrollViewProxy,
+    orderStatus: FactoryStatus,
+    gaugeSnapshot: SuperGaugeSnapshot,
+    hasCandidate: Bool,
+    allStagesDone: Bool
+  ) -> some View {
+    let stagePhasePrimary = !allStagesDone && orderStatus != .shipped
+    let verifyPhasePrimary = allStagesDone && gaugeSnapshot.verdict != .ship && orderStatus != .shipped
+    let approvePhasePrimary = gaugeSnapshot.verdict == .ship && hasCandidate && orderStatus != .shipped
+
+    return FactoryActionRow {
+      if stagePhasePrimary {
+        Button("Run ready stages…") { requestConfirmation("worker") }
+          .buttonStyle(BrandButtonStyle())
+          .disabled(!idle)
+      } else {
+        Button("Run ready stages…") { requestConfirmation("worker") }
+          .disabled(!idle)
+      }
+
+      if verifyPhasePrimary {
+        Button { requestConfirmation("verify") } label: {
+          HStack(spacing: 5) {
+            SuperGaugeMark(verdict: gaugeSnapshot.verdict, size: 15, animating: false)
+            Text("Verify candidate…")
+          }
+        }
+        .buttonStyle(BrandButtonStyle())
+        .disabled(!idle)
+      } else {
+        Button { requestConfirmation("verify") } label: {
+          HStack(spacing: 5) {
+            SuperGaugeMark(verdict: gaugeSnapshot.verdict, size: 15, animating: false)
+            Text("Verify candidate…")
+          }
+        }
+        .disabled(!idle)
+      }
+
+      if approvePhasePrimary {
+        Button { requestConfirmation("approve") } label: {
+          Label("Authenticate approval…", systemImage: "touchid")
+        }
+        .buttonStyle(BrandButtonStyle())
+        .disabled(!idle || library.detail["diff_truncated"] as? Bool == true || string(library.detail, "candidate_diff").isEmpty)
+      }
+
+      Button("Stop run") { requestConfirmation("cancel") }
+        .disabled(library.run.isEmpty)
+
+      nativeButton("factory.run.coverage", action: {
+        runDetailTab = "checks"
+        Task { @MainActor in
+          proxy.scrollTo("factory.requirements", anchor: .top)
+        }
+      }, title: "Requirement coverage") {
+        Text("Requirement coverage")
+      }
+    }
+  }
+
+  private func runPipelinePane(gaugeSnapshot: SuperGaugeSnapshot) -> some View {
+    VStack(alignment: .leading, spacing: 12) {
+      if tasks.isEmpty {
+        Text("No stage tasks recorded for this trial yet.")
+          .font(.caption)
+          .foregroundStyle(.secondary)
+          .padding(12)
+          .frame(maxWidth: .infinity, alignment: .leading)
+          .brandSurface(radius: 10)
+      } else {
+        VStack(alignment: .leading, spacing: 0) {
+          ForEach(Array(tasks.enumerated()), id: \.offset) { index, task in
+            let currentStatus = FactoryStatus(raw: string(task, "status"))
+            FactoryStageRowCard(
+              index: index,
+              task: task,
+              idle: idle,
+              gateReason: $gateReason,
+              onApprove: {
+                let reasonText = gateReason
+                Task { await library.gate(engine: app.engine, task: task, decision: "approve", reason: reasonText) }
+              },
+              onHold: {
+                let reasonText = gateReason
+                Task { await library.gate(engine: app.engine, task: task, decision: "hold", reason: reasonText) }
+              }
+            )
+            if index < tasks.count - 1 {
+              HStack {
+                VStack(spacing: 0) {
+                  Rectangle()
+                    .fill(currentStatus.isComplete ? Color(red: 0.14, green: 0.64, blue: 0.42).opacity(0.55) : Color.primary.opacity(0.16))
+                    .frame(width: 2, height: 10)
+                  Image(systemName: "chevron.down")
+                    .font(.system(size: 8.5, weight: .bold))
+                    .foregroundStyle(currentStatus.isComplete ? Color(red: 0.14, green: 0.64, blue: 0.42).opacity(0.75) : Color.secondary.opacity(0.55))
+                }
+                .padding(.leading, 24)
+                Spacer()
+              }
+              .padding(.vertical, 2)
+            }
+          }
+        }
+      }
+
+      SuperGaugeVerdictCard(
+        snapshot: gaugeSnapshot,
+        isVerifying: library.busy && activeAction == "verify",
+        rawEvidence: library.detail["evidence"]
+      )
+    }
+  }
+
+  private func runChecksAndDiffPane(candidateID: String) -> some View {
+    VStack(alignment: .leading, spacing: 12) {
+      FactoryRequirementTraceView(studio: library, library: library.acceptance, active: active && tab == "Runs")
+        .id("factory.requirements")
+
+      if !candidateID.isEmpty {
+        VStack(alignment: .leading, spacing: 10) {
+          HStack {
+            Text("Verified candidate diff").font(.headline)
+            Spacer()
+            Text(String(candidateID.prefix(16)))
+              .font(.caption2.monospaced())
+              .foregroundStyle(.secondary)
+          }
+          CodeBlock(text: string(library.detail, "candidate_diff"))
+          if library.detail["diff_truncated"] as? Bool == true {
+            Text("Diff exceeds the native review limit. Review the complete candidate with the CLI before approval.")
+              .font(.caption)
+              .foregroundStyle(.orange)
+          }
+          HStack(spacing: 8) {
+            Button { requestConfirmation("approve") } label: {
+              Label("Authenticate approval…", systemImage: "touchid")
+            }
+            .buttonStyle(BrandButtonStyle())
+            .disabled(!idle || library.detail["diff_truncated"] as? Bool == true || string(library.detail, "candidate_diff").isEmpty)
+            Button("Apply approved change…") { requestConfirmation("apply") }
+              .disabled(!idle)
+          }
+          Text("Delivery applies this patch to the working tree only — it never commits, pushes or deploys.")
+            .font(.caption)
+            .foregroundStyle(.secondary)
+        }
+        .padding(12)
+        .brandSurface(radius: 12)
+      } else {
+        Text("Run stages and verify with SuperGauge to inspect the candidate diff here.")
+          .font(.caption)
+          .foregroundStyle(.secondary)
+          .padding(12)
+          .frame(maxWidth: .infinity, alignment: .leading)
+          .brandSurface(radius: 10)
+      }
+    }
+  }
+
+  private func runDiagnosticsPane(factory: [String: Any], metadata: [String: Any]) -> some View {
+    VStack(alignment: .leading, spacing: 10) {
+      VStack(alignment: .leading, spacing: 4) {
+        Text("Pinned snapshot")
+          .font(.caption.weight(.semibold))
+          .foregroundStyle(.secondary)
+        Text(string(factory, "snapshot_digest", "Unavailable"))
+          .font(.caption.monospaced())
+          .textSelection(.enabled)
+        Text("Editing the draft definition never alters this run's pinned inputs.")
+          .font(.caption2)
+          .foregroundStyle(.secondary)
+      }
+      .padding(10)
+      .frame(maxWidth: .infinity, alignment: .leading)
+      .brandSurface(radius: 10)
+
+      DisclosureGroup("Run evidence & budget") { CodeBlock(text: pretty(library.detail["cockpit"])) }
+      DisclosureGroup("Protected verification receipt") { CodeBlock(text: pretty(metadata["factory_verification"])) }
+      if !library.job.isEmpty {
+        DisclosureGroup("Latest factory action") { CodeBlock(text: pretty(library.job)) }
+      }
     }
   }
   private func advanceSetup() {

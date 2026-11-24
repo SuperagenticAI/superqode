@@ -2,8 +2,32 @@ import SwiftUI
 
 struct FactoryNavigationHeader: View {
   let navigation: FactoryNavigation
+  var badges: FactorySidebarBadges = FactorySidebarBadges()
   @Environment(\.colorScheme) private var scheme
   @Environment(\.colorSchemeContrast) private var contrast
+
+  @ViewBuilder
+  private func trailingBadge(for destination: String) -> some View {
+    if destination == "Runs" {
+      if badges.pendingGates > 0 {
+        Text("\(badges.pendingGates)")
+          .font(.system(size: 10, weight: .bold).monospacedDigit())
+          .foregroundStyle(.white)
+          .padding(.horizontal, 5.5)
+          .padding(.vertical, 1.5)
+          .background(Brand.orange, in: Capsule())
+      } else if badges.isRunning {
+        FactoryStatusDot(status: .running, size: 6)
+      } else if badges.readyToShip {
+        FactoryStatusDot(status: .succeeded, size: 6)
+      }
+    } else if destination == "Configuration", badges.hasUnappliedControls {
+      Circle().fill(Brand.orange).frame(width: 6, height: 6)
+    } else if destination == "Definition", badges.hasUnsavedDraft {
+      Circle().fill(Brand.purple.opacity(0.75)).frame(width: 6, height: 6)
+    }
+  }
+
   var body: some View {
     VStack(alignment: .leading, spacing: 16) {
       HStack(spacing: 8) {
@@ -37,7 +61,11 @@ struct FactoryNavigationHeader: View {
             let selected = navigation.selection == item.id
             nativeButton("factory.tab." + item.id, action: { navigation.select(item.id) }, padded: false,
               title: item.title + (selected ? ", selected" : "")) {
-              Text(item.title).font(.system(size: 12, weight: selected ? .semibold : .regular))
+              HStack(spacing: 6) {
+                Text(item.title).font(.system(size: 12, weight: selected ? .semibold : .regular))
+                Spacer(minLength: 4)
+                trailingBadge(for: item.id)
+              }
                 .frame(maxWidth: .infinity, alignment: .leading).padding(.leading, 14).padding(.trailing, 8).padding(.vertical, 6)
                 .background(selected ? Color.primary.opacity(0.10) : Color.clear, in: RoundedRectangle(cornerRadius: 6))
             }.accessibilityAddTraits(selected ? .isSelected : [])
