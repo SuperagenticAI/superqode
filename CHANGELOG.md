@@ -7,6 +7,27 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [2.32.4] - 2026-11-24
+
+- Antigravity CLI (`antigravity-cli`) now streams live thinking, tool and text
+  deltas via `--output-format stream-json`, keeps a warm persistent multi-turn
+  worker alive for fast follow-ups with prompt-cache reuse, parses modern `agy`
+  model listings, and infers per-model effort tiers without spawning dozens of
+  probe processes.
+- CodeGem is now the default harness for Google Gemini and Gemma models across
+  CLI, TUI and the macOS app (explicit harness choices remain respected).
+- Optimized CodeGem and native Gemini 4 / Gemma 4 execution: enabled live
+  thought streaming (`includeThoughts`), pooled HTTP/2 keep-alive clients
+  (`h2>=4.1.0`), live streamed tool output, pure-Python `search` fallback when
+  `rg` is absent, parallel read-only tool batches (`read`/`search`), Gemini
+  4-aware compaction budgets with fast low-effort summaries, and `gemini-4-carbon`
+  profile support.
+- Added persisted reasoning effort controls across all interfaces: `--effort`
+  and `SUPERQODE_REASONING_EFFORT` in the CLI, `:effort` in the TUI, and a
+  Thinking level picker in the macOS composer.
+- Disabled remote LiteLLM cost-map fetches by default to eliminate first-turn
+  network stalls on Core/BYOK routes.
+
 ## [2.32.3] - 2026-11-23
 
 - Factory workflow detection from natural-language descriptions now strips

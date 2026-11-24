@@ -172,7 +172,22 @@ async def test_explicit_thinking_config_wins():
         [httpx.Response(200, json=OK)], {"thinking_config": {"thinkingLevel": "LOW"}}, seen
     )
     await _run(stream)
-    assert seen[0]["generationConfig"]["thinkingConfig"] == {"thinkingLevel": "LOW"}
+    assert seen[0]["generationConfig"]["thinkingConfig"] == {
+        "thinkingLevel": "LOW",
+        "includeThoughts": True,
+    }
+
+    opt_out = []
+    stream_off, _ = _stream(
+        [httpx.Response(200, json=OK)],
+        {"thinking_config": {"thinkingLevel": "LOW", "includeThoughts": False}},
+        opt_out,
+    )
+    await _run(stream_off)
+    assert opt_out[0]["generationConfig"]["thinkingConfig"] == {
+        "thinkingLevel": "LOW",
+        "includeThoughts": False,
+    }
 
 
 @pytest.mark.parametrize(
@@ -262,12 +277,17 @@ async def test_argon_timeout_and_output_defaults(monkeypatch):
     await _run(stream, "gemini-3.8-flash")
     plain, _ = _stream([httpx.Response(200, json=OK)], {"stream": False}, seen=seen)
     await _run(plain, "gemini-4-argon")
-    assert timeouts[0] >= 1200 and timeouts[1] == 180
+    assert timeouts[0].read >= 1200 and timeouts[0].connect <= 30.0
+    assert timeouts[1].read == 180
     # Streaming default 64K for Gemini 4, non-streaming REST 32K.
     assert seen[0]["generationConfig"]["maxOutputTokens"] == 65536
-    assert seen[0]["generationConfig"]["thinkingConfig"] == {"thinkingLevel": "MEDIUM"}
+    assert seen[0]["generationConfig"]["thinkingConfig"] == {
+        "thinkingLevel": "MEDIUM",
+        "includeThoughts": True,
+    }
     assert seen[1]["generationConfig"]["maxOutputTokens"] == 32768
     assert seen[2]["generationConfig"]["maxOutputTokens"] == 32768
+    assert seen[2]["generationConfig"]["thinkingConfig"] == {"thinkingLevel": "MEDIUM"}
 
 
 @pytest.mark.asyncio
@@ -281,11 +301,20 @@ async def test_neon_timeout_output_and_thinking_defaults(monkeypatch):
 
     monkeypatch.setattr(httpx, "AsyncClient", client)
     seen = []
-    stream, _ = _stream([httpx.Response(200, json=OK)], seen=seen)
+    stream, _ = _stream([httpx.Response(200, json=OK), httpx.Response(200, json=OK)], seen=seen)
     await _run(stream, "gemini-4-neon")
-    assert timeouts[0] >= 1200
+    await _run(stream, "gemini-4-neon")
+    # Connection client is reused across turns instead of opening a fresh client each turn.
+    assert len(timeouts) == 1
+    assert timeouts[0].read >= 1200
+    assert timeouts[0].connect <= 30.0
+    assert timeouts[0].write <= 60.0
     assert seen[0]["generationConfig"]["maxOutputTokens"] == 65536
-    assert seen[0]["generationConfig"]["thinkingConfig"] == {"thinkingLevel": "HIGH"}
+    assert seen[0]["generationConfig"]["thinkingConfig"] == {
+        "thinkingLevel": "HIGH",
+        "includeThoughts": True,
+    }
+    await stream.aclose()
 
 
 @pytest.mark.asyncio
@@ -504,7 +533,10 @@ async def test_budget_and_level_keeps_level_and_warns(caplog):
     raw = {"thinkingLevel": "LOW", "thinkingBudget": 1024}
     stream, _ = _stream([httpx.Response(200, json=OK)], {"thinking_config": raw}, seen)
     await _run(stream)
-    assert seen[0]["generationConfig"]["thinkingConfig"] == {"thinkingLevel": "LOW"}
+    assert seen[0]["generationConfig"]["thinkingConfig"] == {
+        "thinkingLevel": "LOW",
+        "includeThoughts": True,
+    }
     assert any("keeping thinkingLevel" in r.message for r in caplog.records)
 
 
@@ -515,7 +547,10 @@ async def test_gemini4_never_sends_budget():
         [httpx.Response(200, json=OK)], {"thinking_config": {"thinkingBudget": 512}}, seen
     )
     await _run(stream, model="gemini-4-argon")
-    assert seen[0]["generationConfig"]["thinkingConfig"] == {"thinkingLevel": "MEDIUM"}
+    assert seen[0]["generationConfig"]["thinkingConfig"] == {
+        "thinkingLevel": "MEDIUM",
+        "includeThoughts": True,
+    }
 
 
 @pytest.mark.asyncio
@@ -551,3 +586,124 @@ async def test_retired_ids_are_mapped(old, new, caplog):
         normalize_model_for_provider("google", "gemini-3.5-flash-lite") == "gemini-3.5-flash-lite"
     )
     assert old not in LATEST_GOOGLE_MODEL_IDS
+
+
+def test_codegem_preferred_routes_and_carbon_profile():
+    from superqode.codegem.profiles import is_codegem_preferred
+
+    assert resolve_profile("gemini-4-carbon", "google").thinking_level == "medium"
+    assert is_codegem_preferred("gemini-4-neon", "google") is True
+    assert is_codegem_preferred("gemini-3.8-flash", "google") is True
+    assert is_codegem_preferred("gemma-4-31b-it", "google") is True
+    assert is_codegem_preferred("gemma4:26b", "ollama") is True
+    assert is_codegem_preferred("google/gemma-4-31B-it", "vllm") is True
+    assert is_codegem_preferred("gpt-5.4", "openai") is False
+    assert is_codegem_preferred("claude-sonnet-4-6", "anthropic") is False
+    assert is_codegem_preferred("qwen3:32b", "ollama") is False
+
+
+def test_pipy_adapter_usage_reports_thinking_and_cached_tokens():
+    from superqode.harness.pipy_adapter import _usage_dict
+    from superqode.pipy.messages import Usage, UsageCost
+
+    usage = Usage(
+        input=5000,
+        output=300,
+        cache_read=4200,
+        reasoning=900,
+        total_tokens=6200,
+        cost=UsageCost(total=0.015),
+    )
+    assert _usage_dict(usage) == {
+        "input_tokens": 5000,
+        "output_tokens": 300,
+        "thinking_tokens": 900,
+        "cached_tokens": 4200,
+        "total_tokens": 6200,
+        "cost_usd": 0.015,
+    }
+
+
+def test_pure_mode_set_reasoning_effort_validates_and_updates_codegem(tmp_path):
+    from superqode.pure_mode import PureMode
+
+    pm = PureMode()
+    pm.select_harness("codegem")
+    pm.session.provider = "google"
+    pm.session.model = "gemini-4-neon"
+
+    assert pm.set_reasoning_effort("medium") == "medium"
+    assert pm._harness_spec.model_policy.reasoning == "medium"
+    assert pm.reasoning_effort == "medium"
+
+    assert pm.set_reasoning_effort("xhigh") == "xhigh"
+    assert pm._harness_spec.model_policy.reasoning == "xhigh"
+
+    with pytest.raises(ValueError, match="not supported for gemini-4-neon"):
+        pm.set_reasoning_effort("minimal")
+
+    assert pm.set_reasoning_effort("auto") is None
+    assert pm._harness_spec.model_policy.reasoning is None
+
+
+@pytest.mark.asyncio
+async def test_codegem_process_streams_live_updates_and_search_falls_back_without_rg(
+    tmp_path, monkeypatch
+):
+    (tmp_path / "demo.py").write_text("alpha = 1\nbeta = 2\n", encoding="utf-8")
+    tools = {t.name: t for t in create_tools(tmp_path)}
+
+    updates = []
+    result = await tools["python"].execute(
+        "p1",
+        {"code": "import sys; print('line-one', flush=True); print('line-two', flush=True)"},
+        on_update=lambda partial: updates.append(partial.text),
+    )
+    assert "line-one" in result.text and "line-two" in result.text
+    assert updates and "line-one" in "".join(updates)
+
+    monkeypatch.setattr("shutil.which", lambda name: None if name == "rg" else "/usr/bin/" + name)
+    text_hits = await tools["search"].execute("s1", {"pattern": "beta"})
+    assert "demo.py:2:beta = 2" in text_hits.text
+    file_hits = await tools["search"].execute("s2", {"pattern": "*.py", "files": True})
+    assert "demo.py" in file_hits.text
+
+
+@pytest.mark.asyncio
+async def test_codegem_compaction_uses_low_reasoning_and_larger_gemini4_window(tmp_path):
+    from superqode.harness.codegem_adapter import CodeGemHarnessProtocolAdapter
+    from superqode.harness.protocol import HarnessCreateRequest
+    from superqode.pipy.compaction import _run_summary
+
+    adapter = CodeGemHarnessProtocolAdapter()
+    request = HarnessCreateRequest(
+        harness_id="codegem",
+        session_id="cg-neon-compaction",
+        provider="google",
+        model="gemini-4-neon",
+        working_directory=tmp_path,
+        metadata={},
+    )
+    session = await adapter._open(request, tmp_path)
+    assert session.options.compaction_settings.reserve_tokens == 65536
+    assert session.options.compaction_settings.keep_recent_tokens == 32768
+    await session.abort()
+
+    seen = []
+    stream, _ = _stream(
+        [httpx.Response(200, json=OK)],
+        {"thinking_config": {"thinkingLevel": "HIGH"}},
+        seen=seen,
+    )
+    summary, _ = await _run_summary(
+        model=Model("gemini-4-neon", "google", supports_reasoning=True),
+        stream_fn=stream,
+        system_prompt="Summarize",
+        messages=[UserMessage("long history")],
+        instruction="Summarize now",
+        signal=None,
+        error_code="compaction_failed",
+    )
+    assert summary == "done"
+    assert seen[0]["generationConfig"]["thinkingConfig"]["thinkingLevel"] == "LOW"
+    await stream.aclose()

@@ -154,6 +154,11 @@ def apply_gemini_next_request_shaping(
         # "off" keeps the lowest level and hides thought summaries.
         show = str(reasoning_effort).strip().lower() not in {"off", "none", "disable", "disabled"}
         request_kwargs["thinkingConfig"] = {"thinkingLevel": level, "includeThoughts": show}
+    elif generation >= 4 and not has_config and request_kwargs.get("stream") is True:
+        # Gemini 4 defaults to deep thinking (high on Neon). Request thought
+        # summaries on streaming calls so the UI shows live progress instead of
+        # waiting silently until thinking finishes.
+        request_kwargs["thinkingConfig"] = {"includeThoughts": True}
     if generation < 4:
         return
     # Google recommends keeping the default temperature of 1.0.
@@ -215,6 +220,8 @@ def _load_litellm():
     global _litellm_module
     with _litellm_lock:
         if _litellm_module is None:
+            # Avoid a blocking GitHub HTTP fetch on every fresh worker process.
+            os.environ.setdefault("LITELLM_LOCAL_MODEL_COST_MAP", "True")
             import litellm
 
             litellm.drop_params = True  # Drop unsupported params

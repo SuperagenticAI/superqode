@@ -63,11 +63,15 @@ def _warn_once(key: str, message: str, *args) -> None:
         logger.warning(message, *args)
 
 
-def _thinking_config(raw: dict, model_id: str, profile) -> dict | None:
+def _thinking_config(raw: dict, model_id: str, profile, *, stream: bool = False) -> dict | None:
     """Return a thinkingConfig Google accepts.
 
     Google: thinkingBudget is deprecated for Gemini 4, and "sending
     thinkingBudget and thinkingLevel together returns a 400 error".
+    When streaming Gemini 3/4 with a thinking level (other than MINIMAL),
+    request thought summaries unless the caller explicitly set includeThoughts
+    so the UI streams live progress instead of waiting silently through long
+    thinking phases.
     """
     config = dict(raw)
     budget_keys = [k for k in ("thinkingBudget", "thinking_budget") if k in config]
@@ -91,6 +95,16 @@ def _thinking_config(raw: dict, model_id: str, profile) -> dict | None:
             )
     if profile.generation == 4 and not has_level and profile.thinking_level:
         config["thinkingLevel"] = profile.thinking_level.upper()
+    if (
+        stream
+        and profile.family == "gemini"
+        and profile.generation in {3, 4}
+        and "includeThoughts" not in config
+        and "include_thoughts" not in config
+    ):
+        level = str(config.get("thinkingLevel") or config.get("thinking_level") or "").upper()
+        if level and level != "MINIMAL":
+            config["includeThoughts"] = True
     return config or None
 
 
@@ -740,12 +754,53 @@ async def discover_server_context(provider: str, config, model_id: str, *, trans
     return int(value) if isinstance(value, int) and value > 0 else None
 
 
+def _http2_supported() -> bool:
+    try:
+        import h2  # noqa: F401
+    except ImportError:
+        return False
+    return True
+
+
 class CodeGemStream:
     def __init__(self, config=None, *, transport=None):
         self.config = dict(config or {})
         self.transport = transport
         self._capabilities = {}
         self._json_tool_compat = set()
+        self._clients: dict[tuple[int, float], httpx.AsyncClient] = {}
+
+    def _get_client(self, timeout: float) -> httpx.AsyncClient:
+        """Reuse a persistent HTTP client per event loop and timeout to keep TLS warm."""
+        loop_id = id(asyncio.get_running_loop())
+        key = (loop_id, timeout)
+        client = self._clients.get(key)
+        if client is not None and not client.is_closed:
+            return client
+        http_timeout = httpx.Timeout(
+            timeout,
+            connect=min(30.0, timeout),
+            write=min(60.0, timeout),
+            pool=min(30.0, timeout),
+        )
+        limits = httpx.Limits(max_keepalive_connections=10, keepalive_expiry=120.0)
+        client_kwargs: dict = {
+            "transport": self.transport,
+            "timeout": http_timeout,
+            "limits": limits,
+        }
+        if self.transport is None and _http2_supported():
+            client_kwargs["http2"] = True
+        client = httpx.AsyncClient(**client_kwargs)
+        self._clients[key] = client
+        return client
+
+    async def aclose(self) -> None:
+        clients = list(self._clients.values())
+        self._clients.clear()
+        for client in clients:
+            if not client.is_closed:
+                await client.aclose()
 
     def _output_limit(self, options, default):
         configured = self.config.get("max_output_tokens", default)
@@ -896,10 +951,27 @@ class CodeGemStream:
                 if budget.api_key:
                     options = dataclasses.replace(options, api_key=budget.api_key)
                 transport = budget.transport(transport)
-            async with httpx.AsyncClient(
-                transport=transport,
-                timeout=float(self.config.get("timeout", default_timeout)),
-            ) as client:
+            timeout = float(self.config.get("timeout", default_timeout))
+            if budget is not None:
+                async with httpx.AsyncClient(transport=transport, timeout=timeout) as client:
+                    if profile.family == "gemini" or model.provider in {"google", "gemini"}:
+                        async for event in self._gemini(
+                            client, model, context, options, profile, message
+                        ):
+                            if isinstance(event, (TextEndEvent, ThinkingEndEvent)):
+                                live.add(event.content_index)
+                            yield event
+                    else:
+                        local = self._ollama if model.provider == "ollama" else self._compatible
+                        async with aclosing(
+                            local(client, model, context, options, profile, message)
+                        ) as events:
+                            async for event in events:
+                                if isinstance(event, (TextEndEvent, ThinkingEndEvent)):
+                                    live.add(event.content_index)
+                                yield event
+            else:
+                client = self._get_client(timeout)
                 if profile.family == "gemini" or model.provider in {"google", "gemini"}:
                     async for event in self._gemini(
                         client, model, context, options, profile, message
@@ -1001,11 +1073,12 @@ class CodeGemStream:
         if gemma and not raw_thinking and "thinking" in self.config:
             # Gemma on the Gemini API: "high" for enabled, "minimal" for disabled.
             raw_thinking = {"thinkingLevel": "HIGH" if self.config["thinking"] else "MINIMAL"}
-        if not raw_thinking and options.reasoning is not None:
+        if options.reasoning is not None:
             raw_thinking = {
-                "thinkingLevel": gemini_thinking_level(model.id, profile, options.reasoning)
+                **raw_thinking,
+                "thinkingLevel": gemini_thinking_level(model.id, profile, options.reasoning),
             }
-        thinking = _thinking_config(raw_thinking, model.id, profile)
+        thinking = _thinking_config(raw_thinking, model.id, profile, stream=stream)
         if thinking:
             generation["thinkingConfig"] = thinking
         # Otherwise no thinking level is sent: Google's per-model default applies.

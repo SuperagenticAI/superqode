@@ -85,6 +85,23 @@ def test_explicit_settings_win_and_other_models_are_untouched():
     assert request == _request()
 
 
+def test_gemini_4_streaming_requests_thought_summaries_by_default():
+    request = _request(stream=True)
+    apply_gemini_next_request_shaping("google", "gemini-4-neon", request, None)
+    assert request["thinkingConfig"] == {"includeThoughts": True}
+    assert request["temperature"] == 1.0
+
+
+def test_load_litellm_defaults_to_local_cost_map(monkeypatch):
+    import os
+    import superqode.providers.gateway.litellm_gateway as mod
+
+    monkeypatch.delenv("LITELLM_LOCAL_MODEL_COST_MAP", raising=False)
+    monkeypatch.setattr(mod, "_litellm_module", None)
+    mod._load_litellm()
+    assert os.environ.get("LITELLM_LOCAL_MODEL_COST_MAP") == "True"
+
+
 @pytest.mark.parametrize("stream", [False, True])
 def test_litellm_sends_gemini_4_level_temperature_and_signature(monkeypatch, stream):
     seen = []

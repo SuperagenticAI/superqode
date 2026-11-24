@@ -1,4 +1,13 @@
-# SuperQode for macOS public beta 0.4.28
+# SuperQode for macOS public beta 0.4.29
+
+Version 0.4.29 (build 55) bundles Python engine 2.32.4.
+
+- Gemini 4 Neon and Gemma models now route to the optimized **CodeGem** harness by default in the Connect flow, while explicit harness selections are preserved.
+- Added a **Thinking** effort picker (`Low`, `Medium`, `High`, `XHigh` / model-appropriate tiers) directly in the chat composer with persisted preferences.
+- Antigravity CLI connections now stream live thinking, tool activity and text immediately, keep warm multi-turn sessions alive, and probe available models without spawning per-model language servers.
+- Bundled engine `2.32.4` enables HTTP/2 keep-alive pooling, live streamed tool output, parallel read-only tool batches, and Gemini 4-aware context compaction.
+
+## 0.4.28 (build 54)
 
 Version 0.4.28 (build 54) bundles Python engine 2.32.3.
 

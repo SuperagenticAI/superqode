@@ -198,6 +198,213 @@ def test_metadata_identifies_antigravity_harness(monkeypatch):
     assert runtime.metadata["runtime"] == "antigravity-cli"
     assert runtime.metadata["harness_owner"] == "antigravity"
     assert runtime.metadata["authentication"] == "google-sign-in"
-    assert runtime.metadata["structured_events"] is False
+    assert runtime.metadata["structured_events"] is True
     assert runtime.metadata["agent"] is None
     assert runtime.metadata["reasoning_effort"] is None
+
+
+def test_parse_agy_models_accepts_spaces_tabs_and_spinner_prefixes():
+    from superqode.runtime.antigravity_status import parse_agy_models
+
+    raw = (
+        "\r⠋ Fetching available models...\r"
+        "gemini-4-neon-high             Gemini 4 Neon (High)\n"
+        "gemini-4-neon-medium\tGemini 4 Neon (Medium)\n"
+        "gemini-4-neon-low\n"
+    )
+    assert parse_agy_models(raw) == [
+        {"id": "gemini-4-neon-high", "name": "Gemini 4 Neon (High)"},
+        {"id": "gemini-4-neon-medium", "name": "Gemini 4 Neon (Medium)"},
+        {"id": "gemini-4-neon-low", "name": "gemini-4-neon-low"},
+    ]
+
+
+@pytest.mark.asyncio
+async def test_stream_json_emits_structured_events_and_captures_conversation(monkeypatch, tmp_path):
+    monkeypatch.setattr("shutil.which", lambda _name: "/tmp/agy")
+    runtime = AntigravityCLIRuntime(
+        config=AgentConfig(
+            provider="google", model="gemini-4-neon-medium", working_directory=tmp_path
+        ),
+        persistent=False,
+    )
+    runtime._checked_version = True
+    runtime._cli_version = (1, 5, 16)
+
+    lines = [
+        '{"event":"init","conversation_id":"conv-42","init":{"model":"gemini-4-neon-medium"}}\n',
+        '{"event":"step_update","step_update":{"conversation_id":"conv-42","step_index":1,"state":"ACTIVE","step_type":"agent_response","thinking_delta":"Inspecting repo"}}\n',
+        '{"event":"step_update","step_update":{"conversation_id":"conv-42","step_index":2,"state":"ACTIVE","step_type":"tool","tool_name":"list_dir","tool_info":{"name":"list_dir","parameters":{"path":"."}}}}\n',
+        '{"event":"step_update","step_update":{"conversation_id":"conv-42","step_index":2,"state":"DONE","step_type":"tool","tool_name":"list_dir","duration_seconds":0.1,"tool_info":{"name":"list_dir","parameters":{"path":"."},"output":"README.md"}}}\n',
+        '{"event":"step_update","step_update":{"conversation_id":"conv-42","step_index":3,"state":"ACTIVE","step_type":"agent_response","text_delta":"Hello"}}\n',
+        '{"event":"step_update","step_update":{"conversation_id":"conv-42","step_index":3,"state":"DONE","step_type":"agent_response","text_delta":" world"}}\n',
+        '{"event":"result","result":{"conversation_id":"conv-42","status":"SUCCESS","response":"Hello world","duration_seconds":2.5,"usage":{"input_tokens":100,"output_tokens":10,"thinking_tokens":8,"cache_read_tokens":50,"total_tokens":110}}}\n',
+    ]
+
+    class FakeStdout:
+        def __init__(self, items):
+            self._items = [item.encode("utf-8") for item in items]
+
+        async def readline(self):
+            return self._items.pop(0) if self._items else b""
+
+    class FakeStderr:
+        async def read(self, _size):
+            return b""
+
+    class FakeProcess:
+        def __init__(self):
+            self.stdout = FakeStdout(lines)
+            self.stderr = FakeStderr()
+            self.returncode = 0
+
+        async def wait(self):
+            return 0
+
+        def terminate(self):
+            pass
+
+        def kill(self):
+            pass
+
+    captured_argv = []
+
+    async def create(*args, **_kwargs):
+        captured_argv.append(list(args))
+        return FakeProcess()
+
+    monkeypatch.setattr(asyncio, "create_subprocess_exec", create)
+    events = [event async for event in runtime.run_harness_events("check repo")]
+
+    assert "--output-format" in captured_argv[0]
+    assert captured_argv[0][captured_argv[0].index("--output-format") + 1] == "stream-json"
+    assert [e.type for e in events] == [
+        "model_request",
+        "thinking",
+        "tool_call",
+        "tool_result",
+        "model_delta",
+        "model_delta",
+        "turn_complete",
+        "model_result",
+    ]
+    assert runtime.session_id == "conv-42"
+    assert runtime.thread_id == "conv-42"
+    assert events[2].data["tool_name"] == "list_dir"
+    assert events[3].data["success"] is True
+    assert events[3].data["output"] == "README.md"
+    assert events[-2].data["usage"]["cache_read_tokens"] == 50
+
+
+@pytest.mark.asyncio
+async def test_persistent_stream_reuses_single_process_and_restarts_on_model_change(
+    monkeypatch, tmp_path
+):
+    monkeypatch.setattr("shutil.which", lambda _name: "/tmp/agy")
+    runtime = AntigravityCLIRuntime(
+        config=AgentConfig(
+            provider="google", model="gemini-4-neon-low", working_directory=tmp_path
+        ),
+        persistent=True,
+    )
+    runtime._checked_version = True
+    runtime._cli_version = (1, 5, 16)
+
+    spawned = []
+
+    class FakeStdin:
+        def __init__(self, out_queue):
+            self.written = []
+            self._queue = out_queue
+            self._closed = False
+
+        def write(self, data):
+            msg = data.decode("utf-8").strip()
+            self.written.append(msg)
+            self._queue.append(
+                '{"event":"init","conversation_id":"conv-warm","init":{"model":"gemini-4-neon-low"}}\n'.encode()
+            )
+            self._queue.append(
+                '{"event":"step_update","step_update":{"step_index":1,"state":"DONE","step_type":"agent_response","text_delta":"ok"}}\n'.encode()
+            )
+            self._queue.append(
+                '{"event":"result","result":{"conversation_id":"conv-warm","status":"SUCCESS","response":"ok","usage":{"total_tokens":5}}}\n'.encode()
+            )
+
+        async def drain(self):
+            pass
+
+        def is_closing(self):
+            return self._closed
+
+        def close(self):
+            self._closed = True
+
+    class FakeStdout:
+        def __init__(self, queue):
+            self._queue = queue
+
+        async def readline(self):
+            return self._queue.pop(0) if self._queue else b""
+
+    class FakeStderr:
+        async def read(self, _size):
+            return b""
+
+    class FakePersistentProcess:
+        def __init__(self):
+            self._queue = []
+            self.stdin = FakeStdin(self._queue)
+            self.stdout = FakeStdout(self._queue)
+            self.stderr = FakeStderr()
+            self.returncode = None
+
+        def terminate(self):
+            self.returncode = 0
+
+        def kill(self):
+            self.returncode = -9
+
+        async def wait(self):
+            if self.returncode is None:
+                self.returncode = 0
+            return self.returncode
+
+    async def create(*args, **_kwargs):
+        proc = FakePersistentProcess()
+        spawned.append((list(args), proc))
+        return proc
+
+    monkeypatch.setattr(asyncio, "create_subprocess_exec", create)
+
+    r1 = await runtime.run("turn 1")
+    r2 = await runtime.run("turn 2")
+    assert r1.content == "ok" and r2.content == "ok"
+    # Both turns share a single warm persistent agy process.
+    assert len(spawned) == 1
+    assert "--input-format" in spawned[0][0]
+    assert len(spawned[0][1].stdin.written) == 2
+
+    # Switching model cleanly restarts the persistent worker on the next turn.
+    runtime.set_model("gemini-4-neon-medium")
+    r3 = await runtime.run("turn 3")
+    assert r3.content == "ok"
+    assert len(spawned) == 2
+    assert "--conversation" in spawned[1][0]
+    assert spawned[1][0][spawned[1][0].index("--conversation") + 1] == "conv-warm"
+
+    await runtime.aclose()
+
+
+def test_resume_thread_updates_conversation_id(monkeypatch, tmp_path):
+    monkeypatch.setattr("shutil.which", lambda _name: "/tmp/agy")
+    runtime = AntigravityCLIRuntime(
+        config=AgentConfig(provider="google", model="", working_directory=tmp_path)
+    )
+    runtime.resume_thread("conv-99")
+    assert runtime.session_id == "conv-99"
+    cmd = runtime._command("follow up")
+    assert cmd[cmd.index("--conversation") : cmd.index("--conversation") + 2] == [
+        "--conversation",
+        "conv-99",
+    ]

@@ -16,6 +16,7 @@ from .events import HarnessEvent
 class CodeGemHarnessProtocolAdapter(PiPyHarnessProtocolAdapter):
     def __init__(self, *, session_factory=None):
         super().__init__(session_factory=session_factory)
+        self._streams: dict[str, object] = {}
         from superqode.codegem.tools import TOOL_NAMES
 
         self.descriptor = replace(
@@ -102,11 +103,14 @@ class CodeGemHarnessProtocolAdapter(PiPyHarnessProtocolAdapter):
             if model.context_window < 1024:
                 raise ValueError("CodeGem context_window must be at least 1024 tokens")
             config.setdefault("max_output_tokens", min(8192, model.context_window // 4))
+        gemini4 = profile.family == "gemini" and profile.generation == 4
+        default_reserve = 65536 if gemini4 else 32768 if profile.family == "gemini" else 8192
+        default_keep_recent = 32768 if gemini4 else 8192
         reserve = min(
-            int(config.get("reserve_tokens", 32768 if profile.family == "gemini" else 8192)),
-            model.context_window // 4 if model.context_window else 32768,
+            int(config.get("reserve_tokens", default_reserve)),
+            model.context_window // 4 if model.context_window else default_reserve,
         )
-        keep_recent = min(int(config.get("keep_recent_tokens", 8192)), reserve)
+        keep_recent = min(int(config.get("keep_recent_tokens", default_keep_recent)), reserve)
         tools = [] if config.get("no_tools") else create_tools(working_directory, config=config)
         policy = config.get("execution_policy", {})
         guarded = []
@@ -126,10 +130,10 @@ class CodeGemHarnessProtocolAdapter(PiPyHarnessProtocolAdapter):
                     raise PermissionError(f"CodeGem execution policy denies {name}")
 
                 guarded.append(replace(tool, execute_fn=denied))
-        stream_fn = CodeGemStream(config)
+        provider_stream = CodeGemStream(config)
+        stream_fn = provider_stream
         token_limit = request.metadata.get("agent_max_tokens")
         if token_limit is not None:
-            provider_stream = stream_fn
 
             def stream_fn(model, context, stream_options):
                 return provider_stream(
@@ -184,6 +188,8 @@ class CodeGemHarnessProtocolAdapter(PiPyHarnessProtocolAdapter):
         else:
             session = await PiPyCodingSession.create(options)
         session.harness.on("tool_result", mark_policy_denial)
+        if request.session_id:
+            self._streams[request.session_id] = provider_stream
         return session
 
     async def send(self, session, message):
@@ -235,4 +241,7 @@ class CodeGemHarnessProtocolAdapter(PiPyHarnessProtocolAdapter):
         coding = self._sessions.get(session.session_id)
         if coding is not None:
             await coding.abort()
+        stream = self._streams.pop(session.session_id, None)
+        if stream is not None and hasattr(stream, "aclose"):
+            await stream.aclose()
         await super().close(session)

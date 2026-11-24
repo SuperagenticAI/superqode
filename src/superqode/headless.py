@@ -168,6 +168,7 @@ async def run_headless(
     billing_requested: str = "agent-managed",
     on_event: Callable[[str, dict], None] | None = None,
     approval_mode: str | None = None,
+    reasoning_effort: str | None = None,
 ) -> AgentResponse:
     """Run a single non-interactive SuperQode request.
 
@@ -260,9 +261,15 @@ async def run_headless(
             raise HeadlessSetupError(
                 "Custom harnesses own their permission policy. Set permissions in the harness spec; --approval-mode applies to native profiles."
             )
+        from dataclasses import replace as _replace
         from .harness import create_harness_store, init_harness
 
         spec = custom_harness.spec
+        effort = (
+            (reasoning_effort or os.environ.get("SUPERQODE_REASONING_EFFORT", "")).strip().lower()
+        )
+        if effort and effort not in {"auto", "default"}:
+            spec = _replace(spec, model_policy=_replace(spec.model_policy, reasoning=effort))
         try:
             store_kind = spec.observability.run_store
             store = create_harness_store(
@@ -337,6 +344,8 @@ async def run_headless(
         definition = resolve_harness(profile.name)
         harness_digest = definition.digest
         harness_spec = definition.spec
+    effort = (reasoning_effort or os.environ.get("SUPERQODE_REASONING_EFFORT", "")).strip().lower()
+    effective_effort = None if effort in {"", "auto", "default"} else effort
     config = AgentConfig(
         provider=provider,
         model=model,
@@ -346,6 +355,7 @@ async def run_headless(
         job_description=profile.job_description,
         plan_mode=profile.name == "plan",
         tools_enabled=profile.name != "no-tool",
+        reasoning_effort=effective_effort,
         enable_session_storage=True,
         session_storage_dir=storage_dir,
         session_id=session_id,

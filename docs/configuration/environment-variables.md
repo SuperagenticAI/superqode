@@ -91,6 +91,7 @@ Every `SUPERQODE_*` variable in one place. Most behavior is configurable per-har
 | `SUPERQODE_A2A_ALLOWED_ORIGINS` | comma-separated hosts | unset | When set, `connect a2a` refuses Agent Card origins that are not on this list. `--allow-origin` adds entries for one invocation. |
 | `SUPERQODE_A2A_JWS_TRUST_ROOT` | path | unset | PEM or JWKS file used to root an Agent Card JWS. A signature without a trust root is not identity and is not authentication. |
 | `SUPERQODE_HARNESS` | path | unset | HarnessSpec YAML/JSON to load on start. |
+| `SUPERQODE_REASONING_EFFORT` | `minimal`/`low`/`medium`/`high`/`xhigh`/`default` | unset | Default reasoning effort for native harnesses and headless runs (overridden by `--effort` or `:effort`). |
 | `SUPERQODE_PIPY_DIR` | path | `~/.superqode/pipy` | Root for everything the PiPy harness writes. |
 | `SUPERQODE_PIPY_SESSION_DIR` | path | `<pipy dir>/sessions` | Where PiPy stores its session tree, one directory per working directory. |
 | `SUPERQODE_RLM_DIR` | path | `~/.superqode/rlm` | Root for native RLM sessions and runtime state. |

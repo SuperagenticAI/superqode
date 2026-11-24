@@ -86,6 +86,10 @@ class PureMode:
         self._harness_kernel = None
         self._harness_session = None
         self._harness_session_id = ""
+        env_effort = os.getenv("SUPERQODE_REASONING_EFFORT", "").strip().lower()
+        self._reasoning_effort: Optional[str] = (
+            None if env_effort in {"", "auto", "default"} else env_effort
+        )
         # Extensions are discovered once per PureMode instance. Project-local
         # executable manifests are trust-gated by load_extension_runtime;
         # installed Python entry points are explicit user installations.
@@ -141,6 +145,15 @@ class PureMode:
             if definition.source != "built-in" or definition.spec.runtime.backend != "builtin"
             else None
         )
+        if self._harness_spec is not None and self._reasoning_effort:
+            from dataclasses import replace as _replace
+
+            self._harness_spec = _replace(
+                self._harness_spec,
+                model_policy=_replace(
+                    self._harness_spec.model_policy, reasoning=self._reasoning_effort
+                ),
+            )
         self._harness_path = str(definition.path or "")
         profile = str(definition.spec.model_policy.config.get("tool_profile") or "").strip()
         if not profile:
@@ -156,6 +169,57 @@ class PureMode:
         self._dispose_runtime()
         self._sync_harness_session_fields()
         return definition
+
+    @property
+    def reasoning_effort(self) -> Optional[str]:
+        if self._runtime is not None and hasattr(self._runtime, "reasoning_effort"):
+            return getattr(self._runtime, "reasoning_effort", None)
+        if self._harness_spec is not None and self._harness_spec.model_policy.reasoning:
+            return self._harness_spec.model_policy.reasoning
+        if self._agent is not None:
+            return getattr(self._agent.config, "reasoning_effort", None)
+        return self._reasoning_effort
+
+    def set_reasoning_effort(self, effort: Optional[str]) -> Optional[str]:
+        """Set or reset reasoning effort across CodeGem, Core/BYOK, and vendor CLIs."""
+        from dataclasses import replace as _replace
+
+        raw = str(effort or "").strip().lower()
+        normalized = None if raw in {"", "auto", "default"} else raw
+        allowed = {"off", "minimal", "low", "medium", "high", "xhigh", "max"}
+        if normalized is not None and normalized not in allowed:
+            raise ValueError(
+                "Reasoning effort must be auto, off, minimal, low, medium, high, xhigh, or max"
+            )
+        if self._runtime is not None and hasattr(self._runtime, "set_reasoning_effort"):
+            self._runtime.set_reasoning_effort(normalized)
+            self._reasoning_effort = getattr(self._runtime, "reasoning_effort", normalized)
+            return self._reasoning_effort
+        if (
+            normalized is not None
+            and self._harness_spec is not None
+            and self._harness_spec.runtime.backend == "codegem"
+            and self.session.provider
+            and self.session.model
+            and self.session.provider.lower() in {"google", "gemini"}
+        ):
+            from superqode.codegem.profiles import gemini_thinking_level, resolve_profile
+
+            profile = resolve_profile(self.session.model, self.session.provider)
+            gemini_thinking_level(self.session.model, profile, normalized)
+        self._reasoning_effort = normalized
+        if self._harness_spec is not None:
+            self._harness_spec = _replace(
+                self._harness_spec,
+                model_policy=_replace(self._harness_spec.model_policy, reasoning=normalized),
+            )
+            # Re-bind the kernel on the next turn so CodeGem picks up the new
+            # thinking level while preserving _harness_session_id continuity.
+            self._harness_kernel = None
+            self._harness_session = None
+        if self._agent is not None:
+            self._agent.config.reasoning_effort = normalized
+        return self._reasoning_effort
 
     def load_harness(self, path: str | Path):
         """Load a HarnessSpec for subsequent provider connections."""
@@ -500,6 +564,7 @@ class PureMode:
             custom_system_prompt=extension_prompt or None,
             job_description=job_description,
             max_iterations=max_iterations,
+            reasoning_effort=self._reasoning_effort,
             enable_session_storage=True,
             session_storage_dir=".superqode/sessions",
             session_id=session_id,

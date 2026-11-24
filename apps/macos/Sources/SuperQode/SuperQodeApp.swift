@@ -1008,6 +1008,21 @@ struct CodingComposer: View {
             }.pickerStyle(.menu).labelsHidden().fixedSize()
               .accessibilityLabel("Permission mode")
           }
+          if !app.nativeReasoningOptions.isEmpty {
+            Picker("Thinking", selection: Binding(
+              get: { app.effectiveNativeReasoningEffort },
+              set: {
+                app.reasoningEffort = $0
+                app.savePreferences()
+              }
+            )) {
+              ForEach(app.nativeReasoningOptions, id: \.value) { option in
+                Text(option.label).tag(option.value)
+              }
+            }.pickerStyle(.menu).labelsHidden().fixedSize().disabled(app.active)
+              .accessibilityLabel("Thinking level")
+              .help("Lower thinking levels (Low/Medium) cut Gemini 4 Neon latency for everyday coding.")
+          }
         }
         Menu {
           Button("Project text files…", action: app.attachFiles)

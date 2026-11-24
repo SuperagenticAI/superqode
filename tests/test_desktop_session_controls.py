@@ -127,3 +127,42 @@ def test_group_permissions_do_not_change_a_spec_that_never_set_them():
     assert profile.permissions.groups[ToolGroup.SHELL] is Permission.DENY
     assert profile.permissions.groups[ToolGroup.NETWORK] is Permission.DENY
     assert ToolGroup.READ not in profile.permissions.groups
+
+
+def test_reasoning_effort_is_validated_and_applied_for_codegem_and_core():
+    from superqode.desktop_service.session_controls import accept, apply_controls
+    from superqode.harness.templates import codegem_template, core_template
+
+    params = {"interaction_mode": "code", "reasoning_effort": "MEDIUM"}
+    accept(params)
+    assert params["reasoning_effort"] == "medium"
+
+    auto_params = {"interaction_mode": "code", "reasoning_effort": "auto"}
+    accept(auto_params)
+    assert "reasoning_effort" not in auto_params
+
+    with pytest.raises(ValueError, match="reasoning effort"):
+        accept({"interaction_mode": "code", "reasoning_effort": "ludicrous"})
+
+    codegem_spec = apply_controls(codegem_template(), {"reasoning_effort": "medium"})
+    assert codegem_spec.model_policy.reasoning == "medium"
+
+    core_spec = apply_controls(core_template(), {"reasoning_effort": "low"})
+    assert core_spec.model_policy.reasoning == "low"
+
+
+def test_desktop_settings_persists_and_validates_reasoning_effort(tmp_path):
+    from superqode.desktop_service.service import DesktopService
+
+    service = DesktopService(tmp_path / "state")
+    try:
+        service.dispatch("settings.set", {"key": "reasoning_effort", "value": "MEDIUM"})
+        assert service.dispatch("settings.get", {})["reasoning_effort"] == "medium"
+
+        service.dispatch("settings.set", {"key": "reasoning_effort", "value": "auto"})
+        assert service.dispatch("settings.get", {})["reasoning_effort"] == ""
+
+        with pytest.raises(ValueError, match="Unsupported reasoning effort"):
+            service.dispatch("settings.set", {"key": "reasoning_effort", "value": "turbo"})
+    finally:
+        service.close()

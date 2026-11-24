@@ -198,10 +198,7 @@ def factory_list_snapshot(value):
     runs = value.get("runs", [])
     revisions = value.get("revisions", [])
     return {
-        "runs": [
-            fields(row, ("id", "goal", "status", "factory_digest"))
-            for row in runs[:50]
-        ],
+        "runs": [fields(row, ("id", "goal", "status", "factory_digest")) for row in runs[:50]],
         "runs_truncated": len(runs) > 50,
         "revision_count": len(revisions),
     }
@@ -251,7 +248,9 @@ def factory_run_snapshot(value):
     cockpit = value.get("cockpit") or {}
     return {
         "work_order": {
-            **fields(order, ("work_order_id", "goal", "status", "error", "created_at", "updated_at")),
+            **fields(
+                order, ("work_order_id", "goal", "status", "error", "created_at", "updated_at")
+            ),
             "metadata": safe_meta,
             "tasks": tasks,
             "tasks_truncated": len(order.get("tasks") or []) > 50,
@@ -300,8 +299,5 @@ def factory_trace_snapshot(value):
             }
             for row in checks[:100]
         ],
-        "requirements": [
-            fields(row, ("id", "description", "status"))
-            for row in reqs[:50]
-        ],
+        "requirements": [fields(row, ("id", "description", "status")) for row in reqs[:50]],
     }

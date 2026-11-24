@@ -11,6 +11,7 @@ from dataclasses import replace
 
 MODES = {"code", "chat", "plan"}
 PERMISSIONS = {"ask", "auto-edit", "full"}
+REASONING_EFFORTS = {"off", "minimal", "low", "medium", "high", "xhigh", "max"}
 READ_TOOLS = {
     "read",
     "read_file",
@@ -51,6 +52,16 @@ def accept(params: dict) -> None:
     if mode not in MODES:
         raise ValueError("Choose Code, Plan, or Chat")
     params["interaction_mode"] = mode
+    raw_effort = params.get("reasoning_effort")
+    if raw_effort in (None, "", "auto", "default"):
+        params.pop("reasoning_effort", None)
+    else:
+        effort = str(raw_effort).strip().lower()
+        if effort not in REASONING_EFFORTS:
+            raise ValueError(
+                "Choose a supported reasoning effort: off, minimal, low, medium, high, xhigh, or max"
+            )
+        params["reasoning_effort"] = effort
     raw = params.get("permission_mode")
     if raw in (None, ""):
         params.pop("permission_mode", None)
@@ -64,8 +75,14 @@ def apply_controls(spec, request: dict):
     """Return a run-only spec. Plan mode closes write, shell, and network."""
     mode = request.get("interaction_mode") or "code"
     permission = request.get("permission_mode")
+    reasoning = request.get("reasoning_effort")
     if mode not in MODES or (permission is not None and permission not in PERMISSIONS):
         raise ValueError("This task has an unsupported mode or permission")
+    if reasoning:
+        effort = str(reasoning).strip().lower()
+        if effort not in REASONING_EFFORTS:
+            raise ValueError("This task has an unsupported reasoning effort")
+        spec = replace(spec, model_policy=replace(spec.model_policy, reasoning=effort))
     if mode != "plan" and not permission:
         return spec
     policy = spec.execution_policy

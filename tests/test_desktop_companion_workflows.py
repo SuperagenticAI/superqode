@@ -283,8 +283,20 @@ def test_turn_changes_projection_filters_sensitive_paths_and_enforces_project_sc
                 "later_turns": 0,
                 "conflicts": ["Sources/App.swift", ".env"],
                 "files": [
-                    {"path": "Sources/App.swift", "change": "modified", "added": 4, "removed": 1, "binary": False},
-                    {"path": ".env", "change": "modified", "added": 1, "removed": 0, "binary": False},
+                    {
+                        "path": "Sources/App.swift",
+                        "change": "modified",
+                        "added": 4,
+                        "removed": 1,
+                        "binary": False,
+                    },
+                    {
+                        "path": ".env",
+                        "change": "modified",
+                        "added": 1,
+                        "removed": 0,
+                        "binary": False,
+                    },
                 ],
             }
         return original(method, params)
@@ -299,9 +311,7 @@ def test_turn_changes_projection_filters_sensitive_paths_and_enforces_project_sc
     assert ".env" not in json.dumps(result)
 
 
-def test_factory_inspection_is_bounded_and_gates_require_approve_permission(
-    companion, monkeypatch
-):
+def test_factory_inspection_is_bounded_and_gates_require_approve_permission(companion, monkeypatch):
     service, project, _, profile, access = companion
     _, reader = pair(access, profile, ["read"])
     _, approver = pair(access, profile, ["read", "approve"])
@@ -331,7 +341,11 @@ def test_factory_inspection_is_bounded_and_gates_require_approve_permission(
                     "repository": "/private/repo",
                     "metadata": {
                         "factory": {"snapshot_digest": "snap-1", "secret_env": "hidden"},
-                        "factory_verification": {"state": "passed", "sandbox": "docker", "isolation_applied": True},
+                        "factory_verification": {
+                            "state": "passed",
+                            "sandbox": "docker",
+                            "isolation_applied": True,
+                        },
                     },
                     "tasks": [
                         {
@@ -361,7 +375,11 @@ def test_factory_inspection_is_bounded_and_gates_require_approve_permission(
                 "diff_truncated": False,
                 "candidate_id": "cand-1",
                 "candidate_digest": "dig-1",
-                "cockpit": {"status": "needs_review", "elapsed_seconds": 12.5, "workers": [{"secret": "no"}]},
+                "cockpit": {
+                    "status": "needs_review",
+                    "elapsed_seconds": 12.5,
+                    "workers": [{"secret": "no"}],
+                },
             }
         if method == "factory.evidence.trace":
             return {
@@ -370,9 +388,19 @@ def test_factory_inspection_is_bounded_and_gates_require_approve_permission(
                 "snapshot_digest": "snap-1",
                 "verification_bound_to_current": True,
                 "missing_evidence": [],
-                "summary": {"checks": {"passed": 2, "failed": 0, "blocked": 0, "never_ran": 0}, "requirements": {}},
+                "summary": {
+                    "checks": {"passed": 2, "failed": 0, "blocked": 0, "never_ran": 0},
+                    "requirements": {},
+                },
                 "application_checks": [
-                    {"check": "unit", "category": "test", "status": "passed", "reason": "All passed", "cases": ["c1"], "failed_cases": []}
+                    {
+                        "check": "unit",
+                        "category": "test",
+                        "status": "passed",
+                        "reason": "All passed",
+                        "cases": ["c1"],
+                        "failed_cases": [],
+                    }
                 ],
                 "requirements": [],
                 "release_authorized": False,
@@ -414,4 +442,9 @@ def test_factory_inspection_is_bounded_and_gates_require_approve_permission(
     }
     assert gate_calls[0]["decision"] == "approve"
     with pytest.raises(PermissionError, match="not available"):
-        access.rpc(approver, "factory.release.authorize", {"project": project["id"], "run": "wo-1"}, "no-release")
+        access.rpc(
+            approver,
+            "factory.release.authorize",
+            {"project": project["id"], "run": "wo-1"},
+            "no-release",
+        )

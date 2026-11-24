@@ -52,6 +52,12 @@ async def run_connection(request, directory, emit, secrets):
     from superqode.tools.base import ToolRegistry
     from superqode.providers.gateway.litellm_gateway import LiteLLMGateway
 
+    runtime_kwargs = {}
+    if route["runtime"] == "antigravity-cli":
+        # Desktop workers execute one turn per process, so one-shot stream-json
+        # avoids extra stdin teardown while still streaming structured events
+        # and preserving conversation continuity via session_id/resume_thread.
+        runtime_kwargs["persistent"] = False
     runtime = create_runtime(
         route["runtime"],
         config=AgentConfig(
@@ -68,6 +74,7 @@ async def run_connection(request, directory, emit, secrets):
         else "byok"
         if route.get("auth") == "byok"
         else "agent-managed",
+        **runtime_kwargs,
     )
     from .controls import inbox
 

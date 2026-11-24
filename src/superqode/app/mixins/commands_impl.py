@@ -4929,6 +4929,7 @@ class CommandImplMixin:
                 return
 
         _os.environ["SUPERQODE_HARNESS"] = str(entry.path or entry.id)
+        self._codegem_auto_selected = False
         if hasattr(pure, "select_harness"):
             pure.select_harness(str(entry.path or entry.id))
         else:

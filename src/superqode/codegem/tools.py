@@ -3,11 +3,15 @@
 from __future__ import annotations
 
 import asyncio
+import codecs
+import fnmatch
 import os
+import re
 import shutil
 import signal as process_signal
 import sys
 import tempfile
+import time
 from dataclasses import replace
 from pathlib import Path
 
@@ -19,7 +23,70 @@ from superqode.pipy.tools.files import create_read_tool, create_write_tool, crea
 from superqode.pipy.tools.paths import json_schema
 
 TOOL_NAMES = ("read", "write", "edit", "search", "python", "bash")
+READ_ONLY_TOOLS = frozenset({"read", "search"})
 OUTPUT_BYTES = 16000
+_SKIP_DIRS = frozenset({".git", ".hg", ".svn", "node_modules", "__pycache__", ".venv", "venv"})
+_STREAM_UPDATE_INTERVAL = 0.1
+
+
+def _python_search(cwd: Path, pattern: str, rel_path: str, *, files_only: bool, signal=None) -> str:
+    """Bounded pure-Python fallback for search when ripgrep (rg) is not installed."""
+    root = (cwd / rel_path).resolve() if rel_path and rel_path != "." else cwd.resolve()
+    cwd_resolved = cwd.resolve()
+    if not root.exists():
+        raise RuntimeError(f"Search path does not exist: {rel_path}")
+    matches: list[str] = []
+    size = 0
+    if files_only:
+        candidates = [root] if root.is_file() else _iter_search_files(root)
+        for path in candidates:
+            if is_aborted(signal):
+                raise RuntimeError("Command aborted")
+            try:
+                rel = str(path.relative_to(cwd_resolved))
+            except ValueError:
+                rel = str(path)
+            if fnmatch.fnmatch(rel, pattern) or fnmatch.fnmatch(path.name, pattern):
+                matches.append(rel)
+                size += len(rel) + 1
+                if size >= OUTPUT_BYTES:
+                    break
+        return "\n".join(matches) if matches else "No matches"
+
+    try:
+        regex = re.compile(pattern)
+    except re.error:
+        regex = re.compile(re.escape(pattern))
+
+    candidates = [root] if root.is_file() else _iter_search_files(root)
+    for path in candidates:
+        if is_aborted(signal):
+            raise RuntimeError("Command aborted")
+        try:
+            raw = path.read_bytes()
+        except OSError:
+            continue
+        if b"\x00" in raw[:8192]:
+            continue
+        try:
+            rel = str(path.relative_to(cwd_resolved))
+        except ValueError:
+            rel = str(path)
+        for lineno, line in enumerate(raw.decode("utf-8", errors="replace").splitlines(), 1):
+            if regex.search(line):
+                entry = f"{rel}:{lineno}:{line}"
+                matches.append(entry)
+                size += len(entry.encode("utf-8")) + 1
+                if size >= OUTPUT_BYTES:
+                    return "\n".join(matches)
+    return "\n".join(matches) if matches else "No matches"
+
+
+def _iter_search_files(root: Path):
+    for current, dirs, files in os.walk(root):
+        dirs[:] = sorted(d for d in dirs if d not in _SKIP_DIRS)
+        for filename in sorted(files):
+            yield Path(current) / filename
 
 
 async def _process(argv, cwd, args, signal=None, on_update=None):
@@ -48,11 +115,37 @@ async def _process(argv, cwd, args, signal=None, on_update=None):
 
     async def pump():
         nonlocal total
+        decoder = codecs.getincrementaldecoder("utf-8")(errors="replace")
+        pending_update: list[str] = []
+        last_emit = 0.0
+
+        def flush_update(force: bool = False) -> None:
+            nonlocal last_emit
+            if not on_update or not pending_update:
+                return
+            now = time.monotonic()
+            if not force and last_emit > 0.0 and (now - last_emit) < _STREAM_UPDATE_INTERVAL:
+                return
+            delta = "".join(pending_update)
+            pending_update.clear()
+            last_emit = now
+            on_update(AgentToolResult(content=[TextContent(delta)]))
+
         while chunk := await proc.stdout.read(8192):
             spill.write(chunk)
             total += len(chunk)
             retained.extend(chunk)
             del retained[:-OUTPUT_BYTES]
+            if on_update:
+                decoded = decoder.decode(chunk)
+                if decoded:
+                    pending_update.append(decoded)
+                    flush_update(force=False)
+        if on_update:
+            tail = decoder.decode(b"", final=True)
+            if tail:
+                pending_update.append(tail)
+            flush_update(force=True)
 
     async def watch():
         while proc.returncode is None or not reader.done():
@@ -187,7 +280,15 @@ def create_tools(cwd: Path, *, config: dict | None = None) -> list[AgentTool]:
             else:
                 rg = shutil.which("rg")
                 if not rg:
-                    raise RuntimeError("Install ripgrep (rg) to use CodeGem search")
+                    text = await asyncio.to_thread(
+                        _python_search,
+                        cwd,
+                        args["pattern"],
+                        args.get("path", "."),
+                        files_only=bool(args.get("files")),
+                        signal=signal,
+                    )
+                    return AgentToolResult(content=[TextContent(text)])
                 if args.get("files"):
                     argv = [rg, "--files", "--glob", args["pattern"], "--", args.get("path", ".")]
                 else:
@@ -231,9 +332,13 @@ def create_tools(cwd: Path, *, config: dict | None = None) -> list[AgentTool]:
                 description=descriptions[name],
                 parameters=json_schema(properties, [key]),
                 execute_fn=instrument_check_tool(execute, cwd) if name == "bash" else execute,
-                execution_mode="sequential",
+                execution_mode="parallel" if name in READ_ONLY_TOOLS else "sequential",
                 replay_safe=name == "search",
             )
         )
-    # Mutations and shell commands must preserve model order within a batch.
-    return [replace(tool, execution_mode="sequential") for tool in tools]
+    # Read-only discovery tools (read, search) run concurrently in batches;
+    # mutations and shell commands preserve model order within a batch.
+    return [
+        replace(tool, execution_mode="parallel" if tool.name in READ_ONLY_TOOLS else "sequential")
+        for tool in tools
+    ]

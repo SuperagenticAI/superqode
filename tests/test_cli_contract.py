@@ -191,11 +191,13 @@ EXPECTED_COMMAND_COUNT = 406
 # 334-route baseline at 88d3f844.
 # `factory workflows` adds one route (405 -> 406). Both renders were
 # regenerated for that command. No route outside `factory` changed.
-EXPECTED_HELP_TREE_SHA256 = "9b66ead447eb87c430e191c0f79b10dbf4380e43b58e5b84dc7530e6777f616b"
+# Root options add `--effort` and clarify `--harness` default for Gemini/Gemma.
+# Command count stays 406; both Click 8.1.8 and 8.5.1 digests were regenerated.
+EXPECTED_HELP_TREE_SHA256 = "820bd9c37df78eae00501b6ccab2b9897660cda9bd5eea3b2707747210eb1d0a"
 # Click 8.5 renders optional group commands as [COMMAND] and case-insensitive
 # choices in lower case. Both verified renders expose the same command tree.
 EXPECTED_MODERN_CLICK_HELP_TREE_SHA256 = (
-    "b625126d49c8e5b844e8ed234d21281e0a448b057f5396e77000d76b4614454c"
+    "d306267441820aca2f3a86200313aa7f65f4db580cabb096f5c869fdd274738b"
 )
 
 

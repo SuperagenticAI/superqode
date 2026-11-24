@@ -22,11 +22,20 @@ def version_tuple(text: str) -> tuple[int, int, int] | None:
 
 
 def parse_agy_models(output: str) -> list[dict[str, str]]:
-    """Read bare model IDs and tab-separated ID and display-name rows."""
+    """Read bare model IDs, tab-separated, or space-padded ID and display-name rows."""
     models = []
     seen = set()
-    for line in output.splitlines():
-        identity, _, name = line.strip().partition("\t")
+    for raw_line in output.splitlines():
+        # TTY captures can prefix the first row with carriage-return spinner frames.
+        line = raw_line.rsplit("\r", 1)[-1].strip()
+        if not line:
+            continue
+        if "\t" in line:
+            identity, _, name = line.partition("\t")
+        else:
+            parts = re.split(r"\s{2,}", line, maxsplit=1)
+            identity = parts[0]
+            name = parts[1] if len(parts) > 1 else ""
         if (
             re.fullmatch(r"[A-Za-z0-9][A-Za-z0-9._:/-]*", identity)
             and identity.lower() not in {"model", "models", "available"}

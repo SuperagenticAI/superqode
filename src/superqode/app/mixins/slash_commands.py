@@ -1005,6 +1005,25 @@ class SlashCommandMixin:
     def _dispatch_log(self, args, log, cmd, c):
         self._handle_log_verbosity(args, log)
 
+    def _dispatch_effort(self, args, log, cmd, c):
+        pure = getattr(self, "_pure_mode", None)
+        if pure is None:
+            log.add_info(
+                "Connect a model or agent first, then set :effort auto|low|medium|high|xhigh."
+            )
+            return
+        value = str(args or "").strip()
+        if not value:
+            current = getattr(pure, "reasoning_effort", None) or "auto"
+            log.add_info(f"Reasoning effort: {current} (use :effort auto|low|medium|high|xhigh)")
+            return
+        try:
+            updated = pure.set_reasoning_effort(value)
+        except (ValueError, RuntimeError) as exc:
+            log.add_error(str(exc))
+            return
+        log.add_success(f"Reasoning effort set to {updated or 'auto'}")
+
     def _dispatch_thinking(self, args, log, cmd, c):
         self._handle_thinking_verbosity(args, log)
 

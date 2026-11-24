@@ -26,9 +26,16 @@ async def run_chat(request, emit):
         Message(role=item["role"], content=image_message(item["text"], list(load_snapshots(item))))
         for item in history
     ]
+    stream_kwargs = {}
+    if request.get("reasoning_effort"):
+        stream_kwargs["reasoning_effort"] = request["reasoning_effort"]
     parts, terminal, usage = [], False, None
     async for chunk in LiteLLMGateway().stream_completion(
-        messages=messages, provider=request["provider"], model=request["model"], tools=None
+        messages=messages,
+        provider=request["provider"],
+        model=request["model"],
+        tools=None,
+        **stream_kwargs,
     ):
         if chunk.content:
             parts.append(chunk.content)

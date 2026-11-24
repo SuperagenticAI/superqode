@@ -217,3 +217,37 @@ async def test_acp_model_config_selection_never_silently_falls_back(accepted):
 
     assert await select_session_model(Client(), "opencode/free-test") is accepted
     assert calls == [("model-choice", "opencode/free-test")]
+
+
+@pytest.mark.asyncio
+async def test_antigravity_model_efforts_infers_sibling_variants_without_spawning(
+    tmp_path, monkeypatch
+):
+    from superqode.desktop_service.connection_probe import _antigravity_model_efforts
+
+    probed = []
+
+    async def fake_cli_output(root, argv, vendor=None, timeout=20, *, include_stderr=False):
+        probed.append(argv)
+        return '{"command": {"data": {"adjustable": true, "available": ["low", "medium", "high"], "current": "medium"}}}'
+
+    monkeypatch.setattr("superqode.desktop_service.connection_controls.cli_output", fake_cli_output)
+    models = [
+        {"id": ""},
+        {"id": "gemini-4-neon-high", "name": "Gemini 4 Neon (High)"},
+        {"id": "gemini-4-neon-xhigh", "name": "Gemini 4 Neon (XHigh)"},
+        {"id": "gemini-4-neon-medium", "name": "Gemini 4 Neon (Medium)"},
+        {"id": "gemini-4-neon-low", "name": "Gemini 4 Neon (Low)"},
+        {"id": "gemini-pro-orchestrator-neon", "name": "Orchestrator (Neon)"},
+    ]
+    await _antigravity_model_efforts(
+        tmp_path, "/usr/bin/agy", models, ["low", "medium", "high", "xhigh", "max"]
+    )
+    # None of the 4 gemini-4-neon-* variants needed a subprocess probe.
+    assert len(probed) == 2
+    for row in models[1:5]:
+        assert row["reasoning_efforts"] == ["low", "medium", "high", "xhigh"]
+    assert models[1]["current_reasoning_effort"] == "high"
+    assert models[2]["current_reasoning_effort"] == "xhigh"
+    assert models[3]["current_reasoning_effort"] == "medium"
+    assert models[4]["current_reasoning_effort"] == "low"

@@ -76,7 +76,11 @@ def test_native_catalog_has_exact_six_tools(tmp_path):
     assert definition.available and definition.recommended
     assert definition.continuity == "exact-resume"
     assert [t.name for t in create_tools(tmp_path)] == list(TOOL_NAMES)
-    assert all(t.execution_mode == "sequential" for t in create_tools(tmp_path))
+    modes = {t.name: t.execution_mode for t in create_tools(tmp_path)}
+    assert modes["read"] == "parallel"
+    assert modes["search"] == "parallel"
+    for mutating in ("write", "edit", "python", "bash"):
+        assert modes[mutating] == "sequential"
     search = next(t for t in create_tools(tmp_path) if t.name == "search")
     assert "semantic" in search.parameters["properties"]
 

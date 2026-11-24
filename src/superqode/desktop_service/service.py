@@ -1549,10 +1549,18 @@ class DesktopService:
                 "provider",
                 "model",
                 "harness",
+                "reasoning_effort",
                 "drafts",
                 "credential_providers",
             }:
                 raise ValueError("Unknown preference")
+            if params["key"] == "reasoning_effort":
+                from .session_controls import REASONING_EFFORTS
+
+                val = str(params["value"] or "").strip().lower()
+                if val not in {"", "auto", "default", *REASONING_EFFORTS}:
+                    raise ValueError("Unsupported reasoning effort preference")
+                params["value"] = "" if val in {"", "auto", "default"} else val
             if params["key"] == "credential_providers":
                 from .connections import key_provider
 

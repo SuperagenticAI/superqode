@@ -14,6 +14,7 @@ _LEVELS_ALL = ("minimal", "low", "medium", "high")
 GEMINI_THINKING: dict[str, tuple[str, tuple[str, ...]]] = {
     "gemini-4-hydrogen": ("high", (*_LEVELS_LMH, "xhigh")),
     "gemini-4-neon": ("high", (*_LEVELS_LMH, "xhigh")),
+    "gemini-4-carbon": ("medium", _LEVELS_LMH),
     "gemini-4-argon": ("medium", _LEVELS_LMH),
     "gemini-3.8-flash": ("medium", _LEVELS_LMH),
     "gemini-3.6-flash": ("medium", _LEVELS_ALL),
@@ -119,3 +120,10 @@ def supports_model(model: str, provider: str) -> bool:
     except ValueError:
         return False
     return True
+
+
+def is_codegem_preferred(model: str, provider: str) -> bool:
+    """Return True when CodeGem is the de facto native harness for this model route."""
+    if not model or not provider:
+        return False
+    return supports_model(model, provider)

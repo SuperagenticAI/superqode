@@ -307,7 +307,16 @@ async def _run_summary(
         messages=default_convert_to_llm([*messages, UserMessage(content=instruction)]),
         tools=None,
     )
-    response = stream_fn(model, context, StreamOptions(signal=signal))
+    compaction_reasoning = None
+    if model.provider in {"google", "gemini"} and model.supports_reasoning:
+        model_slug = (model.id or "").lower().split("/")[-1]
+        if model_slug.startswith(("gemini-3", "gemini-4")):
+            compaction_reasoning = "low"
+        elif model_slug.startswith("gemma-4-"):
+            compaction_reasoning = "minimal"
+    response = stream_fn(
+        model, context, StreamOptions(signal=signal, reasoning=compaction_reasoning)
+    )
     if hasattr(response, "__await__"):
         response = await response  # type: ignore[misc]
 

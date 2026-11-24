@@ -3956,6 +3956,7 @@ class AgentLoop:
             # Local models stream thinking in tiny pieces - accumulate for readable display
             thinking_buffer = ""
             full_thinking_content = ""
+            emitted_first_thinking = False
             import time as _time
 
             last_thinking_emit = _time.time()
@@ -3989,7 +3990,8 @@ class AgentLoop:
                         # 2. Buffer exceeds 200 chars (long enough to be readable)
                         # 3. 500ms has passed since last emit (prevent stale buffer)
                         should_emit = (
-                            thinking_buffer.rstrip().endswith((".", "?", "!", "\n"))
+                            (not emitted_first_thinking and len(thinking_buffer.strip()) >= 8)
+                            or thinking_buffer.rstrip().endswith((".", "?", "!", "\n"))
                             or len(thinking_buffer) > 200
                             or (
                                 current_time - last_thinking_emit > 0.5
@@ -4000,6 +4002,7 @@ class AgentLoop:
                         if should_emit and self.on_thinking and thinking_buffer.strip():
                             await self.on_thinking(thinking_buffer.strip())
                             thinking_buffer = ""
+                            emitted_first_thinking = True
                             last_thinking_emit = current_time
 
                     if chunk.content:
@@ -4096,6 +4099,7 @@ class AgentLoop:
                         tools=tools_to_send,
                         temperature=self.config.temperature,
                         max_tokens=self.config.max_tokens,
+                        reasoning_effort=self.config.reasoning_effort,
                         **self._profile_kwargs(),
                     )
                     record_usage(fallback)

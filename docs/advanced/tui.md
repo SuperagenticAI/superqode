@@ -296,6 +296,7 @@ Access via Command Palette (`Ctrl+K`) or Command Mode (`:`) in TUI:
 - `:compare <models>` - Re-run your last message across several models side by side
 - `:context` - Show, pin, or re-detect the model's loaded context window
 - `:thinking` - Cycle thinking-log verbosity (also `Ctrl+T`)
+- `:effort [minimal|low|medium|high|xhigh|default]` - Show or set reasoning effort for the active model/session
 - `:queue clear` - Clear queued type-ahead messages
 - `:queue send` - Send the next queued message when idle
 - `:workspace add|remove|list` - Register extra repositories for cross-repo search
@@ -321,7 +322,7 @@ show status, or display its local help where supported.
 | Discovery | `:explore`, `:capabilities`, `:tour` |
 | Connections and authentication | `:connect`, `:free`, `:connect a2a`, `:connect uhp`, `:disconnect`, `:agents`, `:agent`, `:acp`, `:providers`, `:provider`, `:profiles`, `:auth`, `:models`, `:model`, `:catalog`, `:model-guide`, `:recommend`, `:hf` |
 | Vendor runtimes | `:codex`, `:copilot`, `:claude`, `:antigravity`, `:agy`, `:muse`, `:muse-code`, `:fx`, `:grok`, `:xai-grok`, `:runtime` |
-| Agent modes and context | `:chat`, `:build`, `:mode`, `:context`, `:thinking`, `:toggle_thinking`, `:compact`, `:retry`, `:redo`, `:compare`, `:prompt`, `:log` |
+| Agent modes and context | `:chat`, `:build`, `:mode`, `:context`, `:thinking`, `:effort`, `:toggle_thinking`, `:compact`, `:retry`, `:redo`, `:compare`, `:prompt`, `:log` |
 | Files and repositories | `:files`, `:find`, `:open`, `:view`, `:search`, `:workspace`, `:sidebar`, `:home`, `:attach`, `:image`, `:img`, `:paste`, `:copy`, `:select` |
 | Harness and delivery | `:hub`, `:harness`, `:tau`, `:pipy`, `:rlm`, `:workflow`, `:workflows`, `:factory`, `:work`, `:policy`, `:eval`, `:evals`, `:gauge`, `:benchmark`, `:benchmarks`, `:systemone`, `:discovery` |
 | Sessions and history | `:activity`, `:session`, `:sessions`, `:sessions-current`, `:resume`, `:tree`, `:switchboard`, `:sw`, `:share`, `:transcript`, `:timeline`, `:rewind`, `:history`, `:stash`, `:checkpoints`, `:clone`, `:fork`, `:queue` |

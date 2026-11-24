@@ -757,7 +757,15 @@ class SuperQodeGroup(click.Group):
     "harness_path",
     envvar="SUPERQODE_HARNESS",
     default=None,
-    help="Harness name or HarnessSpec YAML/JSON path (default: core)",
+    help="Harness name or HarnessSpec YAML/JSON path (default: core, or codegem for Gemini/Gemma)",
+)
+@click.option(
+    "--effort",
+    "reasoning_effort",
+    envvar="SUPERQODE_REASONING_EFFORT",
+    type=click.Choice(["auto", "off", "minimal", "low", "medium", "high", "xhigh", "max"]),
+    default=None,
+    help="Reasoning/thinking effort for supported models (e.g. low/medium/high/xhigh for Gemini 4 Neon)",
 )
 @click.option(
     "--resume", help="Resume a stored session; opens the TUI unless a headless prompt is supplied"
@@ -880,6 +888,7 @@ def cli_main(
     provider,
     model_name,
     harness_path,
+    reasoning_effort,
     resume,
     approval_mode,
     interaction_mode,
@@ -907,6 +916,11 @@ def cli_main(
         _os.environ["SUPERQODE_LOG_VERBOSITY"] = "verbose"
     elif quiet_logs and not verbose_logs:
         _os.environ["SUPERQODE_LOG_VERBOSITY"] = "minimal"
+    if reasoning_effort:
+        if reasoning_effort == "auto":
+            _os.environ.pop("SUPERQODE_REASONING_EFFORT", None)
+        else:
+            _os.environ["SUPERQODE_REASONING_EFFORT"] = reasoning_effort
 
     # A prompt/output flag means this invocation will not enter the TUI. This is
     # needed while resolving dynamic connection profiles below.
@@ -1003,6 +1017,18 @@ def cli_main(
         # A project default is for SuperQode's native loop. Direct Codex
         # routes own their harness; --harness remains an explicit opt-in.
         effective_harness = "core"
+    elif (
+        effective_harness == "core"
+        and ctx.get_parameter_source("harness_path") != ParameterSource.COMMANDLINE
+        and not yaml_harness
+        and (not effective_runtime or effective_runtime == "builtin")
+        and provider
+        and model_name
+    ):
+        from superqode.codegem.profiles import is_codegem_preferred
+
+        if is_codegem_preferred(model_name, provider):
+            effective_harness = "codegem"
     # A model-aware harness is directly runnable: when provider/model were not
     # explicitly supplied, inherit its exact curated target. Explicit CLI or
     # environment choices still win.
@@ -1192,6 +1218,11 @@ def cli_main(
                                 ),
                                 output_schema=output_schema,
                                 rubric=rubric_text,
+                                **(
+                                    {"reasoning_effort": reasoning_effort}
+                                    if reasoning_effort and reasoning_effort != "auto"
+                                    else {}
+                                ),
                                 **({"approval_mode": approval_mode} if approval_mode else {}),
                                 **({"on_event": events} if events else {}),
                             )

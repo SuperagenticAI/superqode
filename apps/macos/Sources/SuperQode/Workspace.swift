@@ -600,7 +600,60 @@ private func jobStamp(_ row: [String: Any]) -> Double {
   @Published var capabilities: [String: Any] = [:]
   @Published var provider = "openai"
   @Published var model = ""
+  struct NativeReasoningOption: Identifiable, Hashable {
+    let value: String
+    let label: String
+    var id: String { value }
+  }
+  @Published var reasoningEffort = ""
   @Published var harness = "superqode"
+  var nativeReasoningOptions: [NativeReasoningOption] {
+    guard !isManaged else { return [] }
+    let normalizedProvider = provider.lowercased()
+    guard normalizedProvider == "google" || normalizedProvider == "gemini" else { return [] }
+    let name = model.lowercased().split(separator: "/").last.map(String.init) ?? ""
+    guard name.hasPrefix("gemini-3") || name.hasPrefix("gemini-4") else { return [] }
+    if name.hasPrefix("gemini-4-neon") || name.hasPrefix("gemini-4-hydrogen") {
+      return [
+        NativeReasoningOption(value: "", label: "Thinking: Default (High)"),
+        NativeReasoningOption(value: "low", label: "Thinking: Low"),
+        NativeReasoningOption(value: "medium", label: "Thinking: Medium"),
+        NativeReasoningOption(value: "high", label: "Thinking: High"),
+        NativeReasoningOption(value: "xhigh", label: "Thinking: XHigh"),
+      ]
+    }
+    if name.hasPrefix("gemini-4-argon") || name.hasPrefix("gemini-3.8-flash")
+      || name.hasPrefix("gemini-3.1-pro")
+    {
+      return [
+        NativeReasoningOption(value: "", label: "Thinking: Default"),
+        NativeReasoningOption(value: "low", label: "Thinking: Low"),
+        NativeReasoningOption(value: "medium", label: "Thinking: Medium"),
+        NativeReasoningOption(value: "high", label: "Thinking: High"),
+      ]
+    }
+    if name.hasPrefix("gemini-3.6-flash") || name.hasPrefix("gemini-3.5-flash-lite")
+      || name.hasPrefix("gemini-3-flash")
+    {
+      return [
+        NativeReasoningOption(value: "", label: "Thinking: Default"),
+        NativeReasoningOption(value: "minimal", label: "Thinking: Minimal"),
+        NativeReasoningOption(value: "low", label: "Thinking: Low"),
+        NativeReasoningOption(value: "medium", label: "Thinking: Medium"),
+        NativeReasoningOption(value: "high", label: "Thinking: High"),
+      ]
+    }
+    return [
+      NativeReasoningOption(value: "", label: "Thinking: Default"),
+      NativeReasoningOption(value: "low", label: "Thinking: Low"),
+      NativeReasoningOption(value: "medium", label: "Thinking: Medium"),
+      NativeReasoningOption(value: "high", label: "Thinking: High"),
+    ]
+  }
+  var effectiveNativeReasoningEffort: String {
+    guard nativeReasoningOptions.contains(where: { $0.value == reasoningEffort }) else { return "" }
+    return reasoningEffort
+  }
   let draftStore = DraftStore()
   let reviewCommentStore = ReviewCommentStore()
   /// Review comments waiting to be sent, per thread.
@@ -896,6 +949,7 @@ private func jobStamp(_ row: [String: Any]) -> Double {
       // A fresh blank thread always starts without a remembered account.
       resetThreadConnection()
       theme = string(settings, "theme", "dark")
+      reasoningEffort = string(settings, "reasoning_effort")
       savedCredentialProviders = settings["credential_providers"] as? [String] ?? []
       // Load only the list of saved providers at launch. Reading a legacy
       // login-keychain item can show an access dialog even with a silent LAContext.
@@ -1161,13 +1215,38 @@ private func jobStamp(_ row: [String: Any]) -> Double {
     }
     throw EngineError(message: "The model is still warming up. Your first question may take longer.")
   }
+  func supportsCodeGem(provider: String, model: String) -> Bool {
+    let normalizedProvider = provider.trimmingCharacters(in: .whitespacesAndNewlines).lowercased()
+    let name = model.trimmingCharacters(in: .whitespacesAndNewlines).lowercased()
+      .split(separator: "/").last.map(String.init) ?? ""
+    guard !name.isEmpty else { return false }
+    if normalizedProvider == "google" || normalizedProvider == "gemini" {
+      return name.hasPrefix("gemini") || name.hasPrefix("gemma-4-")
+    }
+    if ["ollama", "lmstudio", "llamacpp", "vllm"].contains(normalizedProvider) {
+      return name.hasPrefix("gemma") || name.hasPrefix("codegemma")
+    }
+    return false
+  }
   func chooseModelRoute(_ provider: String, _ model: String, preserveHarness: Bool = false) {
     // A Silicon-based coding harness, such as a project harness that inherits silicon, keeps Apple.
     let keepsAppleHarness = provider == "apple-foundation" && interactionMode != "chat"
       && harnessIsAppleCompatible(harness)
+    let codeGemAvailable = harnesses.contains { string($0, "id") == "codegem" }
+    let defaultSwitchableHarness = isManaged || connectionDisconnected
+      || harness.hasPrefix("local-harness:")
+      || ["core", "superqode", "codegem", "apple-local", "no-tool"].contains(harness)
     if !preserveHarness && provider == "apple-foundation" && !keepsAppleHarness {
       chooseHarness(interactionMode == "chat" ? "no-tool" : "apple-local", restoreRemembered: false)
-    } else if !preserveHarness && (isManaged || connectionDisconnected || harness.hasPrefix("local-harness:")) {
+    } else if !preserveHarness && interactionMode != "chat" && codeGemAvailable
+      && defaultSwitchableHarness && supportsCodeGem(provider: provider, model: model)
+    {
+      // Make CodeGem the de facto native harness for Google Gemini and Gemma models.
+      chooseHarness("codegem", restoreRemembered: false)
+    } else if !preserveHarness && (
+      isManaged || connectionDisconnected || harness.hasPrefix("local-harness:")
+        || (harness == "codegem" && !supportsCodeGem(provider: provider, model: model))
+    ) {
       chooseHarness(
         harnesses.first(where: { string($0, "id") == "core" })?.projectRowID
           ?? harnesses.first(where: { string($0, "desktop_kind").isEmpty })?.projectRowID ?? "core")
@@ -1304,7 +1383,13 @@ private func jobStamp(_ row: [String: Any]) -> Double {
 
   func savePreferences() {
     pendingPreferences = PreferenceWrite(
-      values: [("provider", provider), ("model", model), ("harness", harness), ("theme", theme)],
+      values: [
+        ("provider", provider),
+        ("model", model),
+        ("harness", harness),
+        ("reasoning_effort", reasoningEffort),
+        ("theme", theme),
+      ],
       // A phone selection must not be saved back over the shared project as the Mac's choice.
       syncConnection: !applyingPhoneConnection)
     guard !writingPreferences else { return }
@@ -1902,6 +1987,9 @@ private func jobStamp(_ row: [String: Any]) -> Double {
       "image_ids": submittedImages,
     ]
     if enforcesSessionControls { extra["permission_mode"] = submittedPermission }
+    if !isManaged, !effectiveNativeReasoningEffort.isEmpty {
+      extra["reasoning_effort"] = effectiveNativeReasoningEffort
+    }
     if isManaged {
       extra["acp_options"] = [
         "model": agentModel, "mode": agentMode, "config": agentConfigForTurn,
@@ -2003,6 +2091,9 @@ private func jobStamp(_ row: [String: Any]) -> Double {
       "acp_options": ["model": agentModel, "mode": agentMode, "config": agentConfig],
     ]
     if enforcesSessionControls { extra["permission_mode"] = permissionMode }
+    if !isManaged, !effectiveNativeReasoningEffort.isEmpty {
+      extra["reasoning_effort"] = effectiveNativeReasoningEffort
+    }
     queueAction("queue.add", extra: extra)
     notice = "Adding task to the project queue"
   }

@@ -3475,7 +3475,17 @@ class ConnectMixin:
         if getattr(getattr(spec, "runtime", None), "backend", "") == "codegem":
             from superqode.codegem.profiles import resolve_profile
 
-            resolve_profile(model, provider)
+            if getattr(self, "_codegem_auto_selected", False):
+                try:
+                    resolve_profile(model, provider)
+                except ValueError:
+                    if hasattr(pure, "select_harness"):
+                        pure.select_harness("core")
+                    self._codegem_auto_selected = False
+                    if hasattr(self, "_refresh_harness_panel"):
+                        self._refresh_harness_panel()
+            else:
+                resolve_profile(model, provider)
         cancel = getattr(self, "_cancel_harness_wizard", None)
         if callable(cancel):
             try:
@@ -3700,6 +3710,33 @@ class ConnectMixin:
                     base_job_description, role_config=resolved_role
                 )
 
+        # Make CodeGem the de facto native harness for Google Gemini and Gemma
+        # models unless the user explicitly selected another harness.
+        auto_switched_codegem = False
+        explicit_env_harness = os.environ.get("SUPERQODE_HARNESS", "").strip().lower()
+        current_harness_id = str(
+            getattr(getattr(self._pure_mode, "_harness_definition", None), "id", "core") or "core"
+        ).lower()
+        if (
+            key_session is None
+            and getattr(self._pure_mode, "_harness_spec", None) is None
+            and current_harness_id == "core"
+            and explicit_env_harness in {"", "core", "codegem"}
+            and getattr(self._pure_mode, "runtime_name", "builtin") == "builtin"
+            and hasattr(self._pure_mode, "select_harness")
+        ):
+            from superqode.codegem.profiles import is_codegem_preferred
+
+            if is_codegem_preferred(model, provider):
+                try:
+                    self._pure_mode.select_harness("codegem")
+                    self._codegem_auto_selected = True
+                    auto_switched_codegem = True
+                    if hasattr(self, "_refresh_harness_panel"):
+                        self._refresh_harness_panel()
+                except Exception:
+                    pass
+
         # Connect with job description and working directory for role-based connections
         self._pure_mode.connect(
             provider,
@@ -3710,6 +3747,11 @@ class ConnectMixin:
             role_config=resolved_role,
             session_id=session_id,
         )
+        if auto_switched_codegem:
+            log.add_info(
+                "CodeGem harness selected for Gemini/Gemma. "
+                "Use :effort low|medium|high|xhigh to tune thinking speed."
+            )
 
         # Clear any existing ACP connection when switching to BYOK
         self._clear_acp_extra_env()

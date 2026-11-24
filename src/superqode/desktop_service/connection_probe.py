@@ -10,8 +10,35 @@ import time
 
 
 async def _antigravity_model_efforts(root, binary, models, levels):
-    """Read model-specific effort tiers through agy's zero-turn /effort command."""
+    """Read model-specific effort tiers, inferring from variant slugs before probing."""
     from .connection_controls import cli_output
+
+    level_set = set(levels)
+    families: dict[str, list[tuple[dict, str]]] = {}
+    for model in models:
+        model_id = str(model.get("id") or "")
+        base, sep, suffix = model_id.rpartition("-")
+        if base and sep and suffix in level_set:
+            families.setdefault(base, []).append((model, suffix))
+
+    # When `agy models` already lists multiple effort variants for a model
+    # family (e.g. gemini-4-neon-low/medium/high/xhigh), derive the supported
+    # effort tiers directly instead of spawning a cold agy language server per
+    # model. Models without sibling variants still fall back to `/effort`.
+    to_probe = []
+    for model in models:
+        model_id = str(model.get("id") or "")
+        base, sep, suffix = model_id.rpartition("-")
+        siblings = families.get(base, []) if base and sep and suffix in level_set else []
+        if len(siblings) >= 2:
+            available = {tier for _, tier in siblings}
+            model["reasoning_efforts"] = [level for level in levels if level in available]
+            model["current_reasoning_effort"] = suffix
+        else:
+            to_probe.append(model)
+
+    if not to_probe:
+        return
 
     slots = asyncio.Semaphore(4)
 
@@ -39,7 +66,7 @@ async def _antigravity_model_efforts(root, binary, models, levels):
 
     try:
         async with asyncio.timeout(9):
-            await asyncio.gather(*(check(model) for model in models))
+            await asyncio.gather(*(check(model) for model in to_probe))
     except TimeoutError:
         pass
 

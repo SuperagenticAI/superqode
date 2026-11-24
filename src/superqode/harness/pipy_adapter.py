@@ -541,6 +541,8 @@ def _usage_dict(usage: Any) -> dict[str, Any]:
     return {
         "input_tokens": int(getattr(usage, "input", 0) or 0),
         "output_tokens": int(getattr(usage, "output", 0) or 0),
+        "thinking_tokens": int(getattr(usage, "reasoning", 0) or 0),
+        "cached_tokens": int(getattr(usage, "cache_read", 0) or 0),
         "total_tokens": int(getattr(usage, "total_tokens", 0) or 0),
         "cost_usd": float(getattr(getattr(usage, "cost", None), "total", 0.0) or 0.0),
     }

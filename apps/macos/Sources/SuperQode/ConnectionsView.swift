@@ -640,7 +640,11 @@ struct ProviderConnectionView: View {
         let stayed = app.finishConnectionSelection()
         if !app.projectID.isEmpty { app.showWelcome = false }
         let thinking = (model == "qwen4-max" || model == "qwen4-max-preview")
-          ? " Thinking starts at low." : ""
+          ? " Thinking starts at low."
+          : (app.harness == "codegem" && model.lowercased().hasPrefix("gemini-4-neon"))
+          ? " Using CodeGem (optimized for Gemini & Gemma). Switch Thinking to Medium or Low for faster edits."
+          : app.harness == "codegem"
+          ? " Using CodeGem (optimized for Gemini & Gemma)." : ""
         if stayed {
           app.notice = "Connected \(provider)/\(model). Factory Studio can draft with it." + thinking
         } else {

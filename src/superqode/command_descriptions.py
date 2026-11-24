@@ -562,6 +562,7 @@ COMMAND_DESCRIPTIONS = {
     ":theme init": "Create a reusable theme JSON template",
     ":theme list": "List built-in, installed and catalog themes",
     ":theme reload": "Reload theme files and refresh the workspace",
+    ":effort": "Show or set reasoning effort (auto|low|medium|high|xhigh)",
     ":thinking": "Show or change reasoning display detail",
     ":toggle_thinking": "Toggle the agent reasoning display",
     ":tools full": "Inspect the full tool profile or the connected harness's tools",
