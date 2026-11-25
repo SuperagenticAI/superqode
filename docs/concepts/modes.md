@@ -222,10 +222,12 @@ information menu for your selected SuperQode harness:
 The **Use your subscription (Experimental)** option labels all providers
 **Partner integration in progress**. Selecting a card shows information and
 keeps your current connection. Claude/Anthropic subscriptions are excluded.
-Experimental information cards are directly reachable as
-`:connect plan-alibaba-models`, `:connect plan-grok-experimental`,
+`:connect plan-alibaba-models` connects directly to Alibaba Cloud Model Studio
+Token Plan (`alibaba-token-plan`, using an `sk-sp-` Token Plan key and official
+regional Token Plan endpoints). Remaining experimental information cards are
+directly reachable as `:connect plan-grok-experimental`,
 `:connect plan-kimi-models`, `:connect plan-minimax-experimental` and
-`:connect plan-chatgpt`. All say Partner integration in progress and keep
+`:connect plan-chatgpt`, which say Partner integration in progress and keep
 connection state unchanged.
 
 Vendor subscriptions remain under **Existing harnesses → Subscriptions**. Older direct
@@ -308,6 +310,7 @@ direct profile, so the submenu never becomes a required step:
 :connect cursor
 :connect amp
 :connect antigravity
+:connect antigravity-acp
 :connect muse
 :connect grok
 :connect copilot
@@ -441,7 +444,7 @@ that matches the account, runtime, and harness ownership required for the task.
 | --- | --- | --- |
 | OpenAI Codex | Codex CLI, Codex SDK, Codex ACP, OpenAI BYOK | `:connect codex`, `:connect codex-sdk`, `:connect acp codex`, `:connect byok openai <model>` |
 | Anthropic Claude | Claude Agent SDK, Anthropic BYOK | `:runtime claude-agent-sdk`, `:connect byok anthropic <model>` |
-| Google Antigravity | Authenticated Antigravity CLI runtime | `:connect antigravity` |
+| Google Antigravity | Authenticated Antigravity CLI runtime and native ACP session | `:connect antigravity`, `:connect antigravity-acp` |
 | Google Gemini | Gemini CLI Google sign-in, Google AI Studio BYOK, Google ADK runtime | `:connect gemini-cli`, `:connect acp gemini`, `:connect byok google <model>`, `:runtime adk` |
 | GitHub Copilot | Copilot SDK, Copilot CLI ACP | `:connect copilot`, `:connect copilot-cli`, `:connect acp copilot` |
 | xAI Grok | Grok Build ACP, Grok headless CLI, Grok subscription models, xAI BYOK | `:connect grok`, `:runtime grok-cli`, `:grok api [model]`, `:connect byok xai <model>` |
@@ -659,6 +662,7 @@ SuperQode's terminal, sessions, approvals, plans, and evidence surface.
 | GitHub Copilot | `:connect copilot` | GitHub Copilot account through the SDK or official CLI |
 | Claude Agent SDK | `:runtime claude-agent-sdk` | Anthropic API key |
 | Antigravity CLI | `:connect antigravity` | Google Sign-In through `agy` |
+| Antigravity (ACP) | `:connect antigravity-acp` | Google Sign-In through `agy acp` (Gemini 4 Neon & effort controls) |
 | Antigravity Managed Agent | `:connect antigravity-managed` | Gemini API key for Google's hosted sandbox |
 | OpenAI Agents SDK | `:runtime openai-agents` | OpenAI provider credentials |
 | Google ADK | `:runtime adk` | Google provider credentials |

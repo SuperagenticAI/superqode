@@ -251,3 +251,26 @@ async def test_antigravity_model_efforts_infers_sibling_variants_without_spawnin
     assert models[2]["current_reasoning_effort"] == "xhigh"
     assert models[3]["current_reasoning_effort"] == "medium"
     assert models[4]["current_reasoning_effort"] == "low"
+
+
+def test_antigravity_acp_profile_is_subscription_route_with_api_key_isolation(
+    tmp_path, monkeypatch
+):
+    from superqode.desktop_service.connect_workflow import profile_route
+    from superqode.providers.subscription_env import diverting_api_keys, resolve_vendor
+
+    monkeypatch.setattr("superqode.runtime.antigravity_status.antigravity_acp_issue", lambda: "")
+    monkeypatch.setattr("shutil.which", lambda name: "/usr/bin/agy" if name == "agy" else None)
+
+    assert resolve_vendor("antigravity-acp") == "antigravity"
+    assert diverting_api_keys(
+        "antigravity-acp", {"GEMINI_API_KEY": "k1", "GOOGLE_API_KEY": "k2"}
+    ) == ["GEMINI_API_KEY", "GOOGLE_API_KEY"]
+
+    route = profile_route(tmp_path, "antigravity-acp")
+    assert route["id"] == "antigravity-acp"
+    assert route["desktop_kind"] == "acp"
+    assert route["command"] == "agy acp"
+    assert route["subscription_vendor"] == "antigravity"
+    assert route["auth"] == "subscription requested"
+    assert route["available"] is True

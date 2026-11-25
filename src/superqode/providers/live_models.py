@@ -24,8 +24,11 @@ from typing import List, Optional
 from .dynamic import provider_api_key, resolve_base_url, resolve_provider_def
 from .model_studio import (
     METERED_PROVIDERS,
+    TOKEN_PLAN_BASE,
+    TOKEN_PLAN_PROVIDER,
     is_plan_model,
     validate_metered_route,
+    validate_token_plan_route,
     workspace_catalog_url,
 )
 from .models import ModelCapability, ModelInfo
@@ -236,6 +239,29 @@ async def _discover_model_studio(provider_id, base_url, key, examples, timeout):
     )
 
 
+async def _discover_token_plan(base_url, key, examples, timeout):
+    effective_base = base_url or TOKEN_PLAN_BASE
+    error = "Set your Alibaba Token Plan key (sk-sp-) to list models active on your plan."
+    if effective_base and key:
+        try:
+            validate_token_plan_route(effective_base, key)
+        except ValueError as exc:
+            error = str(exc)
+        else:
+            ids = await discover_openai_compatible_models(effective_base, key, timeout)
+            if ids:
+                models = [_model_studio_info(TOKEN_PLAN_PROVIDER, mid) for mid in sorted(set(ids))]
+                return LiveDiscoveryResult(TOKEN_PLAN_PROVIDER, models, "live", effective_base)
+            error = "Could not list Token Plan models. Check your sk-sp- key and selected Token Plan region."
+    return LiveDiscoveryResult(
+        TOKEN_PLAN_PROVIDER,
+        [_model_studio_info(TOKEN_PLAN_PROVIDER, m) for m in examples],
+        "examples",
+        effective_base,
+        error,
+    )
+
+
 def _enrich_from_catalog(provider_id: str, model_ids: List[str]) -> List[ModelInfo]:
     """Turn live model ids into ModelInfo, borrowing models.dev metadata by id."""
     from .models_dev import get_models_dev
@@ -275,6 +301,10 @@ async def discover_provider_models(
     if provider_id in METERED_PROVIDERS and pdef:
         return await _discover_model_studio(
             provider_id, effective_base, effective_key, pdef.example_models, timeout
+        )
+    if provider_id == TOKEN_PLAN_PROVIDER and pdef:
+        return await _discover_token_plan(
+            effective_base, effective_key, pdef.example_models, timeout
         )
 
     if effective_base:

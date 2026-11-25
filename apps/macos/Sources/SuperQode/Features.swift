@@ -1072,6 +1072,7 @@ struct FilesView: View {
 struct SettingsView: View {
   @AppStorage("animatedInterface") private var animatedInterface = true
   @AppStorage("colourfulAgentResponses") private var colourfulResponses = true
+  @AppStorage(FactorySoundEngine.preferenceKey) private var soundFeedback = true
   @AppStorage(RunSleepGuard.settingKey) private var keepAwakeDuringRuns = true
   @EnvironmentObject var app: Workspace
   var body: some View {
@@ -1083,6 +1084,9 @@ struct SettingsView: View {
         Section("Appearance") {
           Toggle("Animate navigation and active agent indicators", isOn: $animatedInterface)
           Text("Animations respect macOS Reduce Motion.").font(.caption).foregroundStyle(.secondary)
+          Toggle("Subtle sounds and Trackpad haptics for status changes", isOn: $soundFeedback)
+          Text("Plays quiet system cues when tasks start, complete, fail or pause for approval.")
+            .font(.caption).foregroundStyle(.secondary)
           Toggle("SuperQode gradient in agent responses", isOn: $colourfulResponses)
           Text(
             "Code blocks keep readable syntax colours. Increase Contrast uses plain, high-contrast code."

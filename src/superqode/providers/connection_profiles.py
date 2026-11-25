@@ -341,6 +341,13 @@ def _antigravity_cli_ready() -> bool:
     return probe_antigravity_cli().compatible
 
 
+def _antigravity_acp_ready() -> bool:
+    """The CLI exists and meets the minimum version required for `agy acp`."""
+    from superqode.runtime.antigravity_status import antigravity_acp_issue
+
+    return not antigravity_acp_issue()
+
+
 def _glm_cli_ready() -> bool:
     """The GLM ACP agent CLI is on PATH."""
     return shutil.which("glm-acp-agent") is not None
@@ -799,17 +806,25 @@ _PLAN_PROFILES: List[ConnectionProfile] = [
     ConnectionProfile(
         id="plan-alibaba-models",
         label="Alibaba Token Plan",
-        description="Alibaba Token Plan models for your selected harness",
-        connector="plan-guidance",
+        description="Alibaba Cloud Model Studio Token Plan (sk-sp- key) for interactive coding",
+        connector="byok",
+        byok_provider="alibaba-token-plan",
         auth_mode="subscription",
         menu=CONNECT_MENU_PLAN,
+        detect=lambda: _provider_ready("alibaba-token-plan"),
+        unavailable_hint=(
+            "set ALIBABA_TOKEN_PLAN_API_KEY to your sk-sp- key, or run "
+            "`superqode auth login alibaba-token-plan`"
+        ),
     ),
 ]
 
 # Keep the existing native shortcuts separate from the experimental cards.
 _NATIVE_PLAN_SHORTCUTS = _PLAN_PROFILES[:2]
 _PLAN_PROFILES = [
-    replace(
+    profile
+    if profile.id == "plan-alibaba-models"
+    else replace(
         profile,
         id=f"{profile.id}-experimental"
         if profile.id in {"plan-minimax", "plan-grok"}
@@ -1024,6 +1039,26 @@ _AGENT_PROFILES: List[ConnectionProfile] = [
         unavailable_hint=(
             "install or update agy from https://antigravity.google/docs/cli-install "
             "(SuperQode requires 1.1.1+)"
+        ),
+    ),
+    ConnectionProfile(
+        id="antigravity-acp",
+        harness_openness="closed",
+        model_openness="multi-model",
+        transport="ACP",
+        label="Antigravity (ACP)",
+        description=(
+            "Use Google's Antigravity agent over its official ACP server (agy acp) "
+            "with your Google Sign-In, live model and thinking controls"
+        ),
+        connector="acp",
+        menu=CONNECT_MENU_VENDORS,
+        acp_agent="antigravity",
+        self_contained=True,
+        detect=_antigravity_acp_ready,
+        unavailable_hint=(
+            "install or update agy from https://antigravity.google/docs/cli-install "
+            "(Antigravity ACP requires agy 1.5.1+), then sign in with `agy`"
         ),
     ),
     ConnectionProfile(

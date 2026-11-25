@@ -3,6 +3,7 @@ import SwiftUI
 
 struct ProviderConnectionView: View {
   var opensOnModelStudio = false
+  var initialRoute: String? = nil
   @EnvironmentObject private var app: Workspace
   @DialogDismiss private var dismiss
 
@@ -39,11 +40,13 @@ struct ProviderConnectionView: View {
     var releaseDate: String? = nil
   }
 
-  private static let alibabaRoutes = ["qwen-intl", "qwen-cn", "alibaba-token-plan", "alibaba"]
+  private static let alibabaRoutes = ["qwen-intl", "qwen-cn", "alibaba"]
+  private static let tokenPlanIntlEndpoint = "https://token-plan.ap-southeast-1.maas.aliyuncs.com/compatible-mode/v1"
+  private static let tokenPlanChinaEndpoint = "https://token-plan.cn-beijing.maas.aliyuncs.com/compatible-mode/v1"
   private static let groupedRoutes = ["alibaba": alibabaRoutes, "zai": ["zai", "zhipu"]]
   private static let groupedNames = ["alibaba": "Alibaba Model Studio", "zai": "Z.AI"]
   private static let hiddenGroupMembers: Set<String> = [
-    "qwen-intl", "qwen-cn", "alibaba-token-plan", "zhipu",
+    "qwen-intl", "qwen-cn", "zhipu",
   ]
   private static let chinaOrder = [
     "deepseek", "moonshot", "zai", "minimax", "doubao", "baidu", "siliconflow",
@@ -51,6 +54,7 @@ struct ProviderConnectionView: View {
   private static let usOrder = ["google", "anthropic", "openai", "xai", "meta", "nvidia", "poolside"]
   private static let hostOrder = ["baseten", "fireworks", "together", "modal", "openrouter"]
   private static let shortNames = [
+    "alibaba-token-plan": "Alibaba Token Plan",
     "xai": "xAI (Grok)", "meta": "Meta", "google": "Google", "siliconflow": "SiliconFlow",
   ]
   private static let apiKeyNotes = [
@@ -78,6 +82,10 @@ struct ProviderConnectionView: View {
     app.providers.first { string($0, "id") == route } ?? [:]
   }
   private var modelStudio: Bool { route == "qwen-intl" || route == "qwen-cn" }
+  private var tokenPlan: Bool { route == "alibaba-token-plan" }
+  private var activeTokenPlanEndpoint: String {
+    regionEndpoint.isEmpty ? Self.tokenPlanIntlEndpoint : regionEndpoint
+  }
   private var configured: Bool { provider["credential_configured"] as? Bool == true }
   private var saved: Bool { app.savedCredentialProviders.contains(route) }
   private var working: Bool { saving || restoringKey }
@@ -113,7 +121,7 @@ struct ProviderConnectionView: View {
     case "qwen-cn":
       return "China pay-as-you-go. Leave the endpoint empty to use the China shared host, or paste the workspace URL from the China console. A Token Plan key belongs on Token Plan. A workspace URL from the region you chose receives new features. The shared host remains the default."
     case "alibaba-token-plan":
-      return "Token Plan key (sk-sp-) for interactive coding. Alibaba publishes one endpoint for this plan. Headless and batch jobs are refused. Coding Plan is a different host and does not include qwen4-max. Use Qwen Code and /auth for Coding Plan. qwen4-max-preview stays on this plan through 25 November 2026."
+      return "Token Plan key (sk-sp-) for interactive coding. Choose Singapore (International) or Beijing (China) to match your plan, then load live Token Plan models. Headless and batch jobs are refused. Coding Plan uses a different host and does not include qwen4-max."
     case "alibaba":
       return "Older DashScope API for earlier Qwen ids. Qwen4-Max uses the Model Studio URL you paste."
     default:
@@ -128,10 +136,22 @@ struct ProviderConnectionView: View {
     ).first
   }
 
+  private var tokenPlanChoice: Choice? {
+    choices(
+      in: providerRows.filter { string($0, "id") == "alibaba-token-plan" },
+      orderedBy: ["alibaba-token-plan"]
+    ).first
+  }
+
+  private var autoOpenTarget: String? {
+    if let initialRoute, !initialRoute.isEmpty { return initialRoute }
+    return opensOnModelStudio ? "qwen-intl" : nil
+  }
+
   private var studioRouteKey: String {
     "\(app.providers.count)|"
       + providerRows.map { string($0, "id") }
-      .filter { Self.alibabaRoutes.contains($0) }
+      .filter { Self.alibabaRoutes.contains($0) || $0 == "alibaba-token-plan" }
       .sorted()
       .joined(separator: ",")
   }
@@ -140,8 +160,8 @@ struct ProviderConnectionView: View {
     Group {
       if let choice {
         detail(choice)
-      } else if opensOnModelStudio && !openedStudio {
-        ProgressView("Opening Model Studio…")
+      } else if autoOpenTarget != nil && !openedStudio {
+        ProgressView(autoOpenTarget == "alibaba-token-plan" ? "Opening Token Plan…" : "Opening Model Studio…")
           .frame(maxWidth: .infinity, maxHeight: .infinity)
       } else {
         chooser
@@ -153,7 +173,13 @@ struct ProviderConnectionView: View {
   }
 
   private func openModelStudioIfRequested() {
-    guard opensOnModelStudio, !openedStudio, choice == nil else { return }
+    guard let target = autoOpenTarget, !openedStudio, choice == nil else { return }
+    if target == "alibaba-token-plan", let plan = tokenPlanChoice {
+      openedStudio = true
+      chooseRoute("alibaba-token-plan")
+      choice = plan
+      return
+    }
     if let featured = studioChoice, let route = featured.routes.first {
       openedStudio = true
       chooseRoute(route)
@@ -183,9 +209,11 @@ struct ProviderConnectionView: View {
     let curated = rows.filter { $0["curated"] as? Bool == true && string($0, "id") != "ollama-cloud" }
     let featured = choices(in: rows.filter { Self.alibabaRoutes.contains(string($0, "id")) },
       orderedBy: ["alibaba"]).first
+    let planFeatured = choices(in: rows.filter { string($0, "id") == "alibaba-token-plan" },
+      orderedBy: ["alibaba-token-plan"]).first
     let query = providerQuery.trimmingCharacters(in: .whitespacesAndNewlines)
     let browsingCatalog = showAllProviders || !query.isEmpty
-    let results = browsingCatalog ? choices(in: rows, orderedBy: ["alibaba"] + Self.chinaOrder + Self.usOrder)
+    let results = browsingCatalog ? choices(in: rows, orderedBy: ["alibaba-token-plan", "alibaba"] + Self.chinaOrder + Self.usOrder)
       .filter { query.isEmpty || $0.searchText.localizedCaseInsensitiveContains(query) } : []
     return VStack(alignment: .leading, spacing: 0) {
       VStack(alignment: .leading, spacing: 12) {
@@ -222,8 +250,21 @@ struct ProviderConnectionView: View {
               providerGrid(results)
             }
           } else {
-            if let featured {
-              providerButton(featured, subtitle: "Connect Qwen4-Max with a Model Studio API key. You choose the region.")
+            if planFeatured != nil || featured != nil {
+              LazyVGrid(columns: [GridItem(.adaptive(minimum: 260), spacing: 10)], spacing: 10) {
+                if let planFeatured {
+                  providerButton(
+                    planFeatured,
+                    subtitle: "Qwen4-Max, GLM-5.3 & DeepSeek V4 with your sk-sp- Token Plan key."
+                  )
+                }
+                if let featured {
+                  providerButton(
+                    featured,
+                    subtitle: "Pay-as-you-go API key with your Model Studio region endpoint."
+                  )
+                }
+              }
             }
             providerSection("China Labs", rows: curated, category: "China Labs", order: Self.chinaOrder)
             providerSection("US Labs", rows: curated, category: "US Labs", order: Self.usOrder)
@@ -245,7 +286,8 @@ struct ProviderConnectionView: View {
     _ title: String, rows: [[String: Any]], category: String, order: [String] = []
   ) -> some View {
     let entries = choices(in: rows.filter {
-      string($0, "category") == category && string($0, "id") != "alibaba"
+      let id = string($0, "id")
+      return string($0, "category") == category && id != "alibaba" && id != "alibaba-token-plan"
     }, orderedBy: order)
     if !entries.isEmpty {
       VStack(alignment: .leading, spacing: 8) {
@@ -444,8 +486,12 @@ struct ProviderConnectionView: View {
         let url = URL(string: "https://modelstudio.console.alibabacloud.com/") {
         Link("Open Model Studio", destination: url)
       }
-      if route == "alibaba-token-plan",
-        let url = URL(string: "https://modelstudio.console.alibabacloud.com/ap-southeast-1/subscription/token-plan/personal") {
+      if tokenPlan,
+        let url = URL(
+          string: activeTokenPlanEndpoint.contains("cn-beijing")
+            ? "https://bailian.console.aliyun.com/"
+            : "https://modelstudio.console.alibabacloud.com/ap-southeast-1/subscription/token-plan/personal"
+        ) {
         Link("Open Token Plan", destination: url)
       }
       if route == "qwen-intl" || route == "qwen-cn" {
@@ -488,7 +534,40 @@ struct ProviderConnectionView: View {
           Text(workspaceMessage).font(.caption).foregroundStyle(.secondary)
         }
       }
-      if !modelStudio {
+      if tokenPlan {
+        Divider().padding(.vertical, 3)
+        Text("Token Plan region").font(.subheadline.weight(.medium))
+        Picker(
+          "Token Plan region",
+          selection: Binding(
+            get: {
+              activeTokenPlanEndpoint == Self.tokenPlanChinaEndpoint
+                ? Self.tokenPlanChinaEndpoint
+                : Self.tokenPlanIntlEndpoint
+            },
+            set: { workspaceEndpoint = $0 == Self.tokenPlanIntlEndpoint ? "" : $0 }
+          )
+        ) {
+          Text("Singapore (Intl)").tag(Self.tokenPlanIntlEndpoint)
+          Text("Beijing (China)").tag(Self.tokenPlanChinaEndpoint)
+        }
+        .pickerStyle(.segmented)
+        .labelsHidden()
+        .accessibilityIdentifier("provider.tokenPlanRegion")
+        Text(activeTokenPlanEndpoint).font(.caption.monospaced()).foregroundStyle(.secondary)
+          .textSelection(.enabled)
+        HStack {
+          Button("Load Token Plan models", action: loadWorkspaceModels)
+            .disabled(
+              workspaceLookup != nil || (suppliedKey.isEmpty && !configured) || keyMismatch
+            )
+          if workspaceLookup != nil { ProgressView().controlSize(.small) }
+        }
+        if !workspaceMessage.isEmpty {
+          Text(workspaceMessage).font(.caption).foregroundStyle(.secondary)
+        }
+      }
+      if !modelStudio && !tokenPlan {
         let endpoint = string(provider, "default_base_url")
         if !endpoint.isEmpty {
           Text(endpoint).font(.caption.monospaced()).foregroundStyle(.secondary).textSelection(.enabled)
@@ -499,8 +578,9 @@ struct ProviderConnectionView: View {
     .onChange(of: key) { _, _ in
       resetWorkspaceModels()
       guard meteredRoute, suppliedKey.hasPrefix("sk-sp-") else { return }
+      if let plan = tokenPlanChoice { choice = plan }
       chooseRoute("alibaba-token-plan", keepKey: true)
-      message = "This key starts with sk-sp-. Token Plan is selected so it is not saved as pay-as-you-go."
+      message = "This key starts with sk-sp-. Switched to Alibaba Token Plan so it is not saved as pay-as-you-go."
     }
     .onChange(of: workspaceEndpoint) { _, _ in resetWorkspaceModels() }
   }
@@ -594,9 +674,10 @@ struct ProviderConnectionView: View {
 
   private func loadWorkspaceModels() {
     let lookup = UUID()
+    let isTokenPlan = tokenPlan
     workspaceLookup = lookup
     workspaceMessage = ""
-    var params = ["provider": route, "endpoint": workspaceEndpoint]
+    var params = ["provider": route, "endpoint": isTokenPlan ? activeTokenPlanEndpoint : workspaceEndpoint]
     if !suppliedKey.isEmpty { params["key"] = suppliedKey }
     Task {
       defer { if workspaceLookup == lookup { workspaceLookup = nil } }
@@ -608,10 +689,13 @@ struct ProviderConnectionView: View {
           uniquingKeysWith: { first, _ in first })
         let ids = string(result, "source") == "live" ? result["models"] as? [String] ?? [] : []
         var seen = Set<String>()
-        workspaceModels = ids.filter { !requiresPlan($0, for: route) && seen.insert($0).inserted }.map { ModelRow(id: $0, name: names[$0] ?? $0) }
+        workspaceModels = ids.filter {
+          !requiresPlan($0, for: route) && (!isTokenPlan || codingModel($0)) && seen.insert($0).inserted
+        }.map { ModelRow(id: $0, name: names[$0] ?? $0) }
+        let label = isTokenPlan ? "Token Plan" : "workspace"
         workspaceMessage = ids.isEmpty
-          ? string(result, "error", "No workspace models returned.")
-          : "Loaded \(workspaceModels.count) workspace models."
+          ? string(result, "error", "No \(label) models returned.")
+          : "Loaded \(workspaceModels.count) \(label) models."
       } catch {
         guard workspaceLookup == lookup else { return }
         workspaceModels = []
@@ -629,7 +713,7 @@ struct ProviderConnectionView: View {
     let key = suppliedKey
     let remember = remember
     let endpoint = workspaceEndpoint.trimmingCharacters(in: .whitespacesAndNewlines)
-    let editedEndpoint = modelStudio && endpoint != string(self.provider, "workspace_endpoint_override")
+    let editedEndpoint = (modelStudio || tokenPlan) && endpoint != string(self.provider, "workspace_endpoint_override")
       ? endpoint : nil
     Task {
       defer { saving = false }
@@ -659,8 +743,12 @@ struct ProviderConnectionView: View {
 }
 
 func codingModel(_ identifier: String) -> Bool {
-  !identifier.localizedCaseInsensitiveContains("embed")
-    && !identifier.localizedCaseInsensitiveContains("rerank")
+  let lower = identifier.lowercased()
+  return !lower.contains("embed")
+    && !lower.contains("rerank")
+    && !lower.hasPrefix("qwen-audio-")
+    && !lower.hasPrefix("qwen-image-")
+    && !lower.hasPrefix("wan")
 }
 func modelName(_ identifier: String) -> String {
   if let range = identifier.range(of: #"^(ollama|lmstudio):"#, options: .regularExpression) {

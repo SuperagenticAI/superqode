@@ -4,6 +4,7 @@ import UIKit
 struct ComposeTaskScreen: View {
   let project: String
   var parent: String? = nil
+  var onSubmitted: () -> Void = {}
   @EnvironmentObject private var store: CompanionStore
   @Environment(\.dismiss) private var dismiss
   @Environment(\.scenePhase) private var scenePhase
@@ -25,9 +26,10 @@ struct ComposeTaskScreen: View {
   @State private var modelChoices: [RemoteRecord] = []
   @State private var pendingHarness: RemoteRecord?
   @FocusState private var editing: Bool
-  init(project: String, parent: String? = nil, restored: LocalDraft? = nil, enqueue: Bool = false) {
+  init(project: String, parent: String? = nil, restored: LocalDraft? = nil, enqueue: Bool = false, onSubmitted: @escaping () -> Void = {}) {
     self.project = project
     self.parent = parent
+    self.onSubmitted = onSubmitted
     var initial = restored ?? LocalDraft(project: project, parent: parent)
     if restored == nil { initial.enqueue = enqueue }
     _draft = State(initialValue: initial)
@@ -71,7 +73,7 @@ struct ComposeTaskScreen: View {
           .frame(maxWidth: .infinity, maxHeight: .infinity)
           .layoutPriority(1)
         if !store.permissions.contains("tasks") {
-          Text("Allow coding tasks when pairing this phone on the Mac to send work.")
+          Text("Allow coding tasks when pairing this \(CompanionDevice.name) on the Mac to send work.")
             .font(.caption).foregroundStyle(CompanionTheme.warning)
         }
         if !issue.isEmpty {
@@ -135,7 +137,7 @@ struct ComposeTaskScreen: View {
           do { try await store.drafts.remove(draft.id); submitted = true; dismiss() }
           catch { issue = error.localizedDescription }
         } }
-      } message: { Text("This removes the iPhone draft. It does not cancel a task the Mac may already have accepted. Check Activity before starting another.") }
+      } message: { Text("This removes the draft on this \(CompanionDevice.name). It does not cancel a task the Mac may already have accepted. Check Activity before starting another.") }
   }
 
   private var promptField: some View {
@@ -393,6 +395,7 @@ struct ComposeTaskScreen: View {
   }
   private func open(_ identity: String) async {
     submitted = true
+    onSubmitted()
     try? await store.drafts.remove(draft.id)
     if draft.attempt?.method == "queue.add" { dismiss(); return }
     startedRun = OpenedRun(id: identity)

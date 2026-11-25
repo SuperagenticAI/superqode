@@ -65,10 +65,10 @@ struct PairMacScreen: View {
           .disabled(store.connecting)
         VStack(alignment: .leading, spacing: 14) {
           setupStep("1", "Create a Tailscale account", "The companion uses your own Tailscale network. Tailscale's free plan covers personal use; business use follows Tailscale's terms. SuperQode does not put you on a shared network.")
-          setupStep("2", "Install Tailscale", "Install it on your Mac and on this iPhone.")
-          setupStep("3", "Sign in on both devices", "The Mac and this iPhone must join the same private Tailscale network. Use the same account, or share the Mac with this iPhone.")
+          setupStep("2", "Install Tailscale", "Install it on your Mac and on this \(CompanionDevice.name).")
+          setupStep("3", "Sign in on both devices", "The Mac and this \(CompanionDevice.name) must join the same private Tailscale network. Use the same account, or share the Mac with this \(CompanionDevice.name).")
           setupStep("4", "Create an invitation", "On the Mac, open Private remote access and create an invitation.")
-          setupStep("5", "Approve this iPhone", "Scan the invitation here, then approve this iPhone on the Mac.")
+          setupStep("5", "Approve this \(CompanionDevice.name)", "Scan the invitation here, then approve this \(CompanionDevice.name) on the Mac.")
           setupStep("6", "Confirm mobile data", "Turn off Wi-Fi once to confirm it works on mobile data.")
         }
         NavigationLink { CompanionSetupGuide() } label: { Label("Setup guide and account help", systemImage: "questionmark.circle") }.font(.subheadline)
@@ -111,7 +111,7 @@ struct PairMacScreen: View {
     }
     let authorized = await AVCaptureDevice.requestAccess(for: .video)
     guard authorized, DataScannerViewController.isAvailable else {
-      scanIssue = "Camera access is unavailable. Use manual pairing, or enable camera access in iPhone Settings."
+      scanIssue = "Camera access is unavailable. Use manual pairing, or enable camera access in \(CompanionDevice.name) Settings."
       manual = true
       return
     }
@@ -125,26 +125,26 @@ struct CompanionSetupGuide: View {
       Section {
         SuperQodeWordmark().padding(.vertical, 12)
         Text("Private by design").font(.title2.bold())
-        Text("Your iPhone connects straight to your own Mac over your own Tailscale network. SuperQode runs no cloud relay for your prompts, files or results, and your projects and API keys stay on your Mac.")
+        Text("This \(CompanionDevice.name) connects straight to your own Mac over your own Tailscale network. SuperQode runs no cloud relay for your prompts, files or results, and your projects and API keys stay on your Mac.")
         Text("Cloud models still receive prompts from the providers you configure.")
       }
       Section("On the Mac") {
         Text("Install Tailscale on the Mac and sign in. Open Private remote access and click Connect this Mac. Keep the Mac awake, online and signed in; closing the lid can make it unavailable.")
         Link("Get Tailscale for Mac", destination: URL(string: "https://tailscale.com/download")!)
       }
-      Section("On this iPhone") {
-        Text("Install Tailscale on this iPhone and sign in to the same account as the Mac. Then scan the invitation, request access, and approve this iPhone on the Mac. Camera permission is only requested when you tap Scan.")
-        Link("Get Tailscale for iPhone", destination: URL(string: "https://apps.apple.com/app/tailscale/id1470499037")!)
+      Section(CompanionDevice.onThisDeviceTitle) {
+        Text("Install Tailscale on this \(CompanionDevice.name) and sign in to the same account as the Mac. Then scan the invitation, request access, and approve this \(CompanionDevice.name) on the Mac. Camera permission is only requested when you tap Scan.")
+        Link("Get Tailscale", destination: URL(string: "https://apps.apple.com/app/tailscale/id1470499037")!)
         Text("If an invitation expires or a camera is unavailable, enter a fresh invitation manually. A new conversation always asks you to choose a connection.")
       }
       Section("Accounts and credentials") {
         Text("The companion works with your Tailscale account. Personal noncommercial use can qualify for its free plan; business use follows Tailscale's terms.")
         Link("Tailscale plans", destination: URL(string: "https://tailscale.com/pricing")!)
-        Text("Model and agent credentials stay configured on the Mac. The companion stores its own device authorization in this iPhone's Keychain.")
+        Text("Model and agent credentials stay configured on the Mac. The companion stores its own device authorization in the system Keychain on this \(CompanionDevice.name).")
       }
       Section("Privacy") {
         Text("Tailscale supplies the private network and may relay encrypted traffic. SuperQode runs no cloud relay for your prompts, files or results. Cloud models still receive prompts from the providers you configure. Choose a verified Local only connection when you want local inference.")
-        Text("Phone access can be revoked on the Mac. Unsent drafts are protected on this iPhone and excluded from backups. Work continues on the Mac when the phone app closes; live updates resume when you reopen it.")
+        Text("Device access can be revoked on the Mac. Unsent drafts are protected on this \(CompanionDevice.name) and excluded from backups. Work continues on the Mac when the companion app closes; live updates resume when you reopen it.")
         Link("Privacy policy", destination: URL(string: "https://superqode.dev/privacy")!)
           .accessibilityIdentifier("guide.privacy")
         Link("Support", destination: URL(string: "https://superqode.dev/support")!)

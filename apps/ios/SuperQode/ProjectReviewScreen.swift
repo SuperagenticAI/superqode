@@ -122,8 +122,8 @@ struct ProjectReviewScreen: View {
       .navigationDestination(item: $autoOpenedFile) { target in
         ReviewedFileScreen(file: target.record, params: params, parent: scope == "turn" ? job : nil, batch: batch)
       }
-      .sheet(item: $batchDraft, onDismiss: { batch.clear() }) { draft in
-        NavigationStack { ComposeTaskScreen(project: project, parent: scope == "turn" ? job : nil, restored: draft) }
+      .sheet(item: $batchDraft) { draft in
+        NavigationStack { ComposeTaskScreen(project: project, parent: scope == "turn" ? job : nil, restored: draft, onSubmitted: { batch.clear() }) }
       }
       .task(id: scope + ":" + base) {
         do { try await Task.sleep(for: .milliseconds(250)); try Task.checkCancellation(); await load() } catch { }
@@ -167,6 +167,7 @@ struct ReviewedFileScreen: View {
   @State private var firstRow = 1
   @State private var lastRow = 1
   @State private var feedbackDraft: LocalDraft?
+  @State private var feedbackFromBatch = false
   @State private var stageRequest: [String: JSONValue]?
   @State private var stageKey = UUID().uuidString
   private var request: [String: JSONValue] { params.merging(["file_id": .string(file.id)]) { _, new in new } }
@@ -191,7 +192,7 @@ struct ReviewedFileScreen: View {
           CompanionCard {
             Button("Stage reviewed file") { stageRequest = request.merging(["snapshot_id": .string(document.text("snapshot_id"))]) { _, new in new } }
               .buttonStyle(CompanionPrimaryButton()).disabled(working || !store.canMutate || !store.permissions.contains("review"))
-            Text(store.permissions.contains("review") ? "Stages every reviewed hunk in this file. Current file text is preserved; no commit is created." : "To stage from the phone, enable Allow staging reviewed files when approving the device on your Mac.").font(.caption).foregroundStyle(.secondary)
+            Text(store.permissions.contains("review") ? "Stages every reviewed hunk in this file. Current file text is preserved; no commit is created." : "To stage from this \(CompanionDevice.name), enable Allow staging reviewed files when approving the device on your Mac.").font(.caption).foregroundStyle(.secondary)
           }
         }
         if working { ProgressView("Waiting for your Mac…") }
@@ -199,7 +200,13 @@ struct ReviewedFileScreen: View {
     }.background(CompanionTheme.background).navigationTitle(file.text("path")).navigationBarTitleDisplayMode(.inline)
       .toolbar { Button("Refresh") { Task { await load() } }.disabled(working) }
       .task { await load() }.interactiveDismissDisabled(working)
-      .sheet(item: $feedbackDraft) { draft in NavigationStack { ComposeTaskScreen(project: params.text("project"), parent: parent, restored: draft) } }
+      .sheet(item: $feedbackDraft, onDismiss: { feedbackFromBatch = false }) { draft in
+        NavigationStack {
+          ComposeTaskScreen(project: params.text("project"), parent: parent, restored: draft) {
+            if feedbackFromBatch { batch.clear() }
+          }
+        }
+      }
       .confirmationDialog("Stage \(file.text("path"))?", isPresented: Binding(get: { stageRequest != nil }, set: { if !$0 { stageRequest = nil } }), titleVisibility: .visible) {
         if let snapshot = stageRequest {
           Button("Stage reviewed file") { Task { await stage(snapshot) } }
@@ -229,7 +236,7 @@ struct ReviewedFileScreen: View {
         var draft = LocalDraft(project: params.text("project"), parent: parent)
         draft.prompt = batch.combinedPrompt
         draft.origin = store.address
-        batch.clear()
+        feedbackFromBatch = true
         feedbackDraft = draft
       } label: {
         Label("Send \(batch.items.count) comment\(batch.items.count == 1 ? "" : "s") as one follow-up", systemImage: "paperplane.fill")

@@ -65,6 +65,7 @@ _RUNTIME_ICONS = {
     "droid": "factory-droid",
     "opencode": "opencode",
     "antigravity-cli": "antigravity",
+    "antigravity-acp": "antigravity",
     "antigravity-sdk": "antigravity",
     "antigravity-managed": "antigravity",
 }

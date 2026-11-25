@@ -35,7 +35,7 @@ struct FileEditorScreen: View {
         TextField("Relative file path", text: Binding(get: { file.path }, set: { draft.fileEdit?.path = $0 })).textInputAutocapitalization(.never).autocorrectionDisabled().textFieldStyle(.roundedBorder).disabled(frozen)
       } else { Text(file.path).font(.caption.monospaced()).foregroundStyle(.secondary) }
       TextEditor(text: Binding(get: { file.text }, set: { draft.fileEdit?.text = $0 })).font(.system(.body, design: .monospaced)).focused($editing).disabled(!loaded || frozen).accessibilityIdentifier("file.editor")
-      Text("\(file.text.utf8.count.formatted()) / 1,000,000 bytes · Unsent edits are protected on this iPhone.").font(.caption).foregroundStyle(.secondary)
+      Text("\(file.text.utf8.count.formatted()) / 1,000,000 bytes · Unsent edits are protected on this \(CompanionDevice.name).").font(.caption).foregroundStyle(.secondary)
       if !issue.isEmpty { Text(issue).font(.footnote).foregroundStyle(CompanionTheme.warning).textSelection(.enabled) }
       if draft.attempt != nil {
         Text("The previous save may have completed. Check its status before making another change.").font(.footnote)
@@ -52,7 +52,7 @@ struct FileEditorScreen: View {
           .buttonStyle(CompanionPrimaryButton()).disabled(!writable || !loaded || file.path.isEmpty || file.text.utf8.count > 1_000_000)
       }
       if saving { ProgressView("Saving the reviewed revision…") }
-      if !store.permissions.contains("edit") { Text("Allow file editing when approving this phone on your Mac.").font(.caption).foregroundStyle(.secondary) }
+      if !store.permissions.contains("edit") { Text("Allow file editing when approving this \(CompanionDevice.name) on your Mac.").font(.caption).foregroundStyle(.secondary) }
       if store.isPreview { Text("Explore mode cannot save files.").font(.caption).foregroundStyle(.secondary) }
     }.padding(18).background(CompanionTheme.background).navigationTitle(file.create ? "New file" : "Edit file").navigationBarTitleDisplayMode(.inline)
       .toolbar {

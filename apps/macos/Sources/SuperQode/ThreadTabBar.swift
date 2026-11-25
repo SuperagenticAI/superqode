@@ -22,7 +22,7 @@ struct ThreadTabBar: View {
                       Text(string(row, "conversation_title", string(row, "title", "Conversation")))
                         .font(.system(size: 12, weight: selected ? .semibold : .regular))
                         .lineLimit(1).frame(maxWidth: 200)
-                    }.padding(.leading, 10).padding(.vertical, 9).contentShape(Rectangle())
+                    }.padding(.leading, 9).padding(.vertical, 5).contentShape(Rectangle())
                   }.buttonStyle(.plain)
                     .help(string(row, "conversation_title", string(row, "title")) + " · " + string(row, "status"))
                     .accessibilityAddTraits(selected ? .isSelected : [])
@@ -51,12 +51,12 @@ struct ThreadTabBar: View {
                     .font(.system(size: 10)).foregroundStyle(Color.secondary)
                     .lineLimit(1)
                 }
-                  .padding(.horizontal, 12).padding(.vertical, 9)
+                  .padding(.horizontal, 10).padding(.vertical, 5)
                   .background(Color.primary.opacity(0.07), in: RoundedRectangle(cornerRadius: 7))
                   .help(app.composerHarnessIdentity.map { "Selected harness: " + $0.name } ?? "No harness connected. Choose a connection before sending a message.")
                   .id("new-conversation")
               }
-            }.padding(.horizontal, 12).padding(.vertical, 5)
+            }.padding(.horizontal, 10).padding(.vertical, 3)
           }.scrollIndicators(.hidden)
             .onAppear {
               let identity = app.selectedConversationID

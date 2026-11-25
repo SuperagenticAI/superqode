@@ -24,12 +24,7 @@ struct ConnectionStartGrid: View {
   ]
 
   var body: some View {
-    VStack(alignment: .leading, spacing: 10) {
-      tileGrid
-      Text("Alibaba Cloud Model Studio is under Your agent. More integrations will follow.")
-        .font(.caption).foregroundStyle(.secondary)
-        .fixedSize(horizontal: false, vertical: true)
-    }
+    tileGrid
   }
 
   private var tileGrid: some View {

@@ -129,7 +129,9 @@ struct ConnectionView: View {
     _path = State(initialValue: pages)
   }
   private var page: String { path.last ?? "menu:root" }
-  private var needsProject: Bool { app.projectID.isEmpty && !["source:key", "source:local"].contains(page) }
+  private var needsProject: Bool {
+    app.projectID.isEmpty && !["source:key", "source:local", "source:studio", "source:token-plan"].contains(page)
+  }
   private var connectionRows: [[String: Any]] {
     let rows = menu["rows"] as? [[String: Any]] ?? []
     guard page == "menu:root" else { return rows }
@@ -184,8 +186,11 @@ struct ConnectionView: View {
               dismiss()
               app.openLocalAIAdvanced(tab)
             })
-        } else if page == "source:key" || page == "source:studio" {
-          ProviderConnectionView(opensOnModelStudio: page == "source:studio")
+        } else if page == "source:key" || page == "source:studio" || page == "source:token-plan" {
+          ProviderConnectionView(
+            opensOnModelStudio: page == "source:studio",
+            initialRoute: page == "source:token-plan" ? "alibaba-token-plan" : nil
+          )
         } else if page.hasPrefix("configure:") {
           HarnessConfigurationView(mode: String(page.dropFirst(10))) { id in
             selectHarness(id)
@@ -354,7 +359,7 @@ struct ConnectionView: View {
             dismiss()
           }.buttonStyle(BrandButtonStyle())
         }
-        if (page == "menu:root" || page == "menu:plan") && search.isEmpty {
+        if page == "menu:root" && search.isEmpty {
           modelStudioHint
         }
         ConnectionSearchField(title: "Search " + catalogSearchScope, text: $search)
@@ -486,17 +491,22 @@ struct ConnectionView: View {
   }
 
   private var modelStudioHint: some View {
-    HStack(alignment: .firstTextBaseline, spacing: 10) {
-      Text("Alibaba Cloud Model Studio")
-        .font(.callout)
-      Text("Use the API key and endpoint from the region you chose.")
+    HStack(alignment: .center, spacing: 10) {
+      ProviderMark(providerID: "alibaba-token-plan").frame(width: 20, height: 20)
+        .accessibilityHidden(true)
+      Text("Alibaba Token Plan")
+        .font(.callout.weight(.medium))
+      Text("Qwen4-Max, GLM-5.3 & DeepSeek V4 with your sk-sp- key.")
         .font(.caption).foregroundStyle(.secondary)
       Spacer(minLength: 8)
-      Button("Open") { push("source:studio") }
+      Button("Open Token Plan") { push("source:token-plan") }
         .buttonStyle(.bordered)
         .controlSize(.small)
-        .accessibilityIdentifier("connect.modelStudio")
+        .accessibilityIdentifier("connect.tokenPlan")
     }
+    .padding(.horizontal, 12).padding(.vertical, 8)
+    .background(Brand.orange.opacity(0.08), in: RoundedRectangle(cornerRadius: 10))
+    .overlay(RoundedRectangle(cornerRadius: 10).strokeBorder(Brand.orange.opacity(0.28), lineWidth: 1))
   }
 
   @ViewBuilder private var detectedConnections: some View {
@@ -537,6 +547,7 @@ struct ConnectionView: View {
     if page == "source:local" { return "Local model" }
     if page == "source:key" { return "API key" }
     if page == "source:studio" { return "Alibaba Model Studio" }
+    if page == "source:token-plan" { return "Alibaba Token Plan" }
     return string(menu, "title", "Connect")
   }
   private var subtitle: String {
@@ -784,10 +795,10 @@ struct ConnectionView: View {
               "This model subscription integration is experimental and unavailable in the terminal too. Use a vendor subscription agent from Existing harnesses → Subscriptions instead."
             ).font(.callout).foregroundStyle(.secondary)
             if string(selected, "id") == "plan-alibaba-models" {
-              Text("Alibaba Cloud Model Studio is available. Paste the API key and the endpoint from the region you chose. Token Plan is on that screen.")
+              Text("Alibaba Token Plan is available with your sk-sp- key.")
                 .font(.callout).foregroundStyle(.secondary)
-              Button("Open Model Studio") { push("source:studio") }
-                .accessibilityIdentifier("connect.modelStudio")
+              Button("Open Token Plan") { push("source:token-plan") }
+                .accessibilityIdentifier("connect.tokenPlan")
             }
             Button("Browse subscription agents") { push("menu:vendors") }
           }
@@ -862,7 +873,14 @@ struct ConnectionView: View {
     case "harness-use":
       useHarness(string(row, "runtime"))
     case "local": push("source:local")
-    case "byok": push("source:key")
+    case "byok":
+      if string(row, "id") == "plan-alibaba-models"
+        || string(row, "byok_provider") == "alibaba-token-plan"
+      {
+        push("source:token-plan")
+      } else {
+        push("source:key")
+      }
     case "harness-catalog", "harness-picker": push("harnesses")
     case "harness-wizard": push("configure:wizard")
     case "rlm-settings": push("configure:rlm")

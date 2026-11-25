@@ -246,6 +246,8 @@ async def run_acp(request, directory, emit, secrets):
         if controls.get("mode") and not await client.set_mode(str(controls["mode"])):
             raise ValueError("The agent rejected the requested mode")
         for identity, value in (controls.get("config") or {}).items():
+            if controls.get("model") and str(identity) == "model":
+                continue
             if not await client.set_config_option(str(identity), str(value)):
                 raise ValueError("The agent rejected configuration option " + str(identity))
         emit(

@@ -112,11 +112,8 @@ struct WelcomeView: View {
   }
 
   private var startFootnote: some View {
-    VStack(alignment: .leading, spacing: 6) {
-      Text("Your project stays on your Mac. Your chosen agent or provider handles model requests.")
-      Text("Alibaba Cloud Model Studio connects after you open a project. More integrations will follow.")
-    }
-    .font(.caption).foregroundStyle(.secondary).fixedSize(horizontal: false, vertical: true)
+    Text("Your project stays on your Mac. Your chosen agent or provider handles model requests.")
+      .font(.caption).foregroundStyle(.secondary).fixedSize(horizontal: false, vertical: true)
   }
   private var recentCard: some View {
     VStack(alignment: .leading, spacing: 16) {

@@ -36,7 +36,7 @@ enum DeviceKeychain {
       return CompanionError("This build cannot access Keychain. Install an ad-hoc signed simulator build or a development build signed by your team.")
     }
     if status == errSecInteractionNotAllowed {
-      return CompanionError("Keychain is locked. Unlock your iPhone and try again.")
+      return CompanionError("Keychain is locked. Unlock your device and try again.")
     }
     return CompanionError("Device authorization could not be accessed in Keychain (\(status)). Reopen the app and retry; if it persists, check this build's signing configuration.")
   }
@@ -48,7 +48,7 @@ enum DeviceKeychain {
     let status = SecItemCopyMatching(request as CFDictionary, &result)
     if status == errSecItemNotFound { return nil }
     guard status == errSecSuccess else { throw failure(status) }
-    guard let data = result as? Data else { throw CompanionError("The saved device authorization is invalid. Disconnect and pair this iPhone again.") }
+    guard let data = result as? Data else { throw CompanionError("The saved device authorization is invalid. Disconnect and pair this device again.") }
     return try JSONDecoder().decode(DeviceCredential.self, from: data)
   }
   static func save(_ credential: DeviceCredential, account: String = "paired-mac") throws {

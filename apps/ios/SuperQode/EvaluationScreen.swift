@@ -65,7 +65,7 @@ struct EvaluationScreen: View {
         Toggle("Stage an optimized candidate", isOn: $optimize)
           .disabled(!optimize && (!store.permissions.contains("optimize") || profile?.flag("optimization") != true))
         if optimize && (!store.permissions.contains("optimize") || profile?.flag("optimization") != true) {
-          Text("Enable optimization for this phone and configure both reflection and optimizer models on the Mac. Choose an optimization-capable connection.").font(.caption).foregroundStyle(CompanionTheme.warning)
+          Text("Enable optimization for this \(CompanionDevice.name) and configure both reflection and optimizer models on the Mac. Choose an optimization-capable connection.").font(.caption).foregroundStyle(CompanionTheme.warning)
         }
         if !optimize {
           Picker("Task split", selection: $split) {
@@ -140,7 +140,7 @@ struct EvaluationScreen: View {
           do { try await store.drafts.remove(savedRequest.id); dismiss() }
           catch { issue = error.localizedDescription }
         } }
-      } message: { Text("This removes the saved request from the iPhone. It does not cancel an experiment already accepted by the Mac. Check Activity before starting another.") }
+      } message: { Text("This removes the saved request from this \(CompanionDevice.name). It does not cancel an experiment already accepted by the Mac. Check Activity before starting another.") }
   }
   private func inspect() async {
     guard let api = store.api, !working, !frozen else { return }

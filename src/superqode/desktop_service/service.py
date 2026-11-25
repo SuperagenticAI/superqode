@@ -1144,10 +1144,11 @@ class DesktopService:
         return {
             row["key"].removeprefix("model_studio_endpoint:"): json.loads(row["value"])
             for row in self._all(
-                "SELECT key, value FROM settings WHERE key IN (?, ?)",
+                "SELECT key, value FROM settings WHERE key IN (?, ?, ?)",
                 (
                     "model_studio_endpoint:qwen-intl",
                     "model_studio_endpoint:qwen-cn",
+                    "model_studio_endpoint:alibaba-token-plan",
                 ),
             )
         }
@@ -1386,7 +1387,9 @@ class DesktopService:
         }:
             from .connections import install, inspect_route, list_connections, list_workspace_models
             from superqode.providers.model_studio import (
-                METERED_PROVIDERS,
+                STUDIO_PROVIDERS,
+                TOKEN_PLAN_PROVIDER,
+                validate_token_plan_endpoint,
                 validate_workspace_endpoint,
             )
 
@@ -1395,12 +1398,19 @@ class DesktopService:
                 endpoints = self._model_studio_endpoints()
                 if method == "providers.endpoint.set":
                     value = params.get("endpoint")
-                    if provider not in METERED_PROVIDERS or not isinstance(value, str):
+                    if provider not in STUDIO_PROVIDERS or not isinstance(value, str):
                         raise ValueError(
                             "Choose a Model Studio provider and enter its API endpoint."
                         )
                     setting = f"model_studio_endpoint:{provider}"
-                    value = validate_workspace_endpoint(value) if value.strip() else ""
+                    if value.strip():
+                        value = (
+                            validate_token_plan_endpoint(value)
+                            if provider == TOKEN_PLAN_PROVIDER
+                            else validate_workspace_endpoint(value)
+                        )
+                    else:
+                        value = ""
                     if "key" in params:
                         install({}, params, base_url=value)
                     if value:

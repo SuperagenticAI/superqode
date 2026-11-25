@@ -30,61 +30,77 @@ struct TaskQueueView: View {
         Button("Pause queue") { app.queueAction("queue.pause") }
           .disabled(app.taskQueue["running"] as? Bool != true)
         Spacer()
-        Text(app.taskQueue["running"] as? Bool == true ? "RUNNING" : "PAUSED").font(
-          .caption.monospaced())
+        let queueRunning = app.taskQueue["running"] as? Bool == true
+        FactoryStatusBadge(status: queueRunning ? .running : .pending, detail: queueRunning ? "Active" : "Paused")
       }
       ScrollView {
         LazyVStack(alignment: .leading, spacing: 12) {
           ForEach(items, id: \.projectRowID) { item in
             let request = item["request"] as? [String: Any] ?? [:]
             let state = string(item, "state")
-            VStack(alignment: .leading, spacing: 8) {
-              HStack {
-                Text(string(request, "prompt")).font(.system(size: 13, design: .monospaced))
-                  .lineLimit(4)
-                Spacer()
-                Pill(title: state, color: state == "failed" ? .orange : .qAccent)
-              }
-              Text(
-                string(request, "harness") + " · " + string(request, "provider") + " / "
-                  + string(request, "model")
-              )
-              .font(.caption).foregroundStyle(.secondary)
-              if !string(item, "error").isEmpty {
-                Text(string(item, "error")).font(.caption).foregroundStyle(.orange)
-              }
-              HStack {
-                if !string(item, "job").isEmpty {
-                  Button("Open run") {
-                    app.selectJob(string(item, "job"))
-                    app.section = "Workspace"
-                    dismiss()
-                  }
+            let status = FactoryStatus(raw: state)
+            HStack(spacing: 0) {
+              RoundedRectangle(cornerRadius: 2, style: .continuous)
+                .fill(status.color.opacity(status.isActive ? 0.95 : 0.65))
+                .frame(width: 3)
+                .padding(.vertical, 8)
+              VStack(alignment: .leading, spacing: 8) {
+                HStack(alignment: .top, spacing: 8) {
+                  Text(string(request, "prompt")).font(.system(size: 13, design: .monospaced))
+                    .lineLimit(4)
+                  Spacer()
+                  FactoryStatusBadge(status: status)
                 }
-                if state != "running" {
-                  if state != "pending" {
-                    Button("Retry") {
-                      app.queueAction("queue.retry", extra: ["id": string(item, "id")])
+                if status == .running {
+                  ThinkingBar().frame(maxWidth: 180)
+                }
+                Text(
+                  string(request, "harness") + " · " + string(request, "provider") + " / "
+                    + string(request, "model")
+                )
+                .font(.caption).foregroundStyle(.secondary)
+                if !string(item, "error").isEmpty {
+                  Text(string(item, "error")).font(.caption).foregroundStyle(Color(red: 0.86, green: 0.24, blue: 0.28))
+                }
+                HStack {
+                  if !string(item, "job").isEmpty {
+                    Button("Open run") {
+                      app.selectJob(string(item, "job"))
+                      app.section = "Workspace"
+                      dismiss()
                     }
                   }
-                  Button {
-                    app.queueAction(
-                      "queue.move", extra: ["id": string(item, "id"), "direction": "up"])
-                  } label: {
-                    Image(systemName: "arrow.up")
+                  if state != "running" {
+                    if state != "pending" {
+                      Button("Retry") {
+                        app.queueAction("queue.retry", extra: ["id": string(item, "id")])
+                      }
+                    }
+                    Button {
+                      app.queueAction(
+                        "queue.move", extra: ["id": string(item, "id"), "direction": "up"])
+                    } label: {
+                      Image(systemName: "arrow.up")
+                    }
+                    Button {
+                      app.queueAction(
+                        "queue.move", extra: ["id": string(item, "id"), "direction": "down"])
+                    } label: {
+                      Image(systemName: "arrow.down")
+                    }
+                    Button("Remove", role: .destructive) {
+                      app.queueAction("queue.remove", extra: ["id": string(item, "id")])
+                    }
                   }
-                  Button {
-                    app.queueAction(
-                      "queue.move", extra: ["id": string(item, "id"), "direction": "down"])
-                  } label: {
-                    Image(systemName: "arrow.down")
-                  }
-                  Button("Remove", role: .destructive) {
-                    app.queueAction("queue.remove", extra: ["id": string(item, "id")])
-                  }
-                }
-              }.controlSize(.small)
-            }.padding(14).brandSurface(radius: 12)
+                }.controlSize(.small)
+              }.padding(14)
+            }
+            .brandSurface(radius: 12)
+            .overlay(
+              RoundedRectangle(cornerRadius: 12, style: .continuous)
+                .strokeBorder(status.isActive || status == .failed ? status.color.opacity(0.36) : Color.clear, lineWidth: 1)
+                .allowsHitTesting(false)
+            )
           }
           if items.isEmpty {
             Text("Use Add to queue in the coding composer to prepare tasks.").foregroundStyle(

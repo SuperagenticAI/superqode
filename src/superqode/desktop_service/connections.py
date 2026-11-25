@@ -6,11 +6,13 @@ from superqode.providers.credentials import provider_api_key
 from superqode.providers.dynamic import connect_provider_ids, resolve_base_url, resolve_provider_def
 from superqode.providers.model_studio import (
     METERED_PROVIDERS,
+    STUDIO_PROVIDERS,
     TOKEN_PLAN_BASE,
     TOKEN_PLAN_PROVIDER,
     is_plan_model,
     thinking_policy,
     validate_metered_route,
+    validate_token_plan_endpoint,
     validate_token_plan_route,
     validate_workspace_endpoint,
 )
@@ -63,7 +65,9 @@ def install(credentials: dict[str, str], params: dict, base_url: str | None = No
         if definition.id in METERED_PROVIDERS:
             validate_metered_route(base_url or resolve_base_url(definition) or "", value)
         elif definition.id == TOKEN_PLAN_PROVIDER:
-            validate_token_plan_route(TOKEN_PLAN_BASE, value)
+            validate_token_plan_route(
+                base_url or resolve_base_url(definition) or TOKEN_PLAN_BASE, value
+            )
         credentials[definition.id] = value.strip()
     return {"ok": True}
 
@@ -74,13 +78,20 @@ def list_workspace_models(credentials: dict[str, str], params: dict, base_url: s
     from superqode.providers.live_models import discover_provider_models
 
     provider = str(params.get("provider") or "")
-    if provider not in METERED_PROVIDERS:
+    if provider not in STUDIO_PROVIDERS:
         raise ValueError("Workspace model discovery requires a Model Studio provider.")
     if "endpoint" in params:
         proposed = params["endpoint"]
         if not isinstance(proposed, str):
             raise ValueError("Enter a Model Studio API endpoint.")
-        base_url = validate_workspace_endpoint(proposed) if proposed.strip() else None
+        if proposed.strip():
+            base_url = (
+                validate_token_plan_endpoint(proposed)
+                if provider == TOKEN_PLAN_PROVIDER
+                else validate_workspace_endpoint(proposed)
+            )
+        else:
+            base_url = TOKEN_PLAN_BASE if provider == TOKEN_PLAN_PROVIDER else None
     if "key" in params:
         # Use a copy: loading models must not store or replace a key.
         credentials = dict(credentials)
@@ -151,11 +162,16 @@ def list_connections(
             "default_base_url": definition.default_base_url,
             # qwen-intl has no region until the user pastes one. qwen-cn is the
             # China route, so an empty field still means the China shared host.
+            # alibaba-token-plan defaults to Singapore unless overridden.
             "workspace_base_url": (
                 configured_endpoint
-                or (resolve_base_url(definition) if definition.id == "qwen-cn" else None)
+                or (
+                    resolve_base_url(definition)
+                    if definition.id in {"qwen-cn", TOKEN_PLAN_PROVIDER}
+                    else None
+                )
             )
-            if definition.id in METERED_PROVIDERS
+            if definition.id in STUDIO_PROVIDERS
             else None,
             "workspace_endpoint_override": configured_endpoint,
             "base_url_env": definition.base_url_env or "",

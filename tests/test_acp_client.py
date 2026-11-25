@@ -480,6 +480,67 @@ class TestACPClient:
         ]
 
     @pytest.mark.asyncio
+    async def test_config_options_precede_legacy_effort_suffixed_models(
+        self, tmp_path, monkeypatch
+    ):
+        """Antigravity ACP returns both configOptions (base IDs + thought_level) and legacy models."""
+        client = ACPClient(project_root=tmp_path, command="agy acp")
+
+        async def fake_call_method(method, *, timeout=None, **params):
+            return {
+                "sessionId": "agy-session-1",
+                "models": {
+                    "currentModelId": "gemini-4-neon-high",
+                    "availableModels": [
+                        {"modelId": "gemini-4-neon-low", "name": "Gemini 4 Neon (Low)"},
+                        {"modelId": "gemini-4-neon-high", "name": "Gemini 4 Neon (High)"},
+                        {"modelId": "gemini-4-neon-xhigh", "name": "Gemini 4 Neon (XHigh)"},
+                        {"modelId": "gemini-4-carbon-medium", "name": "Gemini 4 Carbon (Medium)"},
+                        {"modelId": "gemini-pro-orchestrator-neon", "name": "Orchestrator (Neon)"},
+                    ],
+                },
+                "configOptions": [
+                    {
+                        "id": "model",
+                        "category": "model",
+                        "type": "select",
+                        "currentValue": "gemini-4-neon",
+                        "options": [
+                            {"value": "gemini-4-neon", "name": "Gemini 4 Neon"},
+                            {"value": "gemini-4-carbon", "name": "Gemini 4 Carbon"},
+                            {
+                                "value": "gemini-pro-orchestrator-neon",
+                                "name": "Orchestrator (Neon)",
+                            },
+                        ],
+                    },
+                    {
+                        "id": "thought_level",
+                        "category": "thought_level",
+                        "type": "select",
+                        "currentValue": "high",
+                        "options": [
+                            {"value": "low", "name": "Low"},
+                            {"value": "medium", "name": "Medium"},
+                            {"value": "high", "name": "High"},
+                            {"value": "xhigh", "name": "Extra"},
+                        ],
+                    },
+                ],
+            }
+
+        monkeypatch.setattr(client, "_call_method", fake_call_method)
+        await client._new_session()
+
+        assert await client.get_current_model() == "gemini-4-neon"
+        models = {m["modelId"]: m for m in await client.get_available_models()}
+        assert list(models) == ["gemini-4-neon", "gemini-4-carbon", "gemini-pro-orchestrator-neon"]
+        assert models["gemini-4-neon"]["reasoning_efforts"] == ["low", "high", "xhigh"]
+        assert models["gemini-4-neon"]["current_reasoning_effort"] == "high"
+        assert models["gemini-4-carbon"]["reasoning_efforts"] == ["medium"]
+        assert models["gemini-pro-orchestrator-neon"]["reasoning_efforts"] == []
+
+    @pytest.mark.asyncio
     async def test_new_session_switches_legacy_id_model_shape(self, tmp_path, monkeypatch):
         """Some ACP agents advertise availableModels with id rather than modelId."""
         client = ACPClient(

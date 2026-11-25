@@ -519,6 +519,7 @@ def test_the_subscriptions_category_holds_every_plan_alphabetically():
 
     assert [p.id for p in list_connection_profiles(CONNECT_MENU_VENDORS)] == [
         "amp",
+        "antigravity-acp",
         "antigravity",
         "codex",
         "codex-sdk",
@@ -1358,29 +1359,30 @@ def test_subscription_is_a_real_menu_not_a_printed_list():
     assert CONNECT_MENU_PLAN in CONNECT_MENUS
     for profile in profiles:
         assert profile.menu == CONNECT_MENU_PLAN
-        # Every row has to lead somewhere the dispatcher understands.
+        assert "claude" not in profile.label.casefold()
+        assert "anthropic" not in profile.label.casefold()
+        assert profile.auth_mode == "subscription"
+        if profile.id == "plan-alibaba-models":
+            assert profile.connector == "byok"
+            assert profile.byok_provider == "alibaba-token-plan"
+            assert profile.label == "Alibaba Token Plan"
+            assert "sk-sp-" in profile.unavailable_hint
+            continue
+        # Every remaining row stays on plan-guidance until its provider graduates.
         assert profile.connector == "plan-guidance"
         assert profile.label.endswith(" — Coming soon")
         assert profile.unavailable_hint == "Subscription model access is coming soon."
         assert "adapter" not in profile.unavailable_hint
         assert "credentials" not in profile.unavailable_hint
         assert not profile.available
-        assert "claude" not in profile.label.casefold()
-        assert "anthropic" not in profile.label.casefold()
-        assert profile.auth_mode == "subscription"
-        if profile.connector == "byok":
-            assert profile.byok_provider
-        if profile.connector == "copilot":
-            # The vendor route asks the account what it may use. BYOK would
-            # list the whole catalogue, which is not plan specific.
-            assert profile.runtime
-            assert not profile.byok_provider
 
 
 def test_experimental_subscription_cards_preserve_connection_state():
     from superqode.app_main import SuperQodeApp
 
     for profile in list_connection_profiles(CONNECT_MENU_PLAN):
+        if profile.connector != "plan-guidance":
+            continue
         stub = DispatchStub()
         session = object()
         stub._key_harness_session = session
@@ -1437,6 +1439,14 @@ def test_choosing_a_plan_connects_that_provider():
     assert stub.byok == ["minimax-token-plan"]
     assert stub._next_direct_auth_mode == "subscription"
     assert stub._direct_connection_profile_id == "plan-minimax"
+
+    stub = PlanStub()
+    SuperQodeApp._dispatch_connection_profile(
+        stub, get_connection_profile("plan-alibaba-models"), FakeLog()
+    )
+    assert stub.byok == ["alibaba-token-plan"]
+    assert stub._next_direct_auth_mode == "subscription"
+    assert stub._direct_connection_profile_id == "plan-alibaba-models"
 
 
 def test_direct_plan_connection_persists_as_subscription(tmp_path, monkeypatch):

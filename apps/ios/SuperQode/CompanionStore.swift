@@ -134,7 +134,7 @@ enum MacConnectionPhase: Equatable {
     let request = generation
     do {
       let catalog = try await api.rpc("companion.catalog").object
-      guard catalog.number("protocol") == 1 else { throw CompanionError("Update the Mac and iPhone apps together to use this connection.") }
+      guard catalog.number("protocol") == 1 else { throw CompanionError("Update SuperQode on your Mac and this \(CompanionDevice.name) together to use this connection.") }
       async let projectPage = api.rpc("projects.list")
       async let jobPage = api.rpc("jobs.list")
       let (projectResult, jobResult) = try await (projectPage, jobPage)

@@ -116,13 +116,19 @@ pay-as-you-go.
 ## Token Plan
 
 Token Plan is a separate interactive connection, `alibaba-token-plan`. It uses
-an `sk-sp-` key and the fixed endpoint
-`https://token-plan.ap-southeast-1.maas.aliyuncs.com/compatible-mode/v1`.
-The model list leads with `qwen4-max`. Headless runs, evaluations, and batch
-jobs are refused. `qwen4-max-preview` stays on this plan through 25 November
-2026 and is excluded from metered discovery.
+an `sk-sp-` key and official regional Token Plan endpoints:
+
+- Singapore (International, default): `https://token-plan.ap-southeast-1.maas.aliyuncs.com/compatible-mode/v1`
+- Beijing (China): `https://token-plan.cn-beijing.maas.aliyuncs.com/compatible-mode/v1`
+
+Set `ALIBABA_TOKEN_PLAN_API_KEY` to your `sk-sp-` key, and optionally set
+`ALIBABA_TOKEN_PLAN_API_BASE` if your plan is in the Beijing region. Live model
+discovery loads the models included in your plan (leading with `qwen4-max` and
+supported partner models). Headless runs, evaluations, and batch jobs are
+refused.
 
 ```text
+:connect plan-alibaba-models
 :connect byok alibaba-token-plan qwen4-max
 ```
 

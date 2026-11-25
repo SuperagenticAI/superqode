@@ -67,6 +67,7 @@ _VENDOR_ALIASES: Dict[str, str] = {
     "codex-cli": "codex",
     "codex-sdk": "codex",
     "antigravity-cli": "antigravity",
+    "antigravity-acp": "antigravity",
     "antigravity-sdk": "antigravity",
     "glm-cli": "glm",
     "qwen-code": "qwen",

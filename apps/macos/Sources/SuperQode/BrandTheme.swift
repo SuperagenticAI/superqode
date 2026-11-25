@@ -75,12 +75,14 @@ struct ConversationSurface: ViewModifier {
   @Environment(\.colorSchemeContrast) private var contrast
   func body(content: Content) -> some View {
     content.background {
-      RoundedRectangle(cornerRadius: 14).fill(
-        LinearGradient(colors: reduceTransparency || contrast == .increased ? [Color.qPanel, Color.qPanel]
-          : scheme == .dark ? [.black, Color(red: 0.065, green: 0.038, blue: 0.022), .black]
-          : [.white, Color(red: 1, green: 0.98, blue: 0.95), .white],
-          startPoint: .topLeading, endPoint: .bottomTrailing))
-    }.overlay(RoundedRectangle(cornerRadius: 14).stroke(Color.primary.opacity(0.18), lineWidth: 1).allowsHitTesting(false))
+      RoundedRectangle(cornerRadius: 12).fill(
+        reduceTransparency || contrast == .increased
+          ? Color.qPanel
+          : Color.primary.opacity(scheme == .dark ? 0.03 : 0.022))
+    }.overlay(
+      RoundedRectangle(cornerRadius: 12)
+        .stroke(Color.primary.opacity(contrast == .increased ? 0.35 : 0.08), lineWidth: 1)
+        .allowsHitTesting(false))
   }
 }
 struct OutlinedSurface: ViewModifier {
@@ -402,9 +404,9 @@ struct AgentWorkingCard: View {
             .accessibilityLabel("Current agent activity")
         }
       }
-    }.padding(.horizontal, 12).padding(.vertical, 8).frame(maxWidth: .infinity, alignment: .leading)
-      .background(Color.qPanel, in: RoundedRectangle(cornerRadius: 12))
-      .overlay(RoundedRectangle(cornerRadius: 12).stroke(Color.qAccent.opacity(0.12), lineWidth: 1))
+    }.padding(.horizontal, 10).padding(.vertical, 6).frame(maxWidth: .infinity, alignment: .leading)
+      .background(Color.qPanel, in: RoundedRectangle(cornerRadius: 9))
+      .overlay(RoundedRectangle(cornerRadius: 9).stroke(Color.qAccent.opacity(0.12), lineWidth: 1))
   }
 }
 

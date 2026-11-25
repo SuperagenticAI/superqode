@@ -411,6 +411,7 @@ PROVIDERS: Dict[str, ProviderDef] = {
         category=ProviderCategory.CHINA_LABS,
         env_vars=["ALIBABA_TOKEN_PLAN_API_KEY"],
         litellm_prefix="openai/",
+        base_url_env="ALIBABA_TOKEN_PLAN_API_BASE",
         docs_url="https://modelstudio.console.alibabacloud.com/ap-southeast-1/subscription/token-plan/personal",
         default_base_url=TOKEN_PLAN_BASE,
         example_models=[

@@ -43,14 +43,29 @@ struct CommandPaletteView: View {
           List(results, selection: $selection) { command in
             Button { app.choosePaletteCommand(command.action) } label: {
               HStack(spacing: 12) {
-                Image(systemName: command.symbol).frame(width: 20)
-                VStack(alignment: .leading, spacing: 3) {
-                  Text(command.title).lineLimit(1)
+                Image(systemName: command.symbol)
+                  .font(.system(size: 12, weight: .semibold))
+                  .foregroundStyle(command.isEnabled ? Brand.purple : Color.secondary)
+                  .frame(width: 26, height: 26)
+                  .background(
+                    (command.isEnabled ? Brand.purple.opacity(0.11) : Color.primary.opacity(0.05)),
+                    in: RoundedRectangle(cornerRadius: 6, style: .continuous)
+                  )
+                VStack(alignment: .leading, spacing: 2.5) {
+                  Text(command.title)
+                    .font(.system(size: 13, weight: .medium))
+                    .lineLimit(1)
                   Text(command.disabledReason ?? command.detail).font(.caption)
                     .foregroundStyle(.secondary).lineLimit(1)
                 }
                 Spacer()
-                if let key = command.key { Text((command.shiftKey ? "⇧⌘" : "⌘") + key.uppercased()).font(.caption.monospaced()) }
+                if let key = command.key {
+                  HStack(spacing: 3) {
+                    if command.shiftKey { KeycapPill(text: "⇧") }
+                    KeycapPill(text: "⌘")
+                    KeycapPill(text: key.uppercased())
+                  }
+                }
               }.padding(.vertical, 5).frame(maxWidth: .infinity, alignment: .leading)
             }.buttonStyle(.plain).disabled(!command.isEnabled)
               .help(command.disabledReason ?? command.detail)

@@ -155,6 +155,9 @@ struct CompanionTurnChangesCard: View {
 
       if !summary.canRestore && !summary.live && !summary.restoreReason.isEmpty {
         Text(summary.restoreReason).font(.caption2).foregroundStyle(.secondary)
+      } else if summary.canRestore && !summary.live && !store.isPreview && !store.permissions.contains("restore") {
+        Text("Allow checkpoint restoration when pairing this \(CompanionDevice.name) on your Mac to undo turns.")
+          .font(.caption2).foregroundStyle(.secondary)
       }
       if !issue.isEmpty {
         Text(issue).font(.caption).foregroundStyle(CompanionTheme.warning)

@@ -31,7 +31,7 @@ policies are applied.
 | Route | Authentication | Harness owner | Runtime |
 | --- | --- | --- | --- |
 | `:connect antigravity` | Google Sign-In through `agy` | Google Antigravity | `antigravity-cli` |
-| `:connect acp antigravity` | Antigravity CLI sign-in | Google Antigravity | `agy acp` |
+| `:connect antigravity-acp` / `:connect acp antigravity` | Antigravity CLI sign-in | Google Antigravity | `agy acp` |
 | `:antigravity sdk` | `GEMINI_API_KEY` or `GOOGLE_API_KEY` | Google Antigravity | `antigravity-sdk` |
 | `:antigravity managed` | `GEMINI_API_KEY` or `GOOGLE_API_KEY` | Google Antigravity, hosted by Google | `antigravity-managed` |
 | `:antigravity superqode` | Google API key through BYOK | SuperQode | `builtin` |
@@ -71,9 +71,9 @@ OAuth token.
 SuperQode requires Antigravity CLI 1.1.1 or newer. Version 1.1.1 corrected
 subprocess hangs and error exit behavior in print mode.
 
-For ACP in the TUI, use `:connect acp antigravity`. In the macOS app,
-choose **Google Antigravity (ACP)** from the ACP agent catalog. The ACP
-route requires Antigravity CLI 1.5.1 or newer and uses the models Google
+For ACP in the TUI, use `:connect antigravity-acp` (or `:connect acp antigravity`). In the macOS app,
+choose **Google Antigravity (ACP)** from the ACP agent catalog or Subscriptions. The ACP
+route requires Antigravity CLI 1.5.1 or newer and uses the models and per-model effort levels Google
 advertises to your signed-in account.
 
 Current CLI controls are available without leaving SuperQode:

@@ -914,8 +914,6 @@ class ACPClient:
 
     def _apply_session_state_from_response(self, response: Dict[str, Any]) -> None:
         """Capture session state returned by ``session/new`` or ``session/load``."""
-        self._apply_config_options_from_response(response)
-
         modes = response.get("modes")
         if isinstance(modes, dict):
             available = modes.get("availableModes")
@@ -925,16 +923,35 @@ class ACPClient:
             if isinstance(current, str):
                 self._current_mode_id = current
 
+        legacy_models: List[dict] = []
+        legacy_current: Optional[str] = None
         models = response.get("models")
         if isinstance(models, dict):
             available = models.get("availableModels")
             if isinstance(available, list):
+                legacy_models = [item for item in available if isinstance(item, dict)]
                 self._available_models = available
             current = models.get("currentModelId")
             if isinstance(current, str):
+                legacy_current = current
                 self._current_model_id = current
 
-    def _apply_config_options_from_response(self, response: Dict[str, Any]) -> None:
+        # ACP v2 configOptions take precedence over legacy session/models when a
+        # model option is advertised so exposed IDs match what
+        # session/set_config_option accepts (e.g. agy acp advertises base IDs
+        # like "gemini-4-neon" + a separate "thought_level" option in
+        # configOptions while legacy models lists effort-suffixed IDs).
+        self._apply_config_options_from_response(
+            response, legacy_models=legacy_models, legacy_current=legacy_current
+        )
+
+    def _apply_config_options_from_response(
+        self,
+        response: Dict[str, Any],
+        *,
+        legacy_models: Optional[List[dict]] = None,
+        legacy_current: Optional[str] = None,
+    ) -> None:
         """Capture generic ACP config options and derive model state from them."""
         options = response.get("configOptions")
         if not isinstance(options, list):
@@ -949,7 +966,67 @@ class ACPClient:
             self._current_model_id = current
         models = self._models_from_config_option(model_option)
         if models:
+            self._attach_reasoning_efforts(
+                models, legacy_models or [], legacy_current=legacy_current
+            )
             self._available_models = models
+
+    def _effort_config_option(self) -> Optional[dict]:
+        """Return the generic config option that represents thinking/effort level."""
+        for option in self._config_options:
+            if not isinstance(option, dict):
+                continue
+            if option.get("category") == "thought_level" or option.get("id") in {
+                "thought_level",
+                "effort",
+            }:
+                return option
+        return None
+
+    def _attach_reasoning_efforts(
+        self,
+        models: List[dict],
+        legacy_models: List[dict],
+        *,
+        legacy_current: Optional[str] = None,
+    ) -> None:
+        """Infer per-model supported thinking levels from legacy effort-suffixed IDs."""
+        effort_option = self._effort_config_option()
+        if not effort_option or not legacy_models:
+            return
+        levels: List[str] = []
+        for item in effort_option.get("options") or []:
+            if not isinstance(item, dict):
+                continue
+            nested = item.get("options") if isinstance(item.get("options"), list) else [item]
+            for entry in nested:
+                if isinstance(entry, dict):
+                    val = str(entry.get("value") or entry.get("id") or "").strip().lower()
+                    if val and val not in levels:
+                        levels.append(val)
+        if not levels:
+            return
+        legacy_ids = {mid.lower() for item in legacy_models if (mid := self._model_id(item))}
+        any_suffixed = any(
+            f"{str(row['modelId']).lower()}-{level}" in legacy_ids
+            for row in models
+            for level in levels
+        )
+        if not any_suffixed:
+            return
+        current_effort = str(effort_option.get("currentValue") or "").strip().lower()
+        for row in models:
+            base = str(row["modelId"]).lower()
+            supported = [level for level in levels if f"{base}-{level}" in legacy_ids]
+            row["reasoning_efforts"] = supported
+            if supported:
+                if legacy_current and legacy_current.lower().startswith(base + "-"):
+                    suffix = legacy_current.lower()[len(base) + 1 :]
+                    if suffix in supported:
+                        row["current_reasoning_effort"] = suffix
+                        continue
+                if current_effort in supported:
+                    row["current_reasoning_effort"] = current_effort
 
     @staticmethod
     def _model_id(model: Any) -> Optional[str]:

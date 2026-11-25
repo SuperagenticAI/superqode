@@ -361,9 +361,9 @@ struct RootView: View {
           } label: {
             Image(systemName: "folder")
           }.help("Reveal project in Finder").disabled(app.project.isEmpty)
-        }.padding(.horizontal, 20).padding(.vertical, 12).modifier(NavigationGlass()).padding(
-          .horizontal, 12
-        ).padding(.vertical, 6)
+        }.padding(.horizontal, 14).padding(.vertical, 7).modifier(NavigationGlass()).padding(
+          .horizontal, 10
+        ).padding(.vertical, 4)
         if WorkspaceNavigationGroup.usesCodingWorkspace(app.section) {
           ThreadTabBar()
           ForkWorkspaceBar()
@@ -420,9 +420,9 @@ struct RootView: View {
               width: geometry.size.width, height: geometry.size.height, alignment: .topLeading
             )
             .background(Color.qPanel)
-            .clipShape(RoundedRectangle(cornerRadius: 16))
-            .overlay(RoundedRectangle(cornerRadius: 16).strokeBorder(.primary.opacity(0.07)))
-          }.padding(.horizontal, 20).padding(.bottom, 20)
+            .clipShape(RoundedRectangle(cornerRadius: 12))
+            .overlay(RoundedRectangle(cornerRadius: 12).strokeBorder(.primary.opacity(0.07)))
+          }.padding(.horizontal, 10).padding(.bottom, 10)
         }
         ExecutionRecoveryView()
         if !app.recoveryIssue.isEmpty {
@@ -590,6 +590,12 @@ struct CodingView: View {
           inspector.frame(width: wide ? 350 : nil).background(Color.qPanel)
         }
       }.frame(minHeight: 0, maxHeight: .infinity, alignment: .top).clipped()
+      if let approval = app.pendingApprovalData {
+        PendingApprovalBanner(data: approval)
+          .padding(.horizontal, 18)
+          .padding(.bottom, 6)
+          .transition(.move(edge: .bottom).combined(with: .opacity))
+      }
       CodingComposer(draftStore: app.draftStore, availableHeight: conversationHeight)
     }
     .frame(height: conversationHeight, alignment: .bottom)
@@ -687,7 +693,7 @@ struct CodingView: View {
         Button("Export evidence…", action: app.exportEvidence).disabled(app.selectedJob.isEmpty)
         Button("Full review…", action: openFullReview)
       } label: { Image(systemName: "ellipsis") }.menuStyle(.borderlessButton).fixedSize()
-    }.font(.system(size: 11)).buttonStyle(.plain).padding(.horizontal, 16).padding(.vertical, 10)
+    }.font(.system(size: 11)).buttonStyle(.plain).padding(.horizontal, 14).padding(.vertical, 6)
   }
   private func focusSection() {
     // Local focus only. Workspace pane state is applied atomically by the
@@ -725,16 +731,169 @@ struct CodingView: View {
   }
 }
 
+struct KeycapPill: View {
+  let text: String
+  var body: some View {
+    Text(text)
+      .font(.system(size: 10, weight: .semibold, design: .monospaced))
+      .foregroundStyle(.secondary)
+      .padding(.horizontal, 5)
+      .padding(.vertical, 2)
+      .background(Color.primary.opacity(0.07), in: RoundedRectangle(cornerRadius: 4, style: .continuous))
+      .overlay(
+        RoundedRectangle(cornerRadius: 4, style: .continuous)
+          .strokeBorder(Color.primary.opacity(0.14), lineWidth: 0.75)
+          .allowsHitTesting(false)
+      )
+  }
+}
+
+/// Sticky approval bar docked above the composer so active permission requests
+/// are never missed when scrolled up in a long transcript.
+struct PendingApprovalBanner: View {
+  @EnvironmentObject var app: Workspace
+  let data: [String: Any]
+
+  private var requestID: String { string(data, "request_id") }
+  private var tool: [String: Any] { data["tool"] as? [String: Any] ?? [:] }
+  private var arguments: [String: Any] {
+    tool["arguments"] as? [String: Any] ?? tool["rawInput"] as? [String: Any] ?? [:]
+  }
+  private var headline: String {
+    string(tool, "title", string(tool, "tool_name", string(tool, "name", "Action requires approval")))
+  }
+  private var detailPreview: String {
+    if let command = tool["command"] as? String ?? arguments["command"] as? String, !command.isEmpty {
+      return command
+    }
+    if let path = tool["path"] as? String ?? arguments["path"] as? String, !path.isEmpty {
+      return path
+    }
+    return ""
+  }
+  private var allowsAlways: Bool {
+    (data["options"] as? [[String: Any]] ?? []).contains { string($0, "kind") == "allow_always" }
+  }
+
+  var body: some View {
+    HStack(spacing: 0) {
+      RoundedRectangle(cornerRadius: 2, style: .continuous)
+        .fill(Brand.orange)
+        .frame(width: 3.5)
+        .padding(.vertical, 6)
+      HStack(spacing: 10) {
+        FactoryStatusDot(status: .waitingHuman, size: 7)
+        VStack(alignment: .leading, spacing: 2) {
+          HStack(spacing: 6) {
+            Text("Permission needed")
+              .font(.caption.weight(.semibold))
+              .foregroundStyle(Brand.orange)
+            Text(headline)
+              .font(.caption.weight(.medium))
+              .lineLimit(1)
+          }
+          if !detailPreview.isEmpty {
+            Text(detailPreview)
+              .font(.system(size: 11, design: .monospaced))
+              .foregroundStyle(.secondary)
+              .lineLimit(1)
+          }
+        }
+        Spacer(minLength: 8)
+        HStack(spacing: 6) {
+          Button {
+            app.approve(requestID, allow: false)
+          } label: {
+            HStack(spacing: 4) {
+              Text("Deny")
+              KeycapPill(text: "⎋")
+            }
+          }
+          .disabled(app.busy)
+          if allowsAlways {
+            Button("Allow always") {
+              app.approve(requestID, allow: true, always: true)
+            }
+            .disabled(app.busy)
+          }
+          Button {
+            app.approve(requestID, allow: true)
+          } label: {
+            HStack(spacing: 5) {
+              Text("Allow once")
+              KeycapPill(text: "⏎")
+            }
+          }
+          .buttonStyle(BrandButtonStyle())
+          .disabled(app.busy)
+        }
+      }
+      .padding(.horizontal, 12)
+      .padding(.vertical, 8)
+    }
+    .background(Brand.orange.opacity(0.08), in: RoundedRectangle(cornerRadius: 11, style: .continuous))
+    .overlay(
+      RoundedRectangle(cornerRadius: 11, style: .continuous)
+        .strokeBorder(Brand.orange.opacity(0.35), lineWidth: 1)
+        .allowsHitTesting(false)
+    )
+  }
+}
+
 struct ChangeStrip: View {
   @EnvironmentObject var app: Workspace
+
+  private func statCounts(from stat: String) -> (added: Int, removed: Int) {
+    var added = 0
+    var removed = 0
+    let parts = stat.split(separator: ",")
+    for raw in parts {
+      let part = raw.trimmingCharacters(in: .whitespacesAndNewlines)
+      let digits = part.prefix { $0.isNumber }
+      guard let count = Int(digits) else { continue }
+      if part.contains("insertion") { added += count }
+      else if part.contains("deletion") { removed += count }
+    }
+    return (added, removed)
+  }
+
   var body: some View {
+    let statText = string(app.git, "stat")
     if let line = ChangeSummary.line(
-      stat: string(app.git, "stat"), status: string(app.git, "status"),
+      stat: statText, status: string(app.git, "status"),
       diff: string(app.git, "diff"), error: string(app.git, "error")) {
-      HStack(spacing: 12) {
-        Image(systemName: "arrow.triangle.branch")
-        Text(string(app.git, "branch", "Git")).font(.system(size: 11, design: .monospaced)).foregroundStyle(.secondary)
+      let counts = statCounts(from: statText)
+      HStack(spacing: 10) {
+        HStack(spacing: 5) {
+          Image(systemName: "arrow.triangle.branch")
+            .font(.system(size: 10, weight: .semibold))
+          Text(string(app.git, "branch", "Git"))
+            .font(.system(size: 11, weight: .medium, design: .monospaced))
+        }
+        .foregroundStyle(.secondary)
+        .padding(.horizontal, 7)
+        .padding(.vertical, 3)
+        .background(Color.primary.opacity(0.05), in: Capsule())
+
         Text(line).font(.system(size: 11, design: .monospaced)).lineLimit(1)
+
+        if counts.added > 0 {
+          Text("+\(counts.added)")
+            .font(.system(size: 10.5, weight: .semibold, design: .monospaced))
+            .foregroundStyle(Color(red: 0.14, green: 0.64, blue: 0.42))
+            .padding(.horizontal, 6)
+            .padding(.vertical, 2)
+            .background(Color(red: 0.14, green: 0.64, blue: 0.42).opacity(0.12), in: Capsule())
+        }
+        if counts.removed > 0 {
+          Text("-\(counts.removed)")
+            .font(.system(size: 10.5, weight: .semibold, design: .monospaced))
+            .foregroundStyle(Color(red: 0.86, green: 0.24, blue: 0.28))
+            .padding(.horizontal, 6)
+            .padding(.vertical, 2)
+            .background(Color(red: 0.86, green: 0.24, blue: 0.28).opacity(0.12), in: Capsule())
+        }
+
         Spacer()
         Button("Review") { app.section = "Review" }.font(.caption)
         Button(app.inspectorVisible ? "Hide diff" : "Show diff") { app.inspectorVisible.toggle() }
@@ -912,7 +1071,7 @@ struct CodingComposer: View {
           Text("Choose a connection above to start.").font(.caption).foregroundStyle(.secondary)
         }
       }
-      VStack(alignment: .leading, spacing: 10) {
+      VStack(alignment: .leading, spacing: 6) {
       if app.needsSavedProviderKey {
         HStack {
           Text("Use your saved API key to continue with this model.")
@@ -1061,8 +1220,8 @@ struct CodingComposer: View {
           app.send(continueSession: continuesConversation)
         } label: {
           Label(app.busy ? "Starting…" : "Send", systemImage: "arrow.up")
-            .font(.system(size: 15, weight: .semibold))
-        }.buttonStyle(BrandButtonStyle()).controlSize(.large)
+            .font(.system(size: 13, weight: .semibold))
+        }.buttonStyle(BrandButtonStyle()).controlSize(.regular)
           .disabled(!app.canSubmitDraft)
           .keyboardShortcut(.return, modifiers: .command)
       }
@@ -1082,10 +1241,10 @@ struct CodingComposer: View {
     .onChange(of: app.enforcesSessionControls) { _, enforced in
       if !enforced && app.interactionMode == "plan" { app.interactionMode = "code" }
     }
-    .padding(.horizontal, 12).padding(.vertical, awaitingConnection ? 12 : 10).brandSurface()
+    .padding(.horizontal, 12).padding(.vertical, awaitingConnection ? 9 : 7).brandSurface()
     // Same readable column as the conversation, centred in wide windows.
-    .frame(maxWidth: 840).frame(maxWidth: .infinity)
-    .padding(.horizontal, 20).padding(.bottom, awaitingConnection ? 10 : 6).padding(.top, 4)
+    .frame(maxWidth: 1080).frame(maxWidth: .infinity)
+    .padding(.horizontal, 14).padding(.bottom, 6).padding(.top, 2)
     .sheet(isPresented: $showCLIControls, onDismiss: {
       if let page = setupAfterCLI { setupAfterCLI = nil; app.openConnections(page) }
     }) {
@@ -1297,7 +1456,7 @@ struct HistoricalConversationTurn: View, Equatable {
         .hoverCopy("Copy prompt") { prompt }
       SentTimeLabel(date: stats.sent)
       if !response.isEmpty {
-        VStack(alignment: .leading, spacing: 10) {
+        VStack(alignment: .leading, spacing: 6) {
           Text(harness).font(.caption).foregroundStyle(.secondary)
           ResponseDocument(text: response).equatable()
         }.padding(20).frame(maxWidth: .infinity, alignment: .leading)
@@ -1376,7 +1535,7 @@ struct EventStream: View {
           }.font(.caption)
         }
         Button("Export…", action: app.exportEvidence).font(.caption)
-      }.padding(.horizontal, 20).padding(.top, 10)
+      }.padding(.horizontal, 16).padding(.top, 6).padding(.bottom, 2)
       if !app.activityLoadError.isEmpty {
         HStack {
           Label("Couldn’t load run activity.", systemImage: "exclamationmark.triangle")
@@ -1473,9 +1632,9 @@ struct EventStream: View {
               }.padding(16)
             }
             Color.clear.frame(height: 1).id("bottom")
-          }.scrollTargetLayout().padding(24)
-            // Readable line length: about 800pt of text, centred in wide windows.
-            .frame(maxWidth: 848, alignment: .leading).frame(maxWidth: .infinity)
+          }.scrollTargetLayout().padding(.horizontal, 20).padding(.vertical, 14)
+            // Generous readable column, centred in wide windows.
+            .frame(maxWidth: 1080, alignment: .leading).frame(maxWidth: .infinity)
         }.scrollPosition(id: $visibleAnchor, anchor: follow && app.active ? .bottom : .top)
         .environmentObject(turnChanges)
         .environment(\.turnChangesWorkspace, app)
@@ -1521,7 +1680,7 @@ struct EventStream: View {
       }
       if app.showsWorking || !activity.isEmpty {
         Divider()
-        VStack(spacing: 6) {
+        VStack(spacing: 4) {
           if app.showsWorking {
             AgentWorkingCard(
               status: app.activityStatus, activity: currentAgentActivity(app.events),
@@ -1531,7 +1690,9 @@ struct EventStream: View {
           // Folded until the person opens it, including while a run is active.
           AgentActivityView(events: activity, active: app.showsWorking)
             .id(app.selectedJob)
-        }.padding(.horizontal, 24).padding(.vertical, 6)
+        }
+        .frame(maxWidth: 1080).frame(maxWidth: .infinity)
+        .padding(.horizontal, 14).padding(.vertical, 4)
       }
     }
     .background(TurnChangesSheets(store: turnChanges))
@@ -1589,7 +1750,7 @@ struct EventRow: View {
       if type == "activity_group" {
         AgentActivityView(events: data["events"] as? [[String: Any]] ?? [], active: app.showsWorking)
       } else if type == "approval" {
-        VStack(alignment: .leading, spacing: 10) {
+        VStack(alignment: .leading, spacing: 6) {
           Label("Permission requested", systemImage: "hand.raised").font(.headline).foregroundStyle(
             .orange)
           let tool = data["tool"] as? [String: Any] ?? [:]
@@ -1617,8 +1778,12 @@ struct EventRow: View {
             (latest["sequence"] as? Int) == (event["sequence"] as? Int)
           {
             HStack {
-              Button("Deny") { app.approve(string(data, "request_id"), allow: false) }
-              Button("Allow once") { app.approve(string(data, "request_id"), allow: true) }
+              Button { app.approve(string(data, "request_id"), allow: false) } label: {
+                HStack(spacing: 4) { Text("Deny"); KeycapPill(text: "⎋") }
+              }
+              Button { app.approve(string(data, "request_id"), allow: true) } label: {
+                HStack(spacing: 5) { Text("Allow once"); KeycapPill(text: "⏎") }
+              }
                 .buttonStyle(BrandButtonStyle())
               if (data["options"] as? [[String: Any]] ?? []).contains(where: {
                 string($0, "kind") == "allow_always"

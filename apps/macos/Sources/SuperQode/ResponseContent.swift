@@ -271,19 +271,18 @@ struct AgentActivityView: View {
         }
       }
     } label: {
-      VStack(alignment: .leading, spacing: 4) {
-        HStack(spacing: 8) {
-          Image(systemName: "terminal").foregroundStyle(Color.qAccent)
-          Text(active ? "Agent activity · Working" : "Agent activity").font(.system(size: 13, weight: .medium))
-          Text(events.count == 1 ? "1 event" : "\(events.count) events")
-            .font(.caption).foregroundStyle(.secondary)
-        }
+      HStack(spacing: 8) {
+        Image(systemName: "terminal").font(.caption).foregroundStyle(Color.qAccent)
+        Text(active ? "Agent activity · Working" : "Agent activity").font(.system(size: 12, weight: .medium))
+        Text(events.count == 1 ? "1 event" : "\(events.count) events")
+          .font(.caption).foregroundStyle(.secondary)
         if !decisions.isEmpty {
+          Text("·").font(.caption).foregroundStyle(.tertiary)
           Text(decisions.count == 1 ? "1 SystemOne check" : "\(decisions.count) SystemOne checks")
             .font(.caption.weight(.medium)).foregroundStyle(Color.qAccent)
         }
       }
-    }.padding(12).outlinedSurface(radius: 9)
+    }.padding(.horizontal, 10).padding(.vertical, 6).outlinedSurface(radius: 8)
   }
 
   private func scrollToLatest(_ proxy: ScrollViewProxy, count: Int) {

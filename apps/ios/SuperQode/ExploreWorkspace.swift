@@ -53,7 +53,7 @@ enum ExploreWorkspace {
   ]
   static let permissions: [String] = ["read", "tasks", "evaluate", "approve", "cancel", "steer", "edit", "queue", "restore"]
   static var catalog: JSONValue {
-    .object(["protocol": .number(1), "device": .object(["name": .string("Sample iPhone")]),
+    .object(["protocol": .number(1), "device": .object(["name": .string("Sample device")]),
       "permissions": .array(permissions.map(JSONValue.string)), "profiles": .array([.object(profileRecord.raw)]),
       "suites": .array([.object(["id": .string("decision-routing"), "name": .string("Labelled route decisions"), "description": .string("Sample evaluation suite"), "tasks": .number(6)])]),
       "features": .object([

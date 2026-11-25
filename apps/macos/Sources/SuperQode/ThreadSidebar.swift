@@ -53,11 +53,15 @@ struct ThreadStatusIndicator: View {
   }
   private static let attentionColor = adaptive(dark: (1, 0.64, 0.20), light: (0.62, 0.31, 0))
   private static let failureColor = adaptive(dark: (1, 0.38, 0.38), light: (0.74, 0.12, 0.18))
+  private static let runningColor = adaptive(dark: (0.68, 0.42, 1.0), light: (0.48, 0.14, 0.86))
+  private static let queuedColor = adaptive(dark: (0.50, 0.62, 1.0), light: (0.24, 0.36, 0.78))
+  private static let doneColor = adaptive(dark: (0.24, 0.78, 0.52), light: (0.10, 0.54, 0.34))
   static func color(_ status: String) -> Color {
     switch status {
     case "needs_approval": return attentionColor
-    case "running", "queued", "cancelling": return .secondary
-    case "completed": return .secondary
+    case "running", "cancelling": return runningColor
+    case "queued": return queuedColor
+    case "completed": return doneColor
     case "failed", "interrupted": return failureColor
     default: return .secondary
     }
@@ -70,9 +74,14 @@ struct ThreadStatusIndicator: View {
   }
   var body: some View {
     Group {
-      if status == "needs_approval" { Image(systemName: "exclamationmark.circle.fill").font(.system(size: 10)) }
-      else { Circle().frame(width: 5, height: 5) }
-    }.foregroundStyle(Self.color(status)).help(Self.title(status)).accessibilityLabel(Self.title(status))
+      if status == "needs_approval" {
+        FactoryStatusDot(status: .waitingHuman, size: 5.5)
+      } else if status == "running" || status == "cancelling" {
+        FactoryStatusDot(status: .running, size: 5.5)
+      } else {
+        Circle().frame(width: 5.5, height: 5.5).foregroundStyle(Self.color(status))
+      }
+    }.help(Self.title(status)).accessibilityLabel(Self.title(status))
   }
 }
 
@@ -141,11 +150,24 @@ struct SidebarView: View {
         }.padding(8).background(Color.primary.opacity(0.045), in: RoundedRectangle(cornerRadius: 7))
         HStack(spacing: 3) {
           ForEach(ThreadListFilter.allCases, id: \.self) { item in
+            let count = (item == .working || item == .needsYou)
+              ? app.recentConversations.filter { item.matches($0) }.count
+              : 0
             Button { filter = item } label: {
-              Text(item.rawValue).font(.system(size: 10, weight: filter == item ? .semibold : .regular))
-                .padding(.horizontal, 8).padding(.vertical, 6)
+              HStack(spacing: 4) {
+                Text(item.rawValue).font(.system(size: 10, weight: filter == item ? .semibold : .regular))
+                if count > 0 {
+                  Text("\(count)")
+                    .font(.system(size: 9, weight: .bold).monospacedDigit())
+                    .foregroundStyle(.white)
+                    .padding(.horizontal, 4.5)
+                    .padding(.vertical, 1)
+                    .background(item == .needsYou ? Brand.orange : Brand.purple, in: Capsule())
+                }
+              }
+                .padding(.horizontal, 7).padding(.vertical, 5.5)
                 .foregroundStyle(filter == item ? Color.primary : .secondary)
-                .background(filter == item ? Color.primary.opacity(0.07) : Color.clear, in: RoundedRectangle(cornerRadius: 6))
+                .background(filter == item ? Color.primary.opacity(0.08) : Color.clear, in: RoundedRectangle(cornerRadius: 6))
             }.buttonStyle(.plain).accessibilityAddTraits(filter == item ? .isSelected : [])
           }
         }
@@ -177,10 +199,11 @@ struct SidebarView: View {
         }.font(.system(size: 11)).foregroundStyle(.secondary).padding(.horizontal, 18).padding(.vertical, 12)
       }.buttonStyle(.plain)
       HStack(spacing: 7) {
-        Circle().fill(app.connected ? Color.green : Color.orange).frame(width: 5, height: 5)
+        Circle().fill(app.connected ? Color(red: 0.14, green: 0.64, blue: 0.42) : Brand.orange).frame(width: 6, height: 6)
         Text(app.connected ? "Local engine ready" : "Engine offline").font(.system(size: 10)).foregroundStyle(.secondary)
         Spacer()
-      }.padding(.horizontal, 18).padding(.bottom, 15)
+        FactorySoundToggleButton()
+      }.padding(.horizontal, 18).padding(.bottom, 12)
     }.frame(maxHeight: .infinity).background(Color.qPanel)
       .onChange(of: app.projectID) { _, _ in search = ""; filter = .all }
   }

@@ -9,6 +9,12 @@ METERED_PROVIDERS = frozenset({"qwen-cn", "qwen-intl"})
 TOKEN_PLAN_PROVIDER = "alibaba-token-plan"
 STUDIO_PROVIDERS = METERED_PROVIDERS | {TOKEN_PLAN_PROVIDER}
 TOKEN_PLAN_BASE = "https://token-plan.ap-southeast-1.maas.aliyuncs.com/compatible-mode/v1"
+TOKEN_PLAN_CN_BASE = "https://token-plan.cn-beijing.maas.aliyuncs.com/compatible-mode/v1"
+TOKEN_PLAN_REGIONS = (
+    ("ap-southeast-1", "Singapore (International)", TOKEN_PLAN_BASE),
+    ("cn-beijing", "Beijing (China)", TOKEN_PLAN_CN_BASE),
+)
+_OFFICIAL_TOKEN_PLAN_HOST = re.compile(r"token-plan\.[a-z0-9-]+\.maas\.aliyuncs\.com")
 # Alibaba's shared DashScope hosts still answer, and they remain the default
 # when no workspace URL is set. Since 30 September 2026 they receive no new
 # features. A workspace URL is the host from the region the user chose.
@@ -90,26 +96,40 @@ def _noninteractive() -> bool:
     }
 
 
+def validate_token_plan_endpoint(base_url: str) -> str:
+    """Allow official Alibaba Cloud Model Studio Token Plan regional endpoints."""
+    raw = (base_url or "").strip().rstrip("/")
+    if not raw or len(raw) > 512 or any(char.isspace() for char in raw):
+        raise ValueError(
+            "Token Plan uses https://token-plan.ap-southeast-1.maas.aliyuncs.com/compatible-mode/v1 "
+            "(Singapore) or https://token-plan.cn-beijing.maas.aliyuncs.com/compatible-mode/v1 (Beijing)."
+        )
+    parts = urlsplit(raw)
+    host = (parts.hostname or "").rstrip(".").lower()
+    if (
+        parts.scheme != "https"
+        or parts.port is not None
+        or parts.username is not None
+        or parts.query
+        or parts.fragment
+        or parts.path.rstrip("/") != "/compatible-mode/v1"
+        or not _OFFICIAL_TOKEN_PLAN_HOST.fullmatch(host)
+    ):
+        raise ValueError(
+            "Token Plan uses https://token-plan.ap-southeast-1.maas.aliyuncs.com/compatible-mode/v1 "
+            "(Singapore) or https://token-plan.cn-beijing.maas.aliyuncs.com/compatible-mode/v1 (Beijing)."
+        )
+    return f"https://{host}/compatible-mode/v1"
+
+
 def validate_token_plan_route(base_url: str, key: str) -> None:
-    """Token Plan accepts only its own key, host, and interactive sessions."""
+    """Token Plan accepts only its own key, official regional host, and interactive sessions."""
     if _noninteractive():
         raise ValueError(
             "Alibaba Token Plan is for interactive coding in SuperQode. "
             "Headless runs, evaluations, and batch jobs are refused."
         )
-    parts = urlsplit(base_url.strip())
-    host = (parts.hostname or "").rstrip(".")
-    if (
-        parts.scheme != "https"
-        or host != "token-plan.ap-southeast-1.maas.aliyuncs.com"
-        or parts.path.rstrip("/") != "/compatible-mode/v1"
-        or parts.username is not None
-        or parts.query
-        or parts.fragment
-    ):
-        raise ValueError(
-            "Token Plan uses https://token-plan.ap-southeast-1.maas.aliyuncs.com/compatible-mode/v1."
-        )
+    validate_token_plan_endpoint(base_url)
     if credential_kind(key) != "plan":
         raise ValueError(
             "Token Plan keys start with sk-sp-. A pay-as-you-go key uses the Model Studio region that issued it."

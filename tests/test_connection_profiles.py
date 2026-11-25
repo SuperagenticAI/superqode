@@ -160,6 +160,7 @@ _FLAT_PROFILE_IDS_V1 = [
     "cursor",
     "amp",
     "antigravity",
+    "antigravity-acp",
     "muse",
     "prime-agent",
     "copilot",
@@ -371,6 +372,21 @@ def test_zai_profile_targets_first_party_byok_provider(monkeypatch):
     assert zai.byok_provider == "zai"
     assert zai.available is True
     assert "general api" in zai.description.lower()
+
+
+def test_alibaba_token_plan_profile_routes_to_token_plan_provider(monkeypatch):
+    monkeypatch.delenv("ALIBABA_TOKEN_PLAN_API_KEY", raising=False)
+    profile = get_connection_profile("plan-alibaba-models")
+
+    assert profile is not None
+    assert profile.connector == "byok"
+    assert profile.byok_provider == "alibaba-token-plan"
+    assert profile.auth_mode == "subscription"
+    assert profile.label == "Alibaba Token Plan"
+    assert "sk-sp-" in profile.unavailable_hint
+
+    monkeypatch.setenv("ALIBABA_TOKEN_PLAN_API_KEY", "sk-sp-demo")
+    assert get_connection_profile("plan-alibaba-models").available is True
 
 
 def test_codex_profile_is_runtime_connector():

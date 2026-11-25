@@ -7,12 +7,14 @@ import pytest
 from superqode.providers.models import get_model_info
 from superqode.providers.model_studio import (
     TOKEN_PLAN_BASE,
+    TOKEN_PLAN_CN_BASE,
     explain_failure,
     mark_explicit_cache,
     output_limit,
     preview_open,
     thinking_options,
     thinking_policy,
+    validate_token_plan_endpoint,
     validate_token_plan_route,
     validate_workspace_endpoint,
 )
@@ -141,3 +143,103 @@ def test_token_plan_install_accepts_only_a_plan_key(monkeypatch):
     monkeypatch.setenv("SUPERQODE_NONINTERACTIVE", "1")
     with pytest.raises(ValueError, match="interactive"):
         install({}, {"provider": "alibaba-token-plan", "key": "sk-sp-demo"})
+
+
+def test_token_plan_endpoint_accepts_official_regions_and_rejects_other_hosts():
+    assert validate_token_plan_endpoint(TOKEN_PLAN_BASE + "/") == TOKEN_PLAN_BASE
+    assert validate_token_plan_endpoint(TOKEN_PLAN_CN_BASE) == TOKEN_PLAN_CN_BASE
+    assert (
+        validate_token_plan_endpoint(
+            "https://TOKEN-PLAN.ap-southeast-1.maas.aliyuncs.com/compatible-mode/v1"
+        )
+        == TOKEN_PLAN_BASE
+    )
+    for bad in (
+        "https://dashscope-intl.aliyuncs.com/compatible-mode/v1",
+        "https://coding-intl.dashscope.aliyuncs.com/compatible-mode/v1",
+        "https://example.com/compatible-mode/v1",
+        TOKEN_PLAN_BASE + "?foo=1",
+    ):
+        with pytest.raises(ValueError, match="Token Plan"):
+            validate_token_plan_endpoint(bad)
+
+
+def test_token_plan_route_accepts_beijing_region_and_rejects_metered_host(monkeypatch):
+    monkeypatch.delenv("SUPERQODE_NONINTERACTIVE", raising=False)
+    validate_token_plan_route(TOKEN_PLAN_CN_BASE, "sk-sp-beijing")
+    with pytest.raises(ValueError, match="Token Plan"):
+        validate_token_plan_route(
+            "https://dashscope-intl.aliyuncs.com/compatible-mode/v1", "sk-sp-demo"
+        )
+
+
+def test_token_plan_workspace_models_discovers_live_models_for_region(monkeypatch):
+    from superqode.desktop_service.connections import list_workspace_models
+    from superqode.providers.live_models import LiveDiscoveryResult
+    from superqode.providers.models import ModelInfo
+
+    captured = {}
+
+    async def fake_discover(provider_id, *, timeout=6.0, base_url=None, api_key=None):
+        captured["provider_id"] = provider_id
+        captured["base_url"] = base_url
+        captured["api_key"] = api_key
+        return LiveDiscoveryResult(
+            provider=provider_id,
+            models=[
+                ModelInfo(id="qwen4-max", name="Qwen4 Max", provider=provider_id),
+                ModelInfo(id="glm-5", name="GLM 5", provider=provider_id),
+            ],
+            source="live",
+            endpoint=f"{base_url}/models",
+        )
+
+    monkeypatch.setattr("superqode.providers.live_models.discover_provider_models", fake_discover)
+    result = list_workspace_models(
+        {"alibaba-token-plan": "sk-sp-demo"},
+        {"provider": "alibaba-token-plan", "endpoint": TOKEN_PLAN_CN_BASE},
+    )
+    assert captured == {
+        "provider_id": "alibaba-token-plan",
+        "base_url": TOKEN_PLAN_CN_BASE,
+        "api_key": "sk-sp-demo",
+    }
+    assert result["source"] == "live"
+    assert result["models"] == ["qwen4-max", "glm-5"]
+    assert [row["id"] for row in result["model_details"]] == ["qwen4-max", "glm-5"]
+    assert result["error"] is None
+
+
+def test_desktop_service_persists_token_plan_region_endpoint(tmp_path, monkeypatch):
+    from superqode.desktop_service.service import DesktopService
+
+    monkeypatch.delenv("SUPERQODE_NONINTERACTIVE", raising=False)
+    monkeypatch.setenv("SUPERQODE_STATE_DIR", str(tmp_path))
+    service = DesktopService(tmp_path)
+    try:
+        service.dispatch(
+            "providers.endpoint.set",
+            {
+                "provider": "alibaba-token-plan",
+                "endpoint": TOKEN_PLAN_CN_BASE,
+                "key": "sk-sp-demo",
+            },
+        )
+        assert (
+            service.credential_environment(["alibaba-token-plan"])["ALIBABA_TOKEN_PLAN_API_BASE"]
+            == TOKEN_PLAN_CN_BASE
+        )
+        rows = service.dispatch("providers.list", {})
+        row = next(r for r in rows if r["id"] == "alibaba-token-plan")
+        assert row["workspace_endpoint_override"] == TOKEN_PLAN_CN_BASE
+        assert row["workspace_base_url"] == TOKEN_PLAN_CN_BASE
+
+        service.dispatch(
+            "providers.endpoint.set",
+            {"provider": "alibaba-token-plan", "endpoint": ""},
+        )
+        assert "ALIBABA_TOKEN_PLAN_API_BASE" not in service.credential_environment(
+            ["alibaba-token-plan"]
+        )
+    finally:
+        service.db.close()

@@ -7,6 +7,21 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [2.32.5] - 2026-11-25
+
+- Added first-class **Google Antigravity (ACP)** subscription connection
+  (`:connect antigravity-acp`) over `agy acp`, with live model discovery
+  including Gemini 4 Neon and per-model reasoning effort levels.
+- Added full **Alibaba Cloud Model Studio Token Plan** support across CLI, TUI
+  and desktop: graduated `:connect plan-alibaba-models`, added Singapore
+  (International) and Beijing (China) region selection via
+  `ALIBABA_TOKEN_PLAN_API_BASE`, and enabled live `/v1/models` discovery for
+  Token Plan accounts using `sk-sp-` keys.
+- Polished the macOS workspace for more reading and editing space, promoted
+  Alibaba Token Plan to a standalone provider and New Thread shortcut, and
+  unified live status indicators, sticky permission approvals, and diff badges
+  across the macOS app.
+
 ## [2.32.4] - 2026-11-24
 
 - Antigravity CLI (`antigravity-cli`) now streams live thinking, tool and text

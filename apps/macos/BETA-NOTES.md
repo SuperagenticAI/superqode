@@ -1,4 +1,13 @@
-# SuperQode for macOS public beta 0.4.29
+# SuperQode for macOS public beta 0.4.30
+
+Version 0.4.30 (build 56) bundles Python engine 2.32.5.
+
+- Added first-class **Google Antigravity (ACP)** subscription support with live model discovery (including Gemini 4 Neon) and per-model reasoning effort selection.
+- Added standalone **Alibaba Token Plan** support with a dedicated provider card, New Thread / Connect shortcut, Singapore (International) and Beijing (China) region switcher, and live coding model discovery for `sk-sp-` Token Plan keys.
+- Gave the conversation and response area more breathing room with a wider layout, cleaner neutral response cards, slimmer chrome, and a compact foldable Agent activity bar.
+- Unified live status colors, pulsing indicators and subtle sound cues across **Threads sidebar** (with live `Working` / `Needs you` count pills), **All work** (clickable metric filter cards), **Task Queue**, and **Settings**; added a sticky amber **Permission Approval Bar** with `⏎` / `⎋` keycap hints above the composer, keycap shortcut badges in **Command Palette (`⌘K`)**, and colored `+N` / `-M` and change-type badges in **Changes** and **Review**.
+
+## 0.4.29 (build 55)
 
 Version 0.4.29 (build 55) bundles Python engine 2.32.4.
 
