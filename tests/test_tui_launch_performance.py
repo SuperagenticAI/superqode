@@ -230,3 +230,80 @@ def test_the_splash_costs_nothing_to_import():
     )
     assert out.returncode == 0, out.stderr
     assert out.stdout.strip().endswith("[]"), f"splash imported modules: {out.stdout}"
+
+
+def test_animated_launch_splash_spins_and_clears_cleanly(monkeypatch):
+    """Animated splash renders spinning frames and clears before Textual takes over."""
+    import time
+
+    from superqode.launch_splash import LaunchSplash
+
+    monkeypatch.delenv("NO_COLOR", raising=False)
+    monkeypatch.delenv("SUPERQODE_NO_SPLASH", raising=False)
+    monkeypatch.setenv("TERM", "xterm-256color")
+
+    stream = _FakeTTY()
+    splash = LaunchSplash(stream=stream, interval=0.01)
+    splash.start()
+    time.sleep(0.05)
+    splash.stop()
+
+    written = stream.getvalue()
+    assert "\033[?25l" in written  # hid cursor during animation
+    assert written.endswith("\r\033[2K\033[?25h")  # cleared line and restored cursor
+    assert "◇" in written and "◈" in written  # rendered multiple spinner frames
+
+
+def test_animated_launch_splash_plain_mode_avoids_ansi(monkeypatch):
+    from superqode.launch_splash import LaunchSplash
+
+    monkeypatch.setenv("NO_COLOR", "1")
+    monkeypatch.delenv("SUPERQODE_NO_SPLASH", raising=False)
+
+    stream = _FakeTTY()
+    splash = LaunchSplash(stream=stream, interval=0.01)
+    splash.start()
+    splash.stop()
+
+    written = stream.getvalue()
+    assert "SuperQode" in written
+    assert "\033[" not in written
+
+
+def test_undo_manager_load_deduplicates_path_validation(tmp_path, monkeypatch):
+    """Repeated repository index entries across checkpoints validate once per unique path."""
+    import subprocess
+    from superqode.app.task_changes import TaskChanges
+    from superqode.undo_manager import UndoManager
+
+    subprocess.run(["git", "init", "-q", str(tmp_path)], check=True)
+    subprocess.run(["git", "-C", str(tmp_path), "config", "user.email", "t@e.st"], check=True)
+    subprocess.run(["git", "-C", str(tmp_path), "config", "user.name", "T"], check=True)
+    for i in range(5):
+        (tmp_path / f"f{i}.txt").write_text(f"v{i}\n")
+    subprocess.run(["git", "-C", str(tmp_path), "add", "."], check=True)
+    subprocess.run(["git", "-C", str(tmp_path), "commit", "-qm", "init"], check=True)
+
+    manager = UndoManager(tmp_path)
+    assert manager.initialize()
+    for step in range(4):
+        task = TaskChanges(tmp_path).capture()
+        manager.register_task(task, f"step-{step}")
+        (tmp_path / "f0.txt").write_text(f"changed-{step}\n")
+        task.finish([])
+        manager.seal_task(task)
+
+    calls = 0
+    original_path = TaskChanges._path
+
+    def counted_path(self, name):
+        nonlocal calls
+        calls += 1
+        return original_path(self, name)
+
+    monkeypatch.setattr(TaskChanges, "_path", counted_path)
+    reloaded = UndoManager(tmp_path)
+    assert reloaded.initialize()
+    assert reloaded.can_undo()
+    # 5 tracked files across 4 checkpoints should validate 5 times, not 20.
+    assert calls == 5

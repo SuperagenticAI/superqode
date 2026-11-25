@@ -25,6 +25,7 @@ def _run(request):
 def test_every_starter_is_a_valid_factory():
     assert TEMPLATE_NAMES == (
         "fix-and-verify",
+        "triage-spec-build",
         "continuous-outcomes",
         "build-test-deploy",
         "kanban",
@@ -34,6 +35,19 @@ def test_every_starter_is_a_valid_factory():
     )
     for name in TEMPLATE_NAMES:
         validate_definition(factory_template(name))
+
+
+def test_triage_spec_build_has_conditional_spec_gate_and_optional_input():
+    data = factory_template("triage-spec-build")
+    validate_definition(data)
+    stages = {stage["id"]: stage for stage in data["orchestration"]["stages"]}
+    assert list(stages) == ["triage", "spec", "implement", "verify"]
+    assert stages["spec"]["human_gate"] is True
+    assert stages["spec"]["when"] == {"input": "triage", "field": "needs-spec", "equals": True}
+    assert stages["implement"]["inputs"]["spec"]["optional"] is True
+    assert stages["verify"]["human_gate"] is True
+    detected = compose_from_description("Add triage and spec review before coding")
+    assert detected["metadata"]["name"] == "triage-spec-build"
 
 
 def test_a_build_test_deploy_description_becomes_that_workflow():

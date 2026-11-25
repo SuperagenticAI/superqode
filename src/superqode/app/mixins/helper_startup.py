@@ -743,10 +743,12 @@ class HelperStartupMixin:
         return commands
 
     def _init_undo_manager(self):
-        """Initialize the undo manager for checkpoint/restore."""
+        """Initialize the undo manager without blocking the first TUI paint."""
         try:
-            self._undo_manager = UndoManager()
-            self._undo_manager.initialize()
+            manager = UndoManager()
+            self._undo_manager = manager
+            manager.mark_loading()
+            self.run_worker(manager.initialize, thread=True, exclusive=False)
         except Exception:
             self._undo_manager = None
 

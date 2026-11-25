@@ -4,6 +4,7 @@ import re
 
 TEMPLATE_NAMES = (
     "fix-and-verify",
+    "triage-spec-build",
     "continuous-outcomes",
     "build-test-deploy",
     "kanban",
@@ -63,6 +64,77 @@ def _factory(name, description, stages):
 def factory_template(name="fix-and-verify"):
     if name not in TEMPLATE_NAMES:
         raise ValueError("Choose a built-in factory workflow")
+    if name == "triage-spec-build":
+        return _factory(
+            name,
+            "Triage incoming work, gate ambiguous features with a human-approved spec, implement, and verify before shipping.",
+            [
+                {
+                    "id": "triage",
+                    "goal": (
+                        "Research the request, identify open product or architecture decisions, "
+                        "and decide whether a spec with human sign-off is needed before coding."
+                    ),
+                    "role": "investigator",
+                    "harness": "coder",
+                    "outputs": {
+                        "decision": {
+                            "type": "json",
+                            "fields": {
+                                "complexity": {
+                                    "type": "string",
+                                    "enum": ["small", "medium", "large"],
+                                },
+                                "needs-spec": {"type": "boolean"},
+                                "summary": {"type": "string"},
+                            },
+                        }
+                    },
+                },
+                {
+                    "id": "spec",
+                    "goal": (
+                        "Ask clarifying questions on open product choices, write the agreed "
+                        "product behavior, technical approach, and verification checklist, "
+                        "then wait for human approval."
+                    ),
+                    "role": "investigator",
+                    "harness": "coder",
+                    "depends_on": ["triage"],
+                    "human_gate": True,
+                    "inputs": {"triage": {"stage": "triage", "output": "decision"}},
+                    "when": {"input": "triage", "field": "needs-spec", "equals": True},
+                    "outputs": {"plan": {"type": "text"}},
+                },
+                {
+                    "id": "implement",
+                    "goal": (
+                        "Implement the bounded change following triage and any approved spec, "
+                        "add regression tests, and mitigate merge risks before handoff."
+                    ),
+                    "role": "implementer",
+                    "harness": "coder",
+                    "depends_on": ["triage", "spec"],
+                    "checks": ["regression"],
+                    "inputs": {
+                        "triage": {"stage": "triage", "output": "decision"},
+                        "spec": {"stage": "spec", "output": "plan", "optional": True},
+                    },
+                },
+                {
+                    "id": "verify",
+                    "goal": (
+                        "Verify behavior with checks and visual proof where applicable, "
+                        "summarize impact and rollback cost, and wait for human sign-off."
+                    ),
+                    "role": "tester",
+                    "harness": "coder",
+                    "depends_on": ["implement"],
+                    "human_gate": True,
+                    "checks": ["regression"],
+                },
+            ],
+        )
     if name == "continuous-outcomes":
         return _factory(
             name,
@@ -242,6 +314,8 @@ def factory_template(name="fix-and-verify"):
 def explicit_workflow(description):
     """Return a workflow the description names, or an empty string."""
     words = set(re.findall(r"[a-z0-9]+", description.casefold()))
+    if "triage" in words or "spec" in words:
+        return "triage-spec-build"
     if "kanban" in words:
         return "kanban"
     if "scrum" in words or "sprint" in words:

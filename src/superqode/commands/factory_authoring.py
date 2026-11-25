@@ -101,13 +101,22 @@ def workflows(json_output):
     default=None,
     help="Starter when the description does not name one",
 )
+@click.option(
+    "--rlm",
+    is_flag=True,
+    help="Inspect this repository with SuperQode's RLM context engine to build a repo-native Factory draft",
+)
 @click.option("--apply", "apply_digest", default="", help="Save a reviewed draft by its digest")
 @click.option("--reason", default="", help="Why the reviewed draft is being saved")
 @click.option("--confirm", is_flag=True, help="Confirm saving the reviewed draft")
 @_json
-def describe(project, description, model_ref, workflow, apply_digest, reason, confirm, json_output):
+def describe(
+    project, description, model_ref, workflow, rlm, apply_digest, reason, confirm, json_output
+):
     """Describe how the team works and draft a FactorySpec to review.
 
+    With --rlm, SuperQode inspects the repository lazily via RLMContext/Monty
+    and drafts a tailored FactorySpec (with optional bounded model sub-calls).
     With no --model, SuperQode builds starter settings on this machine.
     Words in the description pick the workflow. --workflow is the fallback.
     Drafting writes nothing to the Factory. Save a reviewed draft with
@@ -130,14 +139,25 @@ def describe(project, description, model_ref, workflow, apply_digest, reason, co
         else:
             click.echo(f"✅ Saved reviewed draft {apply_digest[:12]} to {result['path']}")
         return
-    if not description or not description.strip():
+    if not rlm and (not description or not description.strip()):
         raise click.ClickException(
-            "Give a description of the factory. A model is optional. See: sq factory workflows"
+            "Give a description of the factory, or pass --rlm to inspect this repo. See: sq factory workflows"
         )
     if model_ref and "/" not in model_ref:
         raise click.ClickException("Write --model as provider/model")
     try:
-        if model_ref:
+        if rlm:
+            provider, model = model_ref.split("/", 1) if model_ref else ("", "")
+            result = asyncio.run(
+                authoring.architect(
+                    project,
+                    description or "",
+                    provider=provider,
+                    model=model,
+                    workflow=workflow or "",
+                )
+            )
+        elif model_ref:
             provider, model = model_ref.split("/", 1)
             result = asyncio.run(
                 authoring.draft(
@@ -156,6 +176,14 @@ def describe(project, description, model_ref, workflow, apply_digest, reason, co
         click.echo(json.dumps(result, indent=2))
         return
     click.echo(f"⏸️ Draft {result['digest'][:12]} for {result['name']} (nothing saved yet)")
+    lineage = result.get("rlm_lineage")
+    if isinstance(lineage, dict):
+        click.echo(
+            f"   RLM ({lineage.get('engine')}, {lineage.get('mode')}): "
+            f"{lineage.get('repo_files', 0)} files · "
+            f"stacks={','.join(lineage.get('detected_stacks') or [])} · "
+            f"test=`{lineage.get('detected_test_command', '')}`"
+        )
     click.echo(result["diff"] or "(no changes)")
     for label, key in (("Assumptions", "assumptions"), ("Missing", "missing_capabilities")):
         for item in result[key]:

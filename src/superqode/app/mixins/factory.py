@@ -23,6 +23,10 @@ class FactoryMixin:
             (":factory workflows", "list Kanban, Scrum, XP, Lean and the other starters"),
             (":factory init [--template NAME] [--force]", "create a full FactorySpec"),
             (':factory describe "<process>"', "draft a starter; add --model p/m to ask a model"),
+            (
+                ':factory describe --rlm ["<goal>"]',
+                "inspect this repo via RLM and build a tailored Factory draft",
+            ),
             (":factory describe --apply DIGEST --confirm", "save a reviewed draft"),
             (":factory check [--application]", "readiness, with build, start and health runs"),
             (':factory trial "<goal>"', "queue one WorkOrder from the Factory; no agent runs"),

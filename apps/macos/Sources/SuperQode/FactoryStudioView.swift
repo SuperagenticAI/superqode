@@ -23,7 +23,11 @@ struct FactoryStudioView: View {
   @State private var network = false
   @State private var syncedControls: FactoryControlDraft?
   @State private var runDetailTab = ProcessInfo.processInfo.arguments.contains("--factory-acceptance-inspect") ? "checks" : "pipeline"
-  private static let inlineConfirmActions: Set<String> = ["generate", "template", "reload", "save", "trial"]
+  @State private var showTour = false
+  @State private var uiSkillPreset = "web"
+  @State private var appliedRLMSnapshot: FactoryRLMLineageSnapshot?
+  @AppStorage("factoryShowNextStepGuide") private var showNextStepGuide = true
+  private static let inlineConfirmActions: Set<String> = ["generate", "rlm-architect", "template", "reload", "save", "trial"]
   private var showingInlineConfirm: Bool { Self.inlineConfirmActions.contains(confirmation) }
   private var showingSheetConfirm: Bool { !confirmation.isEmpty && !showingInlineConfirm }
   private var controlDraft: FactoryControlDraft { FactoryControlDraft(name: factoryName, binding: binding,
@@ -34,8 +38,17 @@ struct FactoryStudioView: View {
   private var stages: [[String: Any]] { library.review["stages"] as? [[String: Any]] ?? [] }
   private var tasks: [[String: Any]] { order["tasks"] as? [[String: Any]] ?? [] }
   private var bindings: [String: Any] { library.review["bindings"] as? [String: Any] ?? [:] }
-  private var setup: FactorySetupState { FactorySetupState(text: library.text, review: library.review,
-    savedDigest: library.expectedFileDigest, sources: library.sourceReview, runs: library.runs) }
+  private var setup: FactorySetupState {
+    FactorySetupState(
+      text: library.text,
+      review: library.review,
+      savedDigest: library.expectedFileDigest,
+      sources: library.sourceReview,
+      runs: library.runs,
+      hasSuite: !library.trialSuites.plans.isEmpty,
+      hasImprovement: !library.improvementPlans.isEmpty
+    )
+  }
   private var sidebarBadges: FactorySidebarBadges {
     FactorySidebarBadges(
       isRunning: library.isAnyRunActive,
@@ -50,24 +63,16 @@ struct FactoryStudioView: View {
       FactoryNavigationHeader(navigation: library.navigation, badges: sidebarBadges).frame(width: 178)
       Divider()
       VStack(alignment: .leading, spacing: 14) {
-      HStack(spacing: 10) {
-        FactoryGroupMark(id: library.navigation.group.id, selected: true, size: 26)
-        Text(library.navigation.pageTitle).font(.title2.bold())
-        Spacer()
-        if FactoryNavigation.buildPages.contains(tab) {
-          Button("Check definition") {
-            let ticket = library.navigation.ticket()
-            activeAction = "validate"
-            Task {
-              defer { if activeAction == "validate" { activeAction = "" } }
-              await library.validate(engine: app.engine)
-              if library.navigation.isCurrent(ticket), !controlsHaveChanges { syncControls() }
-            }
-          }.disabled(!idle || library.text.isEmpty)
-          Button("Save changes…") { requestConfirmation("save") }
-            .disabled(!idle || library.review.isEmpty || controlsHaveChanges || setup.saved)
-        }
-        FactorySoundToggleButton()
+      headerBar
+      if showNextStepGuide {
+        FactoryNextStepStrip(
+          setup: setup,
+          controlsHaveChanges: controlsHaveChanges,
+          idle: idle,
+          onPrimaryAction: advanceGuidedStep,
+          onOpenTour: { showTour = true },
+          onHide: { showNextStepGuide = false }
+        )
       }
       if showingInlineConfirm {
         FactoryInlineConfirmCard(
@@ -170,42 +175,123 @@ struct FactoryStudioView: View {
           execute(action)
         }
       )
+      .sheet(isPresented: $showTour) {
+        FactoryTourSheet(
+          onJumpToPage: { destination in library.navigation.select(destination) },
+          onStartStarter: { workflowID in
+            library.navigation.select("Stack")
+            chooseWorkflow(workflowID)
+          }
+        )
+      }
+  }
+
+  private var headerBar: some View {
+    HStack(spacing: 10) {
+      FactoryGroupMark(id: library.navigation.group.id, selected: true, size: 26)
+      Text(library.navigation.pageTitle).font(.title2.bold())
+      Spacer()
+      if FactoryNavigation.buildPages.contains(tab) {
+        Button("Check definition") {
+          let ticket = library.navigation.ticket()
+          activeAction = "validate"
+          Task {
+            defer { if activeAction == "validate" { activeAction = "" } }
+            await library.validate(engine: app.engine)
+            if library.navigation.isCurrent(ticket), !controlsHaveChanges { syncControls() }
+          }
+        }.disabled(!idle || library.text.isEmpty)
+        Button("Save changes…") { requestConfirmation("save") }
+          .disabled(!idle || library.review.isEmpty || controlsHaveChanges || setup.saved)
+      }
+      Button { showTour = true } label: {
+        Label("Tour", systemImage: "book.pages")
+      }
+      .help("Walk through how to build a Software Factory before running anything")
+      .accessibilityIdentifier("factory.tour.open")
+      Button { showNextStepGuide.toggle() } label: {
+        Label(showNextStepGuide ? "Guide" : "Show guide", systemImage: showNextStepGuide ? "checklist.checked" : "checklist")
+      }
+      .help(showNextStepGuide ? "Hide the Next-Step progress strip" : "Show the Next-Step progress strip")
+      .accessibilityIdentifier("factory.guide.toggle")
+      FactorySoundToggleButton()
+    }
   }
 
   private var stack: some View {
-    ScrollView {
-      VStack(alignment: .leading, spacing: 18) {
-        HStack(spacing: 8) {
-          FactoryStudioEmblem(size: 22)
-          Text("What should this Factory do?").font(.headline)
+    ScrollViewReader { proxy in
+      ScrollView {
+        VStack(alignment: .leading, spacing: 18) {
+          if library.canApplyProposal {
+            Group {
+              if let rlmSnapshot = FactoryRLMLineageSnapshot.parse(proposal: library.proposal) {
+                FactoryRLMProposalCard(
+                  snapshot: rlmSnapshot,
+                  assumptions: library.proposal["assumptions"] as? [String] ?? [],
+                  missingCapabilities: library.proposal["missing_capabilities"] as? [String] ?? [],
+                  busy: !idle,
+                  onApply: { chosenSkills in applyRLMProposal(snapshot: rlmSnapshot, skills: chosenSkills) },
+                  onApplyYamlOnly: { applyRLMProposal(snapshot: rlmSnapshot, skills: []) },
+                  onDismiss: { library.proposal = [:] }
+                )
+              } else {
+                VStack(alignment: .leading, spacing: 10) {
+                  Text("A proposal is ready to review.").font(.subheadline.bold())
+                  ForEach(library.proposal["assumptions"] as? [String] ?? [], id: \.self) { Text($0).font(.caption).foregroundStyle(.secondary) }
+                  Button("Open proposal in editor") { library.text = string(library.proposal, "yaml"); library.proposal = [:]; library.navigation.select("Definition") }
+                }.padding(14).brandSurface()
+              }
+            }
+            .id("factory-proposal-top")
+          }
+          HStack(spacing: 8) {
+            FactoryStudioEmblem(size: 22)
+            Text("What should this Factory do?").font(.headline)
+          }
+          TextEditor(text: $library.description).font(.body).frame(height: 120).brandSurface().accessibilityLabel("Factory description")
+          HStack {
+            Text(app.provider.isEmpty || app.model.isEmpty || app.provider == "acp" ? "Generate starter settings from this description. No model is required." : "Drafting with \(app.provider)/\(app.model). If that model cannot draft, starter settings are built here.").font(.caption).foregroundStyle(.secondary)
+            Spacer()
+            Button("Choose harness and model…") { app.openConnections(returningTo: "Factory Studio") }
+          }
+          VStack(alignment: .leading, spacing: 6) {
+            HStack(spacing: 10) {
+              Button { requestConfirmation("rlm-architect") } label: {
+                Label("Build On-Demand Software Factory…", systemImage: "sparkles")
+              }
+              .buttonStyle(BrandButtonStyle())
+              .disabled(!idle)
+              .help("Inspect this repository and your goal using Recursive Language Models (RLM) to assemble the right stages, agents, checks, and skills automatically")
+              .accessibilityIdentifier("factory.rlm.architect")
+
+              Button("Generate a draft…") { requestConfirmation("generate") }
+                .disabled(!idle || library.description.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty)
+            }
+            Text("Powered by Recursive Language Models (RLM): inspects your repository and task read-only, selects the right stages, agent roles, test checks, and skills, and drafts a reviewable factory.yaml before anything runs.")
+              .font(.caption)
+              .foregroundStyle(.secondary)
+              .fixedSize(horizontal: false, vertical: true)
+          }
+          Divider()
+          Text("Start from a workflow").font(.subheadline.bold())
+          Text("Click a card to load its settings. A model is not required.").font(.caption).foregroundStyle(.secondary)
+          workflowGrid
+          Button("Reload saved…") { requestConfirmation("reload") }.disabled(!idle)
+          Divider()
+          HStack {
+            Text(setup.hasDraft ? "Your draft is available in the pages on the left." : "Load a starter first to establish the drafting permissions and budget.").font(.caption).foregroundStyle(.secondary)
+            Spacer()
+            nativeButton("factory.setup.next", action: advanceSetup, title: setup.action) { Text(setup.action).font(.caption.weight(.semibold)) }.disabled(!idle || (controlsHaveChanges && setup.hasDraft))
+          }
+        }.frame(maxWidth: .infinity, alignment: .leading)
+      }
+      .onChange(of: library.canApplyProposal) { _, ready in
+        if ready {
+          withAnimation(.easeInOut(duration: 0.25)) {
+            proxy.scrollTo("factory-proposal-top", anchor: .top)
+          }
         }
-        TextEditor(text: $library.description).font(.body).frame(height: 140).brandSurface().accessibilityLabel("Factory description")
-        HStack {
-          Text(app.provider.isEmpty || app.model.isEmpty || app.provider == "acp" ? "Generate starter settings from this description. No model is required." : "Drafting with \(app.provider)/\(app.model). If that model cannot draft, starter settings are built here.").font(.caption).foregroundStyle(.secondary)
-          Spacer()
-          Button("Choose harness and model…") { app.openConnections(returningTo: "Factory Studio") }
-        }
-        Button("Generate a draft…") { requestConfirmation("generate") }.buttonStyle(BrandButtonStyle())
-          .disabled(!idle || library.description.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty)
-        if library.canApplyProposal {
-          VStack(alignment: .leading, spacing: 10) {
-            Text("A proposal is ready to review.").font(.subheadline.bold())
-            ForEach(library.proposal["assumptions"] as? [String] ?? [], id: \.self) { Text($0).font(.caption).foregroundStyle(.secondary) }
-            Button("Open proposal in editor") { library.text = string(library.proposal, "yaml"); library.proposal = [:]; library.navigation.select("Definition") }
-          }.padding(14).brandSurface()
-        }
-        Divider()
-        Text("Start from a workflow").font(.subheadline.bold())
-        Text("Click a card to load its settings. A model is not required.").font(.caption).foregroundStyle(.secondary)
-        workflowGrid
-        Button("Reload saved…") { requestConfirmation("reload") }.disabled(!idle)
-        Divider()
-        HStack {
-          Text(setup.hasDraft ? "Your draft is available in the pages on the left." : "Load a starter first to establish the drafting permissions and budget.").font(.caption).foregroundStyle(.secondary)
-          Spacer()
-          nativeButton("factory.setup.next", action: advanceSetup, title: setup.action) { Text(setup.action).font(.caption.weight(.semibold)) }.disabled(!idle || (controlsHaveChanges && setup.hasDraft))
-        }
-      }.frame(maxWidth: .infinity, alignment: .leading)
+      }
     }
   }
 
@@ -213,10 +299,12 @@ struct FactoryStudioView: View {
     let id: String
     let title: String
     let detail: String
+    var badge: String = ""
   }
 
   private static let workflowCards: [WorkflowCard] = [
-    WorkflowCard(id: "fix-and-verify", title: "Fix and verify", detail: "Investigate a problem, make a small fix, and check it."),
+    WorkflowCard(id: "fix-and-verify", title: "Fix and verify", detail: "Investigate a problem, make a small fix, and check it.", badge: "Start here"),
+    WorkflowCard(id: "triage-spec-build", title: "Triage, spec & build", detail: "Triage ambiguity, gate features on a human-approved spec, build, and verify.", badge: "Two gates"),
     WorkflowCard(id: "continuous-outcomes", title: "Continuous outcomes", detail: "Deliver a change and keep the feedback."),
     WorkflowCard(id: "build-test-deploy", title: "Build, test, deploy", detail: "Build the change, test it, and wait before release."),
     WorkflowCard(id: "kanban", title: "Kanban", detail: "Move one item from selection to a reviewed finish."),
@@ -229,7 +317,7 @@ struct FactoryStudioView: View {
     LazyVGrid(columns: [GridItem(.adaptive(minimum: 220), spacing: 8)], spacing: 8) {
       ForEach(Self.workflowCards) { card in
         Button { chooseWorkflow(card.id) } label: {
-          ConnectionCardLabel(title: card.title, subtitle: card.detail) {
+          ConnectionCardLabel(title: card.title, subtitle: card.detail, status: card.badge) {
             FactoryWorkflowMark(id: card.id).frame(width: 36, height: 36)
           }
         }
@@ -261,7 +349,16 @@ struct FactoryStudioView: View {
           Picker("Harness binding", selection: $binding) {
             ForEach(bindings.keys.sorted(), id: \.self) { Text($0).tag($0) }
           }.onChange(of: binding) { _, value in modelRef = modelForBinding(value) }
-          TextField("Provider/model reference", text: $modelRef).textFieldStyle(.roundedBorder)
+          HStack(spacing: 8) {
+            TextField("Provider/model reference", text: $modelRef).textFieldStyle(.roundedBorder)
+            if !app.provider.isEmpty && !app.model.isEmpty && app.provider != "acp" {
+              Button("Use \(app.provider)/\(app.model)") {
+                modelRef = "\(app.provider)/\(app.model)"
+              }
+              .font(.caption)
+              .help("Fill from your currently connected SuperQode workspace model")
+            }
+          }
           Stepper("Workers: \(workers)", value: $workers, in: 1...16)
           Stepper("Time budget: \(seconds) seconds", value: $seconds, in: 30...86400, step: 30)
           Toggle("Allow network for factory stages", isOn: $network)
@@ -278,6 +375,36 @@ struct FactoryStudioView: View {
           }
           if controlsHaveChanges { Text("Configuration fields have unapplied changes. Apply them to the draft before saving.").font(.caption).foregroundStyle(.secondary) }
           }.disabled(!idle || library.review.isEmpty)
+          Divider()
+          DisclosureGroup("Built-in Factory skills (Merge Risk & UI Verification)") {
+            VStack(alignment: .leading, spacing: 10) {
+              Text("Scaffold reusable Markdown skills under skills/ and bind them to your factory draft so agents self-mitigate merge risk and record visual proof.")
+                .font(.caption).foregroundStyle(.secondary)
+              HStack(spacing: 8) {
+                Button {
+                  Task { await library.scaffoldSkill(engine: app.engine, skill: "merge-risk") }
+                } label: {
+                  Label("Add merge-risk skill", systemImage: "shield.checkered")
+                }
+                .disabled(!idle)
+                Picker("UI target", selection: $uiSkillPreset) {
+                  Text("Web / Playwright").tag("web")
+                  Text("macOS App").tag("macos")
+                  Text("CLI / Terminal").tag("cli")
+                }
+                .labelsHidden()
+                .frame(width: 150)
+                Button {
+                  let chosen = uiSkillPreset
+                  Task { await library.scaffoldSkill(engine: app.engine, skill: "ui-verification", preset: chosen) }
+                } label: {
+                  Label("Add ui-verification skill", systemImage: "photo.on.rectangle.angled")
+                }
+                .disabled(!idle)
+              }
+            }
+            .padding(.top, 6)
+          }
           Divider()
           DisclosureGroup("Advanced: release signing") {
           Text("Enroll a user-presence protected Secure Enclave key on this Mac, then review and save its public key in the factory policy before preparing a trial.")
@@ -342,7 +469,18 @@ struct FactoryStudioView: View {
               if stage["inputs"] != nil || stage["outputs"] != nil {
                 DisclosureGroup("Input and output contracts") { CodeBlock(text: pretty(["inputs": stage["inputs"] ?? [:], "outputs": stage["outputs"] ?? [:]])) }
               }
-              if stage["when"] != nil { Text("Conditional stage: " + pretty(stage["when"])).font(.caption.monospaced()) }
+              if let when = stage["when"] as? [String: Any] {
+                let input = string(when, "input")
+                let field = string(when, "field")
+                let eq = when["equals"].map { String(describing: $0) } ?? ""
+                let target = field.isEmpty ? input : "\(input).\(field)"
+                Label("Conditional: runs when \(target) = \(eq)", systemImage: "arrow.triangle.branch")
+                  .font(.caption.monospaced())
+                  .foregroundStyle(Brand.purple)
+                  .padding(.horizontal, 8)
+                  .padding(.vertical, 3)
+                  .background(Brand.purple.opacity(0.09), in: Capsule())
+              }
             }
             .frame(maxWidth: .infinity, alignment: .leading)
             .padding(14)
@@ -397,6 +535,14 @@ struct FactoryStudioView: View {
   private var definition: some View {
     VStack(alignment: .leading, spacing: 10) {
       definitionGuide
+      if let snapshot = appliedRLMSnapshot {
+        FactoryOnDemandSummaryBanner(
+          snapshot: snapshot,
+          onViewStages: { library.navigation.select("Workflow") },
+          onEditConfig: { library.navigation.select("Configuration") },
+          onDismiss: { appliedRLMSnapshot = nil }
+        )
+      }
       definitionEditor
     }
   }
@@ -515,6 +661,20 @@ struct FactoryStudioView: View {
           .buttonStyle(BrandButtonStyle())
           .disabled(!idle || !setup.saved || controlsHaveChanges || goal.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty)
       }
+      if library.runs.isEmpty {
+        HStack(spacing: 6) {
+          Text("Try a starter goal:").font(.caption2).foregroundStyle(.secondary)
+          ForEach([
+            "Audit tests and fix one failing check",
+            "Review a core module and propose one focused cleanup",
+            "Add regression unit tests for a recent change",
+          ], id: \.self) { sample in
+            Button(sample) { goal = sample }
+              .buttonStyle(.bordered)
+              .controlSize(.mini)
+          }
+        }
+      }
     }
   }
 
@@ -616,6 +776,9 @@ struct FactoryStudioView: View {
               }
               if gaugeSnapshot.hasRecord {
                 SuperGaugeBadge(verdict: gaugeSnapshot.verdict, showWordmark: false)
+              }
+              if let mergeRisk = FactoryMergeRiskSnapshot.parse(detail: library.detail) {
+                FactoryMergeRiskBadge(level: mergeRisk.overall)
               }
             }
           }
@@ -770,13 +933,16 @@ struct FactoryStudioView: View {
       SuperGaugeVerdictCard(
         snapshot: gaugeSnapshot,
         isVerifying: library.busy && activeAction == "verify",
-        rawEvidence: library.detail["evidence"]
+        rawEvidence: library.detail["evidence"],
+        mergeRisk: FactoryMergeRiskSnapshot.parse(detail: library.detail)
       )
     }
   }
 
   private func runChecksAndDiffPane(candidateID: String) -> some View {
     VStack(alignment: .leading, spacing: 12) {
+      FactoryVisualProofView(detail: library.detail)
+
       FactoryRequirementTraceView(studio: library, library: library.acceptance, active: active && tab == "Runs")
         .id("factory.requirements")
 
@@ -845,6 +1011,34 @@ struct FactoryStudioView: View {
       }
     }
   }
+  private func advanceGuidedStep() {
+    if controlsHaveChanges {
+      library.navigation.select("Configuration")
+      return
+    }
+    if !setup.hasDraft {
+      preset = "fix-and-verify"
+      execute("template")
+      return
+    }
+    if !setup.validated {
+      let ticket = library.navigation.ticket()
+      activeAction = "validate"
+      Task {
+        defer { if activeAction == "validate" { activeAction = "" } }
+        await library.validate(engine: app.engine)
+        if library.navigation.isCurrent(ticket) { syncControls(); await library.refreshSources(engine: app.engine) }
+      }
+      return
+    }
+    if !setup.saved {
+      if tab != "Definition" { library.navigation.select("Definition") }
+      requestConfirmation("save")
+      return
+    }
+    library.navigation.select(setup.nextDestination)
+  }
+
   private func advanceSetup() {
     if !setup.hasDraft { requestConfirmation("template") }
     else if !setup.validated {
@@ -898,7 +1092,7 @@ struct FactoryStudioView: View {
   }
   private var confirmationTitle: String {
     ["save": "Save this Factory revision?", "template": "Load \(workflowTitle(preset))?", "reload": "Reload saved definition?", "trial": "Prepare a pinned trial?",
-     "generate": "Generate a factory proposal?", "worker": "Run ready factory stages?", "verify": "Execute protected verification?",
+     "generate": "Generate a factory proposal?", "rlm-architect": "Build On-Demand Software Factory with RLM?", "worker": "Run ready factory stages?", "verify": "Execute protected verification?",
      "enroll": "Enroll this Mac as a release signer?", "approve": "Authenticate candidate approval?", "apply": "Apply the approved change?", "cancel": "Stop this factory run?"][confirmation] ?? "Review factory action"
   }
   private var confirmationMessage: String {
@@ -908,6 +1102,9 @@ struct FactoryStudioView: View {
     case "generate": return app.provider.isEmpty || app.model.isEmpty || app.provider == "acp"
       ? "This builds starter factory settings from your description on this Mac. No model is called."
       : "The selected model receives your description and draft definition. This may incur model usage. If that model cannot draft, starter settings are built here instead. The result is a proposal for you to review."
+    case "rlm-architect": return app.provider.isEmpty || app.model.isEmpty || app.provider == "acp"
+      ? "SuperQode inspects this repository read-only (manifests, tests, build setup, and high-risk paths) using Recursive Language Model (RLM) context indexing, then chooses the right stages, agent roles, test checks, and skills for your project. Nothing is written or executed until you review and save."
+      : "SuperQode inspects this repository read-only with Recursive Language Model (RLM) context indexing and runs up to 2 bounded sub-queries with \(app.provider)/\(app.model) to assemble the right stages, agent roles, test checks, and skills for your task. Nothing is written or executed until you review and save."
     case "trial": return "Pin the saved definition and its inputs to a queued WorkOrder for this goal. This step makes no model calls. The application must have a clean committed baseline."
     case "worker": return "Execute ready stages using this run’s pinned harnesses and model routes. Model calls may incur cost and stages may edit isolated worktrees. Human gates pause execution."
     case "verify": return "Execute the exact candidate in the required OS sandbox against pinned protected Python probes. Passing checks supplies acceptance evidence; it does not approve delivery."
@@ -926,7 +1123,7 @@ struct FactoryStudioView: View {
   }
   private var confirmationKind: FactoryVisualKind {
     switch confirmation {
-    case "generate": return .draft
+    case "generate", "rlm-architect": return .draft
     case "template", "reload": return .workflow
     case "save": return .save
     case "trial": return .trial
@@ -944,6 +1141,7 @@ struct FactoryStudioView: View {
     case "template": return "Load \(workflowTitle(preset))"
     case "reload": return "Reload saved"
     case "generate": return "Generate draft"
+    case "rlm-architect": return "Inspect repo & build"
     case "trial": return "Prepare trial"
     case "worker": return "Run stages"
     case "verify": return "Run SuperGauge"
@@ -962,6 +1160,12 @@ struct FactoryStudioView: View {
         ? [FactoryConfirmBadge(label: "Built on this Mac", symbol: "desktopcomputer", color: Color(red: 0.14, green: 0.62, blue: 0.42)),
            FactoryConfirmBadge(label: "No model call", symbol: "bolt.slash", color: Brand.purple)]
         : [FactoryConfirmBadge(label: "\(app.provider)/\(app.model)", symbol: "sparkles", color: Brand.pink)]
+    case "rlm-architect":
+      return noModel
+        ? [FactoryConfirmBadge(label: "On-Demand · Read-Only Scan", symbol: "sparkles", color: Brand.purple),
+           FactoryConfirmBadge(label: "No model call", symbol: "bolt.slash", color: Color(red: 0.14, green: 0.62, blue: 0.42))]
+        : [FactoryConfirmBadge(label: "On-Demand · Read-Only Scan", symbol: "sparkles", color: Brand.purple),
+           FactoryConfirmBadge(label: "\(app.provider)/\(app.model)", symbol: "cpu", color: Brand.pink)]
     case "template", "reload":
       return [FactoryConfirmBadge(label: "Draft only", symbol: "doc.text", color: Brand.purple),
               FactoryConfirmBadge(label: "No model call", symbol: "bolt.slash", color: Color(red: 0.14, green: 0.62, blue: 0.42))]
@@ -986,6 +1190,7 @@ struct FactoryStudioView: View {
     if replacingDraft { return "Loading workflow starter…" }
     switch activeAction {
     case "generate": return "Drafting Factory settings…"
+    case "rlm-architect": return "Building On-Demand Software Factory…"
     case "validate": return "Checking Factory definition…"
     case "save": return "Saving pinned Factory revision…"
     case "trial": return "Preparing pinned trial…"
@@ -1000,6 +1205,7 @@ struct FactoryStudioView: View {
   private var activityDetail: String {
     switch activeAction {
     case "generate": return app.provider.isEmpty || app.model.isEmpty || app.provider == "acp" ? "Building starter settings locally on this Mac." : "Drafting with \(app.provider)/\(app.model)."
+    case "rlm-architect": return "Scanning repository manifests, test setup, and high-risk paths to pick the right stages, agents, and skills."
     case "verify": return "Running pinned protected probes inside the OS sandbox."
     case "worker": return "Hidden evaluator files are masked from workers."
     case "approve": return "Authenticate on this Mac to sign the exact verified candidate."
@@ -1009,7 +1215,7 @@ struct FactoryStudioView: View {
   private var activityKind: FactoryVisualKind {
     if replacingDraft { return .workflow }
     switch activeAction {
-    case "generate": return .draft
+    case "generate", "rlm-architect": return .draft
     case "save", "apply": return .save
     case "trial": return .trial
     case "worker": return .run
@@ -1041,6 +1247,8 @@ struct FactoryStudioView: View {
         if library.navigation.isCurrent(ticket), library.failure.isEmpty, library.message.hasPrefix("Starter settings") {
           library.navigation.select("Definition")
         }
+      case "rlm-architect":
+        await library.start(engine: app.engine, action: action, provider: app.provider, model: app.model, workflow: "")
       case "trial": await library.trial(engine: app.engine, goal: goal); if library.failure.isEmpty { follow(ticket, to: "Runs") }
       case "enroll":
         let identity = library.project; let version = library.version
@@ -1057,6 +1265,26 @@ struct FactoryStudioView: View {
       }
     }
   }
+  private func applyRLMProposal(snapshot: FactoryRLMLineageSnapshot, skills: [FactoryRLMLineageSnapshot.RecommendedSkill]) {
+    let proposedYaml = string(library.proposal, "yaml")
+    guard !proposedYaml.isEmpty else { return }
+    let projectIdentity = library.project
+    library.text = proposedYaml
+    library.proposal = [:]
+    appliedRLMSnapshot = snapshot
+    // Jump immediately to the editable Definition page so the user sees their new factory right away.
+    library.navigation.select("Definition")
+    Task {
+      for skill in skills {
+        await library.scaffoldSkill(engine: app.engine, skill: skill.name, preset: skill.preset.isEmpty ? "web" : skill.preset)
+      }
+      await library.validate(engine: app.engine)
+      if library.project == projectIdentity, !library.review.isEmpty {
+        syncControls()
+      }
+    }
+  }
+
   private func follow(_ ticket: FactoryNavigation.Ticket, to destination: String) {
     guard app.section == "Factory Studio" else { return }
     library.navigation.follow(ticket, to: destination)

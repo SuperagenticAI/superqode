@@ -336,7 +336,12 @@ struct LearningGuideView: View {
               "Improve with a budget",
               "Optimization runs bounded experiments and presents a candidate diff for review. Set evaluation and cost budgets before live execution. Tools exposes more engine workflows when you need them."
             )
-            navigate("Explore Harness Hub", section: "Harness Hub")
+            HStack(spacing: 10) {
+              navigate("Explore Harness Hub", section: "Harness Hub")
+              if !app.project.isEmpty {
+                navigate("Open Factory Studio", section: "Factory Studio")
+              }
+            }
           }
         }.padding(.vertical, 12).frame(maxWidth: .infinity, alignment: .leading)
       }.defaultScrollAnchor(.top).id(app.learningTopic)

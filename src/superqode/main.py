@@ -1302,31 +1302,38 @@ def cli_main(
                 ctx.exit(130)
             ctx.exit(0 if response.stopped_reason == "complete" and not response.error else 1)
 
-        # Import and run the TUI
-        _os.environ["SUPERQODE_HARNESS"] = effective_harness
-        if provider:
-            _os.environ["SUPERQODE_PROVIDER"] = provider
-        if model_name:
-            _os.environ["SUPERQODE_MODEL"] = model_name
-        from superqode.app import run_textual_app
+        # Start the animated launch splash before importing Textual/widgets.
+        from superqode.launch_splash import start_launch_splash, stop_launch_splash
 
-        startup = {}
-        if resume:
-            startup["resume"] = resume
-        if fork_from:
-            startup["fork_from"] = fork_from
-        if approval_mode is not None:
-            startup["approval_mode"] = approval_mode
-        if interaction_mode is not None:
-            startup["interaction_mode"] = interaction_mode
-        if theme_selection is not None:
-            startup["theme_selection"] = theme_selection
-        from superqode.theming import ThemeError
-
+        start_launch_splash()
         try:
-            run_textual_app(**startup)
-        except (ThemeError, ValueError) as exc:
+            # Import and run the TUI
+            _os.environ["SUPERQODE_HARNESS"] = effective_harness
+            if provider:
+                _os.environ["SUPERQODE_PROVIDER"] = provider
+            if model_name:
+                _os.environ["SUPERQODE_MODEL"] = model_name
+            from superqode.app import run_textual_app
+
+            startup = {}
+            if resume:
+                startup["resume"] = resume
+            if fork_from:
+                startup["fork_from"] = fork_from
+            if approval_mode is not None:
+                startup["approval_mode"] = approval_mode
+            if interaction_mode is not None:
+                startup["interaction_mode"] = interaction_mode
             if theme_selection is not None:
+                startup["theme_selection"] = theme_selection
+            from superqode.theming import ThemeError
+
+            run_textual_app(**startup)
+        except BaseException as exc:
+            stop_launch_splash()
+            from superqode.theming import ThemeError
+
+            if isinstance(exc, (ThemeError, ValueError)) and theme_selection is not None:
                 raise click.BadParameter(str(exc), param_hint="--theme") from exc
             raise
         return
@@ -2034,8 +2041,9 @@ def config_init(force):
 @click.pass_context
 def tui_command(ctx):
     """Launch the Textual TUI interface."""
-    from superqode.app import run_textual_app
+    from superqode.launch_splash import start_launch_splash, stop_launch_splash
 
+    start_launch_splash()
     startup = {
         key: value
         for key, value in (ctx.parent.params if ctx.parent else {}).items()
@@ -2043,9 +2051,12 @@ def tui_command(ctx):
         and value is not None
     }
     try:
+        from superqode.app import run_textual_app
+
         run_textual_app(**startup)
-    except ValueError as exc:
-        if startup.get("theme_selection") is not None:
+    except BaseException as exc:
+        stop_launch_splash()
+        if isinstance(exc, ValueError) and startup.get("theme_selection") is not None:
             raise click.BadParameter(str(exc), param_hint="--theme") from exc
         raise
 

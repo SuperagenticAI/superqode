@@ -1,0 +1,124 @@
+apiVersion: superqode.dev/v1alpha1
+kind: Factory
+metadata:
+  name: triage-spec-build
+  description: Triage incoming work, gate ambiguous features on a human-approved spec, implement with Merge Risk and UI Verification skills, and verify with SuperGauge before shipping.
+default_route: no-subscription
+data_context:
+  repository: .
+  files:
+    skill-merge-risk:
+      path: skills/merge-risk/SKILL.md
+      purpose: skill
+    skill-ui-verification:
+      path: skills/ui-verification/SKILL.md
+      purpose: skill
+compute:
+  runner: worktree
+inference:
+  harnesses:
+    coder:
+      template: core
+      model: alibaba-token-plan/qwen4-max
+      skills:
+        - skill-merge-risk
+        - skill-ui-verification
+improvement:
+  checks:
+    regression:
+      command: python -m pytest -q
+      files: []
+  optimization:
+    automatic_experiments: false
+    editable:
+      - skills
+      - harnesses
+      - routes
+      - workflow
+    protected:
+      - governance
+      - improvement.checks
+      - orchestration.acceptance_checks
+orchestration:
+  stages:
+    - id: triage
+      goal: Research the request, identify open product or architecture decisions, and decide whether a spec with human sign-off is needed before coding.
+      role: investigator
+      harness: coder
+      outputs:
+        decision:
+          type: json
+          fields:
+            complexity:
+              type: string
+              enum:
+                - small
+                - medium
+                - large
+            needs-spec:
+              type: boolean
+            summary:
+              type: string
+    - id: spec
+      goal: Ask clarifying questions on open product choices, write the agreed product behavior, technical approach, and verification checklist, then wait for human approval.
+      role: investigator
+      harness: coder
+      depends_on:
+        - triage
+      human_gate: true
+      inputs:
+        triage:
+          stage: triage
+          output: decision
+      when:
+        input: triage
+        field: needs-spec
+        equals: true
+      outputs:
+        plan:
+          type: text
+    - id: implement
+      goal: Implement the bounded change following triage and any approved spec, add regression tests, and mitigate merge risks before handoff.
+      role: implementer
+      harness: coder
+      depends_on:
+        - triage
+        - spec
+      checks:
+        - regression
+      inputs:
+        triage:
+          stage: triage
+          output: decision
+        spec:
+          stage: spec
+          output: plan
+          optional: true
+    - id: verify
+      goal: Verify behavior with checks and visual proof where applicable, summarize impact and rollback cost, and wait for human sign-off.
+      role: tester
+      harness: coder
+      depends_on:
+        - implement
+      human_gate: true
+      checks:
+        - regression
+  acceptance_checks:
+    - regression
+access:
+  interfaces:
+    - macos
+    - cli
+    - tui
+    - api
+governance:
+  permissions:
+    allow_read: true
+    allow_write: true
+    allow_shell: true
+    allow_network: false
+  budget:
+    max_workers: 1
+    max_seconds: 1800
+    max_tool_calls: 100
+  release: human

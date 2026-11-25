@@ -370,6 +370,7 @@ struct SuperGaugeVerdictCard: View {
   let snapshot: SuperGaugeSnapshot
   var isVerifying: Bool = false
   let rawEvidence: Any?
+  var mergeRisk: FactoryMergeRiskSnapshot? = nil
   @Environment(\.colorScheme) private var scheme
   @Environment(\.colorSchemeContrast) private var contrast
 
@@ -484,6 +485,11 @@ struct SuperGaugeVerdictCard: View {
             }
           }
         }
+      }
+
+      if let mergeRisk {
+        Divider().opacity(0.6)
+        FactoryMergeRiskSection(risk: mergeRisk)
       }
 
       DisclosureGroup("Recorded evidence & SuperGauge receipt") {

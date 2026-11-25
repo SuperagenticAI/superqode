@@ -135,6 +135,24 @@ import Combine
       text = string(result, "yaml"); failure = ""; await validate(engine: engine)
     } catch { if project == identity, version == token { failure = error.localizedDescription } }
   }
+  func scaffoldSkill(engine: Engine, skill: String, preset: String = "") async {
+    let identity = project; let token = version
+    do {
+      let result = try await rpc(engine, "skills.scaffold", [
+        "skill": skill, "preset": preset, "yaml": text, "bind": !text.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty,
+      ])
+      guard project == identity, version == token else { return }
+      let updated = string(result, "yaml")
+      if !updated.isEmpty && updated != text {
+        version += 1
+        text = updated
+        await validate(engine: engine)
+      }
+      let path = string(result, "path", "skills/\(skill)/SKILL.md")
+      failure = ""
+      message = "Added \(path) and bound it to your factory draft. Save the revision when ready."
+    } catch { if project == identity { failure = error.localizedDescription } }
+  }
   func save(engine: Engine, reason: String) async {
     let identity = project; let token = version
     guard !busy else { return }; busy = true
@@ -218,14 +236,14 @@ import Combine
     var params: [String: Any] = ["confirmed": true, "command_id": UUID().uuidString,
       "factory_action": action, "run": selected]
     if ["source-commit", "improvement-search", "improvement-compare", "campaign-run", "campaign-worker"].contains(action) { params.merge(extra) { _, value in value } }
-    if action == "generate" { params.merge(["yaml": text, "description": description,
+    if ["generate", "rlm-architect"].contains(action) { params.merge(["yaml": text, "description": description,
       "provider": provider, "model": model, "workflow": workflow]) { _, value in value } }
     if action == "apply" { params["candidate_id"] = detail["candidate_id"]; params["candidate_digest"] = detail["candidate_digest"] }
     do {
       let started = try await rpc(engine, "action.start", params)
       let id = string(started, "id")
       guard project == identity, operation == op else { return }
-      job = started; actionRun = ["generate", "source-commit", "improvement-search", "improvement-compare", "campaign-run", "campaign-worker"].contains(action) ? "" : selected
+      job = started; actionRun = ["generate", "rlm-architect", "source-commit", "improvement-search", "improvement-compare", "campaign-run", "campaign-worker"].contains(action) ? "" : selected
       FactorySoundEngine.play(.started)
       var previousTasks: [String: String] = actionRun.isEmpty ? [:] : taskStatusMap(from: detail)
       var pollTicks = 0
@@ -249,6 +267,13 @@ import Combine
                 message = action == "improvement-search" ? (result["held"] as? Bool == true ? "Search is on hold. Review shared budget and usage evidence." : "Candidate staged. Run the separate held-out comparison to assess it.")
                   : (result["eligible"] as? Bool == true ? "Candidate improved on the checked held-out cases. Review the evidence before draft adoption." : "Candidate remains on hold. Review the comparison issues.")
               }
+            }
+            if action == "rlm-architect" {
+              let result = current["result"] as? [String: Any] ?? [:]
+              proposal = result
+              message = version == token
+                ? "RLM inspected your repository and drafted a tailored Factory. Review the receipt and apply it to the draft."
+                : "Draft changed during RLM inspection. Your edits are preserved; compare the proposal before applying it."
             }
             if action == "generate" {
               let result = current["result"] as? [String: Any] ?? [:]

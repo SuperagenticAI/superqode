@@ -308,7 +308,24 @@ def handle(service, method, params):
             "work_order": {"work_order_id": order.work_order_id, "status": order.status.value},
             "execution_started": False,
         }
+    if method == "factory.skills.catalog":
+        from superqode.factory.skill_templates import list_skill_templates
+
+        return {"skills": list_skill_templates()}
+    if method == "factory.skills.scaffold":
+        from superqode.factory.skill_templates import scaffold_skill
+
+        return scaffold_skill(
+            root,
+            str(params.get("skill") or ""),
+            preset=str(params.get("preset") or ""),
+            yaml_text=str(params.get("yaml") or ""),
+            bind=bool(params.get("bind", True)),
+            overwrite=bool(params.get("overwrite", False)),
+        )
     if method == "factory.run.inspect":
+        from superqode.factory.merge_risk import assess_merge_risk
+        from superqode.factory.visual_proof import build_handoff_markdown, collect_visual_proof
         from superqode.workorders.cockpit import build_cockpit_snapshot
 
         store = factory_store(root, read_only=True)
@@ -328,6 +345,43 @@ def handle(service, method, params):
         candidate = next(
             (a for a in reversed(order.artifacts) if a.kind == "integration_candidate"), None
         )
+        candidate_diff = candidate.content[:200000] if candidate else ""
+        candidate_files = (
+            list(candidate.metadata.get("files") or [])
+            if candidate and isinstance(candidate.metadata, dict)
+            else None
+        )
+        visual_proof = collect_visual_proof(root, order)
+        verification_meta = order.metadata.get("factory_verification") or {}
+        merge_risk = assess_merge_risk(
+            goal=order.goal,
+            diff_text=candidate_diff,
+            files=candidate_files,
+            verification=verification_meta,
+            visual_proof=visual_proof,
+            stage_statuses=[t.status.value for t in order.tasks],
+        )
+        verdict = ""
+        quality_artifact = next(
+            (a for a in reversed(order.artifacts) if a.kind == "factory_quality_record"), None
+        )
+        if quality_artifact and quality_artifact.content:
+            try:
+                verdict = str(
+                    (json.loads(quality_artifact.content).get("decision") or {}).get("verdict")
+                    or ""
+                )
+            except (ValueError, TypeError):
+                verdict = ""
+        if not verdict:
+            verdict = "ship" if verification_meta.get("state") == "passed" else "pending"
+        handoff_markdown = build_handoff_markdown(
+            goal=order.goal,
+            status=order.status.value,
+            supergauge_verdict=verdict,
+            merge_risk=merge_risk,
+            visual_proof=visual_proof,
+        )
         return {
             "work_order": data,
             "evidence": [
@@ -342,10 +396,13 @@ def handle(service, method, params):
                 if a.content and a.kind != "integration_candidate"
             ],
             "cockpit": build_cockpit_snapshot(store, order.work_order_id),
-            "candidate_diff": candidate.content[:200000] if candidate else "",
+            "candidate_diff": candidate_diff,
             "diff_truncated": bool(candidate and len(candidate.content) > 200000),
             "candidate_id": candidate.artifact_id if candidate else "",
             "candidate_digest": candidate.digest if candidate else "",
+            "merge_risk": merge_risk,
+            "visual_proof": visual_proof,
+            "handoff_markdown": handoff_markdown,
         }
     if method == "factory.gate":
         store = factory_store(root)
@@ -902,16 +959,21 @@ def validate_request(root, params, *, service=None):
             "provider": "",
             "model": "",
         }
-    if action in {"generate", "verifier-generate"}:
+    if action in {"generate", "verifier-generate", "rlm-architect"}:
         from superqode.providers.registry import PROVIDERS
 
-        data = read_mapping(params["yaml"])
-        validate_definition(data)
-        if action == "verifier-generate" and data != load_factory(root=root).data:
-            raise ValueError("Save the Factory draft before proposing its verifiers")
-        _credentials(data)
-        description = params.get("description")
-        if not isinstance(description, str) or not 0 < len(description) <= 8000:
+        raw_yaml = str(params.get("yaml", ""))
+        if action != "rlm-architect" or raw_yaml.strip():
+            data = read_mapping(raw_yaml)
+            validate_definition(data)
+            if action == "verifier-generate" and data != load_factory(root=root).data:
+                raise ValueError("Save the Factory draft before proposing its verifiers")
+            _credentials(data)
+        description = params.get("description", "")
+        if action == "rlm-architect":
+            if not isinstance(description, str) or len(description) > 8000:
+                raise ValueError("Describe the factory in under 8000 characters")
+        elif not isinstance(description, str) or not 0 < len(description) <= 8000:
             raise ValueError("Describe the factory")
         provider = str(params.get("provider", ""))
         model = str(params.get("model", ""))
@@ -924,7 +986,7 @@ def validate_request(root, params, *, service=None):
             workflow = ""
         return {
             **common,
-            "yaml": params.get("yaml", ""),
+            "yaml": raw_yaml,
             "description": description,
             "provider": provider,
             "model": model,
@@ -1007,11 +1069,21 @@ async def run(request, emit):
         from superqode.factory.versioning import commit_sources
 
         result = commit_sources(root, request["source_plan"], request["paths"], request["message"])
-    elif action in {"generate", "verifier-generate"}:
+    elif action in {"generate", "verifier-generate", "rlm-architect"}:
         from superqode.factory.generation import generate_factory, proposal_from_description
+        from superqode.factory.rlm_architect import architect_factory
         from superqode.factory.verifiers import generate as generate_verifiers
 
-        if action == "verifier-generate":
+        if action == "rlm-architect":
+            result = await architect_factory(
+                root,
+                description=request.get("description", ""),
+                yaml_text=request.get("yaml", ""),
+                workflow=request.get("workflow", ""),
+                provider=request.get("provider", ""),
+                model=request.get("model", ""),
+            )
+        elif action == "verifier-generate":
             result = await generate_verifiers(
                 root,
                 description=request["description"],

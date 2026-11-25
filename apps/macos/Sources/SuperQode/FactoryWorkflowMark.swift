@@ -17,6 +17,7 @@ struct FactoryWorkflowMark: View {
   private var tile: Color {
     switch id {
     case "fix-and-verify": Color(red: 0.98, green: 0.93, blue: 0.84)
+    case "triage-spec-build": Color(red: 0.92, green: 0.89, blue: 0.98)
     case "continuous-outcomes": Color(red: 0.88, green: 0.93, blue: 0.98)
     case "build-test-deploy": Color(red: 0.88, green: 0.95, blue: 0.91)
     case "kanban": Color(red: 0.93, green: 0.94, blue: 0.96)
@@ -30,6 +31,7 @@ struct FactoryWorkflowMark: View {
   @ViewBuilder private var content: some View {
     switch id {
     case "fix-and-verify": fixMark
+    case "triage-spec-build": triageSpecMark
     case "continuous-outcomes": continuousMark
     case "build-test-deploy": pipelineMark
     case "kanban": kanbanMark
@@ -37,6 +39,25 @@ struct FactoryWorkflowMark: View {
     case "xp": xpMark
     case "lean": leanMark
     default: EmptyView()
+    }
+  }
+
+  private var triageSpecMark: some View {
+    VStack(spacing: 2) {
+      HStack(spacing: 3) {
+        Circle().fill(Color(red: 0.48, green: 0.16, blue: 0.82)).frame(width: 5, height: 5)
+        Image(systemName: "arrow.triangle.branch")
+          .font(.system(size: 9, weight: .bold))
+          .foregroundStyle(Color(red: 0.48, green: 0.16, blue: 0.82))
+      }
+      HStack(spacing: 3) {
+        Image(systemName: "lock.fill")
+          .font(.system(size: 7.5, weight: .bold))
+          .foregroundStyle(Color(red: 0.86, green: 0.50, blue: 0.10))
+        Image(systemName: "checkmark.circle.fill")
+          .font(.system(size: 8.5, weight: .bold))
+          .foregroundStyle(Color(red: 0.16, green: 0.54, blue: 0.34))
+      }
     }
   }
 

@@ -59,13 +59,15 @@ class TaskChanges:
         return result.stdout
 
     def _path(self, name: str) -> Path:
-        if Path(name).is_absolute() or ".git" in Path(name).parts:
-            raise ValueError("Git metadata is outside task restoration.")
         if any(character in name for character in "\n\r\t\0"):
             raise ValueError("This file name cannot be represented safely in task review.")
-        path = self.root / name
+        rel = Path(name)
+        if rel.is_absolute() or ".git" in rel.parts:
+            raise ValueError("Git metadata is outside task restoration.")
+        path = self.root / rel
         # Never follow symlinks (including parent directory links) for undo.
-        if path.resolve() != path.absolute() or not path.resolve().is_relative_to(self.root):
+        resolved = path.resolve()
+        if resolved != path.absolute() or not resolved.is_relative_to(self.root):
             raise ValueError("File is outside the task workspace or is a symbolic link.")
         return path
 

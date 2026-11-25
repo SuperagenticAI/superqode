@@ -33,4 +33,84 @@ final class FactorySetupTests: XCTestCase {
     let queued = FactorySetupState(text: "draft", review: review, savedDigest: "saved", sources: sources, runs: [["factory_digest": "snapshot", "status": "queued"]])
     XCTAssertTrue(queued.trialPrepared); XCTAssertEqual(queued.action, "Open trials")
   }
+
+  func testGuidedMilestonesAdvanceFromDraftToSelfImprovement() {
+    let sources: [String: Any] = ["snapshot_digest": "snapshot", "files": [["changed": false]]]
+    let start = FactorySetupState(text: "", review: [:], savedDigest: "", sources: [:], runs: [])
+    XCTAssertEqual(start.guidedStepIndex, 0)
+    XCTAssertEqual(start.nextActionTitle, "Load Fix and verify")
+
+    let saved = FactorySetupState(text: "draft", review: review, savedDigest: "saved", sources: sources, runs: [])
+    XCTAssertEqual(saved.guidedStepIndex, 2)
+    XCTAssertEqual(saved.nextDestination, "Runs")
+
+    let completed = FactorySetupState(
+      text: "draft",
+      review: ["review": "native-review", "yaml": "draft", "digest": "saved", "snapshot_digest": "snapshot", "acceptance_checks": ["regression"]],
+      savedDigest: "saved",
+      sources: sources,
+      runs: [["factory_digest": "snapshot", "status": "completed"]],
+      hasSuite: true,
+      hasImprovement: true
+    )
+    XCTAssertTrue(completed.hasCompletedRun)
+    XCTAssertEqual(completed.guidedStepIndex, 4)
+    XCTAssertEqual(completed.completedBadgeText, "Self-improving loop active ✓")
+  }
+
+  func testMergeRiskSnapshotParsesFiveDimensions() {
+    let detail: [String: Any] = [
+      "merge_risk": [
+        "overall": "medium",
+        "file_count": 3,
+        "churn_lines": 42,
+        "categories": [
+          ["id": "alignment", "title": "Alignment", "risk": "low", "summary": "Focused scope."],
+          ["id": "impact", "title": "Impact", "risk": "medium", "summary": "Touches auth."],
+        ],
+        "gaps": ["Verify auth path."],
+        "markdown": "## Merge Risk Assessment",
+      ]
+    ]
+    let snapshot = FactoryMergeRiskSnapshot.parse(detail: detail)
+    XCTAssertNotNil(snapshot)
+    XCTAssertEqual(snapshot?.overall, .medium)
+    XCTAssertEqual(snapshot?.categories.count, 2)
+    XCTAssertEqual(snapshot?.gaps, ["Verify auth path."])
+  }
+
+  func testRLMLineageSnapshotParsesProposal() {
+    let proposal: [String: Any] = [
+      "yaml": "apiVersion: superqode.dev/v1alpha1",
+      "recommended_skills": [
+        ["name": "merge-risk", "preset": "", "reason": "Guards auth paths"],
+        ["name": "ui-verification", "preset": "macos", "reason": "Matches SwiftUI app"],
+      ],
+      "rlm_lineage": [
+        "engine": "monty-repl",
+        "mode": "rlm-live",
+        "repo_files": 48,
+        "repo_bytes": 128000,
+        "files_inspected": ["Package.swift", "pyproject.toml"],
+        "detected_stacks": ["python", "swift"],
+        "detected_test_command": "pytest -q",
+        "detected_build_command": "swift build",
+        "sensitive_areas": ["src/auth"],
+        "recommended_workflow": "triage-spec-build",
+        "subcalls": [
+          ["id": "subcall-1", "topic": "architecture-and-stages", "ok": true, "input_tokens": 120, "output_tokens": 45, "duration_ms": 620, "error": ""],
+        ],
+        "subcall_budget": ["used_calls": 1, "max_calls": 4, "total_tokens": 165],
+        "duration_ms": 840,
+      ],
+    ]
+    let snapshot = FactoryRLMLineageSnapshot.parse(proposal: proposal)
+    XCTAssertNotNil(snapshot)
+    XCTAssertEqual(snapshot?.engineLabel, "RLM · Monty REPL")
+    XCTAssertEqual(snapshot?.modeLabel, "Live · 1/4 sub-queries")
+    XCTAssertEqual(snapshot?.repoFiles, 48)
+    XCTAssertEqual(snapshot?.detectedStacks, ["python", "swift"])
+    XCTAssertEqual(snapshot?.recommendedSkills.count, 2)
+    XCTAssertEqual(snapshot?.subcalls.count, 1)
+  }
 }

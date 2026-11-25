@@ -18,10 +18,11 @@ The macOS app is the primary Factory interface. The CLI and TUI use the same
 engine and can run the whole flow on their own:
 
 ```bash
-sq factory workflows                          # fix-and-verify, continuous-outcomes,
+sq factory workflows                          # fix-and-verify, triage-spec-build, continuous-outcomes,
                                               # build-test-deploy, kanban, scrum, xp, lean
 sq factory init --template fix-and-verify     # full FactorySpec; keeps existing routes
 sq factory show                               # stages, checks, release rule, recent runs
+sq factory describe --rlm                     # inspect this repo lazily via RLM and draft a tailored FactorySpec
 sq factory describe "build, test and deploy"  # starter draft; no model is required
 sq factory describe "We triage bugs, fix them and verify" --model ollama/qwen3-coder
 sq factory describe --apply DRAFT_DIGEST --confirm --reason "Reviewed draft"
@@ -41,13 +42,18 @@ that file is upgraded in place and its `default_route` and `routes` are kept;
 an existing FactorySpec is replaced only with `--force`. Every save is kept as a
 revision under `.superqode/factory-studio/revisions`, the same store the app uses.
 
-`workflows` lists the seven starters and their stages: Fix and verify,
-Continuous outcomes, Build test deploy, Kanban, Scrum, XP and Lean.
+`workflows` lists the eight starters and their stages: Fix and verify,
+Triage spec and build, Continuous outcomes, Build test deploy, Kanban, Scrum,
+XP and Lean.
 
-`describe` can build those starter settings from the description alone. Words
-in the description pick the workflow (kanban, scrum or sprint, xp, lean, or
-build plus test or deploy). `--workflow NAME` is used when the description
-does not name one. Pass `--model provider/model` to ask that model instead.
+`describe` can build starter settings from the description alone, or inspect
+your repository read-only with `--rlm` using SuperQode's Recursive Language
+Model context engine (Monty REPL when installed, with optional bounded
+`--model provider/model` sub-queries) to detect your stack, test commands,
+high-risk paths, and recommended skills. Words in the description pick the
+workflow (triage/spec, kanban, scrum or sprint, xp, lean, or build plus test
+or deploy). `--workflow NAME` is used when the description does not name one.
+Pass `--model provider/model` to ask that model instead.
 The model receives the description and current definition, has no tools, and
 cannot change the release authority. A private route that rejects a cloud
 drafting model falls back to the same starter. Either way, `describe` writes
@@ -72,6 +78,7 @@ In the TUI, the same flow is:
 | `:factory workflows` | List the starter workflows |
 | `:factory init [--template NAME] [--force]` | Create a FactorySpec |
 | `:factory describe "<process>"` | Draft a starter with no model, or pass `--model p/m` (runs the CLI) |
+| `:factory describe --rlm ["<goal>"]` | Inspect this repo via RLM and build a tailored Factory draft |
 | `:factory check [--application]` | Readiness (runs the CLI) |
 | `:factory trial "<goal>"` | Queue one WorkOrder; no agent runs |
 | `:factory run WORK_ID` | Run it with live agents (`sq factory worker WORK_ID --live`) |

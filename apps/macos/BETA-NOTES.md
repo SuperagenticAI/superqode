@@ -1,4 +1,14 @@
-# SuperQode for macOS public beta 0.4.30
+# SuperQode for macOS public beta 0.5.0
+
+Version 0.5.0 (build 57) bundles Python engine 2.33.0.
+
+- Added **On-Demand Software Factory with Recursive Language Models (RLM)** in **Factory Studio -> Build -> Describe**: inspects any repository read-only inside the bundled Monty REPL, detects your stack, test commands, and high-risk paths, and drafts a tailored, reviewable `factory.yaml` with interactive skill checkboxes and an instant jump to the editable **Definition** page.
+- Added a standalone **5-slide Interactive Software Factory Tour** (accessible directly from the **Welcome** screen or Factory Studio header, with an interactive Triage routing toggle, keyboard arrow stepping, and Auto-play) and a collapsible **Next-Step Progress Strip** tracking five real milestones.
+- Added the conditional **`Triage, spec & build`** two-gate starter blueprint (`triage -> conditional spec human gate -> implement -> verify human gate`) with plain-English conditional branching badges in **Workflow**.
+- Added deterministic **5-Dimension Merge Risk Assessment** (*Alignment, Impact, Verification, Rollback cost, Error detection*) inside **SuperGauge**, one-click built-in **`merge-risk`** and **`ui-verification`** Factory skills (Web/Playwright, macOS, CLI presets), a **Visual Proof** gallery in Trial `Changes & Checks`, and one-click **Copy PR handoff summary**.
+- Eliminated the multi-second TUI startup stall on repositories with saved checkpoints and added an animated spinning SuperQode launch splash.
+
+## 0.4.30 (build 56)
 
 Version 0.4.30 (build 56) bundles Python engine 2.32.5.
 

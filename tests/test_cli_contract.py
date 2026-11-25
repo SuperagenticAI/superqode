@@ -192,8 +192,9 @@ EXPECTED_COMMAND_COUNT = 406
 # `factory workflows` adds one route (405 -> 406). Both renders were
 # regenerated for that command. No route outside `factory` changed.
 # Root options add `--effort` and clarify `--harness` default for Gemini/Gemma.
-# Command count stays 406; both Click 8.1.8 and 8.5.1 digests were regenerated.
-EXPECTED_HELP_TREE_SHA256 = "820bd9c37df78eae00501b6ccab2b9897660cda9bd5eea3b2707747210eb1d0a"
+# Adding `triage-spec-build` to `TEMPLATE_NAMES` widens factory workflow choices;
+# command count stays 406.
+EXPECTED_HELP_TREE_SHA256 = "54d6d81c00e3f69bbb764a1537cf70e8c10cf2c36d540f9176f68c50db549516"
 # Click 8.5 renders optional group commands as [COMMAND] and case-insensitive
 # choices in lower case. Both verified renders expose the same command tree.
 EXPECTED_MODERN_CLICK_HELP_TREE_SHA256 = (

@@ -5,6 +5,7 @@ import SwiftUI
 struct WelcomeView: View {
   @EnvironmentObject var app: Workspace
   @State private var showBetaGuide = false
+  @State private var showFactoryTour = false
   var body: some View {
     GeometryReader { geometry in
       ScrollView {
@@ -40,6 +41,12 @@ struct WelcomeView: View {
             } label: {
               Label("Getting started", systemImage: "book.closed")
             }
+            Button {
+              showFactoryTour = true
+            } label: {
+              Label("Software Factory tour", systemImage: "building.2")
+            }
+            .accessibilityIdentifier("welcome.factoryTour")
             if !app.project.isEmpty {
               Button("Return to " + string(app.project, "name", "Agent Space")) {
                 app.runWorkspaceCommand(.section("Workspace"))
@@ -59,6 +66,20 @@ struct WelcomeView: View {
     }.background { BrandBackdrop() }
       .centeredDialog(isPresented: $showBetaGuide, title: "Public Beta") {
         BetaGuideView()
+      }
+      .sheet(isPresented: $showFactoryTour) {
+        FactoryTourSheet(
+          onJumpToPage: app.project.isEmpty ? nil : { destination in
+            app.factoryStudio.navigation.select(destination)
+            app.section = "Factory Studio"
+            app.showWelcome = false
+          },
+          onStartStarter: app.project.isEmpty ? nil : { _ in
+            app.factoryStudio.navigation.select("Stack")
+            app.section = "Factory Studio"
+            app.showWelcome = false
+          }
+        )
       }
   }
   private var startCard: some View {

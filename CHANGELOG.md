@@ -7,6 +7,31 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [2.33.0] - 2026-11-25
+
+- Added **On-Demand Software Factory with Recursive Language Models (RLM)**
+  (`sq factory describe --rlm`, `:factory describe --rlm`, and **Build On-Demand
+  Software Factory** in macOS Factory Studio): lazily mounts any repository as
+  read-only `RLMContext` inside the sandboxed Monty REPL (with optional bounded
+  recursive sub-queries), detects real stacks, regression test commands, and
+  high-risk paths, and proposes a validated 7-layer `FactorySpec` plus tailored
+  skills while preserving `release_authority`.
+- Added the smart conditional **`triage-spec-build`** starter blueprint
+  (`triage -> conditional spec human gate -> implement -> verify human gate`),
+  so clear bugs take the fast path while ambiguous features pause for human
+  specification approval before implementation.
+- Added deterministic **5-Dimension Merge Risk Assessment** (Alignment, Impact,
+  Verification, Rollback cost, Error detection) inside SuperGauge verification
+  and trial inspection, reusable built-in **`merge-risk`** and
+  **`ui-verification`** (Web/Playwright, macOS, CLI presets) Factory skills,
+  **Visual Proof** artifact collection, and one-click PR handoff Markdown.
+- Added a standalone 5-slide **Interactive Software Factory Tour** (available
+  from the Welcome screen and Factory Studio header) and a collapsible
+  **Next-Step Progress Strip** in the macOS app.
+- Accelerated TUI startup by 14x (64x faster checkpoint loading moved off the
+  UI thread) and added a zero-dependency animated spinning SuperQode launch
+  splash before Textual mounts.
+
 ## [2.32.5] - 2026-11-25
 
 - Added first-class **Google Antigravity (ACP)** subscription connection

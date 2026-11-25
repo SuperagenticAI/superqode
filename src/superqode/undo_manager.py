@@ -31,6 +31,7 @@ from __future__ import annotations
 import asyncio
 import os
 import subprocess
+import threading
 from dataclasses import dataclass, field
 from datetime import datetime
 from pathlib import Path
@@ -79,8 +80,20 @@ class UndoManager:
         self._redo_stack: List[Checkpoint] = []
         self._current_index = -1
         self._initialized = False
+        self._init_lock = threading.Lock()
+        self._loading_event = threading.Event()
+        self._loading_event.set()
         self.last_error = ""
         self._directory = self.working_dir / ".superqode" / "checkpoints"
+
+    def mark_loading(self) -> None:
+        """Signal that background initialization has been scheduled."""
+        if not self._initialized:
+            self._loading_event.clear()
+
+    def _wait_if_loading(self) -> None:
+        if not self._loading_event.is_set():
+            self._loading_event.wait(timeout=15.0)
 
     def _run_git(self, args, capture_output=True):
         return subprocess.run(
@@ -92,21 +105,25 @@ class UndoManager:
         )
 
     def initialize(self) -> bool:
-        if self._initialized:
-            return True
-        try:
-            if self._run_git(["rev-parse", "--git-dir"]).returncode:
+        with self._init_lock:
+            try:
+                if self._initialized:
+                    return True
+                if self._run_git(["rev-parse", "--git-dir"]).returncode:
+                    return False
+                self._git_root = Path(
+                    self._run_git(["rev-parse", "--show-toplevel"]).stdout.strip()
+                ).resolve()
+                self._initialized = True
+                self._load()
+                return True
+            except (OSError, ValueError, subprocess.SubprocessError):
                 return False
-            self._git_root = Path(
-                self._run_git(["rev-parse", "--show-toplevel"]).stdout.strip()
-            ).resolve()
-            self._initialized = True
-            self._load()
-            return True
-        except (OSError, ValueError, subprocess.SubprocessError):
-            return False
+            finally:
+                self._loading_event.set()
 
     def register_task(self, task, name="Agent task", message=""):
+        self._wait_if_loading()
         if not task.available:
             return None
         checkpoint = Checkpoint(task.id, name, datetime.now(), message)
@@ -208,6 +225,7 @@ class UndoManager:
                 os.unlink(temporary)
 
     def undo(self):
+        self._wait_if_loading()
         while self.can_undo():
             checkpoint = self._checkpoints[self._current_index]
             result = self._transition(checkpoint)
@@ -218,6 +236,7 @@ class UndoManager:
         return None
 
     def redo(self):
+        self._wait_if_loading()
         if not self._redo_stack:
             return None
         checkpoint = self._redo_stack[-1]
@@ -257,6 +276,7 @@ class UndoManager:
         return checkpoint
 
     def restore(self, checkpoint_id):
+        self._wait_if_loading()
         for index, checkpoint in enumerate(self._checkpoints):
             if checkpoint.id == checkpoint_id:
                 previous_index, previous_redo = self._current_index, self._redo_stack[:]
@@ -285,6 +305,7 @@ class UndoManager:
         return False
 
     def restore_file(self, checkpoint_id, file_path):
+        self._wait_if_loading()
         checkpoint = next((cp for cp in self._checkpoints if cp.id == checkpoint_id), None)
         try:
             task = self._target(checkpoint) if checkpoint else None
@@ -317,18 +338,23 @@ class UndoManager:
             return False
 
     def get_checkpoints(self, limit=20):
+        self._wait_if_loading()
         return self._checkpoints[-limit:]
 
     def get_current_checkpoint(self):
+        self._wait_if_loading()
         return self._checkpoints[self._current_index] if self.can_undo() else None
 
     def can_undo(self):
+        self._wait_if_loading()
         return self._current_index >= 0
 
     def can_redo(self):
+        self._wait_if_loading()
         return bool(self._redo_stack)
 
     def get_changes_since(self, checkpoint_id):
+        self._wait_if_loading()
         checkpoint = next((cp for cp in self._checkpoints if cp.id == checkpoint_id), None)
         task = self._target(checkpoint) if checkpoint else None
         if task is None:
@@ -346,6 +372,7 @@ class UndoManager:
         ]
 
     def get_file_diff(self, checkpoint_id, file_path):
+        self._wait_if_loading()
         task = self._tasks.get(checkpoint_id)
         if task is None:
             return "", ""
@@ -357,6 +384,7 @@ class UndoManager:
         )
 
     def clear_old_checkpoints(self, keep_count=50):
+        self._wait_if_loading()
         keep_count = max(1, keep_count)
         removed = max(0, len(self._checkpoints) - keep_count)
         self._checkpoints = self._checkpoints[removed:]
@@ -491,6 +519,7 @@ class UndoManager:
                     )
                 )
 
+            validated_paths: set[str] = set()
             for row in data["checkpoints"]:
                 task = TaskChanges(self.working_dir)
                 task.root = Path(row.get("root", str(self.working_dir))).resolve()
@@ -501,7 +530,9 @@ class UndoManager:
                 task.before = {name: state(value) for name, value in row["before"].items()}
                 task.after = {name: state(value) for name, value in row["after"].items()}
                 for name in task.before.keys() | task.after.keys() | task.index.keys():
-                    task._path(name)
+                    if name not in validated_paths:
+                        task._path(name)
+                        validated_paths.add(name)
                 task.finished = row["finished"]
                 task.undone = set(row.get("undone", []))
                 if not task.undone.issubset(task.before):

@@ -206,6 +206,8 @@ def _store_draft(root, proposal):
         **review,
         "assumptions": proposal["assumptions"],
         "missing_capabilities": proposal["missing_capabilities"],
+        "recommended_skills": proposal.get("recommended_skills", []),
+        "rlm_lineage": proposal.get("rlm_lineage"),
         "usage": proposal.get("usage"),
         "cost": proposal.get("cost"),
         "proposal_only": True,
@@ -218,6 +220,25 @@ def draft_from_description(root, description, workflow=""):
     from .generation import proposal_from_description
 
     return _store_draft(root, proposal_from_description(description, workflow=workflow))
+
+
+async def architect(root, description="", *, provider="", model="", gateway=None, workflow=""):
+    """Inspect the repository via RLMContext/Monty and store a reviewable FactorySpec draft."""
+    from .rlm_architect import architect_factory
+
+    root = Path(root).resolve()
+    path = target(root)
+    base = read_text(path) if path.is_file() else ""
+    proposal = await architect_factory(
+        root,
+        description=description,
+        yaml_text=base,
+        workflow=workflow,
+        provider=provider,
+        model=model,
+        gateway=gateway,
+    )
+    return _store_draft(root, proposal)
 
 
 async def draft(root, description, *, provider, model, gateway=None, workflow=""):
