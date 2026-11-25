@@ -58,6 +58,7 @@ from .widgets import (
 from superqode.launch_splash import (
     _SPLASH_QODE,
     _SPLASH_SUPER,
+    _cube,
     _print_launch_splash,
     color_mode,
     sgr_foreground,

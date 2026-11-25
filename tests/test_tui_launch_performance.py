@@ -307,3 +307,33 @@ def test_undo_manager_load_deduplicates_path_validation(tmp_path, monkeypatch):
     assert reloaded.can_undo()
     # 5 tracked files across 4 checkpoints should validate 5 times, not 20.
     assert calls == 5
+
+
+def test_run_textual_app_wires_colormode_and_launch_splash(monkeypatch):
+    """Regression test: run_textual_app must import colormode (_cube/color_mode) cleanly."""
+    import superqode.app as app_pkg
+    import superqode.app.colormode as colormode
+    import superqode.app_main as app_main
+
+    assert app_pkg._cube is colormode._cube
+    assert app_pkg.color_mode is colormode.color_mode
+    assert app_pkg.sgr_foreground is colormode.sgr_foreground
+
+    events = []
+
+    class _FakeApp:
+        def __init__(self, **startup):
+            events.append(("init", startup))
+
+        def run(self):
+            events.append(("run", None))
+
+    monkeypatch.setattr(app_main, "SuperQodeApp", _FakeApp)
+    monkeypatch.setattr(
+        "superqode.app.herdr.close", lambda app: events.append(("close", type(app).__name__))
+    )
+    monkeypatch.setenv("SUPERQODE_NO_SPLASH", "1")
+
+    app_pkg.run_textual_app(demo=True)
+
+    assert events == [("init", {"demo": True}), ("run", None), ("close", "_FakeApp")]

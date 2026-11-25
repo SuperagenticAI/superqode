@@ -1,14 +1,15 @@
 """Terminal colour capability detection applied to Textual before startup.
 
-color_mode and sgr_foreground live in superqode.app so the launch splash can
-use them without importing anything.
+color_mode and sgr_foreground live in superqode.launch_splash (and are
+re-exported from superqode.app) so the launch splash can use them without
+importing Textual or widget modules.
 """
 
 from __future__ import annotations
 
 import os
 
-from superqode.app import _cube, color_mode, sgr_foreground  # noqa: F401
+from superqode.launch_splash import _cube, color_mode, sgr_foreground  # noqa: F401
 
 _TEXTUAL_SYSTEM = {"truecolor": "truecolor", "256": "256", "standard": "standard"}
 

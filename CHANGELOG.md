@@ -7,6 +7,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [2.33.1] - 2026-11-25
+
+- Fixed TUI startup crash (`ImportError: cannot import name '_cube' from 'superqode.app'`)
+  by re-exporting `_cube` from `superqode.app` and importing colour helpers directly from
+  `superqode.launch_splash` in `superqode.app.colormode`.
+
 ## [2.33.0] - 2026-11-25
 
 - Added **On-Demand Software Factory with Recursive Language Models (RLM)**
