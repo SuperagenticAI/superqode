@@ -1,4 +1,12 @@
-# SuperQode for macOS public beta 0.5.0
+# SuperQode for macOS public beta 0.5.1
+
+Version 0.5.1 (build 58) bundles Python engine 2.33.1.
+
+- Fixed a bug in Factory Studio's confirmation sheet where confirming **Run ready stages**, **Verify**, **Approve**, **Apply**, **Run suite**, or **Save verifiers** cleared the pending action before executing it (returning `Unsupported factory action`).
+- Improved Factory Studio first-open responsiveness by replacing `Canvas` emblem rendering with native SwiftUI `Shape` paths, eliminating redundant `@Published` invalidations on initial project entry, and staging initial pane mount across run-loop frames.
+- Bundles Python engine `2.33.1`, which fixes the `sq` / `superqode` TUI startup `ImportError` for `_cube`.
+
+## 0.5.0 (build 57)
 
 Version 0.5.0 (build 57) bundles Python engine 2.33.0.
 

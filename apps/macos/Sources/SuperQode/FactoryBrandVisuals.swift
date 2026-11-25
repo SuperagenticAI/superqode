@@ -559,12 +559,12 @@ extension View {
         inputLabel: inputLabel,
         inputText: inputText,
         onCancel: {
-          isPresented.wrappedValue = false
           onCancel?()
+          isPresented.wrappedValue = false
         },
         onConfirm: {
-          isPresented.wrappedValue = false
           onConfirm()
+          isPresented.wrappedValue = false
         }
       )
     }

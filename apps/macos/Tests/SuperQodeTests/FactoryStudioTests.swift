@@ -1,6 +1,7 @@
 import XCTest
 import Security
 import CryptoKit
+import SwiftUI
 @testable import SuperQode
 
 final class FactoryStudioTests: XCTestCase {
@@ -457,5 +458,32 @@ final class FactoryStudioTests: XCTestCase {
       FactorySoundEngine.cueForTaskTransitions(previous: previous, current: current),
       .needsAttention
     )
+  }
+
+  @MainActor func testFactoryConfirmationPreservesPendingActionBeforeDismissingBinding() {
+    var pendingAction = "worker"
+    var executedAction: String?
+    let isPresented = Binding<Bool>(
+      get: { !pendingAction.isEmpty },
+      set: { if !$0 { pendingAction = "" } }
+    )
+    let sheet = FactoryConfirmationSheet(
+      title: "Run ready factory stages?",
+      message: "Confirm worker execution",
+      onCancel: {
+        pendingAction = ""
+        isPresented.wrappedValue = false
+      },
+      onConfirm: {
+        let action = pendingAction
+        pendingAction = ""
+        executedAction = action
+        isPresented.wrappedValue = false
+      }
+    )
+    sheet.onConfirm()
+    XCTAssertEqual(executedAction, "worker")
+    XCTAssertEqual(pendingAction, "")
+    XCTAssertFalse(isPresented.wrappedValue)
   }
 }

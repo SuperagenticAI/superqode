@@ -24,6 +24,7 @@ struct FactoryStudioView: View {
   @State private var syncedControls: FactoryControlDraft?
   @State private var runDetailTab = ProcessInfo.processInfo.arguments.contains("--factory-acceptance-inspect") ? "checks" : "pipeline"
   @State private var showTour = false
+  @State private var contentReady = false
   @State private var uiSkillPreset = "web"
   @State private var appliedRLMSnapshot: FactoryRLMLineageSnapshot?
   @AppStorage("factoryShowNextStepGuide") private var showNextStepGuide = true
@@ -111,6 +112,7 @@ struct FactoryStudioView: View {
         .transition(.opacity.combined(with: .scale(scale: 0.98)))
       }
       ZStack(alignment: .topLeading) {
+        if contentReady {
         if library.navigation.mounted.contains("Operations") {
           FactoryOperationsView(studio: library, library: library.operations, active: active && tab == "Operations")
             .modifier(FactoryPaneVisibility(active: active && tab == "Operations"))
@@ -146,6 +148,7 @@ struct FactoryStudioView: View {
         if controlsHaveChanges { HStack { Text("Configuration has unapplied edits.").font(.caption).foregroundStyle(.orange); Button("Review configuration") { library.navigation.select("Configuration") } } }
         }.modifier(FactoryPaneVisibility(active: active && FactoryNavigation.buildPages.contains(tab)))
         }
+        }
       }.frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
       }
     }.padding(20)
@@ -153,6 +156,7 @@ struct FactoryStudioView: View {
         guard active else { return }
         await Task.yield()
         guard !Task.isCancelled, active else { return }
+        if !contentReady { contentReady = true }
         library.enter(app.projectID)
         library.navigation.setActive(true)
         guard !app.projectID.isEmpty else { return }
@@ -1228,6 +1232,7 @@ struct FactoryStudioView: View {
     }
   }
   private func execute(_ action: String) {
+    guard !action.isEmpty else { return }
     let ticket = library.navigation.ticket()
     activeAction = action
     Task {
