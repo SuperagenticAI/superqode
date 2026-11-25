@@ -150,7 +150,10 @@ struct FactoryStudioView: View {
       }
     }.padding(20)
       .task(id: app.projectID + "\n" + String(active)) {
-        guard active else { return }; library.enter(app.projectID)
+        guard active else { return }
+        await Task.yield()
+        guard !Task.isCancelled, active else { return }
+        library.enter(app.projectID)
         library.navigation.setActive(true)
         guard !app.projectID.isEmpty else { return }
         if library.text.isEmpty { await library.load(engine: app.engine) }
@@ -314,7 +317,7 @@ struct FactoryStudioView: View {
   ]
 
   private var workflowGrid: some View {
-    LazyVGrid(columns: [GridItem(.adaptive(minimum: 220), spacing: 8)], spacing: 8) {
+    LazyVGrid(columns: [GridItem(.flexible(), spacing: 8), GridItem(.flexible(), spacing: 8)], spacing: 8) {
       ForEach(Self.workflowCards) { card in
         Button { chooseWorkflow(card.id) } label: {
           ConnectionCardLabel(title: card.title, subtitle: card.detail, status: card.badge) {

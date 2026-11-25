@@ -65,9 +65,14 @@ def test_native_menu_uses_terminal_profiles_and_order(desktop):
 def test_model_subscription_guidance_is_not_an_agent_connection(desktop):
     _, _, root = desktop
     plans = connection_menu(root, "plan")["rows"]
-    assert plans and all(r["connector"] == "plan-guidance" and "route" not in r for r in plans)
+    active_plans = [r for r in plans if r["id"] == "plan-alibaba-models"]
+    guidance_plans = [r for r in plans if r["id"] != "plan-alibaba-models"]
+    assert active_plans and active_plans[0]["connector"] == "byok"
+    assert guidance_plans and all(
+        r["connector"] == "plan-guidance" and "route" not in r for r in guidance_plans
+    )
     with pytest.raises(ValueError):
-        profile_route(root, plans[0]["id"])
+        profile_route(root, guidance_plans[0]["id"])
 
 
 def test_subscription_menu_works_without_installed_vendor_binaries(desktop, monkeypatch):

@@ -89,18 +89,42 @@ import Combine
 
   func enter(_ identity: String) {
     guard identity != project else { return }
+    let hadProject = !project.isEmpty
     trialSuites.enter(identity)
     operations.enter(identity)
     acceptance.enter(identity)
     portable.enter(identity)
     navigation.enter(identity)
-    if !project.isEmpty { drafts[project] = (text, description, expectedFileDigest) }
-    operation = UUID(); sourceGeneration += 1; sourceReview = [:]; busy = false; project = identity; review = [:]; detail = [:]; run = ""
-    improvementGeneration += 1; improvementPlans = []; improvementPlan = [:]; improvementPreview = [:]; improvementResult = [:]; improvementCandidate = ""; improvementComparisonJob = ""
-    revisions = []; runs = []; job = [:]; proposal = [:]; failure = ""; message = ""
+    if hadProject { drafts[project] = (text, description, expectedFileDigest) }
+    operation = UUID(); sourceGeneration += 1; improvementGeneration += 1
+    project = identity
+    if hadProject {
+      if !sourceReview.isEmpty { sourceReview = [:] }
+      if busy { busy = false }
+      if !review.isEmpty { review = [:] }
+      if !detail.isEmpty { detail = [:] }
+      if !run.isEmpty { run = "" }
+      if !improvementPlans.isEmpty { improvementPlans = [] }
+      if !improvementPlan.isEmpty { improvementPlan = [:] }
+      if !improvementPreview.isEmpty { improvementPreview = [:] }
+      if !improvementResult.isEmpty { improvementResult = [:] }
+      if !improvementCandidate.isEmpty { improvementCandidate = "" }
+      if !improvementComparisonJob.isEmpty { improvementComparisonJob = "" }
+      if !revisions.isEmpty { revisions = [] }
+      if !runs.isEmpty { runs = [] }
+      if !job.isEmpty { job = [:] }
+      if !proposal.isEmpty { proposal = [:] }
+      if !failure.isEmpty { failure = "" }
+      if !message.isEmpty { message = "" }
+    }
     let draft = drafts[identity]
-    text = draft?.0 ?? ""; description = draft?.1 ?? ""; expectedFileDigest = draft?.2 ?? ""
-    acceptance.sourceChanged(text)
+    let nextText = draft?.0 ?? ""
+    let nextDescription = draft?.1 ?? ""
+    let nextDigest = draft?.2 ?? ""
+    if text != nextText { text = nextText }
+    if description != nextDescription { description = nextDescription }
+    if expectedFileDigest != nextDigest { expectedFileDigest = nextDigest }
+    if hadProject || !nextText.isEmpty { acceptance.sourceChanged(text) }
     trialRequest = UUID().uuidString; version += 1
   }
   func rpc(_ engine: Engine, _ method: String, _ params: [String: Any] = [:]) async throws -> [String: Any] {

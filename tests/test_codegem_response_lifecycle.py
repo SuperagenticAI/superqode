@@ -131,6 +131,21 @@ async def test_explicit_harness_thinking_and_lower_output_cap_keep_precedence():
         {"thinking_config": {"thinkingLevel": "HIGH"}, "max_output_tokens": 128},
         transport=httpx.MockTransport(respond),
     )
+    # Without a per-call reasoning override, harness thinking_config keeps precedence.
+    events_default = [
+        event
+        async for event in source(
+            Model("gemini-4-argon", "google"),
+            Context("", [UserMessage("Hello")]),
+            StreamOptions(api_key="fixture", max_tokens=256),
+        )
+    ]
+    assert events_default[-1].type == "done"
+    assert bodies[0]["generationConfig"]["thinkingConfig"]["thinkingLevel"] == "HIGH"
+    assert bodies[0]["generationConfig"]["maxOutputTokens"] == 128
+
+    # Per-call reasoning (e.g. --effort or compaction) overrides thinkingLevel while
+    # preserving the harness's lower output token cap.
     events = [
         event
         async for event in source(
@@ -140,8 +155,8 @@ async def test_explicit_harness_thinking_and_lower_output_cap_keep_precedence():
         )
     ]
     assert events[-1].type == "done"
-    assert bodies[0]["generationConfig"]["thinkingConfig"]["thinkingLevel"] == "HIGH"
-    assert bodies[0]["generationConfig"]["maxOutputTokens"] == 128
+    assert bodies[1]["generationConfig"]["thinkingConfig"]["thinkingLevel"] == "LOW"
+    assert bodies[1]["generationConfig"]["maxOutputTokens"] == 128
 
 
 @pytest.mark.asyncio

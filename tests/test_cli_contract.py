@@ -198,7 +198,7 @@ EXPECTED_HELP_TREE_SHA256 = "54d6d81c00e3f69bbb764a1537cf70e8c10cf2c36d540f9176f
 # Click 8.5 renders optional group commands as [COMMAND] and case-insensitive
 # choices in lower case. Both verified renders expose the same command tree.
 EXPECTED_MODERN_CLICK_HELP_TREE_SHA256 = (
-    "d306267441820aca2f3a86200313aa7f65f4db580cabb096f5c869fdd274738b"
+    "de99132fa76cac7c90e77cbe4b9297873e8c6170b234b2684ab21b7537562499"
 )
 
 

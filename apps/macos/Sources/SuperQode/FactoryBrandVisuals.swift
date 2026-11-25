@@ -1,11 +1,45 @@
 import SwiftUI
 
+private struct FactoryEmblemSilhouette: Shape {
+  func path(in rect: CGRect) -> Path {
+    let w = rect.width
+    let h = rect.height
+    var bodyPath = Path()
+    bodyPath.move(to: CGPoint(x: rect.minX + w * 0.16, y: rect.minY + h * 0.80))
+    bodyPath.addLine(to: CGPoint(x: rect.minX + w * 0.16, y: rect.minY + h * 0.44))
+    bodyPath.addLine(to: CGPoint(x: rect.minX + w * 0.38, y: rect.minY + h * 0.56))
+    bodyPath.addLine(to: CGPoint(x: rect.minX + w * 0.38, y: rect.minY + h * 0.42))
+    bodyPath.addLine(to: CGPoint(x: rect.minX + w * 0.62, y: rect.minY + h * 0.55))
+    bodyPath.addLine(to: CGPoint(x: rect.minX + w * 0.62, y: rect.minY + h * 0.24))
+    bodyPath.addLine(to: CGPoint(x: rect.minX + w * 0.84, y: rect.minY + h * 0.24))
+    bodyPath.addLine(to: CGPoint(x: rect.minX + w * 0.84, y: rect.minY + h * 0.80))
+    bodyPath.closeSubpath()
+    return bodyPath
+  }
+}
+
+private struct FactoryEmblemWindow: Shape {
+  let xFraction: CGFloat
+  func path(in rect: CGRect) -> Path {
+    let w = rect.width
+    let h = rect.height
+    let winRect = CGRect(
+      x: rect.minX + w * xFraction,
+      y: rect.minY + h * 0.61,
+      width: w * 0.13,
+      height: h * 0.13
+    )
+    return Path(roundedRect: winRect, cornerRadius: 1.5)
+  }
+}
+
 /// Original vector emblem for Factory Studio matching the SuperQode palette.
 struct FactoryStudioEmblem: View {
   var size: CGFloat = 24
   @Environment(\.colorSchemeContrast) private var contrast
 
   var body: some View {
+    let fg: Color = contrast == .increased ? .primary : .white
     ZStack {
       RoundedRectangle(cornerRadius: size * 0.28, style: .continuous)
         .fill(
@@ -15,28 +49,13 @@ struct FactoryStudioEmblem: View {
               colors: [Brand.purple, Brand.pink, Brand.orange],
               startPoint: .topLeading, endPoint: .bottomTrailing))
         )
-      Canvas { context, canvasSize in
-        let w = canvasSize.width
-        let h = canvasSize.height
-        let fg: Color = contrast == .increased ? .primary : .white
-        // Sawtooth factory silhouette with two clean precision windows.
-        var bodyPath = Path()
-        bodyPath.move(to: CGPoint(x: w * 0.16, y: h * 0.80))
-        bodyPath.addLine(to: CGPoint(x: w * 0.16, y: h * 0.44))
-        bodyPath.addLine(to: CGPoint(x: w * 0.38, y: h * 0.56))
-        bodyPath.addLine(to: CGPoint(x: w * 0.38, y: h * 0.42))
-        bodyPath.addLine(to: CGPoint(x: w * 0.62, y: h * 0.55))
-        bodyPath.addLine(to: CGPoint(x: w * 0.62, y: h * 0.24))
-        bodyPath.addLine(to: CGPoint(x: w * 0.84, y: h * 0.24))
-        bodyPath.addLine(to: CGPoint(x: w * 0.84, y: h * 0.80))
-        bodyPath.closeSubpath()
-        context.fill(bodyPath, with: .color(fg.opacity(0.95)))
-
-        let winSize = CGSize(width: w * 0.13, height: h * 0.13)
-        let win1 = CGRect(origin: CGPoint(x: w * 0.28, y: h * 0.61), size: winSize)
-        let win2 = CGRect(origin: CGPoint(x: w * 0.50, y: h * 0.61), size: winSize)
-        context.fill(Path(roundedRect: win1, cornerRadius: 1.5), with: .color(Brand.purple.opacity(contrast == .increased ? 0.4 : 0.75)))
-        context.fill(Path(roundedRect: win2, cornerRadius: 1.5), with: .color(Brand.pink.opacity(contrast == .increased ? 0.4 : 0.75)))
+      ZStack {
+        FactoryEmblemSilhouette()
+          .fill(fg.opacity(0.95))
+        FactoryEmblemWindow(xFraction: 0.28)
+          .fill(Brand.purple.opacity(contrast == .increased ? 0.4 : 0.75))
+        FactoryEmblemWindow(xFraction: 0.50)
+          .fill(Brand.pink.opacity(contrast == .increased ? 0.4 : 0.75))
       }
       .padding(size * 0.12)
     }
