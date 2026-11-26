@@ -717,6 +717,11 @@ def _compose_factory_spec(
             "acceptance checks, permissions, budgets and release policy. Review proposed stage "
             "instruction changes in the definition diff. Workflow suggestions do not replace the saved workflow."
         )
+        if workflow_override:
+            assumptions.append(
+                f"Requested starter `{workflow_override}` was not applied: the existing Factory workflow is preserved. "
+                "Choose and review a replacement starter separately to change workflow structure."
+            )
     assumptions.append(
         "The drafting model is separate from execution models; review the execution bindings before running a trial."
     )

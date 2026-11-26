@@ -125,11 +125,17 @@ async def test_rlm_architect_preserves_existing_release_authority(tmp_path):
     result = await architect_factory(
         tmp_path,
         description="Upgrade to two gates",
+        workflow="continuous-outcomes",
         yaml_text=yaml.safe_dump(existing, sort_keys=False),
     )
     updated = read_mapping(result["yaml"])
     validate_definition(updated)
     assert updated["governance"]["release_authority"] == existing["governance"]["release_authority"]
+    assert updated["orchestration"] == existing["orchestration"]
+    assert any(
+        "Requested starter `continuous-outcomes` was not applied" in item
+        for item in result["assumptions"]
+    )
 
 
 async def test_authoring_architect_stores_reviewable_draft_without_writing_factory(tmp_path):

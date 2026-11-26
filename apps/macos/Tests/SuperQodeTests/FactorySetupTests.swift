@@ -2,7 +2,7 @@ import XCTest
 @testable import SuperQode
 
 final class FactorySetupTests: XCTestCase {
-  private let review: [String: Any] = ["review": "native-review", "yaml": "draft", "digest": "saved", "snapshot_digest": "snapshot"]
+  private let review: [String: Any] = ["review": "native-review", "yaml": "draft", "digest": "saved", "snapshot_digest": "snapshot", "acceptance_checks": ["regression"], "application_checks": ["regression": ["evaluator": "probes"]]]
   func testAnEditedOrUnvalidatedDraftCannotAppearReady() {
     let empty = FactorySetupState(text: "", review: [:], savedDigest: "", sources: [:], runs: [])
     XCTAssertEqual(empty.action, "Load a starter")
@@ -41,21 +41,47 @@ final class FactorySetupTests: XCTestCase {
     XCTAssertEqual(start.nextActionTitle, "Load Fix and verify")
 
     let saved = FactorySetupState(text: "draft", review: review, savedDigest: "saved", sources: sources, runs: [])
-    XCTAssertEqual(saved.guidedStepIndex, 2)
+    XCTAssertEqual(saved.guidedStepIndex, 3)
     XCTAssertEqual(saved.nextDestination, "Runs")
 
     let completed = FactorySetupState(
       text: "draft",
-      review: ["review": "native-review", "yaml": "draft", "digest": "saved", "snapshot_digest": "snapshot", "acceptance_checks": ["regression"]],
+      review: ["review": "native-review", "yaml": "draft", "digest": "saved", "snapshot_digest": "snapshot", "acceptance_checks": ["regression"], "application_checks": ["regression": ["evaluator": "probes"]]],
       savedDigest: "saved",
       sources: sources,
-      runs: [["factory_digest": "snapshot", "status": "completed"]],
+      runs: [["factory_digest": "snapshot", "status": "ready_to_merge", "verification_valid": true]],
       hasSuite: true,
       hasImprovement: true
     )
     XCTAssertTrue(completed.hasCompletedRun)
     XCTAssertEqual(completed.guidedStepIndex, 4)
-    XCTAssertEqual(completed.completedBadgeText, "Self-improving loop active ✓")
+    XCTAssertEqual(completed.completedBadgeText, "Improvement plan prepared ✓")
+  }
+
+  func testOrdinaryCompletionAndForeignReceiptsDoNotCountAsVerified() {
+    for run: [String: Any] in [
+      ["factory_digest": "snapshot", "status": "completed"],
+      ["factory_digest": "other", "verification_valid": true],
+      ["factory_digest": "snapshot", "verification_valid": false]] {
+      let state = FactorySetupState(text: "draft", review: review, savedDigest: "saved", sources: [:], runs: [run])
+      XCTAssertFalse(state.hasCompletedRun)
+    }
+  }
+
+  func testSuiteAndHumanGateDoNotSubstituteForProtectedAcceptance() {
+    var ordinary = review
+    ordinary["application_checks"] = ["regression": ["command": "pytest"]]
+    ordinary["stages"] = [["human_gate": true]]
+    let state = FactorySetupState(text: "draft", review: ordinary, savedDigest: "saved", sources: [:], runs: [], hasSuite: true)
+    XCTAssertFalse(state.hasProtectedChecks)
+    XCTAssertEqual(state.guidedStepIndex, 2)
+    XCTAssertEqual(state.nextDestination, "Acceptance")
+  }
+
+  func testSharedChecklistCanRejectEvidenceFromAnOlderApplicationBaseline() {
+    let state = FactorySetupState(text: "draft", review: review, savedDigest: "saved", sources: [:],
+      runs: [["factory_digest": "snapshot", "verification_valid": true]], verifiedTrial: false)
+    XCTAssertFalse(state.hasCompletedRun)
   }
 
   func testMergeRiskSnapshotParsesFiveDimensions() {

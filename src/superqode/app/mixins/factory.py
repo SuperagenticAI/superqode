@@ -19,6 +19,12 @@ class FactoryMixin:
         t = Text()
         t.append("\n  Code Factory\n\n", style=f"bold {THEME['purple']}")
         commands = [
+            (":factory start", "first-run checklist and the next concrete step; no execution"),
+            (
+                ":factory models [--check-connections]",
+                "check local/frontier model setup separately from execution",
+            ),
+            (":factory benchmark history", "select past tasks for reviewed local replay"),
             (":factory status", "FactorySpec, acceptance checks, release rule and recent runs"),
             (":factory workflows", "list Kanban, Scrum, XP, Lean and the other starters"),
             (":factory init [--template NAME] [--force]", "create a full FactorySpec"),
@@ -207,7 +213,7 @@ class FactoryMixin:
         log.add_success(
             f"✅ FactorySpec {result['template']} saved to {result['path']}"
             + (" (route policy kept)" if result.get("upgraded_route_policy") else "")
-            + ". Next: :factory check"
+            + ". Next: :factory start"
         )
 
     def _factory_workflows(self, log: ConversationLog) -> None:

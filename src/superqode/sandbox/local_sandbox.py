@@ -155,7 +155,11 @@ def build_sandboxed_argv(
     backend = _backend_for_platform()
     if backend == "none":
         if boundary:
-            raise RuntimeError("Factory worker commands require an available OS sandbox")
+            raise RuntimeError(
+                "Factory worker commands require an available OS sandbox for isolation. On Linux install Bubblewrap "
+                "(bwrap) and enable unprivileged user namespaces; on macOS use sandbox-exec. "
+                "Run `sq factory operations check --probe` to diagnose this host before retrying."
+            )
         return SandboxPlan(
             argv=shell_argv, applied=False, backend="none", reason="no sandbox backend available"
         )

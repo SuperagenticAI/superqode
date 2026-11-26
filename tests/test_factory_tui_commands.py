@@ -86,3 +86,21 @@ def test_tui_init_creates_spec_and_route_commands_still_work(tmp_path, monkeypat
     assert log.lines[-1][0] == "success"
     host.factory("status")
     assert "route-only policy" in host.shown[-1]
+
+
+def test_onboarding_model_setup_and_benchmarks_use_shared_cli():
+    host = Host()
+    for command in ("start", "models", "models --check-connections", "benchmark history"):
+        host.factory(command)
+        assert host.passthrough[-1] == ["factory", *command.split()]
+    host.factory("help")
+    assert ":factory start" in host.shown[-1]
+    assert ":factory models" in host.shown[-1]
+
+
+def test_onboarding_commands_have_discoverable_completion_descriptions():
+    from superqode.command_registry import DEFAULT_COMMANDS
+
+    commands = {item.command: item.description for item in DEFAULT_COMMANDS}
+    for command in (":factory start", ":factory models", ":factory benchmark history"):
+        assert commands[command]

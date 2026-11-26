@@ -82,6 +82,12 @@ def handle(service, method, params):
     root = service.project(params["project"])
     _ensure(service)
     target = _target(root)
+    if method == "factory.onboarding.inspect":
+        from superqode.factory.onboarding import inspect_setup
+
+        return inspect_setup(
+            root, yaml_text=params.get("yaml"), drafting_model=params.get("drafting_model", "")
+        )
     if method == "factory.models.inspect":
         from superqode.factory.model_setup import inspect_models
 
@@ -297,6 +303,8 @@ def handle(service, method, params):
                 lease.close()
         return {"digest": saved["digest"], "snapshot_digest": saved["snapshot_digest"]}
     if method == "factory.list":
+        from superqode.factory.onboarding import verified_trial
+
         folder = project_path(root, ".superqode/factory-studio/revisions")
         revisions = []
         if folder.exists():
@@ -317,6 +325,7 @@ def handle(service, method, params):
                             "goal": order.goal,
                             "status": order.status.value,
                             "factory_digest": order.metadata["factory"]["snapshot_digest"],
+                            "verification_valid": verified_trial(order),
                         }
                     )
         return {"revisions": revisions, "runs": runs}

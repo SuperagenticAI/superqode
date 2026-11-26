@@ -8,7 +8,10 @@ import Combine
   let portable = FactoryExportLibrary()
   let navigation = FactoryNavigation(initial: FactoryNavigation.initialTab)
   let modelSetup = FactoryModelSetupLibrary()
-  @Published var text = "" { didSet { if text != oldValue { version += 1; review = [:]; acceptance.sourceChanged(text); modelSetup.invalidate() } } }
+  @Published var text = "" { didSet { if text != oldValue { version += 1; review = [:]; acceptance.sourceChanged(text); modelSetup.invalidate(); setupGeneration += 1; gettingStarted = [:]; setupChecking = false } } }
+  @Published var gettingStarted: [String: Any] = [:]
+  @Published var setupChecking = false
+  private var setupGeneration = 0
   @Published var description = "" { didSet { if description != oldValue { version += 1 } } }
   @Published var review: [String: Any] = [:]
   @Published var improvementPlans: [[String: Any]] = []
@@ -90,6 +93,7 @@ import Combine
 
   func enter(_ identity: String) {
     guard identity != project else { return }
+    setupGeneration += 1; gettingStarted = [:]; setupChecking = false
     let hadProject = !project.isEmpty
     trialSuites.enter(identity)
     modelSetup.enter(identity)
@@ -132,6 +136,21 @@ import Combine
   func rpc(_ engine: Engine, _ method: String, _ params: [String: Any] = [:]) async throws -> [String: Any] {
     var params = params; params["project"] = project
     return try await engine.call("factory." + method, params) as? [String: Any] ?? [:]
+  }
+  func inspectGettingStarted(engine: Engine) async {
+    guard !project.isEmpty else { return }
+    setupGeneration += 1
+    let token = setupGeneration; let identity = project; let source = version
+    let drafting = modelSetup.draftingReference
+    setupChecking = true
+    defer { if project == identity, setupGeneration == token { setupChecking = false } }
+    do {
+      let value = try await rpc(engine, "onboarding.inspect", ["yaml": text, "drafting_model": drafting])
+      guard project == identity, setupGeneration == token, version == source, modelSetup.draftingReference == drafting, !Task.isCancelled else { return }
+      gettingStarted = value
+    } catch {
+      if project == identity, setupGeneration == token, version == source, modelSetup.draftingReference == drafting { failure = error.localizedDescription }
+    }
   }
   func load(engine: Engine, template: String = "", revision: String = "") async {
     version += 1

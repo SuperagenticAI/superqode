@@ -50,7 +50,8 @@ struct FactoryStudioView: View {
       sources: library.sourceReview,
       runs: library.runs,
       hasSuite: !library.trialSuites.plans.isEmpty,
-      hasImprovement: !library.improvementPlans.isEmpty
+      hasImprovement: !library.improvementPlans.isEmpty,
+      verifiedTrial: library.gettingStarted["verified_trial"] as? Bool ?? false
     )
   }
   private var sidebarBadges: FactorySidebarBadges {
@@ -260,6 +261,7 @@ struct FactoryStudioView: View {
             Text("What should this Factory do?").font(.headline)
           }
           TextEditor(text: $library.description).font(.body).frame(height: 120).brandSurface().accessibilityLabel("Factory description")
+          FactoryGettingStartedView(studio: library, idle: idle)
           FactoryModelSetupView(studio: library, models: library.modelSetup, idle: idle)
           VStack(alignment: .leading, spacing: 6) {
             HStack(spacing: 10) {

@@ -7,6 +7,33 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [2.33.2] - 2026-11-26
+
+### Added
+
+- Shared Factory getting-started checklist in `sq factory start`, `:factory start`
+  and macOS Factory Studio, with explicit next actions for model setup, host
+  prerequisites, protected acceptance checks and a verified first trial.
+- Local and frontier model setup guidance that separates drafting from execution
+  bindings and explains private-route restrictions without inference calls.
+- Reviewable benchmark datasets from past runs, with pinned starting revisions,
+  isolated replay, and cost or latency optimization objectives under held-out gates.
+- Protected acceptance probe files for the Factory demo.
+- macOS public beta 0.5.2 (build 59), bundling engine 2.33.2.
+
+### Fixed
+
+- RLM Factory drafts preserve existing execution models, budgets, permissions,
+  workflow contracts and release policy, and report ignored workflow overrides.
+- Terminal Factory model setup reaches the shared model checker instead of the
+  route list. Factory initialization directs users to the first-run checklist.
+- First-run progress requires matching protected verification evidence and a
+  current application baseline; unsaved drafts stay at review and save.
+- Factory worker commands require OS isolation, with actionable sandbox setup
+  guidance when the host cannot provide it.
+- Equal-quality, lower-cost candidates can qualify for manual promotion when the
+  configured objective is cost and the required held-out evidence is complete.
+
 ## [2.33.1] - 2026-11-25
 
 - Fixed TUI startup crash (`ImportError: cannot import name '_cube' from 'superqode.app'`)

@@ -18,6 +18,7 @@ The macOS app is the primary Factory interface. The CLI and TUI use the same
 engine and can run the whole flow on their own:
 
 ```bash
+sq factory start                              # read-only first-run checklist and next action
 sq factory workflows                          # fix-and-verify, triage-spec-build, continuous-outcomes,
                                               # build-test-deploy, kanban, scrum, xp, lean
 sq factory init --template fix-and-verify     # full FactorySpec; keeps existing routes
@@ -86,6 +87,9 @@ In the TUI, the same flow is:
 | TUI command | Does |
 | --- | --- |
 | `:factory` or `:factory status` | Factory overview, recent runs and the session route |
+| `:factory start` | First-run checklist and the next setup action |
+| `:factory models [--check-connections]` | Inspect execution and drafting model setup through the CLI |
+| `:factory benchmark history` | Review project runs eligible for benchmark replay |
 | `:factory workflows` | List the starter workflows |
 | `:factory init [--template NAME] [--force]` | Create a FactorySpec |
 | `:factory describe "<process>"` | Draft a starter with no model, or pass `--model p/m` (runs the CLI) |
@@ -101,12 +105,38 @@ Status marks are ✅ passed or covered, ⏸️ held or uncovered, ❌ failed or
 rejected, ⛔ blocked and ➖ never ran. Route, mode, switch, fork and lineage
 commands are unchanged.
 
+## factory start
+
+Run `sq factory start` in your project to inspect the Factory definition, execution
+models, host prerequisites, protected acceptance checks and first-trial evidence.
+It prints the next command, creates no project files, sends no inference prompts
+and runs no project commands. `--json` returns the shared checklist used by the
+macOS Describe screen; the TUI exposes it as `:factory start`.
+
+Use `--check-connections` for explicit credential and local-model discovery.
+Configured bindings establish configuration only. Run
+`sq factory operations check --probe --application` after reviewing the saved
+Factory's application commands to test isolation, build, startup and health checks.
+Linux workers require Bubblewrap and usable unprivileged user namespaces.
+
+Review protected probe expectations in Acceptance before preparing a small trial.
+The guide advances through the worker, human gates and protected verification
+according to the run's state. A matching verification receipt establishes a
+verified trial; SuperGauge and human release authorization remain separate checks.
+The macOS guide asks for confirmation before running host and application checks.
+
 ## factory models
 
 Use `sq factory models --draft-model PROVIDER/MODEL` while creating an on-demand
 Factory or editing your own. The report separates the optional drafting model
 from each harness's execution model and fallbacks. Choosing a drafting model
 leaves the execution models unchanged. Starter generation works without a model.
+
+For connection setup, use the [provider commands](provider-commands.md),
+[BYOK guide](../providers/byok.md) or [local stack guide](../advanced/local-stack.md).
+The macOS model card opens Local AI or frontier-provider Connections and returns
+to Factory Studio. In the TUI, `:connect local` and `:connect byok` open the
+corresponding pickers. Review execution bindings in the Factory separately.
 
 Add `--check-connections` to check credentials and discover local models through
 the existing connection services. Checks send no inference prompts. A discovered

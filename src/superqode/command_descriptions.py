@@ -6,6 +6,13 @@ completion and both command palettes consume that same registry.
 """
 
 COMMAND_DESCRIPTIONS = {
+    ":factory start": "Show the next step toward a first verified Factory run",
+    ":factory models": "Inspect drafting and execution model setup",
+    ":factory models --check-connections": "Check model connections without inference",
+    ":factory benchmark": "Review and replay project-specific benchmark tasks",
+    ":factory benchmark history": "Inspect eligible past runs for a benchmark",
+    ":factory benchmark draft": "Draft a reviewable benchmark from selected runs",
+    ":factory benchmark install": "Install a confirmed benchmark draft",
     ":a2a-keys": "Issue, inspect, and revoke A2A agent API keys.",
     ":a2a-keys credits": "Manage hosted skill entitlements independently of signed keys.",
     ":a2a-keys credits grant": "Add credits and set CUSTOMER's explicit skill entitlement.",

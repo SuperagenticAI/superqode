@@ -1,4 +1,15 @@
-# SuperQode for macOS public beta 0.5.1
+# SuperQode for macOS public beta 0.5.2
+
+Version 0.5.2 (build 59) bundles Python engine 2.33.2.
+
+- Factory Studio adds a **Your first verified run** checklist with links to definition review, execution models, host checks, protected acceptance and trial evidence. Isolation and application checks ask for confirmation before running.
+- Model setup separates the optional drafting model from execution bindings, with Local AI and frontier-provider connection shortcuts that return to Factory Studio. Connection checks send no inference prompts, and private routes require an explicit change before cloud use.
+- The getting-started guide places protected acceptance before a trial, counts matching verification evidence, and rejects stale results after project, draft or model changes. A prepared improvement plan is labeled as prepared.
+- RLM drafts preserve existing Factory models, budgets, permissions, workflow and release policy, with proposed instruction changes available for review.
+- Trial suites can draft reviewed datasets from past runs and replay each task from its pinned starting commit. Cost and latency optimization require held-out evidence and manual promotion.
+- The bundled engine adds `sq factory start` and `:factory start`, fixes terminal model setup routing, ships protected demo probes, and explains Linux sandbox prerequisites when isolation is unavailable.
+
+## 0.5.1 (build 58)
 
 Version 0.5.1 (build 58) bundles Python engine 2.33.1.
 

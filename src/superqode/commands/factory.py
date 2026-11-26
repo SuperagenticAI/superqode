@@ -14,6 +14,7 @@ from .factory_authoring import (
     show,
     workflows,
     models,
+    start,
     describe,
     sources,
     check,
@@ -35,7 +36,7 @@ factory.add_command(intake)
 factory.add_command(benchmark)
 factory.add_command(evidence)
 factory.add_command(verifier)
-for _command in (init, show, workflows, models, describe, sources, check, decide, trial):
+for _command in (init, show, workflows, models, start, describe, sources, check, decide, trial):
     factory.add_command(_command)
 
 

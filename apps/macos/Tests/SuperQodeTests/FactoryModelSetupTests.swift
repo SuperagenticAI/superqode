@@ -2,6 +2,42 @@ import XCTest
 @testable import SuperQode
 
 final class FactoryModelSetupTests: XCTestCase {
+  @MainActor func testFirstRunChecklistCannotCrossProjects() async {
+    let pipe = Pipe(); let engine = Engine(input: pipe.fileHandleForWriting); defer { engine.stop() }
+    let studio = FactoryStudioLibrary(); studio.enter("first")
+    let pending = Task { await studio.inspectGettingStarted(engine: engine) }
+    while engine.pendingRequestCount < 1 { await Task.yield() }
+    studio.enter("second")
+    engine.receive(["id": 1, "result": ["verified_trial": true]])
+    await pending.value
+    XCTAssertTrue(studio.gettingStarted.isEmpty)
+    XCTAssertFalse(studio.setupChecking)
+  }
+
+  @MainActor func testDraftEditsRejectStaleFirstRunChecklist() async {
+    let pipe = Pipe(); let engine = Engine(input: pipe.fileHandleForWriting); defer { engine.stop() }
+    let studio = FactoryStudioLibrary(); studio.enter("project")
+    let pending = Task { await studio.inspectGettingStarted(engine: engine) }
+    while engine.pendingRequestCount < 1 { await Task.yield() }
+    studio.text = "Changed definition"
+    engine.receive(["id": 1, "result": ["verified_trial": true]])
+    await pending.value
+    XCTAssertTrue(studio.gettingStarted.isEmpty)
+    XCTAssertFalse(studio.setupChecking)
+  }
+
+  @MainActor func testModelChangeRejectsStaleFirstRunChecklist() async {
+    let pipe = Pipe(); let engine = Engine(input: pipe.fileHandleForWriting); defer { engine.stop() }
+    let studio = FactoryStudioLibrary(); studio.enter("project")
+    let pending = Task { await studio.inspectGettingStarted(engine: engine) }
+    while engine.pendingRequestCount < 1 { await Task.yield() }
+    studio.modelSetup.draftingReference = "ollama/changed"
+    engine.receive(["id": 1, "result": ["models": ["drafting": ["eligible": true]]]])
+    await pending.value
+    XCTAssertTrue(studio.gettingStarted.isEmpty)
+    XCTAssertFalse(studio.setupChecking)
+  }
+
   @MainActor func testHistoricalDatasetCannotCrossProjects() async {
     let pipe = Pipe(); let engine = Engine(input: pipe.fileHandleForWriting); defer { engine.stop() }
     let library = FactoryTrialSuiteLibrary(); library.enter("first")

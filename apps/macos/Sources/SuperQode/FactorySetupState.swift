@@ -18,6 +18,7 @@ struct FactorySetupState {
   let hasCompletedRun: Bool
   let hasHumanGate: Bool
   let hasChecksOrSuite: Bool
+  let hasProtectedChecks: Bool
   let hasImprovement: Bool
 
   init(
@@ -27,7 +28,8 @@ struct FactorySetupState {
     sources: [String: Any],
     runs: [[String: Any]],
     hasSuite: Bool = false,
-    hasImprovement: Bool = false
+    hasImprovement: Bool = false,
+    verifiedTrial: Bool? = nil
   ) {
     hasDraft = !text.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
     validated = hasDraft && string(review, "yaml") == text && !string(review, "review").isEmpty
@@ -37,14 +39,18 @@ struct FactorySetupState {
     committed = saved && !snapshot.isEmpty && string(sources, "snapshot_digest") == snapshot
       && !files.isEmpty && files.allSatisfy { $0["changed"] as? Bool == false }
     trialPrepared = saved && !snapshot.isEmpty && runs.contains { string($0, "factory_digest") == snapshot }
-    hasCompletedRun = runs.contains {
-      let status = string($0, "status").lowercased()
-      return status == "completed" || status == "succeeded" || status == "shipped" || status == "ready_to_merge"
+    hasCompletedRun = (verifiedTrial ?? true) && runs.contains {
+      string($0, "factory_digest") == snapshot && !snapshot.isEmpty
+        && ($0["verification_valid"] as? Bool) == true
     }
     let stages = review["stages"] as? [[String: Any]] ?? []
     hasHumanGate = stages.contains { $0["human_gate"] as? Bool == true }
-    let acceptanceChecks = review["acceptance_checks"] as? [Any] ?? []
-    hasChecksOrSuite = hasSuite || !acceptanceChecks.isEmpty || hasHumanGate
+    let acceptanceChecks = review["acceptance_checks"] as? [String] ?? []
+    let configured = review["application_checks"] as? [String: [String: Any]] ?? [:]
+    hasProtectedChecks = !acceptanceChecks.isEmpty && acceptanceChecks.allSatisfy {
+      !string(configured[$0] ?? [:], "evaluator").isEmpty
+    }
+    hasChecksOrSuite = hasProtectedChecks
     self.hasImprovement = hasImprovement
   }
 
@@ -52,15 +58,15 @@ struct FactorySetupState {
 
   var action: String {
     !hasDraft ? "Load a starter" : !validated ? "Validate draft" : !saved ? "Review & save"
-      : !committed ? "Review source changes" : trialPrepared ? "Open trials" : "Prepare a trial"
+      : !hasProtectedChecks ? "Configure acceptance" : !committed ? "Review source changes" : trialPrepared ? "Open trials" : "Prepare a trial"
   }
 
   var milestones: [GuidedMilestone] {
     [
       GuidedMilestone(id: "starter", number: 1, title: "Pick workflow", completed: hasDraft, destination: "Stack"),
       GuidedMilestone(id: "save", number: 2, title: "Check & save", completed: saved, destination: "Definition"),
-      GuidedMilestone(id: "trial", number: 3, title: "First trial", completed: hasCompletedRun, destination: "Runs"),
-      GuidedMilestone(id: "protect", number: 4, title: "Checks & gates", completed: hasCompletedRun && hasChecksOrSuite, destination: "Acceptance"),
+      GuidedMilestone(id: "protect", number: 3, title: "Acceptance", completed: hasProtectedChecks, destination: "Acceptance"),
+      GuidedMilestone(id: "trial", number: 4, title: "Verified trial", completed: hasCompletedRun, destination: "Runs"),
       GuidedMilestone(id: "improve", number: 5, title: "Measure & improve", completed: hasImprovement, destination: "Improve"),
     ]
   }
@@ -68,8 +74,8 @@ struct FactorySetupState {
   var guidedStepIndex: Int {
     if !hasDraft { return 0 }
     if !saved { return 1 }
-    if !hasCompletedRun { return 2 }
-    if !hasChecksOrSuite { return 3 }
+    if !hasProtectedChecks { return 2 }
+    if !hasCompletedRun { return 3 }
     return 4
   }
 
@@ -77,21 +83,22 @@ struct FactorySetupState {
     if !hasDraft { return "Step 1 of 5" }
     if !validated { return "Starter loaded ✓" }
     if !saved { return "Definition checked ✓" }
+    if !hasProtectedChecks { return "Revision saved ✓" }
     if !committed { return "Revision saved ✓" }
     if !trialPrepared && !hasCompletedRun { return "Sources ready ✓" }
     if !hasCompletedRun { return "Trial prepared ✓" }
     if !hasImprovement { return "First trial complete ✓" }
-    return "Self-improving loop active ✓"
+    return "Improvement plan prepared ✓"
   }
 
   var nextTitle: String {
     if !hasDraft { return "Pick a starter workflow" }
     if !validated { return "Check your factory definition" }
     if !saved { return "Save this checked revision" }
+    if !hasProtectedChecks { return "Add protected acceptance checks" }
     if !committed { return "Review factory files in Source control" }
     if !trialPrepared && !hasCompletedRun { return "Prepare and run your first trial" }
     if !hasCompletedRun { return "Run ready stages and verify with SuperGauge" }
-    if !hasChecksOrSuite { return "Add protected checks or a Trial Suite" }
     return "Measure with Trial Suites or run Improve"
   }
 
@@ -105,6 +112,9 @@ struct FactorySetupState {
     if !saved {
       return "Your draft passed checks. Save the revision so trials can pin an immutable snapshot."
     }
+    if !hasProtectedChecks {
+      return "Configure and independently review protected probe expectations. Ordinary tests, skills and human gates do not establish protected acceptance."
+    }
     if !committed {
       return "Your factory is defined as code. Review or commit factory files before pinning a trial."
     }
@@ -114,29 +124,26 @@ struct FactorySetupState {
     if !hasCompletedRun {
       return "Run the ready stages in isolated worktrees, approve any human gates, then verify with SuperGauge."
     }
-    if !hasChecksOrSuite {
-      return "Add a protected acceptance check or attach the merge-risk and ui-verification skills to build review trust."
-    }
-    return "Build a Trial Suite from real tasks and let Native, GEPA, MetaHarness, or Omni propose verified upgrades."
+    return "Build a Trial Suite from real tasks and let Native, GEPA, MetaHarness, or Omni propose measured changes for review."
   }
 
   var nextActionTitle: String {
     if !hasDraft { return "Load Fix and verify" }
     if !validated { return "Check definition" }
     if !saved { return "Save revision…" }
+    if !hasProtectedChecks { return "Open Acceptance →" }
     if !committed { return "Review sources →" }
     if !trialPrepared && !hasCompletedRun { return "Go to Single trial →" }
     if !hasCompletedRun { return "Open active trial →" }
-    if !hasChecksOrSuite { return "Open Acceptance →" }
     return "Open Improve →"
   }
 
   var nextDestination: String {
     if !hasDraft { return "Stack" }
     if !validated || !saved { return "Definition" }
+    if !hasProtectedChecks { return "Acceptance" }
     if !committed { return "Sources" }
     if !hasCompletedRun { return "Runs" }
-    if !hasChecksOrSuite { return "Acceptance" }
     return "Improve"
   }
 }

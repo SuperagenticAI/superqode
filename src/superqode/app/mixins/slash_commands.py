@@ -1608,7 +1608,7 @@ class SlashCommandMixin:
             self._factory_workflows(log)
         elif subcommand == "init-policy":
             self._factory_init_policy(rest, log)
-        elif subcommand in {"describe", "check", "run"}:
+        elif subcommand in {"start", "models", "describe", "check", "run"}:
             self._factory_cli(subcommand, rest, log)
         elif subcommand == "trial":
             self._factory_trial(rest, log)
@@ -1616,7 +1616,7 @@ class SlashCommandMixin:
             self._factory_evidence(rest, log)
         elif subcommand in {"decide", "decision"}:
             self._factory_decide(rest, log)
-        elif subcommand in {"routes", "route", "models"}:
+        elif subcommand in {"routes", "route"}:
             self._factory_routes(log)
         elif subcommand in {"mode", "policy"}:
             self._factory_mode(rest, log)

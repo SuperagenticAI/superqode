@@ -54,7 +54,7 @@ def init(project, template, force, json_output):
         return
     click.echo(f"✅ Factory created from {template}: {result['path']}")
     click.echo(f"   Revision {result['digest'][:12]}  snapshot {result['snapshot_digest'][:19]}")
-    click.echo("   Next: sq factory check --project . --application")
+    click.echo("   Next: sq factory start --project " + str(project))
 
 
 @click.command("show")
@@ -136,6 +136,34 @@ def models(project, draft_model, check_connections, json_output):
         click.echo(
             "Choose a Factory starter or draft, then configure its execution harness models."
         )
+
+
+@click.command("start")
+@_project
+@click.option(
+    "--check-connections",
+    is_flag=True,
+    help="Inspect credentials and local model availability without inference",
+)
+@_json
+def start(project, check_connections, json_output):
+    """Show the next first-run step without changing files or calling models."""
+    from superqode.factory.onboarding import inspect_setup, lines
+    from superqode.desktop_service.connections import inspect_route
+
+    try:
+        value = inspect_setup(
+            project,
+            check_connection=(lambda p, m, b: inspect_route({}, {"provider": p, "model": m}))
+            if check_connections
+            else None,
+        )
+    except (ValueError, OSError) as exc:
+        _fail(exc)
+    if json_output:
+        click.echo(json.dumps(value, indent=2))
+    else:
+        _lines(lines(value))
 
 
 @click.command("describe")
