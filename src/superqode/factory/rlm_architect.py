@@ -592,19 +592,23 @@ def _compose_factory_spec(
     if chosen_workflow not in TEMPLATE_NAMES:
         chosen_workflow = signals["recommended_workflow"]
 
-    spec = factory_template(chosen_workflow)
-    spec["metadata"]["name"] = _slugify_factory_name(signals["repo_name"])
-    spec["metadata"]["description"] = (
-        description.strip()[:240]
-        if description.strip()
-        else f"RLM-architected {chosen_workflow} factory for {signals['repo_name']}."
-    )
+    from copy import deepcopy
+
+    existing = bool(base_data and "apiVersion" in base_data)
+    spec = deepcopy(base_data) if existing else factory_template(chosen_workflow)
+    if not existing:
+        spec["metadata"]["name"] = _slugify_factory_name(signals["repo_name"])
+        spec["metadata"]["description"] = (
+            description.strip()[:240]
+            if description.strip()
+            else f"RLM-architected {chosen_workflow} factory for {signals['repo_name']}."
+        )
 
     # Preserve existing route policy and immutable release_authority from current draft.
     if base_data:
         for key in ("default_route", "routes"):
             if key in base_data:
-                spec[key] = base_data[key]
+                spec[key] = deepcopy(base_data[key])
         if isinstance(base_data.get("governance"), dict) and base_data["governance"].get(
             "release_authority"
         ):
@@ -615,17 +619,17 @@ def _compose_factory_spec(
     if len(test_command) > 240 or "\n" in test_command:
         test_command = signals["detected_test_command"]
     checks = spec.setdefault("improvement", {}).setdefault("checks", {})
-    if "regression" in checks and isinstance(checks["regression"], dict):
+    if existing:
+        test_command = "; ".join(
+            checks[name]["command"] for name in spec["orchestration"]["acceptance_checks"]
+        )
+    elif "regression" in checks and isinstance(checks["regression"], dict):
         checks["regression"]["command"] = test_command
     else:
         checks["regression"] = {"command": test_command, "files": []}
 
-    # Optionally bind the explicitly chosen model ref to harnesses.
-    if provider and model:
-        model_ref = f"{provider}/{model}"
-        for harness in spec.get("inference", {}).get("harnesses", {}).values():
-            if isinstance(harness, dict):
-                harness["model"] = model_ref
+    # provider/model authorize drafting only. Execution choices belong to the
+    # existing bindings or the starter and are reviewed independently.
 
     # Tailor stage goals lightly with grounded repo context (keeping contracts valid).
     stage_guidance = (
@@ -634,7 +638,7 @@ def _compose_factory_spec(
     for stage in spec.get("orchestration", {}).get("stages", []):
         stage_id = str(stage.get("id") or "")
         extra = str(stage_guidance.get(stage_id) or "").strip()
-        if extra and len(extra) <= 280:
+        if extra and len(extra) <= 280 and extra not in str(stage.get("goal", "")):
             base_goal = str(stage.get("goal") or "").strip()
             stage["goal"] = f"{base_goal} Repo note: {extra}" if base_goal else extra
 
@@ -671,7 +675,8 @@ def _compose_factory_spec(
                     "stages": req_stages,
                     "checks": acceptance_checks,
                 }
-    spec.setdefault("data_context", {})["requirements"] = reqs
+    if not existing:
+        spec.setdefault("data_context", {})["requirements"] = reqs
 
     # Finalize recommended skills with refined ui_preset.
     ui_preset = str(verif.get("ui_preset") or "").strip().lower()
@@ -706,6 +711,15 @@ def _compose_factory_spec(
             f"(`{ui_preset}` preset)."
         ),
     ]
+    if existing:
+        assumptions[1] = (
+            "Kept existing Factory identity, workflow contracts, execution bindings, context, "
+            "acceptance checks, permissions, budgets and release policy. Review proposed stage "
+            "instruction changes in the definition diff. Workflow suggestions do not replace the saved workflow."
+        )
+    assumptions.append(
+        "The drafting model is separate from execution models; review the execution bindings before running a trial."
+    )
     for item in arch.get("assumptions") if isinstance(arch.get("assumptions"), list) else []:
         text = str(item).strip()
         if text and len(assumptions) < 8:
@@ -873,8 +887,21 @@ async def architect_factory(
         "duration_ms": duration_ms,
     }
 
+    proposed_yaml = yaml.safe_dump(spec, sort_keys=False)
+    import difflib
+
+    definition_diff = "".join(
+        difflib.unified_diff(
+            yaml_text.splitlines(True),
+            proposed_yaml.splitlines(True),
+            fromfile="Current Factory",
+            tofile="Proposed Factory",
+        )
+    )
     return {
-        "yaml": yaml.safe_dump(spec, sort_keys=False),
+        "yaml": proposed_yaml,
+        "definition_diff": definition_diff,
+        "existing_configuration_preserved": bool(base_data and "apiVersion" in base_data),
         "assumptions": assumptions,
         "missing_capabilities": missing_capabilities,
         "recommended_skills": recommended_skills,

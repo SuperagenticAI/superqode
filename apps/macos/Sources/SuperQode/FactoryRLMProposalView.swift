@@ -113,6 +113,7 @@ struct FactoryRLMProposalCard: View {
   let onApply: ([FactoryRLMLineageSnapshot.RecommendedSkill]) -> Void
   let onApplyYamlOnly: () -> Void
   let onDismiss: () -> Void
+  var definitionDiff = ""
 
   @State private var showTrace = false
   @State private var disabledSkillIDs: Set<String> = []
@@ -223,6 +224,13 @@ struct FactoryRLMProposalCard: View {
         }
       }
 
+      if !definitionDiff.isEmpty {
+        DisclosureGroup("Review proposed definition changes") {
+          ScrollView(.horizontal) {
+            Text(definitionDiff).font(.system(.caption, design: .monospaced)).textSelection(.enabled)
+          }.frame(maxHeight: 220)
+        }
+      }
       if !assumptions.isEmpty {
         VStack(alignment: .leading, spacing: 3) {
           ForEach(assumptions, id: \.self) { item in

@@ -36,7 +36,7 @@ The supported search adapters are:
 
 Manual proposal import also uses the shared metered final comparison. Search
 produces a staged proposal; run the separate final held-out comparison explicitly.
-Adoption still requires a strictly higher pass rate, no regressions, exact pinned
+Adoption requires the pinned objective to improve, no regressions, exact pinned
 grading evidence, a matching completed native job and complete budget evidence.
 Nothing activates or releases automatically.
 

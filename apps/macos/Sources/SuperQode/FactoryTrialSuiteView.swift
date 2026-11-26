@@ -97,12 +97,13 @@ struct FactoryTrialSuiteView: View {
   }
   private var inputs: some View {
     VStack(alignment: .leading, spacing: 10) {
+      FactoryBenchmarkSetupView(library: library, idle: idle)
       HStack {
         TextField("Suite source under .superqode/trials", text: $library.path).textFieldStyle(.roundedBorder)
         Button("Load / starter") { Task { await library.loadSource(app.engine) } }.disabled(!idle)
         Button("Save source") { Task { await library.saveSource(app.engine) } }.disabled(!idle || library.text.isEmpty)
       }
-      Text("Use a clean committed application repository. Reference saved Factory definitions or revision files, with optional per-case references. Paired revisions must preserve protected checks, governance and workflow structure. Up to eight cases use the same pinned application seed.").font(.caption).foregroundStyle(.secondary)
+      Text("Use a clean committed application repository. Reference saved Factory definitions or revision files. Historical cases may pin their original commit; both variants use that same application seed. Paired revisions must preserve protected checks, governance and workflow structure. Up to eight cases per suite.").font(.caption).foregroundStyle(.secondary)
       SourceEditor(text: $library.text, path: "factory-trial-suite.yaml", editable: idle, documentID: "factory-trial-suite:" + studio.project, active: active).brandSurface()
       Button("Prepare paired projects: no model calls") {
         let ticket = studio.navigation.ticket(); let token = tabGeneration
@@ -131,6 +132,11 @@ struct FactoryTrialSuiteView: View {
             VStack(alignment: .leading, spacing: 4) {
               Text(variant.capitalized).font(.headline)
               Text("Verified workflows: \(summary["passed"] as? Int ?? 0) / \(summary["total"] as? Int ?? 0)")
+              let splits = summary["by_split"] as? [String: [String: Any]] ?? [:]
+              ForEach(["held-in", "held-out"], id: \.self) { split in
+                let counts = splits[split] ?? [:]
+                Text("\(split): \(counts["passed"] as? Int ?? 0) / \(counts["total"] as? Int ?? 0)").font(.caption)
+              }
               Text("Recorded tokens: \(metric(usage, "total_tokens")) · tools: \(metric(usage, "tool_calls")) · API USD: \(metric(usage, "cost_usd"))").font(.caption)
               Text("Model ms: \(metric(usage, "latency_ms")) · recorded operator gate decisions: \(summary["operator_gate_decisions"] as? Int ?? 0)").font(.caption)
             }.padding(10).frame(maxWidth: .infinity, alignment: .leading).brandSurface()

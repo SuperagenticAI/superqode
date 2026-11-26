@@ -53,10 +53,7 @@ async def test_rlm_architect_detects_web_stack_and_runs_bounded_subcalls(tmp_pat
     (tmp_path / "src" / "App.tsx").write_text("export function App() { return <div />; }\n")
 
     calls = []
-    from superqode.factory.templates import factory_template
-
-    base = factory_template()
-    base["default_route"] = "best"
+    base = {"default_route": "best"}
 
     class FakeGateway:
         async def chat_completion(self, *, messages, model, provider, **kwargs):

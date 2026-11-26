@@ -25,6 +25,28 @@ def registered(service, params):
 
 
 def handle(service, root, method, params):
+    if method.startswith("factory.suite.history."):
+        from superqode.factory import benchmarks
+
+        if method == "factory.suite.history.list":
+            return benchmarks.history(root)
+        if method == "factory.suite.history.draft":
+            return benchmarks.draft(
+                root,
+                held_in=params.get("held_in", []),
+                held_out=params.get("held_out", []),
+                candidate=params["candidate"],
+            )
+        if method == "factory.suite.history.install":
+            with service.lock:
+                assert_idle(service, params["project"])
+                return benchmarks.install(
+                    root,
+                    params["proposal"],
+                    expected=params["digest"],
+                    confirmed=params.get("confirmed") is True,
+                )
+        raise ValueError("Unknown historical workload action")
     service._write(
         "CREATE TABLE IF NOT EXISTS factory_trial_plans(id TEXT PRIMARY KEY,project TEXT,digest TEXT,payload TEXT,created REAL)"
     )

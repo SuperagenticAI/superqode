@@ -39,6 +39,12 @@ def capabilities():
     default="evaluator-optimizer",
 )
 @click.option("--reflection-model", default="")
+@click.option(
+    "--objective",
+    type=click.Choice(["quality", "cost", "latency"]),
+    default="quality",
+    show_default=True,
+)
 @click.option("--max-evals", type=click.IntRange(1, 20), default=4)
 @click.option("--max-seconds", type=click.IntRange(1, 600), default=120)
 @output

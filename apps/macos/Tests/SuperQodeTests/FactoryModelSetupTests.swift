@@ -2,6 +2,29 @@ import XCTest
 @testable import SuperQode
 
 final class FactoryModelSetupTests: XCTestCase {
+  @MainActor func testHistoricalDatasetCannotCrossProjects() async {
+    let pipe = Pipe(); let engine = Engine(input: pipe.fileHandleForWriting); defer { engine.stop() }
+    let library = FactoryTrialSuiteLibrary(); library.enter("first")
+    let pending = Task { await library.history(engine, action: "draft") }
+    while engine.pendingRequestCount < 1 { await Task.yield() }
+    library.enter("second")
+    engine.receive(["id": 1, "result": ["yaml": "foreign tasks", "digest": "old"]])
+    await pending.value
+    XCTAssertTrue(library.historyProposal.isEmpty)
+    XCTAssertFalse(library.busy)
+  }
+
+  @MainActor func testChangingDatasetSplitInvalidatesPendingProposal() async {
+    let pipe = Pipe(); let engine = Engine(input: pipe.fileHandleForWriting); defer { engine.stop() }
+    let library = FactoryTrialSuiteLibrary(); library.enter("project")
+    let pending = Task { await library.history(engine, action: "draft") }
+    while engine.pendingRequestCount < 1 { await Task.yield() }
+    library.historySplits = ["changed": "held-out"]
+    engine.receive(["id": 1, "result": ["yaml": "old tasks", "digest": "old"]])
+    await pending.value
+    XCTAssertTrue(library.historyProposal.isEmpty)
+    XCTAssertFalse(library.busy)
+  }
   @MainActor func testDraftingSelectionIsExplicitAndScopedToProject() {
     let library = FactoryModelSetupLibrary()
     library.enter("first")

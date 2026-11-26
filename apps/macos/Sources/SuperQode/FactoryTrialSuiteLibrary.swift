@@ -15,6 +15,11 @@ import Foundation
   @Published var busy = false
   @Published var failure = ""
   @Published var message = ""
+  @Published var historyRuns: [[String: Any]] = []
+  @Published var historyProposal: [String: Any] = [:]
+  @Published var historyCandidate = ".superqode/factory.yaml" { didSet { historyVersion += 1; historyProposal = [:] } }
+  @Published var historySplits: [String: String] = [:] { didSet { historyVersion += 1; historyProposal = [:] } }
+  private var historyVersion = 0
   var sourceVersion = 0
   var generation = 0
   var operation = UUID()
@@ -25,6 +30,7 @@ import Foundation
     feedback.enter(value)
     if !project.isEmpty { drafts[project] = (path, text, sourceDigest) }
     generation += 1; operation = UUID(); project = value
+    historyRuns = []; historySplits = [:]; historyCandidate = ".superqode/factory.yaml"; historyProposal = [:]
     selected = ""; board = [:]; detail = [:]; plans = []; job = [:]; busy = false; failure = ""; message = ""
     if let draft = drafts[value] { path = draft.0; text = draft.1; sourceDigest = draft.2 }
     else { path = ".superqode/trials/reference.yaml"; text = ""; sourceDigest = "" }
@@ -32,6 +38,32 @@ import Foundation
   func rpc(_ engine: Engine, _ method: String, _ params: [String: Any] = [:]) async throws -> [String: Any] {
     var request = params; request["project"] = project
     return try await engine.call("factory.suite." + method, request) as? [String: Any] ?? [:]
+  }
+  func history(_ engine: Engine, action: String) async {
+    guard !busy else { return }; busy = true
+    let identity = project; let token = historyVersion; let source = sourceVersion
+    let proposal = historyProposal
+    failure = ""
+    defer { if project == identity { busy = false } }
+    do {
+      var params: [String: Any] = [:]
+      if action == "draft" {
+        params = ["held_in": historySplits.filter { $0.value == "held-in" }.keys.sorted(),
+          "held_out": historySplits.filter { $0.value == "held-out" }.keys.sorted(), "candidate": historyCandidate]
+      } else if action == "install" {
+        params = ["proposal": proposal, "digest": string(proposal, "digest"), "confirmed": true]
+      }
+      let result = try await rpc(engine, "history." + action, params)
+      guard project == identity, historyVersion == token, sourceVersion == source, !Task.isCancelled else { return }
+      if action == "list" { historyRuns = result["runs"] as? [[String: Any]] ?? [] }
+      else if action == "draft" { historyProposal = result }
+      else {
+        path = string(result, "path"); await loadSource(engine)
+        guard project == identity, historyVersion == token, failure.isEmpty else { return }
+        historyProposal = [:]; message = "Historical workload saved. Review the suite, then prepare and run it explicitly."
+      }
+      failure = ""
+    } catch { if project == identity, historyVersion == token { failure = error.localizedDescription } }
   }
   func refresh(_ engine: Engine) async {
     let identity = project

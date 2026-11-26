@@ -155,6 +155,31 @@ def build_factory_mcp_server(project, *, allow_execution=False):
         }
 
     @server.tool()
+    def factory_benchmark_history() -> dict:
+        """List past task identities without returning protected evaluator contents."""
+        from superqode.factory.benchmarks import history
+
+        return history(root)
+
+    @server.tool()
+    def factory_benchmark_prepare(
+        held_in: list[str], held_out: list[str], candidate: str, confirmed: bool = False
+    ) -> dict:
+        """Prepare local dataset review; return task text and digests, withholding probe contents."""
+        from superqode.factory.benchmarks import prepare_review
+
+        return prepare_review(
+            root, held_in=held_in, held_out=held_out, candidate=candidate, confirmed=confirmed
+        )
+
+    @server.tool()
+    def factory_benchmark_install(proposal_id: str, confirmed: bool = False) -> dict:
+        """Save the explicitly reviewed dataset; no worker, optimizer or release executes."""
+        from superqode.factory.benchmarks import install_review
+
+        return install_review(root, proposal_id, confirmed=confirmed)
+
+    @server.tool()
     def factory_improvement_inspect(plan: str) -> dict:
         """Inspect the pinned experiment and its cumulative usage."""
         value, _ = imp.load(root, plan)
@@ -178,6 +203,7 @@ def build_factory_mcp_server(project, *, allow_execution=False):
         engine: str = "evaluator-optimizer",
         max_evals: int = 4,
         max_seconds: int = 120,
+        objective: str = "quality",
         confirmed: bool = False,
     ) -> dict:
         """Pin an experiment without model calls; requires explicit confirmation."""
@@ -195,6 +221,7 @@ def build_factory_mcp_server(project, *, allow_execution=False):
             optimizer_engine=engine,
             max_evals=max_evals,
             max_seconds=max_seconds,
+            objective=objective,
         )
 
     @server.tool()

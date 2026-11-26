@@ -8,6 +8,7 @@ struct FactoryImprovementView: View {
   @State private var capabilities: [String: Any] = [:]
   @State private var binding = "coder"
   @State private var targetKind = "harness"
+  @State private var objective = "quality"
   @State private var skill = ""
   @State private var stage = ""
   @State private var routeModelsText = ""
@@ -91,6 +92,7 @@ struct FactoryImprovementView: View {
       if !planID.isEmpty {
         VStack(alignment: .leading, spacing: 7) {
           Text("Pinned experiment " + String(planID.prefix(20))).font(.caption.monospaced())
+          Text("Objective: " + string(library.improvementPlan, "objective", "quality")).font(.caption).foregroundStyle(.secondary)
           FactoryActionRow {
           if tab == "Inputs" {
           Button("Run metered search…") { confirmation = "search" }
@@ -160,6 +162,13 @@ struct FactoryImprovementView: View {
             Text("Harness instructions").tag("harness"); Text("Bound skill instructions").tag("skill")
             Text("Primary model route").tag("route"); Text("Workflow entry-stage goal").tag("workflow")
           }
+          Picker("Objective", selection: $objective) {
+            Text("Higher quality").tag("quality")
+            Text("Lower cost, preserve quality").tag("cost")
+            Text("Lower latency, preserve quality").tag("latency")
+          }
+          Text("Efficiency objectives require at least three held-out cases, no baseline-success regressions and at least 5% measured improvement. Results describe this workload; they do not establish statistical significance.")
+            .font(.caption).foregroundStyle(.secondary)
           if targetKind == "route" {
             Text("Pinned model choices (one provider/model per line, including the baseline)").font(.caption)
             TextEditor(text: $routeModelsText).font(.system(.caption, design: .monospaced)).frame(minHeight: 80).brandSurface()
@@ -345,7 +354,7 @@ struct FactoryImprovementView: View {
       case "external-import": await library.importOptimizerCandidate(engine: app.engine, optimizer: externalEngine, path: externalPath)
       case "prepare":
         await library.prepareImprovement(engine: app.engine, params: ["binding": binding, "tasks": tasksPath,
-          "target_kind": targetKind, "skill": skill,
+          "target_kind": targetKind, "skill": skill, "objective": objective,
           "stage": stage, "route_models": targetKind == "route" ? routeModelsText.split(whereSeparator: \.isNewline).map { $0.trimmingCharacters(in: .whitespaces) }.filter { !$0.isEmpty } : [],
           "fixture": fixture, "max_evals": maxEvals, "max_seconds": seconds,
           "optimizer_engine": optimizerEngine,

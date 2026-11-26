@@ -119,18 +119,10 @@ def create_project(case, project, model, public_key, variant):
     (config / "components/demo.yaml").write_text(
         yaml.safe_dump(harness_spec_to_dict(spec), sort_keys=False)
     )
-    probes = {
-        "format": "superqode.factory-probes/1",
-        "cases": [
-            {
-                "id": f"case-{index}",
-                "argv": ["python", "app.py", case["id"], json.dumps(row["input"])],
-                "stdout": json.dumps(row["expected"], sort_keys=True) + "\n",
-                "returncode": 0,
-            }
-            for index, row in enumerate(case["probes"])
-        ],
-    }
+    from superqode.factory.probes import parse_probes
+
+    probe_name = "cli-probes" if case["id"] == "totals" else case["id"]
+    probes = parse_probes((ROOT / f"examples/factory/demo/evals/{probe_name}.json").read_text())
     (config / "evaluators/acceptance.json").write_text(json.dumps(probes, indent=2) + "\n")
     definition = factory_template()
     definition["metadata"]["name"] = "demo-" + case["id"]

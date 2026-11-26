@@ -67,6 +67,10 @@ routing-only policies and new projects. Generation receipts under
 `.superqode/factory-studio/generation-usage/` retain request intent, completion or
 uncertainty, reported tokens and costs. Missing cost evidence stays unknown.
 The stored draft retains its lineage and receipt reference for later inspection.
+When a FactorySpec already exists, RLM authoring preserves its identity, workflow
+contracts, context, execution bindings, acceptance checks and governance. Model
+refinements can propose stage instruction changes, shown in `definition_diff`
+and the native proposal card. The drafting model never replaces execution models.
 
 `sources inspect` lists the saved definition and its declared components with
 diffs against HEAD. `sources commit` creates a local commit of the chosen paths,
@@ -636,8 +640,11 @@ to draft** to author a project skill, then review and save its explicit binding.
 Declared skill assets apply only when listed in `inference.harnesses.<id>.skills`.
 
 Adoption requires the exact completed engine comparison job, unchanged criteria
-and source, a strictly higher pass rate, no regressions, and complete required
-budget evidence. Imported result claims are insufficient. Adoption loads a draft;
+and source, no regressions, complete required budget evidence, and success on the
+pinned objective. Quality requires a strictly higher held-out pass rate. Cost or
+latency requires at least three held-out cases, at least one success, no loss of
+baseline successes, and at least 5% measured improvement. Unknown, invalid or
+zero baseline efficiency metrics hold the comparison. Imported result claims are insufficient. Adoption loads a draft;
 harness and skill proposals also create an immutable component. Saving, source commit, new trial, application
 verification and signed release are separate actions. Historical comparisons can
 be reopened without applying them to a changed Factory.
@@ -860,7 +867,11 @@ The same engine is available outside Studio:
 Each command except `capabilities` accepts `--project`. Preparation supports
 `--engine evaluator-optimizer|gepa|metaharness|omni`, `--reflection-model`,
 `--target-kind harness|skill|route|workflow`, `--skill`, `--stage`, repeated
-`--route-model`, `--max-evals` and `--max-seconds`. Optional engines never install
+`--route-model`, `--objective quality|cost|latency`, `--max-evals` and `--max-seconds`. The objective
+is pinned when preparing the plan; existing plans default to quality. Cost measures
+reported inference spend and latency measures evaluation duration. Efficiency
+results describe the selected workload and do not establish statistical significance.
+Optional engines never install
 themselves. Source installations can use `uv sync --extra optimization`.
 See [shared accounting](../../examples/factory/OPTIMIZER-METERING.md).
 
@@ -869,6 +880,40 @@ require both `--allow-execution` at startup and confirmation of the specific
 tool call. The server is fixed to its selected project. It exposes compile,
 explicit submission, inspection and bounded execution; it does not expose human
 gate approval or signing/release authority.
+
+## Benchmark past Factory work
+
+Use **Trial Suites → Suite & inputs → Benchmark your past work** to select two
+to eight runs, assign held-in and held-out splits, and select a candidate Factory.
+Review the dataset proposal, save its sources, then prepare the paired projects
+and run the suite explicitly. Both variants start at each task's original commit,
+with identical protected checks and governance. The original commits must still
+be available locally. The scorecard separates held-in and held-out results.
+
+The CLI uses the same engine:
+
+```bash
+sq factory benchmark history --project .
+mkdir -p .superqode/trials
+sq factory benchmark draft --project . --held-in RUN_A --held-out RUN_B \
+  --candidate .superqode/trials/candidate.yaml > .superqode/trials/reviewed-benchmark.json
+# Inspect the task text, candidate and returned digest before saving.
+sq factory benchmark install --project . --proposal .superqode/trials/reviewed-benchmark.json \
+  --digest sha256:REVIEWED_DIGEST --confirm
+sq factory suite-prepare --project . --suite .superqode/trials/history-RETURNED_ID.yaml
+```
+
+Installation returns the exact suite path. It pins Factory snapshots without
+changing the active Factory. Historical outputs never become expected answers.
+Historical cases are familiar workloads, so their results do not prove unseen-task
+generalization. These workflow suites remain diagnostic and do not issue optimizer
+adoption receipts. Automated optimizer search continues using its separately
+reviewed graded evaluation suite, with held-out cases withheld from search.
+
+MCP offers `factory_benchmark_history`, `factory_benchmark_prepare`, and
+`factory_benchmark_install`. Preparation and installation require explicit
+confirmation and make no model calls. The prepared proposal stays local; MCP
+returns task text and source digests, withholding protected probe contents.
 
 ## Campaigns and event intake
 

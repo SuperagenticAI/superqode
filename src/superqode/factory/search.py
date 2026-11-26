@@ -92,13 +92,40 @@ class ReflectionModel:
 
 
 def _objective(plan):
-    return {
+    surface = {
         "harness": "Edit only agent system_prompt, role or description in the resolved harness YAML.",
         "skill": "Edit only the bound skill Markdown body; preserve every frontmatter field.",
         "route": "Return YAML with only model, selecting one of these pinned routes: "
         + json.dumps(plan["route_models"]),
         "workflow": "Return YAML with only stage and goal; preserve the selected stage identity.",
     }[plan.get("target_kind", "harness")]
+    return (
+        surface
+        + " "
+        + {
+            "quality": "Improve deterministic task quality within the pinned budget.",
+            "cost": "Reduce measured inference cost while preserving every baseline success. Do not weaken checks.",
+            "latency": "Reduce measured execution duration while preserving every baseline success. Do not weaken checks.",
+        }[plan.get("objective", "quality")]
+    )
+
+
+def objective_score(plan, row):
+    """Held-in search signal only; adoption uses separate paired held-out evidence."""
+    import math
+
+    quality = float(row.get("score", 0))
+    objective = plan.get("objective", "quality")
+    if objective == "quality":
+        return quality
+    metric = (
+        (row.get("usage") or {}).get("cost_usd")
+        if objective == "cost"
+        else row.get("duration_seconds")
+    )
+    if type(metric) not in {int, float} or not math.isfinite(metric) or metric < 0:
+        raise ValueError("Efficiency search requires complete measured usage and duration")
+    return 0.5 + 0.5 / (1 + metric) if row.get("status") == "passed" else 0.0
 
 
 class NativeSearchSession:
@@ -254,11 +281,18 @@ def run_search(root, identity, expected):
                 if ledger.summary()["issues"]:
                     raise BudgetHalt("; ".join(ledger.summary()["issues"]))
                 row = report["variants"][0]["tasks"][0]
+                value = objective_score(plan, row)
                 token = imp.digest(text)
-                scored_candidates.setdefault(token, {})[example["id"]] = float(row.get("score", 0))
+                scored_candidates.setdefault(token, {})[example["id"]] = value
                 scored_text[token] = text
-                return float(row.get("score", 0)), {
-                    "Feedback": {"status": row["status"], "reason": row.get("reason")}
+                return value, {
+                    "Feedback": {
+                        "status": row["status"],
+                        "reason": row.get("reason"),
+                        "quality_score": row.get("score"),
+                        "usage": row.get("usage"),
+                        "duration_seconds": row.get("duration_seconds"),
+                    }
                 }
             except BudgetHalt:
                 raise

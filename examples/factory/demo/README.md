@@ -16,6 +16,15 @@ The seed `app.py` is deliberately faulty. Do not treat its initial self-check
 failures as repository regressions. The visible `self_check.py` provides a small
 regression test; each case also has four protected CLI acceptance probes.
 
+The probe files ship with the example: `evals/cli-probes.json` checks `totals`,
+`evals/active.json` checks `active`, and `evals/ordered.json` checks `ordered`.
+The runner reads these files and installs the selected manifest as a protected
+evaluator in each disposable project. The files are public examples; protection
+means the implementation worker cannot edit or read the installed evaluator.
+When building a Factory in Studio yourself, add the matching file under
+**Build → Acceptance checks**, review and save, then prepare a new trial.
+On-demand generation does not install or approve acceptance expectations.
+
 From the SuperQode checkout, with an installed local model server available:
 
 ```bash

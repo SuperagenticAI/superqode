@@ -1,0 +1,49 @@
+{
+  "format": "superqode.factory-probes/1",
+  "cases": [
+    {
+      "id": "case-0",
+      "argv": [
+        "python",
+        "app.py",
+        "totals",
+        "[{\"category\": \"a\", \"amount\": 2}, {\"category\": \"a\", \"amount\": 3}]"
+      ],
+      "stdout": "{\"a\": 5}\n",
+      "returncode": 0
+    },
+    {
+      "id": "case-1",
+      "argv": [
+        "python",
+        "app.py",
+        "totals",
+        "[{\"category\": \"food\", \"amount\": 10}, {\"category\": \"travel\", \"amount\": 3}, {\"category\": \"food\", \"amount\": -4}]"
+      ],
+      "stdout": "{\"food\": 6, \"travel\": 3}\n",
+      "returncode": 0
+    },
+    {
+      "id": "case-2",
+      "argv": [
+        "python",
+        "app.py",
+        "totals",
+        "[]"
+      ],
+      "stdout": "{}\n",
+      "returncode": 0
+    },
+    {
+      "id": "case-3",
+      "argv": [
+        "python",
+        "app.py",
+        "totals",
+        "[{\"category\": \"zero\", \"amount\": 0}, {\"category\": \"zero\", \"amount\": 0}]"
+      ],
+      "stdout": "{\"zero\": 0}\n",
+      "returncode": 0
+    }
+  ]
+}

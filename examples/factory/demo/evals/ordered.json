@@ -1,0 +1,49 @@
+{
+  "format": "superqode.factory-probes/1",
+  "cases": [
+    {
+      "id": "case-0",
+      "argv": [
+        "python",
+        "app.py",
+        "ordered",
+        "[\"zebra\", \"Apple\", \"banana\", \"Zoo\"]"
+      ],
+      "stdout": "[\"Apple\", \"banana\", \"zebra\", \"Zoo\"]\n",
+      "returncode": 0
+    },
+    {
+      "id": "case-1",
+      "argv": [
+        "python",
+        "app.py",
+        "ordered",
+        "[\"beta\", \"Alpha\", \"alpha\", \"ALPHA\"]"
+      ],
+      "stdout": "[\"Alpha\", \"alpha\", \"ALPHA\", \"beta\"]\n",
+      "returncode": 0
+    },
+    {
+      "id": "case-2",
+      "argv": [
+        "python",
+        "app.py",
+        "ordered",
+        "[]"
+      ],
+      "stdout": "[]\n",
+      "returncode": 0
+    },
+    {
+      "id": "case-3",
+      "argv": [
+        "python",
+        "app.py",
+        "ordered",
+        "[\"ss\", \"\\u00df\", \"apple\"]"
+      ],
+      "stdout": "[\"apple\", \"ss\", \"\\u00df\"]\n",
+      "returncode": 0
+    }
+  ]
+}

@@ -7,6 +7,7 @@ from .factory_operations import operations
 from .factory_improvement import improve
 from .factory_campaigns import campaign
 from .factory_intake import intake
+from .factory_benchmarks import benchmark
 from .factory_evidence import evidence, verifier
 from .factory_authoring import (
     init,
@@ -31,6 +32,7 @@ factory.add_command(operations)
 factory.add_command(improve)
 factory.add_command(campaign)
 factory.add_command(intake)
+factory.add_command(benchmark)
 factory.add_command(evidence)
 factory.add_command(verifier)
 for _command in (init, show, workflows, models, describe, sources, check, decide, trial):

@@ -242,7 +242,8 @@ struct FactoryStudioView: View {
                   busy: !idle,
                   onApply: { chosenSkills in applyRLMProposal(snapshot: rlmSnapshot, skills: chosenSkills) },
                   onApplyYamlOnly: { applyRLMProposal(snapshot: rlmSnapshot, skills: []) },
-                  onDismiss: { library.proposal = [:] }
+                  onDismiss: { library.proposal = [:] },
+                  definitionDiff: string(library.proposal, "definition_diff")
                 )
               } else {
                 VStack(alignment: .leading, spacing: 10) {

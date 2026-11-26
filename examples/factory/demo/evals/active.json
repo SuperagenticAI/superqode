@@ -1,0 +1,49 @@
+{
+  "format": "superqode.factory-probes/1",
+  "cases": [
+    {
+      "id": "case-0",
+      "argv": [
+        "python",
+        "app.py",
+        "active",
+        "[{\"id\": 1}, {\"id\": 2, \"active\": true}, {\"id\": 3, \"active\": false}]"
+      ],
+      "stdout": "[{\"active\": true, \"id\": 2}]\n",
+      "returncode": 0
+    },
+    {
+      "id": "case-1",
+      "argv": [
+        "python",
+        "app.py",
+        "active",
+        "[{\"active\": \"false\"}, {\"active\": 1}, {\"active\": null}, {\"active\": true, \"id\": 8}]"
+      ],
+      "stdout": "[{\"active\": true, \"id\": 8}]\n",
+      "returncode": 0
+    },
+    {
+      "id": "case-2",
+      "argv": [
+        "python",
+        "app.py",
+        "active",
+        "[]"
+      ],
+      "stdout": "[]\n",
+      "returncode": 0
+    },
+    {
+      "id": "case-3",
+      "argv": [
+        "python",
+        "app.py",
+        "active",
+        "[{\"id\": 2, \"active\": true}, {\"id\": 1, \"active\": true}]"
+      ],
+      "stdout": "[{\"active\": true, \"id\": 2}, {\"active\": true, \"id\": 1}]\n",
+      "returncode": 0
+    }
+  ]
+}

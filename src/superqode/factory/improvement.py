@@ -124,7 +124,7 @@ def capabilities():
                 "metered": True,
             },
         ],
-        "adoption": "explicit draft proposal after a strictly better, non-regressing comparison",
+        "adoption": "explicit draft proposal after a non-regressing comparison meets its pinned quality, cost or latency objective",
     }
 
 
@@ -243,6 +243,7 @@ def prepare(
     optimizer_engine="gepa",
     budget_limits=None,
     absolute_deadline=None,
+    objective="quality",
 ):
     root = Path(root).resolve()
     definition = load_factory(root=root)
@@ -267,6 +268,10 @@ def prepare(
         _protected(definition.data, binding)
     suite_path = source_path(root, tasks)
     suite_text, suite = _suite(suite_path)
+    if objective not in {"quality", "cost", "latency"}:
+        raise ValueError("Choose quality, cost or latency as the improvement objective")
+    if objective != "quality" and suite["split_counts"]["held-out"] < 3:
+        raise ValueError("Cost and latency comparisons require at least three held-out tasks")
     if (
         target_kind == "workflow"
         and experiments.stage_definition(definition.data, stage)["role"] == "reviewer"
@@ -402,6 +407,8 @@ def prepare(
         plan = {
             "format": FORMAT,
             "target_kind": target_kind,
+            "objective": objective,
+            "minimum_relative_improvement": 0.05,
             "stage": stage if target_kind == "workflow" else "",
             "route_models": route_models if target_kind == "route" else [],
             "skill": skill if target_kind == "skill" else "",
@@ -474,6 +481,11 @@ def load(root, identity, expected="", *, fresh=False):
     ):
         raise ValueError("Improvement plan digest or project mismatch")
     plan["digest"] = token
+    if (
+        plan.get("objective", "quality") not in {"quality", "cost", "latency"}
+        or plan.get("minimum_relative_improvement", 0.05) != 0.05
+    ):
+        raise ValueError("Unsupported pinned improvement objective")
     snapshot = FactorySnapshot.from_dict(
         json.loads(_read(project_path(root, f"{PREFIX}/{identity}/snapshot.json"), 8_000_000))
     )
@@ -924,8 +936,40 @@ def _gate(plan, report, expected_specs, expected_context=None):
             gate["issues"].append(
                 "Comparison does not cover the exact pinned held-out task identities"
             )
-    if gate["candidate_score"] <= gate["baseline_score"]:
+    objective = plan.get("objective", "quality")
+    if objective == "quality" and gate["candidate_score"] <= gate["baseline_score"]:
         gate["issues"].append("Candidate has no strictly higher held-out pass rate")
+    elif objective in {"cost", "latency"}:
+        if len(expected) < 3 or gate["candidate_score"] <= 0:
+            gate["issues"].append(
+                "Efficiency comparisons need three held-out tasks and successful grading"
+            )
+        field = "cost_usd" if objective == "cost" else "duration_seconds"
+        values = [
+            (v.get("usage", {}) if objective == "cost" else v).get(field)
+            for v in report.get("variants", [])
+        ]
+        valid = len(values) == 2 and all(
+            type(v) in {int, float} and math.isfinite(v) and v >= 0 for v in values
+        )
+        threshold = 0.05
+        if not valid or values[0] <= 0:
+            gate["issues"].append(
+                "Efficiency objective requires known positive baseline and complete " + field
+            )
+        elif values[1] > values[0] * (1 - threshold):
+            gate["issues"].append(
+                "Candidate must improve " + field + " by at least 5% without quality regressions"
+            )
+        gate["objective_evidence"] = {
+            "objective": objective,
+            "metric": field,
+            "values": values if valid else [None, None],
+            "minimum_relative_improvement": threshold,
+            "statistical_significance_established": False,
+        }
+    elif objective != "quality":
+        gate["issues"].append("Unsupported improvement objective")
     if report.get("workspace", {}).get("snapshot_sha256") != plan["trial_fixture_digest"]:
         gate["issues"].append("Comparison fixture does not match the pinned inputs")
     for field, maximum in (

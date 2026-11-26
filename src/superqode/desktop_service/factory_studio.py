@@ -719,6 +719,7 @@ def _improvement(service, root, method, params):
                     stage=params.get("stage", ""),
                     route_models=params.get("route_models"),
                     optimizer_engine=params.get("optimizer_engine", "gepa"),
+                    objective=params.get("objective", "quality"),
                 )
                 service._write(
                     "INSERT INTO factory_improvement_plans VALUES(?,?,?,?)",

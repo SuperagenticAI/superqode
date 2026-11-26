@@ -61,6 +61,8 @@ SCHEMA = obj(
                     "goal": {"type": "string", "minLength": 1, "maxLength": 8000, "pattern": r"\S"},
                     "baseline": TEXT,
                     "candidate": TEXT,
+                    "revision": {"type": "string", "pattern": "^([0-9a-f]{40}|[0-9a-f]{64})$"},
+                    "split": {"enum": ["held-in", "held-out"]},
                 },
                 ("id", "goal"),
             ),
@@ -308,13 +310,19 @@ def prepare(root, *, suite_text):
     suite = parse_suite(suite_text)
     revision = repository_revision(root)
     seed = _seed(root, revision)
+    seeds = {revision: seed}
     snapshots = []
     for case in suite["cases"]:
+        source_revision = case.get("revision", revision)
+        if source_revision not in seeds:
+            if _git(root, "cat-file", "-t", source_revision).strip() != b"commit":
+                raise ValueError("Historical replay requires an available commit object")
+            seeds[source_revision] = _seed(root, source_revision)
         pair = [
             _snapshot(root, case.get(variant, suite[variant]))
             for variant in ("baseline", "candidate")
         ]
-        _paired(*pair, root, revision)
+        _paired(*pair, root, source_revision)
         snapshots.append(pair)
     identity = "suite_" + uuid4().hex
     directory = folder(root, identity)
@@ -328,16 +336,35 @@ def prepare(root, *, suite_text):
             target.write_bytes(content)
             target.chmod(mode)
         fixture_digest = manifest_digest(_fixture_manifest(fixture))
+        case_fixtures = {}
+        for source_revision, source_seed in seeds.items():
+            if source_revision == revision:
+                continue
+            target_fixture = directory / ("fixture-" + source_revision)
+            target_fixture.mkdir()
+            for path, (content, mode) in source_seed.items():
+                target = project_path(target_fixture, path)
+                target.parent.mkdir(parents=True, exist_ok=True)
+                target.write_bytes(content)
+                target.chmod(mode)
+            case_fixtures[source_revision] = manifest_digest(_fixture_manifest(target_fixture))
         entries = []
         for case, pair in zip(suite["cases"], snapshots):
+            source_revision = case.get("revision", revision)
+            case_seed = seeds[source_revision]
+            case_fixture = (
+                fixture
+                if source_revision == revision
+                else directory / ("fixture-" + source_revision)
+            )
             for variant, original in zip(("baseline", "candidate"), pair):
                 snapshot = _narrow(original, suite["budget"], len(suite["cases"]) * 2)
                 entry_id = case["id"] + "--" + variant
                 project = directory / "projects" / entry_id
-                shutil.copytree(fixture, project)
+                shutil.copytree(case_fixture, project)
                 for path, source in snapshot.payload["sources"].items():
                     if not path.startswith(".superqode/") and (
-                        path not in seed or seed[path][0] != source["text"].encode()
+                        path not in case_seed or case_seed[path][0] != source["text"].encode()
                     ):
                         raise ValueError(
                             "Declared sources outside .superqode must match the committed application fixture"
@@ -351,7 +378,7 @@ def prepare(root, *, suite_text):
                 _git(project, "config", "commit.gpgsign", "false")
                 _git(project, "config", "core.hooksPath", ".git/disabled-hooks")
                 (project / ".git/info/exclude").write_text(".superqode/\n")
-                paths = sorted(set(seed) | set(snapshot.payload["sources"]))
+                paths = sorted(set(case_seed) | set(snapshot.payload["sources"]))
                 _git(
                     project,
                     "add",
@@ -372,6 +399,8 @@ def prepare(root, *, suite_text):
                         "case": case["id"],
                         "variant": variant,
                         "goal": case["goal"],
+                        "source_revision": source_revision,
+                        "split": case.get("split", "held-out"),
                         "project": project.relative_to(root).as_posix(),
                         "run": order.work_order_id,
                         "snapshot_digest": snapshot.digest,
@@ -388,6 +417,7 @@ def prepare(root, *, suite_text):
             "suite_digest": digest(suite_text),
             "revision": revision,
             "fixture_digest": fixture_digest,
+            "case_fixtures": case_fixtures,
             "created": time.time(),
             "entries": entries,
         }
@@ -419,6 +449,14 @@ def load(root, identity, expected=""):
         project_path(root, path.relative_to(root).as_posix())
     if manifest_digest(_fixture_manifest(directory / "fixture")) != plan["fixture_digest"]:
         raise ValueError("Pinned trial application fixture changed")
+    for revision, expected_fixture in plan.get("case_fixtures", {}).items():
+        if not re.fullmatch(r"[0-9a-f]{40}|[0-9a-f]{64}", revision):
+            raise ValueError("Invalid historical fixture revision")
+        fixture = directory / ("fixture-" + revision)
+        for path in fixture.rglob("*"):
+            project_path(root, path.relative_to(root).as_posix())
+        if manifest_digest(_fixture_manifest(fixture)) != expected_fixture:
+            raise ValueError("Pinned historical application fixture changed")
     return plan
 
 
@@ -564,6 +602,17 @@ def scorecard(root, identity, expected=""):
             "total": len(selected),
             "usage": usage,
             "operator_gate_decisions": sum(r.get("operator_gate_decisions", 0) for r in selected),
+            "by_split": {
+                split: {
+                    "passed": sum(
+                        r["status"] == "passed"
+                        for r in selected
+                        if r.get("split", "held-out") == split
+                    ),
+                    "total": sum(r.get("split", "held-out") == split for r in selected),
+                }
+                for split in ("held-in", "held-out")
+            },
         }
     issues = []
     limits = plan["suite"]["budget"]
