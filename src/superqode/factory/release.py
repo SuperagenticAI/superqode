@@ -47,6 +47,16 @@ def gauge_evidence(order, plan, candidate, verification_id):
             problems.append("SuperGauge record digest changed")
         else:
             record = json.loads(artifact.content)
+            from .protection import provenance, WORKER_BOUNDARY
+
+            assurance = record.get("assurance", {})
+            if assurance.get("evaluator_independent") and (
+                assurance.get("evaluator_provenance", {}).get("worker_boundary") != WORKER_BOUNDARY
+                or not provenance(order)["evaluators_hidden"]
+            ):
+                problems.append(
+                    "Factory worker boundary evidence is missing; prepare a fresh isolated trial"
+                )
     problems.extend(
         release_check(
             record,

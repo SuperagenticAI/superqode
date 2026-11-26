@@ -70,6 +70,7 @@ class WorkTaskWorkspace:
     scope: str = "task"
     integration_path: Path | None = None
     hidden_paths: tuple[str, ...] = ()
+    worker_boundary: str = ""
 
 
 class _WorkOrderCancelled(Exception):
@@ -243,6 +244,7 @@ async def _execute_claimed_task(
                         "evaluators_hidden": True,
                         "hidden_paths": list(workspace.hidden_paths),
                         "sandbox_masking": _sandbox_masking_active(),
+                        "worker_boundary": workspace.worker_boundary,
                     }
                     if workspace.hidden_paths
                     else {}
@@ -322,14 +324,30 @@ async def _execute_claimed_task(
                     invocation_namespace=retry_namespace,
                 )
             ):
-                from superqode.factory.protection import hidden_paths_scope, mask_targets
+                from superqode.factory.protection import (
+                    hidden_paths_scope,
+                    mask_targets,
+                    worker_scope,
+                )
 
                 masked = (
                     await asyncio.to_thread(mask_targets, store.get(order.work_order_id))
                     if workspace.hidden_paths
                     else ()
                 )
-                with hidden_paths_scope(masked):
+                if workspace.hidden_paths:
+                    from superqode.factory.runtime import _pinned_plan
+
+                    network = (
+                        _pinned_plan(order)
+                        .harnesses[task.task_id]
+                        .get("execution_policy", {})
+                        .get("allow_network", False)
+                    )
+                    boundary = worker_scope(workspace.path, order.repository, allow_network=network)
+                else:
+                    boundary = contextlib.nullcontext()
+                with hidden_paths_scope(masked), boundary:
                     outcome = await _execute_harness_task(
                         order,
                         task,
@@ -1243,6 +1261,7 @@ async def _prepare_task_workspace(
                 workspace_id=str(data.get("workspace_id", "")),
                 scope=str(data.get("scope", "task")),
                 hidden_paths=tuple(data.get("hidden_paths", ())),
+                worker_boundary=str(data.get("worker_boundary", "")),
                 integration_path=Path(data["integration_workspace"])
                 if data.get("integration_workspace")
                 else None,
@@ -1285,12 +1304,32 @@ async def _prepare_task_workspace(
     workspace_id = _workspace_id(
         order.work_order_id, f"task-{task.task_id}-attempt-{task.attempts}"
     )
-    info = await manager.create_qe_worktree(
-        session_id=workspace_id,
-        base_ref=task_commit,
-        copy_uncommitted=False,
-        keep_gitignored=True,
-    )
+    if hidden:
+        from superqode.factory.protection import create_worker_repository, WORKER_BOUNDARY
+        from superqode.workspace.worktree import WorktreeInfo
+        from datetime import datetime
+
+        manager.worktree_base.mkdir(parents=True, exist_ok=True)
+        worker_path = manager.worktree_base / workspace_id
+        task_commit = await asyncio.to_thread(
+            create_worker_repository, integration.path, integration_tree, worker_path
+        )
+        info = WorktreeInfo(
+            path=worker_path,
+            session_id=workspace_id,
+            base_ref=task_commit,
+            base_commit=task_commit,
+            created_at=datetime.now(),
+            repo_root=repository,
+        )
+        await manager._register_worktree(info)
+    else:
+        info = await manager.create_qe_worktree(
+            session_id=workspace_id,
+            base_ref=task_commit,
+            copy_uncommitted=False,
+            keep_gitignored=True,
+        )
     return WorkTaskWorkspace(
         path=info.path,
         isolation="worktree",
@@ -1301,6 +1340,7 @@ async def _prepare_task_workspace(
         scope="task",
         integration_path=integration.path,
         hidden_paths=hidden,
+        worker_boundary=WORKER_BOUNDARY if hidden else "",
     )
 
 
@@ -1450,9 +1490,9 @@ async def _record_workspace_evidence(
 
 
 def _sandbox_masking_active() -> bool:
-    from superqode.sandbox.local_sandbox import sandbox_status
+    from superqode.sandbox.local_sandbox import sandbox_available
 
-    return bool(sandbox_status()["active"])
+    return sandbox_available()
 
 
 def _workspace_id(work_order_id: str, task_id: str) -> str:
@@ -1480,6 +1520,10 @@ def _task_prompt(
         f"Assigned role: {task.role.value}",
         f"Assigned task ({task.task_id}):\n{task.goal}",
     ]
+    if "factory" in order.metadata:
+        parts.append(
+            "The controller manages task Git metadata and captures the patch. Use git status and diff for inspection; leave staging and commits to the controller."
+        )
     if task.dependencies:
         parts.append(f"Completed dependencies: {', '.join(task.dependencies)}")
         evidence = _dependency_evidence(order, task)

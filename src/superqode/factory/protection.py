@@ -22,6 +22,127 @@ FLAG_KINDS = ("factory_protected_access", "factory_protected_write")
 _HIDDEN: contextvars.ContextVar[tuple[str, ...]] = contextvars.ContextVar(
     "superqode_factory_hidden_paths", default=()
 )
+_WORKER = contextvars.ContextVar("superqode_factory_worker_boundary", default=None)
+WORKER_BOUNDARY = "sanitized-repository/1"
+
+
+@contextmanager
+def worker_scope(root, controller, *, allow_network=False):
+    token = _WORKER.set((Path(root).resolve(), Path(controller).resolve(), bool(allow_network)))
+    try:
+        from superqode.pipy.tools.host import tool_operations_scope
+
+        with tool_operations_scope(
+            validate_path=confine_tool_path, prepare_command=_prepare_command
+        ):
+            yield
+    finally:
+        _WORKER.reset(token)
+
+
+def worker_boundary():
+    return _WORKER.get()
+
+
+def _prepare_command(argv, cwd):
+    from superqode.sandbox.local_sandbox import build_sandboxed_argv
+
+    plan = build_sandboxed_argv(argv, cwd)
+    if not plan.applied:
+        raise RuntimeError("Factory worker shell isolation was not applied")
+    return plan.argv
+
+
+def confine_tool_path(path):
+    boundary = worker_boundary()
+    if boundary is None:
+        return
+    target = Path(path).resolve()
+    if not target.is_relative_to(boundary[0]):
+        raise ValueError("Factory worker file access must stay inside its isolated repository")
+    relative = target.relative_to(boundary[0])
+    metadata = bool(relative.parts and relative.parts[0].casefold() == ".git")
+    if relative.parts and not metadata:
+        try:
+            metadata = (boundary[0] / relative.parts[0]).samefile(boundary[0] / ".git")
+        except OSError:
+            pass
+    if metadata:
+        raise ValueError("Factory worker Git metadata is managed by the controller")
+
+
+def create_worker_repository(repository, tree, destination):
+    """Copy only the sanitized tree objects, with no controller history or alternates."""
+    destination = Path(destination)
+    destination.mkdir(parents=True, exist_ok=False)
+    env = {k: v for k, v in os.environ.items() if not k.startswith("GIT_")}
+    env.update(GIT_CONFIG_GLOBAL=os.devnull, GIT_CONFIG_NOSYSTEM="1")
+    env.update(
+        GIT_AUTHOR_NAME="SuperQode WorkOrder",
+        GIT_AUTHOR_EMAIL="workorders@superqode.local",
+        GIT_COMMITTER_NAME="SuperQode WorkOrder",
+        GIT_COMMITTER_EMAIL="workorders@superqode.local",
+    )
+
+    def run(root, args, **kwargs):
+        return subprocess.run(
+            [
+                "git",
+                "-c",
+                "core.hooksPath=/dev/null",
+                "-c",
+                "commit.gpgsign=false",
+                "-C",
+                str(root),
+                *args,
+            ],
+            env=env,
+            capture_output=True,
+            check=True,
+            timeout=120,
+            **kwargs,
+        )
+
+    run(
+        destination,
+        [
+            "init",
+            "--quiet",
+            "--template=",
+            "--object-format=" + _git(repository, ["rev-parse", "--show-object-format"]).strip(),
+        ],
+    )
+    # A tree revision has no commit parents. Streaming the pack through a private
+    # file bounds memory and never exposes protected objects to the worker store.
+    with tempfile.TemporaryFile() as pack:
+        subprocess.run(
+            ["git", "-C", str(repository), "pack-objects", "--stdout", "--revs"],
+            input=(tree + "\n").encode(),
+            stdout=pack,
+            stderr=subprocess.PIPE,
+            env=env,
+            check=True,
+            timeout=120,
+        )
+        pack.seek(0)
+        subprocess.run(
+            ["git", "-C", str(destination), "unpack-objects", "-q"],
+            stdin=pack,
+            stdout=subprocess.PIPE,
+            stderr=subprocess.PIPE,
+            env=env,
+            check=True,
+            timeout=120,
+        )
+    commit = (
+        run(destination, ["commit-tree", tree, "-m", "Isolated task baseline"])
+        .stdout.decode()
+        .strip()
+    )
+    run(destination, ["reset", "--hard", "--quiet", commit])
+    run(destination, ["config", "core.hooksPath", os.devnull])
+    run(destination, ["config", "core.fsmonitor", "false"])
+    return commit
 
 
 def evaluator_paths(definition) -> tuple[str, ...]:
@@ -111,7 +232,14 @@ def mask_targets(order) -> tuple[str, ...]:
     for artifact in order.artifacts:
         if artifact.kind == "workspace" and artifact.metadata.get("scope") == "work-order":
             roots.add(Path(artifact.path).resolve())
-    return tuple(sorted(str(root / item) for root in roots for item in protected))
+    targets = {str(root / item) for root in roots for item in protected}
+    # A controller can itself be a linked worktree. Hide both its pointer and
+    # the actual common object database, which may live outside the project.
+    repository = Path(order.repository).resolve()
+    targets.add(str(repository / ".git"))
+    common = _git(repository, ["rev-parse", "--git-common-dir"]).strip()
+    targets.add(str((repository / common).resolve()))
+    return tuple(sorted(targets))
 
 
 @contextmanager
@@ -193,7 +321,12 @@ def provenance(order) -> dict:
         for artifact in order.artifacts
         if artifact.kind == "workspace" and artifact.metadata.get("scope") == "task"
     ]
-    hidden = bool(tasks) and all(a.metadata.get("evaluators_hidden") is True for a in tasks)
+    hidden = bool(tasks) and all(
+        a.metadata.get("evaluators_hidden") is True
+        and a.metadata.get("worker_boundary") == WORKER_BOUNDARY
+        and a.metadata.get("sandbox_masking") is True
+        for a in tasks
+    )
     return {
         "evaluators_hidden": hidden,
         "task_workspaces": len(tasks),

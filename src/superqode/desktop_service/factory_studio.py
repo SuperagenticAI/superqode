@@ -82,6 +82,26 @@ def handle(service, method, params):
     root = service.project(params["project"])
     _ensure(service)
     target = _target(root)
+    if method == "factory.models.inspect":
+        from superqode.factory.model_setup import inspect_models
+
+        def check(provider, model, binding):
+            return service.dispatch(
+                "providers.check",
+                {
+                    "project": params["project"],
+                    "provider": provider,
+                    "model": model,
+                    "harness": binding or params.get("drafting_harness", "no-tool"),
+                },
+            )
+
+        return inspect_models(
+            root,
+            yaml_text=params.get("yaml"),
+            drafting_model=params.get("drafting_model", ""),
+            check_connection=check if params.get("check_connections") is True else None,
+        )
     if method.startswith("factory.export."):
         from superqode.factory import portable
 
@@ -204,6 +224,15 @@ def handle(service, method, params):
             if binding not in data["inference"]["harnesses"]:
                 raise ValueError("Choose an existing factory harness binding")
             data["inference"]["harnesses"][binding]["model"] = controls["model"]
+        if "default_route" in controls:
+            from superqode.session.factory import default_policy
+
+            route = controls["default_route"]
+            if not isinstance(route, str) or (
+                route not in default_policy()["routes"] and route not in data.get("routes", {})
+            ):
+                raise ValueError("Choose an existing Factory route")
+            data["default_route"] = route
         for key in ("max_workers", "max_seconds"):
             if key in controls:
                 data["governance"]["budget"][key] = controls[key]
@@ -1106,7 +1135,9 @@ async def run(request, emit):
                 if "local drafting model" not in str(exc):
                     raise
                 result = proposal_from_description(
-                    request["description"], workflow=request.get("workflow", "")
+                    request["description"],
+                    workflow=request.get("workflow", ""),
+                    privacy_blocked=True,
                 )
     elif action == "worker":
         from superqode.workorders.worker import WorkOrderWorker, WorkOrderWorkerConfig

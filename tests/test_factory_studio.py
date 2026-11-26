@@ -320,7 +320,7 @@ def test_native_studio_verification_and_signed_delivery(project, tmp_path, monke
     try:
         result = action("verify")
         assert result["verification_status"] == "passed", result
-        assert result["record"]["decision"]["verdict"] == "hold"
+        assert result["record"]["decision"]["verdict"] == "ship"
         challenge = rpc("release.challenge", run=run, key_id="fixture")
         rpc("release.authorize", run=run, proof=signed(challenge, key))
         inspected = rpc("run.inspect", run=run)

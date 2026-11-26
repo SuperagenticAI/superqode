@@ -34,11 +34,14 @@ struct FactoryStudioView: View {
   private var controlDraft: FactoryControlDraft { FactoryControlDraft(name: factoryName, binding: binding,
     model: modelRef, seconds: seconds, workers: workers, network: network) }
   private var controlsHaveChanges: Bool { syncedControls.map { $0 != controlDraft } ?? false }
-  private var idle: Bool { !replacingDraft && !library.busy && !library.acceptance.busy && !library.portable.busy && !app.anyActive && !app.busy }
+  private var idle: Bool { !replacingDraft && !library.busy && !library.modelSetup.checking && !library.acceptance.busy && !library.portable.busy && !app.anyActive && !app.busy }
   private var order: [String: Any] { library.detail["work_order"] as? [String: Any] ?? [:] }
   private var stages: [[String: Any]] { library.review["stages"] as? [[String: Any]] ?? [] }
   private var tasks: [[String: Any]] { order["tasks"] as? [[String: Any]] ?? [] }
   private var bindings: [String: Any] { library.review["bindings"] as? [String: Any] ?? [:] }
+  private var draftingProvider: String { library.modelSetup.provider }
+  private var draftingModel: String { library.modelSetup.model }
+  private var noDraftingModel: Bool { library.modelSetup.draftingReference.isEmpty }
   private var setup: FactorySetupState {
     FactorySetupState(
       text: library.text,
@@ -256,11 +259,7 @@ struct FactoryStudioView: View {
             Text("What should this Factory do?").font(.headline)
           }
           TextEditor(text: $library.description).font(.body).frame(height: 120).brandSurface().accessibilityLabel("Factory description")
-          HStack {
-            Text(app.provider.isEmpty || app.model.isEmpty || app.provider == "acp" ? "Generate starter settings from this description. No model is required." : "Drafting with \(app.provider)/\(app.model). If that model cannot draft, starter settings are built here.").font(.caption).foregroundStyle(.secondary)
-            Spacer()
-            Button("Choose harness and model…") { app.openConnections(returningTo: "Factory Studio") }
-          }
+          FactoryModelSetupView(studio: library, models: library.modelSetup, idle: idle)
           VStack(alignment: .leading, spacing: 6) {
             HStack(spacing: 10) {
               Button { requestConfirmation("rlm-architect") } label: {
@@ -349,6 +348,7 @@ struct FactoryStudioView: View {
   private var configuration: some View {
     ScrollView {
       VStack(alignment: .leading, spacing: 14) {
+          FactoryModelSetupView(studio: library, models: library.modelSetup, idle: idle, executionOnly: true)
           Text("Harness, model & permissions").font(.headline)
           Text("Validate the definition to load its current bindings.").font(.caption).foregroundStyle(.secondary)
           VStack(alignment: .leading, spacing: 12) {
@@ -359,7 +359,7 @@ struct FactoryStudioView: View {
           HStack(spacing: 8) {
             TextField("Provider/model reference", text: $modelRef).textFieldStyle(.roundedBorder)
             if !app.provider.isEmpty && !app.model.isEmpty && app.provider != "acp" {
-              Button("Use \(app.provider)/\(app.model)") {
+              Button("Use connected model for this binding") {
                 modelRef = "\(app.provider)/\(app.model)"
               }
               .font(.caption)
@@ -1106,12 +1106,12 @@ struct FactoryStudioView: View {
     switch confirmation {
     case "save": return "Save the checked definition and record the reason for this revision. Existing runs keep their pinned inputs."
     case "template", "reload": return "This replaces the current draft. Saved revisions and existing trials remain available."
-    case "generate": return app.provider.isEmpty || app.model.isEmpty || app.provider == "acp"
+    case "generate": return noDraftingModel
       ? "This builds starter factory settings from your description on this Mac. No model is called."
       : "The selected model receives your description and draft definition. This may incur model usage. If that model cannot draft, starter settings are built here instead. The result is a proposal for you to review."
-    case "rlm-architect": return app.provider.isEmpty || app.model.isEmpty || app.provider == "acp"
+    case "rlm-architect": return noDraftingModel
       ? "SuperQode inspects this repository read-only (manifests, tests, build setup, and high-risk paths) using Recursive Language Model (RLM) context indexing, then chooses the right stages, agent roles, test checks, and skills for your project. Nothing is written or executed until you review and save."
-      : "SuperQode inspects this repository read-only with Recursive Language Model (RLM) context indexing and runs up to 2 bounded sub-queries with \(app.provider)/\(app.model) to assemble the right stages, agent roles, test checks, and skills for your task. Nothing is written or executed until you review and save."
+      : "SuperQode inspects this repository read-only with Recursive Language Model (RLM) context indexing and runs up to 2 bounded sub-queries with \(draftingProvider)/\(draftingModel) to assemble the right stages, agent roles, test checks, and skills for your task. Nothing is written or executed until you review and save."
     case "trial": return "Pin the saved definition and its inputs to a queued WorkOrder for this goal. This step makes no model calls. The application must have a clean committed baseline."
     case "worker": return "Execute ready stages using this run’s pinned harnesses and model routes. Model calls may incur cost and stages may edit isolated worktrees. Human gates pause execution."
     case "verify": return "Execute the exact candidate in the required OS sandbox against pinned protected Python probes. Passing checks supplies acceptance evidence; it does not approve delivery."
@@ -1160,19 +1160,19 @@ struct FactoryStudioView: View {
     }
   }
   private var confirmationBadges: [FactoryConfirmBadge] {
-    let noModel = app.provider.isEmpty || app.model.isEmpty || app.provider == "acp"
+    let noModel = noDraftingModel
     switch confirmation {
     case "generate":
       return noModel
         ? [FactoryConfirmBadge(label: "Built on this Mac", symbol: "desktopcomputer", color: Color(red: 0.14, green: 0.62, blue: 0.42)),
            FactoryConfirmBadge(label: "No model call", symbol: "bolt.slash", color: Brand.purple)]
-        : [FactoryConfirmBadge(label: "\(app.provider)/\(app.model)", symbol: "sparkles", color: Brand.pink)]
+        : [FactoryConfirmBadge(label: "\(draftingProvider)/\(draftingModel)", symbol: "sparkles", color: Brand.pink)]
     case "rlm-architect":
       return noModel
         ? [FactoryConfirmBadge(label: "On-Demand · Read-Only Scan", symbol: "sparkles", color: Brand.purple),
            FactoryConfirmBadge(label: "No model call", symbol: "bolt.slash", color: Color(red: 0.14, green: 0.62, blue: 0.42))]
         : [FactoryConfirmBadge(label: "On-Demand · Read-Only Scan", symbol: "sparkles", color: Brand.purple),
-           FactoryConfirmBadge(label: "\(app.provider)/\(app.model)", symbol: "cpu", color: Brand.pink)]
+           FactoryConfirmBadge(label: "\(draftingProvider)/\(draftingModel)", symbol: "cpu", color: Brand.pink)]
     case "template", "reload":
       return [FactoryConfirmBadge(label: "Draft only", symbol: "doc.text", color: Brand.purple),
               FactoryConfirmBadge(label: "No model call", symbol: "bolt.slash", color: Color(red: 0.14, green: 0.62, blue: 0.42))]
@@ -1211,7 +1211,7 @@ struct FactoryStudioView: View {
   }
   private var activityDetail: String {
     switch activeAction {
-    case "generate": return app.provider.isEmpty || app.model.isEmpty || app.provider == "acp" ? "Building starter settings locally on this Mac." : "Drafting with \(app.provider)/\(app.model)."
+    case "generate": return noDraftingModel ? "Building starter settings locally on this Mac." : "Drafting with \(draftingProvider)/\(draftingModel)."
     case "rlm-architect": return "Scanning repository manifests, test setup, and high-risk paths to pick the right stages, agents, and skills."
     case "verify": return "Running pinned protected probes inside the OS sandbox."
     case "worker": return "Hidden evaluator files are masked from workers."
@@ -1234,6 +1234,7 @@ struct FactoryStudioView: View {
   private func execute(_ action: String) {
     guard !action.isEmpty else { return }
     let ticket = library.navigation.ticket()
+    let draftingReference = library.modelSetup.draftingReference
     activeAction = action
     Task {
       defer { if activeAction == action { activeAction = "" } }
@@ -1251,12 +1252,14 @@ struct FactoryStudioView: View {
       case "generate":
         if library.text.isEmpty { await library.load(engine: app.engine, template: preset) }
         guard library.navigation.isCurrent(ticket), !library.text.isEmpty else { return }
-        await library.start(engine: app.engine, action: action, provider: app.provider, model: app.model, workflow: preset)
+        guard await checkDraftingSelection(draftingReference) else { return }
+        await library.start(engine: app.engine, action: action, provider: draftingProvider, model: draftingModel, workflow: preset)
         if library.navigation.isCurrent(ticket), library.failure.isEmpty, library.message.hasPrefix("Starter settings") {
           library.navigation.select("Definition")
         }
       case "rlm-architect":
-        await library.start(engine: app.engine, action: action, provider: app.provider, model: app.model, workflow: "")
+        guard await checkDraftingSelection(draftingReference) else { return }
+        await library.start(engine: app.engine, action: action, provider: draftingProvider, model: draftingModel, workflow: "")
       case "trial": await library.trial(engine: app.engine, goal: goal); if library.failure.isEmpty { follow(ticket, to: "Runs") }
       case "enroll":
         let identity = library.project; let version = library.version
@@ -1272,6 +1275,23 @@ struct FactoryStudioView: View {
       default: await library.start(engine: app.engine, action: action, provider: app.provider, model: app.model)
       }
     }
+  }
+  private func checkDraftingSelection(_ reference: String) async -> Bool {
+    guard library.modelSetup.draftingReference == reference else { return false }
+    if reference.isEmpty { return true }
+    let project = library.project; let version = library.version
+    await library.modelSetup.inspect(engine: app.engine, yaml: library.text, checkConnections: true)
+    guard library.project == project, library.version == version,
+      library.modelSetup.draftingReference == reference else { return false }
+    guard !library.modelSetup.report.isEmpty, library.modelSetup.failure.isEmpty else {
+      library.failure = "Check the drafting model connection before continuing."
+      return false
+    }
+    if library.modelSetup.drafting["eligible"] as? Bool != true {
+      library.failure = string(library.modelSetup.drafting, "message", "Choose a supported drafting model before continuing.")
+      return false
+    }
+    return true
   }
   private func applyRLMProposal(snapshot: FactoryRLMLineageSnapshot, skills: [FactoryRLMLineageSnapshot.RecommendedSkill]) {
     let proposedYaml = string(library.proposal, "yaml")

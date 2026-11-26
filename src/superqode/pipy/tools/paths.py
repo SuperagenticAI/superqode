@@ -24,6 +24,9 @@ _mutation_locks: dict[str, asyncio.Lock] = {}
 def resolve_to_cwd(path: str, cwd: str | Path) -> Path:
     """Resolve a tool path argument against the working directory."""
     candidate = Path(path).expanduser()
+    from .host import validate_path
+
+    validate_path(candidate if candidate.is_absolute() else Path(cwd) / candidate)
     if candidate.is_absolute():
         return candidate
     return (Path(cwd) / candidate).resolve()

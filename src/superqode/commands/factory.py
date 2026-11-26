@@ -8,7 +8,17 @@ from .factory_improvement import improve
 from .factory_campaigns import campaign
 from .factory_intake import intake
 from .factory_evidence import evidence, verifier
-from .factory_authoring import init, show, workflows, describe, sources, check, decide, trial
+from .factory_authoring import (
+    init,
+    show,
+    workflows,
+    models,
+    describe,
+    sources,
+    check,
+    decide,
+    trial,
+)
 
 
 @click.group()
@@ -23,7 +33,7 @@ factory.add_command(campaign)
 factory.add_command(intake)
 factory.add_command(evidence)
 factory.add_command(verifier)
-for _command in (init, show, workflows, describe, sources, check, decide, trial):
+for _command in (init, show, workflows, models, describe, sources, check, decide, trial):
     factory.add_command(_command)
 
 

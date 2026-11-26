@@ -224,3 +224,21 @@ async def test_chunking_then_querying_is_the_intended_shape(tmp_path):
 
     assert result.error is None
     assert result.value_repr == "['alpha', 'beta']"
+
+
+def test_bulk_context_methods_reject_outside_symlink_after_discovery(tmp_path):
+    from superqode.rlm.context import RLMContext
+
+    root = tmp_path / "repo"
+    root.mkdir()
+    file = root / "notes.txt"
+    file.write_text("public")
+    context = RLMContext(root)
+    assert "notes.txt" in context.files()
+    external = tmp_path / "outside.txt"
+    external.write_text("SYNTHETIC_OUTSIDE_ROOT")
+    file.unlink()
+    file.symlink_to(external)
+    assert "SYNTHETIC_OUTSIDE_ROOT" not in context.text()
+    assert context.search("SYNTHETIC_OUTSIDE_ROOT") == []
+    assert context.chunk() == []

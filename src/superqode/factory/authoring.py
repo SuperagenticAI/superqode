@@ -98,6 +98,14 @@ def inspect_definition(root, text):
     warnings.append(
         "Definition validation makes no model calls and does not establish execution quality."
     )
+    from .model_setup import inspect_models
+
+    model_setup = inspect_models(root, yaml_text=text)
+    warnings.extend(
+        f"{row['binding']}{' fallback' if row['fallback'] else ''}: {row['message']}"
+        for row in model_setup["execution"]
+        if not row["eligible"]
+    )
     return {
         "yaml": text,
         "name": data["metadata"]["name"],
@@ -105,6 +113,7 @@ def inspect_definition(root, text):
         "snapshot_digest": snapshot.digest,
         "expected_file_digest": file_digest(path),
         "warnings": warnings,
+        "model_setup": model_setup,
         "stages": data["orchestration"]["stages"],
         "requirements": data["data_context"].get("requirements", {}),
         "application_checks": data["improvement"]["checks"],
@@ -197,6 +206,11 @@ def _store_draft(root, proposal):
         "expected_file_digest": review["expected_file_digest"],
         "snapshot_digest": review["snapshot_digest"],
         "created": time.time(),
+        "recommended_skills": proposal.get("recommended_skills", []),
+        "rlm_lineage": proposal.get("rlm_lineage"),
+        "usage": proposal.get("usage"),
+        "cost": proposal.get("cost"),
+        "generation_receipt": proposal.get("generation_receipt"),
     }
     atomic(
         project_path(root, (folder.relative_to(root) / (review["digest"] + ".json")).as_posix()),
@@ -210,6 +224,7 @@ def _store_draft(root, proposal):
         "rlm_lineage": proposal.get("rlm_lineage"),
         "usage": proposal.get("usage"),
         "cost": proposal.get("cost"),
+        "generation_receipt": proposal.get("generation_receipt"),
         "proposal_only": True,
         "written": False,
     }
@@ -229,6 +244,24 @@ async def architect(root, description="", *, provider="", model="", gateway=None
     root = Path(root).resolve()
     path = target(root)
     base = read_text(path) if path.is_file() else ""
+    from uuid import uuid4
+    from .operations import write
+
+    identity = uuid4().hex
+    receipt_path = project_path(root, f".superqode/factory-studio/generation-usage/{identity}.json")
+    receipt = {
+        "format": "superqode.factory-generation-usage/1",
+        "id": identity,
+        "provider": provider,
+        "model": model,
+        "status": "incomplete",
+        "calls": {},
+    }
+
+    def observe(record):
+        receipt["calls"][record["id"]] = record
+        write(receipt_path, json.dumps(receipt, allow_nan=False))
+
     proposal = await architect_factory(
         root,
         description=description,
@@ -237,7 +270,12 @@ async def architect(root, description="", *, provider="", model="", gateway=None
         provider=provider,
         model=model,
         gateway=gateway,
+        on_subcall=observe,
     )
+    if receipt["calls"]:
+        receipt.update(status="complete", usage=proposal["usage"], cost=proposal["cost"])
+        write(receipt_path, json.dumps(receipt, allow_nan=False))
+        proposal["generation_receipt"] = receipt_path.relative_to(root).as_posix()
     return _store_draft(root, proposal)
 
 
@@ -266,7 +304,7 @@ async def draft(root, description, *, provider, model, gateway=None, workflow=""
     except ValueError as exc:
         if "local drafting model" not in str(exc):
             raise
-        proposal = proposal_from_description(description, workflow=workflow)
+        proposal = proposal_from_description(description, workflow=workflow, privacy_blocked=True)
     return _store_draft(root, proposal)
 
 

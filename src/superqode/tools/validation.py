@@ -72,6 +72,10 @@ def validate_path_in_working_directory(path: str, working_directory: Path) -> Pa
     Raises:
         ValueError: If path escapes working_directory or working_directory is not absolute
     """
+    from superqode.factory.protection import confine_tool_path
+
+    candidate = Path(path).expanduser()
+    confine_tool_path(candidate if candidate.is_absolute() else working_directory / candidate)
     # Ensure working_directory is absolute without resolving symlinks.
     working_dir = Path(working_directory).absolute()
     working_dir_real = Path(os.path.realpath(working_dir))
@@ -129,6 +133,10 @@ def validate_path_in_search_scope(
     Raises:
         ValueError: If the path escapes both the cwd and every search root.
     """
+    from superqode.factory.protection import confine_tool_path
+
+    candidate = Path(path).expanduser()
+    confine_tool_path(candidate if candidate.is_absolute() else working_directory / candidate)
     # Inside the working directory? Keep the existing behavior verbatim.
     try:
         return validate_path_in_working_directory(path, working_directory)

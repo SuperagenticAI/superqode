@@ -20,6 +20,7 @@ from __future__ import annotations
 import os
 import platform
 import shutil
+import sys
 from dataclasses import dataclass
 from pathlib import Path
 
@@ -70,7 +71,7 @@ def _hidden_paths() -> list[Path]:
 
 
 def _seatbelt_profile(
-    cwd: Path, *, allow_network: bool, writable: list[Path], hidden: list[Path] = ()
+    cwd: Path, *, allow_network: bool, writable: list[Path], hidden: list[Path] = (), boundary=None
 ) -> str:
     """Build a Seatbelt (SBPL) profile: read all, write only to allowed roots."""
     import json
@@ -96,7 +97,25 @@ def _seatbelt_profile(
         lines.append("(deny network*)")
     for path in hidden:
         lines.append(f"(deny file-read* file-write* (subpath {json.dumps(str(path))}))")
+    if boundary:
+        worker, controller, _ = boundary
+        lines.append(f"(deny file-write* (subpath {json.dumps(str(worker / '.git'))}))")
+        exceptions = [worker, *_worker_runtime_roots(controller)]
+        filters = " ".join(f"(require-not (subpath {json.dumps(str(p))}))" for p in exceptions)
+        lines.append(
+            f"(deny file-read* file-write* (require-all (subpath {json.dumps(str(controller))}) {filters}))"
+        )
     return "\n".join(lines)
+
+
+def _worker_runtime_roots(controller):
+    return sorted(
+        {
+            Path(p).resolve()
+            for p in (sys.prefix, sys.base_prefix)
+            if Path(p).resolve().is_relative_to(controller) and Path(p).resolve() != controller
+        }
+    )
 
 
 def _writable_roots(cwd: Path, mode: str) -> list[Path]:
@@ -120,11 +139,23 @@ def build_sandboxed_argv(
     shell_argv: list[str], cwd: Path, mode: str | None = None, *, allow_network: bool | None = None
 ) -> SandboxPlan:
     mode = (mode or current_mode()).lower()
+    from superqode.factory.protection import worker_boundary
+
+    boundary = worker_boundary()
+    if boundary:
+        worker, controller, network = boundary
+        if not Path(cwd).resolve().is_relative_to(worker):
+            raise ValueError("Factory commands must run inside the isolated task repository")
+        if mode in (MODE_OFF, MODE_DANGER):
+            mode = MODE_WORKSPACE_WRITE
+        allow_network = network and (allow_network is not False)
     if mode in (MODE_OFF, MODE_DANGER):
         return SandboxPlan(argv=shell_argv, applied=False, backend="none", reason="disabled")
 
     backend = _backend_for_platform()
     if backend == "none":
+        if boundary:
+            raise RuntimeError("Factory worker commands require an available OS sandbox")
         return SandboxPlan(
             argv=shell_argv, applied=False, backend="none", reason="no sandbox backend available"
         )
@@ -136,16 +167,38 @@ def build_sandboxed_argv(
 
     if backend == "seatbelt":
         profile = _seatbelt_profile(
-            cwd, allow_network=allow_network, writable=_writable_roots(cwd, mode), hidden=hidden
+            cwd,
+            allow_network=allow_network,
+            writable=_writable_roots(cwd, mode),
+            hidden=hidden,
+            boundary=boundary,
         )
         argv = ["sandbox-exec", "-p", profile, *shell_argv]
         return SandboxPlan(argv=argv, applied=True, backend="seatbelt")
 
     # Linux bubblewrap: read-only bind the whole FS, rebind writable roots rw.
     argv = ["bwrap", "--ro-bind", "/", "/", "--dev", "/dev", "--proc", "/proc", "--tmpfs", "/tmp"]
+    if boundary:
+        worker, controller, _ = boundary
+        argv += [
+            "--unshare-pid",
+            "--unshare-user",
+            "--unshare-ipc",
+            "--unshare-uts",
+            "--new-session",
+            "--cap-drop",
+            "ALL",
+        ]
+        argv += ["--tmpfs", str(controller)]
+        for runtime in _worker_runtime_roots(controller):
+            argv += ["--ro-bind", str(runtime), str(runtime)]
+        argv += ["--ro-bind", str(worker), str(worker)]
     if mode == MODE_WORKSPACE_WRITE:
         resolved = str(cwd.resolve())
         argv += ["--bind", resolved, resolved]
+    if boundary:
+        metadata = boundary[0] / ".git"
+        argv += ["--ro-bind", str(metadata), str(metadata)]
     for path in hidden:
         # Mask protected evaluators: an empty directory or an empty file.
         if path.is_dir():
@@ -154,7 +207,7 @@ def build_sandboxed_argv(
             argv += ["--ro-bind", "/dev/null", str(path)]
     if not allow_network:
         argv += ["--unshare-net"]
-    argv += ["--die-with-parent", *shell_argv]
+    argv += ["--die-with-parent", "--chdir", str(cwd), *shell_argv]
     return SandboxPlan(argv=argv, applied=True, backend="bwrap")
 
 

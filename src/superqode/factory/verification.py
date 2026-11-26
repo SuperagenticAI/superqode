@@ -354,7 +354,7 @@ def verification_record(order, artifact, *, judges=()):
     Ship is a quality recommendation; release still needs a human signature.
     """
     from superqode.gauge import decide
-    from .protection import provenance
+    from .protection import provenance, WORKER_BOUNDARY
 
     report = json.loads(artifact.content)
     binding = report["binding"]
@@ -436,6 +436,7 @@ def verification_record(order, artifact, *, judges=()):
     record.assurance = {
         "evaluator_independent": protection["evaluators_hidden"],
         "evaluator_provenance": {
+            "worker_boundary": WORKER_BOUNDARY if protection["evaluators_hidden"] else None,
             "evaluators": binding["evaluators"],
             "hidden_from_workers": protection["evaluators_hidden"],
             "hidden_paths": protection["hidden_paths"],

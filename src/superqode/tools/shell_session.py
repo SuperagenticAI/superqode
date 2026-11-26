@@ -318,6 +318,14 @@ class ShellSessionTool(Tool):
         return content
 
     async def execute(self, args: Dict[str, Any], ctx: ToolContext) -> ToolResult:
+        from superqode.factory.protection import worker_boundary
+
+        if worker_boundary():
+            return ToolResult(
+                success=False,
+                output="",
+                error="Factory workers cannot access unconfined persistent shell sessions",
+            )
         action = (args.get("action") or "").strip().lower()
         try:
             if action == "open":

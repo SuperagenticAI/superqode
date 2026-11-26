@@ -14,12 +14,13 @@ from __future__ import annotations
 
 import ast
 import asyncio
-from dataclasses import asdict
+from dataclasses import asdict, dataclass
 import json
+import math
 from pathlib import Path
 import re
 import time
-from typing import Any
+from typing import Any, Callable
 
 import yaml
 
@@ -29,6 +30,13 @@ from superqode.rlm.subcalls import SubcallPolicy, SubcallUsage
 from .definition import SCHEMA, read_mapping, validate_definition
 from .generation import check_generation_route
 from .templates import TEMPLATE_NAMES, explicit_workflow, factory_template
+
+
+@dataclass
+class ArchitectUsage(SubcallUsage):
+    unknown_cost_calls: int = 0
+    unknown_token_calls: int = 0
+
 
 DEFAULT_GOAL = (
     "Build a safe, verified Software Factory tailored to this repository's stack, "
@@ -410,12 +418,13 @@ async def _run_bounded_subcalls(
     model: str,
     gateway: Any,
     policy: SubcallPolicy,
+    on_subcall: Callable[[dict], None] | None = None,
 ) -> tuple[dict[str, Any], list[dict[str, Any]], SubcallUsage]:
     """Issue up to two bounded recursive sub-calls over compact repo slices."""
     from superqode.providers.gateway import GatewayFactory, Message
 
     client = gateway or GatewayFactory.create(timeout=min(int(policy.timeout), 45))
-    usage = SubcallUsage()
+    usage = ArchitectUsage()
     subcalls: list[dict[str, Any]] = []
     refinements: dict[str, Any] = {}
 
@@ -489,7 +498,14 @@ async def _run_bounded_subcalls(
             "output_tokens": 0,
             "duration_ms": 0,
             "error": "",
+            "cost_usd": None,
         }
+        usage.calls += 1
+        token_known = cost_known = False
+        response_seen = False
+        record["state"] = "intent"
+        if on_subcall:
+            on_subcall(dict(record))
         try:
             response = await asyncio.wait_for(
                 client.chat_completion(
@@ -505,7 +521,7 @@ async def _run_bounded_subcalls(
                 ),
                 timeout=min(policy.timeout, 45.0),
             )
-            usage.calls += 1
+            response_seen = True
             raw_usage = getattr(response, "usage", None)
             if raw_usage is not None:
                 in_tok = int(
@@ -516,19 +532,41 @@ async def _run_bounded_subcalls(
                     or getattr(raw_usage, "output", 0)
                     or 0
                 )
+                total = int(getattr(raw_usage, "total_tokens", 0) or 0)
+                if min(in_tok, out_tok, total) < 0:
+                    raise ValueError("Provider returned invalid token counts")
                 usage.input_tokens += in_tok
                 usage.output_tokens += out_tok
-                usage.total_tokens += in_tok + out_tok
+                usage.total_tokens += max(total, in_tok + out_tok)
                 record["input_tokens"] = in_tok
                 record["output_tokens"] = out_tok
+                token_known = True
+            raw_cost = getattr(response, "cost", None)
+            value = getattr(raw_cost, "total_cost", None)
+            if (
+                type(value) in {int, float}
+                and math.isfinite(value)
+                and value >= 0
+                and getattr(raw_cost, "currency", "USD") == "USD"
+            ):
+                usage.cost_usd += value
+                record["cost_usd"] = value
+                cost_known = True
             parsed = _extract_json_object(response.content or "")
             refinements[topic] = parsed
             record["ok"] = True
         except Exception as exc:  # noqa: BLE001 - bounded sub-calls fall back cleanly
             usage.failures += 1
             record["error"] = str(exc)[:200]
-        record["duration_ms"] = int((time.monotonic() - started) * 1000)
-        subcalls.append(record)
+        finally:
+            usage.unknown_cost_calls += not cost_known
+            usage.unknown_token_calls += not token_known
+            record["duration_ms"] = int((time.monotonic() - started) * 1000)
+            record["state"] = "recorded" if response_seen else "uncertain"
+            record["tokens_known"] = token_known
+            subcalls.append(record)
+            if on_subcall:
+                on_subcall(dict(record))
 
     return refinements, subcalls, usage
 
@@ -705,6 +743,7 @@ async def architect_factory(
     model: str = "",
     gateway: Any = None,
     use_monty: bool = True,
+    on_subcall: Callable[[dict], None] | None = None,
 ) -> dict[str, Any]:
     """Inspect a repository with SuperQode's RLM context engine and propose a FactorySpec."""
     started = time.monotonic()
@@ -719,7 +758,9 @@ async def architect_factory(
         candidate = read_mapping(yaml_text)
         if "apiVersion" in candidate:
             validate_definition(candidate)
-            base_data = candidate
+        elif set(candidate) - {"default_route", "routes"}:
+            raise ValueError("A full FactorySpec requires apiVersion and kind")
+        base_data = candidate
 
     policy = ContextPolicy(
         max_files=2000,
@@ -741,9 +782,9 @@ async def architect_factory(
     # Respect private route policy before issuing any model sub-calls.
     allow_live_subcalls = bool(provider and model)
     route_note = ""
-    if allow_live_subcalls and base_data:
+    if allow_live_subcalls:
         try:
-            check_generation_route(base_data, provider, model)
+            check_generation_route(base_data or {}, provider, model)
         except ValueError as exc:
             if "local drafting model" not in str(exc):
                 raise
@@ -763,7 +804,7 @@ async def architect_factory(
     )
     refinements: dict[str, Any] = {}
     subcalls: list[dict[str, Any]] = []
-    usage = SubcallUsage()
+    usage = ArchitectUsage()
 
     if allow_live_subcalls:
         refinements, subcalls, usage = await _run_bounded_subcalls(
@@ -773,6 +814,7 @@ async def architect_factory(
             model=model,
             gateway=gateway,
             policy=subcall_policy,
+            on_subcall=on_subcall,
         )
 
     spec, assumptions, missing_capabilities, recommended_skills = _compose_factory_spec(
@@ -825,6 +867,8 @@ async def architect_factory(
             "used_calls": usage.calls,
             "failures": usage.failures,
             "total_tokens": usage.total_tokens,
+            "unknown_cost_calls": usage.unknown_cost_calls,
+            "unknown_token_calls": usage.unknown_token_calls,
         },
         "duration_ms": duration_ms,
     }
@@ -836,6 +880,11 @@ async def architect_factory(
         "recommended_skills": recommended_skills,
         "rlm_lineage": rlm_lineage,
         "usage": asdict(usage) if usage.calls else None,
-        "cost": {"total": usage.cost_usd} if usage.calls else None,
+        "cost": {
+            "total": None if usage.unknown_cost_calls else usage.cost_usd,
+            "unknown_requests": usage.unknown_cost_calls,
+        }
+        if usage.calls
+        else None,
         "proposal_only": True,
     }

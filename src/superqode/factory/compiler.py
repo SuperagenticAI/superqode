@@ -136,6 +136,19 @@ def _compile_factory(
         from .skills import bound_harness
 
         spec = harness_spec_from_dict(bound_harness(payload, stage["harness"]))
+        from .protection import evaluator_paths, is_protected
+
+        protected = evaluator_paths(definition)
+        context_dirs = [p for p in (spec.context.skills_dir, spec.context.roles_dir) if p]
+        instruction_files = {Path(p).as_posix() for p in spec.context.instruction_files}
+        for path in payload["sources"]:
+            reaches_prompt = path in instruction_files or any(
+                Path(path).is_relative_to(Path(directory)) for directory in context_dirs
+            )
+            if reaches_prompt and is_protected(path, protected):
+                raise ValueError(
+                    "Protected evaluators cannot also be worker instructions, skills or roles"
+                )
         if (
             spec.runtime.backend != "builtin"
             or spec.runtime.fallback_backends

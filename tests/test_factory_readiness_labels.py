@@ -78,6 +78,14 @@ def test_verified_acceptance_check_is_quality_evaluated(project, monkeypatch):
 
     monkeypatch.setattr(verification, "run_python_probe", probe)
     verification.verify_factory(run, root=root)
+    # The verified candidate is not the application checkout until adopted.
+    assert (
+        next(r for r in readiness(root)["application"] if r["id"] == "regression")["label"]
+        == "configured"
+    )
+    (root / "app.py").write_text("print(43)\n")
+    git(root, "add", "app.py")
+    git(root, "commit", "-qm", "Adopt the verified application tree")
     row = next(r for r in readiness(root)["application"] if r["id"] == "regression")
     assert row["label"] == "quality_evaluated"
     assert run in row["detail"]

@@ -35,14 +35,29 @@ _ADVICE = {
 def _quality_evaluated(root, snapshot_digest):
     """Check names whose protected verification passed on this Factory revision."""
     from .runtime import factory_store
+    from superqode.workorders.store import _require_factory_verification
 
     if not project_path(root, ".superqode/workorders/store.sqlite3").exists():
         return {}
+    if _git(root, "status", "--porcelain", "--untracked-files=all").stdout.strip():
+        return {}
+    current_tree = _git(root, "rev-parse", "HEAD^{tree}").stdout.strip()
     passed = {}
     for order in factory_store(root, read_only=True).list(limit=200):
         factory = order.metadata.get("factory") or {}
         receipt = order.metadata.get("factory_verification") or {}
         if factory.get("snapshot_digest") != snapshot_digest or receipt.get("state") != "passed":
+            continue
+        if receipt.get("binding", {}).get("candidate_tree") != current_tree:
+            continue
+        candidate = next(
+            (a for a in reversed(order.artifacts) if a.kind == "integration_candidate"), None
+        )
+        if candidate is None:
+            continue
+        try:
+            _require_factory_verification(order, candidate.artifact_id)
+        except ValueError:
             continue
         for name in (receipt.get("binding") or {}).get("evaluators", {}):
             passed.setdefault(name, order.work_order_id)
@@ -134,11 +149,11 @@ def application_findings(root, *, execute=False, timeout=300, snapshot_digest=""
                 "label": "configured",
                 "status": "not_run",
             }
-            if name in quality:
+            if name in quality and not (execute and category in APPLICATION_CATEGORIES):
                 row.update(
                     label="quality_evaluated",
                     status="passed",
-                    detail=f"Protected verification passed on run {quality[name]} for this Factory revision.",
+                    detail=f"Protected verification passed on run {quality[name]} for this exact application tree and Factory revision; environment checks have not been replayed here.",
                     action="",
                 )
             elif workspace is not None and category in APPLICATION_CATEGORIES:

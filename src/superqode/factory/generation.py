@@ -10,11 +10,11 @@ from .definition import SCHEMA, read_mapping, validate_definition
 from .templates import compose_from_description
 
 
-def proposal_from_description(description, workflow=""):
+def proposal_from_description(description, workflow="", *, privacy_blocked=False):
     """A reviewable FactorySpec built on this Mac from the description alone."""
     data = compose_from_description(description, workflow=workflow)
     validate_definition(data)
-    return {
+    proposal = {
         "yaml": yaml.safe_dump(data, sort_keys=False),
         "assumptions": [
             "Built on this Mac from your description. No model was called, and nothing has run."
@@ -22,6 +22,13 @@ def proposal_from_description(description, workflow=""):
         "missing_capabilities": [],
         "proposal_only": True,
     }
+    if privacy_blocked:
+        proposal["assumptions"].append(
+            "The selected cloud drafting model was blocked by the Factory's private route. "
+            "Starter settings were generated without a model call. Choose a local model, "
+            "or explicitly review and save a cloud-enabled route before drafting with a frontier model."
+        )
+    return proposal
 
 
 def check_generation_route(data, provider, model):
@@ -30,10 +37,7 @@ def check_generation_route(data, provider, model):
     defaults = default_policy()
     name = data.get("default_route", defaults["default_route"])
     route = {**defaults["routes"].get(name, {}), **data.get("routes", {}).get(name, {})}
-    local = (
-        "LOCAL" in classify_model_ref(provider + "/" + model)["tags"]
-        or provider == "apple-foundation"
-    )
+    local = "LOCAL" in classify_model_ref(provider + "/" + model)["tags"]
     if route.get("allow_cloud") is False and not local:
         raise ValueError("This factory's private route requires a local drafting model")
 

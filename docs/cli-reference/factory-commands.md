@@ -22,6 +22,7 @@ sq factory workflows                          # fix-and-verify, triage-spec-buil
                                               # build-test-deploy, kanban, scrum, xp, lean
 sq factory init --template fix-and-verify     # full FactorySpec; keeps existing routes
 sq factory show                               # stages, checks, release rule, recent runs
+sq factory models --draft-model ollama/qwen3-coder # explain drafting and execution model setup
 sq factory describe --rlm                     # inspect this repo lazily via RLM and draft a tailored FactorySpec
 sq factory describe "build, test and deploy"  # starter draft; no model is required
 sq factory describe "We triage bugs, fix them and verify" --model ollama/qwen3-coder
@@ -61,6 +62,12 @@ nothing to `factory.yaml`. The draft is stored by digest, and
 `describe --apply DIGEST --confirm` saves it only if the Factory has not changed
 since the draft was made.
 
+RLM authoring applies the effective route policy to versioned definitions,
+routing-only policies and new projects. Generation receipts under
+`.superqode/factory-studio/generation-usage/` retain request intent, completion or
+uncertainty, reported tokens and costs. Missing cost evidence stays unknown.
+The stored draft retains its lineage and receipt reference for later inspection.
+
 `sources inspect` lists the saved definition and its declared components with
 diffs against HEAD. `sources commit` creates a local commit of the chosen paths,
 only for the exact reviewed digest and only with `--confirm`. It never pushes.
@@ -89,6 +96,24 @@ In the TUI, the same flow is:
 Status marks are ✅ passed or covered, ⏸️ held or uncovered, ❌ failed or
 rejected, ⛔ blocked and ➖ never ran. Route, mode, switch, fork and lineage
 commands are unchanged.
+
+## factory models
+
+Use `sq factory models --draft-model PROVIDER/MODEL` while creating an on-demand
+Factory or editing your own. The report separates the optional drafting model
+from each harness's execution model and fallbacks. Choosing a drafting model
+leaves the execution models unchanged. Starter generation works without a model.
+
+Add `--check-connections` to check credentials and discover local models through
+the existing connection services. Checks send no inference prompts. A discovered
+model still needs a small reviewed trial to establish inference and tool-use
+evidence. `--json` returns the same structured report used by the desktop
+`factory.models.inspect` API; desktop checks honor project-specific local bindings.
+
+The default private route blocks cloud drafting even when an API key is present.
+Choose a local model, or explicitly review and save a cloud-enabled route such as
+`default_route: best` in the Factory definition. This command changes neither
+credentials nor Factory configuration, installs no models, and starts no work.
 
 ## factory validate
 
@@ -417,19 +442,23 @@ evaluator files are omitted from the candidate copy.
 ### Evaluators are hidden from workers
 
 Evaluator files (every `data_context.files` entry with `purpose: evaluator`, plus
-`.superqode/evaluators`) are removed from each task's Git worktree before an
-agent starts, so they are not on disk in the worker's checkout. With
-`SUPERQODE_SANDBOX` enabled, the worker sandbox also masks those paths in the
-project and integration folders (Bubblewrap mounts an empty folder or file over
-them; Seatbelt denies reads and writes). Tool arguments that name an evaluator
-path are denied by a governance rule and recorded. Edits a worker makes to a
-protected path are dropped during integration and recorded.
+`.superqode/evaluators`) are excluded from each task repository before execution.
+Each Factory task receives a separate Git object database containing its
+sanitized baseline, with controller-managed Git metadata. File tools stay within
+that repository. Shell commands require OS isolation even when the interactive
+sandbox setting is off; the controller checkout, shared Git history and private
+Factory stores remain hidden. Commands fail when the required isolation is
+unavailable. Workers use bounded foreground commands; persistent shell-session
+adapters remain outside this execution contract. Tool arguments that name an
+evaluator path are denied by governance and recorded. Edits to protected paths
+are dropped during integration and recorded. Evaluators cannot also be bound as
+worker instruction, skill or role files.
 
 Each run records provenance: whether evaluators were hidden in every task
 workspace, which paths were hidden, whether sandbox masking was active, and any
 `factory_protected_access` (read attempt) or `factory_protected_write` artifacts.
-Without the OS sandbox, the hiding is the worktree removal plus the governance
-rule; a process that reads the original project folder directly is not blocked.
+Historical runs using shared Git task workspaces do not establish evaluator
+independence. Prepare a fresh trial to obtain evidence with the enforced boundary.
 Verification also checks the candidate for copies of evaluator content. Network and host-data reads
 are denied by a dedicated macOS Seatbelt or Linux Bubblewrap profile. Interpreter
 and OS library roots remain readable. Metadata access is permitted on macOS;

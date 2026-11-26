@@ -112,6 +112,14 @@ class BashTool(Tool):
         # Background runs are persistent sessions: start one and hand the
         # model a session_id it can poll/write/kill via shell_session.
         if args.get("run_in_background"):
+            from superqode.factory.protection import worker_boundary
+
+            if worker_boundary():
+                return ToolResult(
+                    success=False,
+                    output="",
+                    error="Factory workers use bounded foreground commands; background shell sessions require an isolated adapter",
+                )
             from .shell_session import ShellSessionTool
 
             result = await ShellSessionTool().execute(
@@ -185,6 +193,10 @@ class BashTool(Tool):
 
             plan = build_sandboxed_command(command, cwd)
         except Exception:
+            from superqode.factory.protection import worker_boundary
+
+            if worker_boundary():
+                raise
             plan = None
 
         from .env_policy import build_shell_env

@@ -19,6 +19,8 @@ to the source rather than a pile of anonymous strings.
 from __future__ import annotations
 
 import fnmatch
+from contextlib import contextmanager
+import os
 import re
 import subprocess
 from dataclasses import dataclass
@@ -291,17 +293,42 @@ class RLMContext:
             return
         for name in self.files():
             try:
-                yield (name, self._read(self.root / name, name))
-            except OSError:
+                yield (name, self._read(self._resolve(name), name))
+            except (OSError, ValueError):
                 continue
 
     def _read(self, target: Path, name: str) -> str:
-        data = target.read_bytes()[: self.policy.max_file_bytes + 1]
+        with self._open(target) as stream:
+            data = stream.read(self.policy.max_file_bytes + 1)
         if len(data) > self.policy.max_file_bytes:
             data = data[: self.policy.max_file_bytes]
             if name not in self._truncated:
                 self._truncated.append(name)
         return data.decode("utf-8", errors="replace")
+
+    @contextmanager
+    def _open(self, path):
+        target = self._resolve(path)
+        if os.open not in os.supports_dir_fd or not hasattr(os, "O_NOFOLLOW"):
+            with target.open("rb") as stream:
+                yield stream
+            return
+        # Resolve permitted aliases first, then walk by descriptors so a swapped
+        # parent or leaf symlink cannot redirect a bounded read outside the root.
+        relative = target.relative_to(self.root)
+        directory = os.open(self.root, os.O_RDONLY | os.O_DIRECTORY | os.O_NOFOLLOW)
+        try:
+            for part in relative.parts[:-1]:
+                child = os.open(
+                    part, os.O_RDONLY | os.O_DIRECTORY | os.O_NOFOLLOW, dir_fd=directory
+                )
+                os.close(directory)
+                directory = child
+            fd = os.open(relative.name, os.O_RDONLY | os.O_NOFOLLOW, dir_fd=directory)
+            with os.fdopen(fd, "rb") as stream:
+                yield stream
+        finally:
+            os.close(directory)
 
     def _resolve(self, path: str | Path) -> Path:
         candidate = Path(path).expanduser()
@@ -335,12 +362,16 @@ class RLMContext:
         if any(fnmatch.fnmatch(name, pattern) for pattern in self.policy.exclude):
             return False
         target = self.root / name
+        try:
+            target = self._resolve(target)
+        except ValueError:
+            return False
         if target.suffix.lower() in BINARY_SUFFIXES:
             return False
         try:
             if not target.is_file():
                 return False
-            with target.open("rb") as handle:
+            with self._open(target) as handle:
                 # A NUL byte early on is the cheap, reliable binary signal.
                 if b"\0" in handle.read(8192):
                     return False

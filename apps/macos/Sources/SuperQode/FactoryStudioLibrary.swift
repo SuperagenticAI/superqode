@@ -7,7 +7,8 @@ import Combine
   let acceptance = FactoryAcceptanceLibrary()
   let portable = FactoryExportLibrary()
   let navigation = FactoryNavigation(initial: FactoryNavigation.initialTab)
-  @Published var text = "" { didSet { if text != oldValue { version += 1; review = [:]; acceptance.sourceChanged(text) } } }
+  let modelSetup = FactoryModelSetupLibrary()
+  @Published var text = "" { didSet { if text != oldValue { version += 1; review = [:]; acceptance.sourceChanged(text); modelSetup.invalidate() } } }
   @Published var description = "" { didSet { if description != oldValue { version += 1 } } }
   @Published var review: [String: Any] = [:]
   @Published var improvementPlans: [[String: Any]] = []
@@ -37,7 +38,7 @@ import Combine
   private var trialRequest = UUID().uuidString
   private var trialGoal = ""
   private var acceptanceChanges: AnyCancellable?
-  init() { acceptanceChanges = Publishers.Merge(acceptance.objectWillChange, portable.objectWillChange).sink { [weak self] in self?.objectWillChange.send() } }
+  init() { acceptanceChanges = Publishers.Merge3(acceptance.objectWillChange, portable.objectWillChange, modelSetup.objectWillChange).sink { [weak self] in self?.objectWillChange.send() } }
   var canApplyProposal: Bool { !string(proposal, "yaml").isEmpty }
   var isAnyRunActive: Bool {
     if busy && !actionRun.isEmpty { return true }
@@ -91,6 +92,7 @@ import Combine
     guard identity != project else { return }
     let hadProject = !project.isEmpty
     trialSuites.enter(identity)
+    modelSetup.enter(identity)
     operations.enter(identity)
     acceptance.enter(identity)
     portable.enter(identity)

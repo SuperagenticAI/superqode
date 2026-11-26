@@ -91,6 +91,53 @@ def workflows(json_output):
     click.echo("      or sq factory init --template NAME")
 
 
+@click.command("models")
+@_project
+@click.option("--draft-model", default="", help="Optional drafting model as provider/model")
+@click.option(
+    "--check-connections",
+    is_flag=True,
+    help="Check configuration and discover local models; sends no inference prompt",
+)
+@_json
+def models(project, draft_model, check_connections, json_output):
+    """Explain drafting and execution model setup without running the Factory."""
+    from superqode.factory.model_setup import inspect_models
+    from superqode.desktop_service.connections import inspect_route
+
+    try:
+        value = inspect_models(
+            project,
+            drafting_model=draft_model,
+            check_connection=(
+                lambda provider, model, binding: inspect_route(
+                    {}, {"provider": provider, "model": model}
+                )
+            )
+            if check_connections
+            else None,
+        )
+    except (ValueError, OSError) as exc:
+        _fail(exc)
+    if json_output:
+        click.echo(json.dumps(value, indent=2))
+        return
+    click.echo(f"Factory model setup · route: {value['default_route']}")
+    click.echo(value["guidance"])
+    for row in [value["drafting"], *value["execution"]]:
+        label = row["purpose"] + (f"/{row['binding']}" if row.get("binding") else "")
+        if row.get("fallback"):
+            label += " (fallback)"
+        click.echo(f"{label}: {row['reference'] or 'starter generation'} [{row['state']}]")
+        click.echo("  " + row["message"])
+    if value.get("execution_error"):
+        click.echo(value["execution_error"])
+    elif not value["execution_configured"]:
+        click.echo(
+            "Choose a Factory starter or draft, then configure its execution harness models."
+        )
+
+
 @click.command("describe")
 @_project
 @click.argument("description", required=False)

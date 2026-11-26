@@ -77,7 +77,9 @@ def classify_model_ref(model_ref: str) -> dict[str, Any]:
     model = parsed.model or raw
     provider_lower = provider.lower()
     tags: list[str] = []
-    if provider_lower in {
+    if provider_lower == "apple-foundation":
+        tags.extend(["LOCAL", "PRIVATE"])
+    elif provider_lower in {
         "local",
         "ollama",
         "lmstudio",
@@ -85,6 +87,12 @@ def classify_model_ref(model_ref: str) -> dict[str, Any]:
         "vllm",
         "llamacpp",
         "llama.cpp",
+        "local-openai",
+        "swift-mlx",
+        "mlx",
+        "ds4",
+        "sglang",
+        "tgi",
     }:
         tags.extend(["LOCAL", "OSS", "PRIVATE"])
     elif provider_lower in {

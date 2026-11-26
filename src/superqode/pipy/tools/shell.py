@@ -158,6 +158,9 @@ def create_bash_tool(
             argv = [os.environ.get("COMSPEC", "cmd.exe"), "/c", command]
         else:
             argv = [shell, "-c", command]
+        from .host import prepare_command
+
+        argv = prepare_command(argv, Path(cwd))
         process = await asyncio.create_subprocess_exec(
             *argv,
             cwd=str(cwd),

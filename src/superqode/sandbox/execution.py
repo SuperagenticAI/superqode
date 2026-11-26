@@ -561,6 +561,10 @@ def _run_container_cli(
 
 
 def _run_local(command: str, cwd: Path, timeout: int) -> SandboxRunResult:
+    from superqode.factory.protection import worker_boundary
+
+    if worker_boundary():
+        return _run_local_os(command, cwd, timeout)
     completed = subprocess.run(
         command,
         cwd=cwd,

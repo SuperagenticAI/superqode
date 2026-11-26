@@ -412,4 +412,4 @@ def test_native_generated_verifier_checks_application_startup(
         "build",
         "health",
     }
-    assert result["record"]["decision"]["verdict"] == "hold"
+    assert result["record"]["decision"]["verdict"] == ("ship" if passed else "reject")
