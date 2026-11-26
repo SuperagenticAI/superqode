@@ -12,7 +12,7 @@ import click
 from superqode.main import cli_main
 
 
-EXPECTED_COMMAND_COUNT = 406
+EXPECTED_COMMAND_COUNT = 424
 # Rebaselined for `superqode update` (261 -> 262: exactly one command added),
 # and again for the `copilot-cli` / `grok-cli` subscription runtimes, which
 # widen the --runtime choice list without adding a Click command. The same work
@@ -194,11 +194,14 @@ EXPECTED_COMMAND_COUNT = 406
 # Root options add `--effort` and clarify `--harness` default for Gemini/Gemma.
 # Adding `triage-spec-build` to `TEMPLATE_NAMES` widens factory workflow choices;
 # command count stays 406.
-EXPECTED_HELP_TREE_SHA256 = "54d6d81c00e3f69bbb764a1537cf70e8c10cf2c36d540f9176f68c50db549516"
+# Factory model setup/start (+2), historical benchmarks (+4), demo (+3),
+# local drafts (+3), evidence summary (+1) and Pydantic Coder (+5) add the
+# intended eighteen routes (406 -> 424). Existing commands remain available.
+EXPECTED_HELP_TREE_SHA256 = "6eee7a5553c5b779a59572782535bef9190bd9d50c3a3c5a08b123f1a5512ed7"
 # Click 8.5 renders optional group commands as [COMMAND] and case-insensitive
 # choices in lower case. Both verified renders expose the same command tree.
 EXPECTED_MODERN_CLICK_HELP_TREE_SHA256 = (
-    "de99132fa76cac7c90e77cbe4b9297873e8c6170b234b2684ab21b7537562499"
+    "1c40193164337878ab0f95e19e814e5fe27e7763b78e51f7a06dd4db30475745"
 )
 
 

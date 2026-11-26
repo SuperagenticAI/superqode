@@ -1,6 +1,6 @@
 # SuperQode for macOS public beta 0.5.2
 
-Version 0.5.2 (build 59) bundles Python engine 2.33.2.
+Version 0.5.2 (build 59) bundles Python engine 2.33.3.
 
 - Added **Pydantic Coder — Experimental** in the ACP agent catalog, using the coding engine behind Pax. Install its pinned runtime separately, check the connection and choose a model in Agent controls. Tool approvals, MCP and resumable sessions are supported; Pax's own terminal UI and plugins are separate.
 

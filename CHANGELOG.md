@@ -7,7 +7,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
-## [2.33.2] - 2026-11-26
+## [2.33.3] - 2026-11-26
 
 ### Added
 
@@ -30,7 +30,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   isolated replay, and cost or latency optimization objectives under held-out gates.
 - Protected acceptance probe files for the Factory demo.
 - Prepared macOS source for public beta 0.5.2 (build 59), bundling engine
-  2.33.2. Signed macOS installers are distributed separately.
+  2.33.3. Signed macOS installers are distributed separately.
 
 ### Fixed
 
