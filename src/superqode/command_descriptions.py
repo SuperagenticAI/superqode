@@ -6,6 +6,19 @@ completion and both command palettes consume that same registry.
 """
 
 COMMAND_DESCRIPTIONS = {
+    ":factory demo check": "Run sample diagnostics with explicit --execute",
+    ":factory draft": "Keep and inspect local Factory drafts",
+    ":pydantic-coder": "Inspect the experimental Pydantic Coder ACP connector",
+    ":pydantic-coder chat": "Connect through the TUI ACP flow; advanced options use the terminal CLI",
+    ":pydantic-coder doctor": "Check the separately installed Pydantic Coder runtime",
+    ":pydantic-coder serve": "Show how to launch the ACP stdio server in a terminal",
+    ":pydantic-coder setup": "Install the optional pinned Pydantic Coder runtime",
+    ":factory demo": "Create and inspect a disposable first-run Factory sample",
+    ":factory demo create": "Create a new sample directory with --confirm",
+    ":factory demo check --execute": "Run protected sample diagnostics without inference",
+    ":factory draft keep": "Keep a confirmed local draft without activating it",
+    ":factory draft show": "Inspect a local draft from an earlier session",
+    ":factory evidence summary": "Explain a run's changes, verification, cost and human steps",
     ":factory start": "Show the next step toward a first verified Factory run",
     ":factory models": "Inspect drafting and execution model setup",
     ":factory models --check-connections": "Check model connections without inference",

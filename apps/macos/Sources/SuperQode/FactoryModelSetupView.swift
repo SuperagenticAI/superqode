@@ -9,6 +9,10 @@ struct FactoryModelSetupView: View {
   @State private var reviewCloud = false
   @State private var cloudReviewProject = ""
   @State private var cloudReviewVersion = 0
+  @State private var executionBinding = ""
+  @State private var executionReference = ""
+  @State private var executionProject = ""
+  @State private var executionVersion = 0
 
   private var connected: Bool { !app.provider.isEmpty && app.provider != "acp" && !app.model.isEmpty }
   private var privacyBlocked: Bool {
@@ -46,6 +50,12 @@ struct FactoryModelSetupView: View {
           Text("\(string(row, "binding"))\(row["fallback"] as? Bool == true ? " · fallback" : "") · \(string(row, "reference", "Choose a model"))")
             .font(.callout).textSelection(.enabled)
           status(row)
+          if connected, row["fallback"] as? Bool != true {
+            Button("Use connected model for this execution binding…") {
+              executionBinding = string(row, "binding"); executionReference = app.provider + "/" + app.model
+              executionProject = studio.project; executionVersion = studio.version
+            }.disabled(!idle)
+          }
         }
       }
       if !string(models.report, "execution_error").isEmpty {
@@ -64,6 +74,10 @@ struct FactoryModelSetupView: View {
             .disabled(!idle)
         }
       }
+      Button("Try execution with one small trial") { studio.navigation.select("Runs") }
+        .disabled(!idle)
+      Text("Review and save changed bindings first. The trial asks before calling models, exercises real coding tools and retains usage evidence. Reported cost may remain unknown until the provider supplies it.")
+        .font(.caption).foregroundStyle(.secondary)
       if privacyBlocked {
         Button("Review cloud permission…") {
           cloudReviewProject = studio.project; cloudReviewVersion = studio.version
@@ -83,8 +97,22 @@ struct FactoryModelSetupView: View {
       guard models.project == studio.project, models.report.isEmpty else { return }
       await models.inspect(engine: app.engine, yaml: studio.text)
     }
-    .onChange(of: studio.project) { _, _ in reviewCloud = false }
-    .onChange(of: studio.text) { _, _ in reviewCloud = false }
+    .onChange(of: studio.project) { _, _ in reviewCloud = false; executionBinding = "" }
+    .onChange(of: studio.text) { _, _ in reviewCloud = false; executionBinding = "" }
+    .confirmationDialog("Change this draft's execution model?", isPresented: Binding(get: { !executionBinding.isEmpty }, set: { if !$0 { executionBinding = "" } }), titleVisibility: .visible) {
+      Button("Use " + executionReference) {
+        let binding = executionBinding; let reference = executionReference
+        guard !binding.isEmpty, idle, studio.project == executionProject, studio.version == executionVersion else { return }
+        executionBinding = ""
+        Task {
+          await studio.edit(engine: app.engine, controls: ["binding": binding, "model": reference])
+          await models.inspect(engine: app.engine, yaml: studio.text)
+        }
+      }
+      Button("Cancel", role: .cancel) { executionBinding = "" }
+    } message: {
+      Text("Set binding \(executionBinding) to \(executionReference) in the editor. Other bindings, the drafting model and cloud permissions stay as configured. Review and save before running. Confirmed cloud trials may transmit task context and incur provider charges.")
+    }
     .confirmationDialog("Allow cloud models in this Factory draft?", isPresented: $reviewCloud, titleVisibility: .visible) {
       Button("Set draft route to best") {
         Task {

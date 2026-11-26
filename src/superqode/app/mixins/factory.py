@@ -19,6 +19,23 @@ class FactoryMixin:
         t = Text()
         t.append("\n  Code Factory\n\n", style=f"bold {THEME['purple']}")
         commands = [
+            (
+                ":factory demo create <new-folder> --confirm",
+                "create a disposable app and protected checks",
+            ),
+            (
+                ":factory demo check --execute",
+                "reproduce the sample defect in isolation; no inference",
+            ),
+            (
+                ":factory evidence summary <work-order-id>",
+                "changes, protected checks, cost and human steps",
+            ),
+            (
+                ":factory draft keep --file <draft.yaml> --confirm",
+                "keep a local draft for a later session",
+            ),
+            (":factory draft show", "inspect the kept draft; no activation"),
             (":factory start", "first-run checklist and the next concrete step; no execution"),
             (
                 ":factory models [--check-connections]",
@@ -267,7 +284,7 @@ class FactoryMixin:
         from superqode.factory.evidence import trace
         from superqode.factory.summaries import trace_lines
 
-        if tokens and tokens[0] in {"trace", "outcomes", "record-outcome"}:
+        if tokens and tokens[0] in {"trace", "summary", "outcomes", "record-outcome"}:
             self._run_cli_passthrough(["factory", "evidence", *tokens], log, "Factory evidence")
             return
         if len(tokens) != 1:

@@ -77,11 +77,11 @@ The CLI supports `/models`, `/model PROVIDER:MODEL`, and `/quit`. To choose a
 model at startup or resume a saved session, use
 `superqode pydantic-coder chat --model PROVIDER:MODEL --resume SESSION_ID`.
 
-In the TUI, select **Pydantic Coder — Experimental** under `:connect acp`, or
+In the TUI, select **Pydantic Coder - Experimental** under `:connect acp`, or
 run `:connect acp pydantic-coder`. The setup picker can install its reviewed
 runtime. `superqode agents install pydantic-coder` is also supported.
 
-In the macOS app, open **ACP agents**, select **Pydantic Coder — Experimental**,
+In the macOS app, open **ACP agents**, select **Pydantic Coder - Experimental**,
 choose **Install agent**, then **Check connection** and **Use this connection**.
 The connector launches through the app's bundled engine; it does not require a
 `superqode` console script on PATH. Provider keys configured in the app are

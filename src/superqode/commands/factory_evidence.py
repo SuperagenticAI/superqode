@@ -24,6 +24,17 @@ def trace(project, run):
     return trace(project, run)
 
 
+@evidence.command("summary")
+@project_option
+@click.argument("run")
+@output
+def summary(project, run):
+    """Explain changes, protected evidence, reported cost and remaining human steps."""
+    from superqode.factory.onboarding import result_summary
+
+    return result_summary(project, run)
+
+
 @evidence.command("record-outcome")
 @project_option
 @click.argument("run")

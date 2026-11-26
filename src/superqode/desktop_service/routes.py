@@ -36,7 +36,11 @@ def acp_routes(root: Path):
         declared = agent.get("run_command", {})
         command = declared.get("*") if isinstance(declared, dict) else declared
         parts = shlex.split(str(command or ""))
-        from superqode.pydantic_coder import is_bundled_agent, installed as pydantic_coder_installed, launcher_argv
+        from superqode.pydantic_coder import (
+            is_bundled_agent,
+            installed as pydantic_coder_installed,
+            launcher_argv,
+        )
 
         pydantic_coder = is_bundled_agent(agent)
         if pydantic_coder:

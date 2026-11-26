@@ -90,7 +90,15 @@ def test_tui_init_creates_spec_and_route_commands_still_work(tmp_path, monkeypat
 
 def test_onboarding_model_setup_and_benchmarks_use_shared_cli():
     host = Host()
-    for command in ("start", "models", "models --check-connections", "benchmark history"):
+    for command in (
+        "start",
+        "models",
+        "models --check-connections",
+        "benchmark history",
+        "demo check --execute",
+        "draft show",
+        "evidence summary work-example",
+    ):
         host.factory(command)
         assert host.passthrough[-1] == ["factory", *command.split()]
     host.factory("help")
@@ -102,5 +110,12 @@ def test_onboarding_commands_have_discoverable_completion_descriptions():
     from superqode.command_registry import DEFAULT_COMMANDS
 
     commands = {item.command: item.description for item in DEFAULT_COMMANDS}
-    for command in (":factory start", ":factory models", ":factory benchmark history"):
+    for command in (
+        ":factory start",
+        ":factory models",
+        ":factory benchmark history",
+        ":factory demo",
+        ":factory draft show",
+        ":factory evidence summary",
+    ):
         assert commands[command]

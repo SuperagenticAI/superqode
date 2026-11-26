@@ -256,10 +256,8 @@ def test_efficiency_preparation_rejects_insufficient_held_out_cases(prepared):
         )
 
 
-def historical_runs(root):
-    first = compile_factory(
-        resolve_factory(load_factory(root=root)), root=root, goal="Make app.py print 43"
-    )
+def historical_runs(root, *, first_goal="Make app.py print 43"):
+    first = compile_factory(resolve_factory(load_factory(root=root)), root=root, goal=first_goal)
     materialize_snapshot(first)
     before = admit_factory(first, actor="test", request_id="history-before")
     (root / "app.py").write_text("answer = 41\n")
@@ -415,3 +413,39 @@ def test_real_demo_probes_fail_on_seed_and_pass_on_repaired_application(tmp_path
     )
     (candidate / "app.py").write_text(source)
     assert all(all(check(manifest)) for manifest in manifests)
+
+
+@pytest.mark.parametrize(
+    "secret",
+    [
+        "sk-proj-" + "SyntheticFixtureOnly123456789",
+        "ghp_" + "SyntheticFixtureOnly123456789012345678",
+        "api_key=synthetic-example-credential",
+        "Authorization: Bearer synthetic-example-token-12345",
+    ],
+)
+def test_historical_credentials_are_withheld_and_cannot_be_exported(suite_project, secret):
+    root, _ = suite_project
+    before, after = historical_runs(root, first_goal="Repair the API using " + secret)
+    history = benchmarks.history(root)
+    assert secret not in json.dumps(history)
+    row = next(r for r in history["runs"] if r["run"] == before.work_order_id)
+    assert row["task_text_withheld"]
+    with pytest.raises(ValueError, match="may contain credentials"):
+        benchmarks.prepare_review(
+            root,
+            held_in=[before.work_order_id],
+            held_out=[after.work_order_id],
+            candidate=".superqode/trials/candidate.yaml",
+            confirmed=True,
+        )
+    assert not (root / ".superqode/factory-benchmark-drafts").exists()
+    assert secret in factory_store(root, read_only=True).get(before.work_order_id).goal
+
+
+def test_historical_configured_secret_values_are_rejected(monkeypatch):
+    token = "synthetic-provider-value-92837465"
+    monkeypatch.setenv("EXAMPLE_API_KEY", token)
+    with pytest.raises(ValueError, match="may contain credentials"):
+        benchmarks._safe_task("Use " + token + " to reproduce the issue")
+    benchmarks._safe_task("Use ${EXAMPLE_API_KEY} from the environment")

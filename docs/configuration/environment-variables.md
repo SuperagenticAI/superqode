@@ -1,5 +1,15 @@
 # Environment Variables
 
+## Optional Pydantic Coder connector
+
+| Variable | Purpose |
+| --- | --- |
+| `SUPERQODE_PYDANTIC_CODER_PYTHON` | Python executable in the separately installed, pinned Pydantic Coder runtime. |
+| `SUPERQODE_PYDANTIC_CODER_MODEL` | Default advertised `provider:model` for the experimental ACP connector. An explicit command-line model takes precedence. |
+
+These settings configure the optional connector; they do not install its SDKs or
+start inference. See [Pydantic Coder commands](../cli-reference/pydantic-coder-commands.md).
+
 Every `SUPERQODE_*` variable in one place. Most behavior is configurable per-harness or in `superqode.yaml` too; env vars win for quick experiments, CI, and per-shell overrides.
 
 ## Agent loop

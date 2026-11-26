@@ -672,6 +672,10 @@ struct FactoryStudioView: View {
           .disabled(!idle || !setup.saved || controlsHaveChanges || goal.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty)
       }
       if library.runs.isEmpty {
+        if !string(library.gettingStarted, "demo_goal").isEmpty {
+          Button("Use the sample repair task") { goal = string(library.gettingStarted, "demo_goal") }
+            .controlSize(.small)
+        }
         HStack(spacing: 6) {
           Text("Try a starter goal:").font(.caption2).foregroundStyle(.secondary)
           ForEach([
@@ -769,6 +773,7 @@ struct FactoryStudioView: View {
       let doneCount = tasks.filter { FactoryStatus(raw: string($0, "status")).isComplete }.count
 
       VStack(alignment: .leading, spacing: 14) {
+        FactoryRunSummaryView(studio: library, inspectChecks: { runDetailTab = "checks" })
         HStack(alignment: .top, spacing: 10) {
           VStack(alignment: .leading, spacing: 5) {
             Text(string(order, "goal"))

@@ -177,3 +177,27 @@ async def test_cli_connect_uses_explicit_denial_instead_of_the_legacy_autoapprov
     monkeypatch.setattr(acp_client, "ACPClient", Client)
     assert await command.connect_interactive(tmp_path) == 0
     assert decisions == ["reject"]
+
+
+def test_tui_chat_uses_the_existing_acp_connect_flow():
+    from superqode.app.mixins.slash_commands import SlashCommandMixin
+
+    calls = []
+    host = SimpleNamespace(_dispatch_connect=lambda *args: calls.append(args))
+    log = SimpleNamespace(add_error=lambda text: None)
+    SlashCommandMixin._dispatch_pydantic_coder(
+        host, "chat", log, ":pydantic-coder chat", "pydantic-coder"
+    )
+    assert calls == [("acp pydantic-coder", log, ":connect acp pydantic-coder", "connect")]
+
+
+def test_tui_stdio_server_does_not_start_a_background_server():
+    from superqode.app.mixins.slash_commands import SlashCommandMixin
+
+    messages = []
+    host = SimpleNamespace()
+    log = SimpleNamespace(add_info=messages.append)
+    SlashCommandMixin._dispatch_pydantic_coder(
+        host, "serve", log, ":pydantic-coder serve", "pydantic-coder"
+    )
+    assert len(messages) == 1 and "terminal" in messages[0]

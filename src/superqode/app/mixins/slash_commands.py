@@ -641,6 +641,25 @@ class SlashCommandMixin:
     def _dispatch_codex(self, args, log, cmd, c):
         self._codex_cmd(args, log)
 
+    def _dispatch_pydantic_coder(self, args, log, cmd, c):
+        try:
+            tokens = shlex.split(args or "")
+        except ValueError:
+            log.add_error("Could not parse :pydantic-coder arguments")
+            return
+        if tokens == ["chat"]:
+            self._dispatch_connect(
+                "acp pydantic-coder", log, ":connect acp pydantic-coder", "connect"
+            )
+        elif tokens and tokens[0] in {"chat", "serve"}:
+            log.add_info(
+                "Use `sq pydantic-coder "
+                + tokens[0]
+                + "` in a terminal for interactive or stdio options. In the TUI use :connect acp pydantic-coder and Agent controls."
+            )
+        else:
+            self._run_cli_group("pydantic-coder", args, log, "Pydantic Coder")
+
     def _dispatch_copilot(self, args, log, cmd, c):
         self._copilot_cmd(args, log)
 

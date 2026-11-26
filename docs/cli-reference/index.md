@@ -48,6 +48,7 @@ superqode [OPTIONS] COMMAND [ARGS]...
 | `policy` | [Policy Commands](policy-commands.md) |
 | `profiles` | [Profiles and Tools Commands](profiles-commands.md) |
 | `providers` | [Provider Commands](provider-commands.md) |
+| `pydantic-coder` | [Pydantic Coder Commands](pydantic-coder-commands.md) |
 | `runtime` | [Runtime Commands](runtime-commands.md) |
 | `sandbox` | [Sandbox Commands](sandbox-commands.md) |
 | `serve` | [Serve Commands](serve-commands.md) |

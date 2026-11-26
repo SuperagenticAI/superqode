@@ -1,6 +1,7 @@
 """Reviewed historical workloads over the existing paired Factory trial engine."""
 
 import json
+import os
 from pathlib import Path
 import re
 
@@ -15,6 +16,31 @@ from .snapshot import canonical, digest
 from .versioning import _safe_text
 
 
+def _safe_task(text):
+    """Reject common credential formats before task text crosses dataset interfaces."""
+    _safe_text("historical-task.txt", text)
+    patterns = (
+        r"\bsk-[A-Za-z0-9_-]{12,}",
+        r"\b(?:gh[pousr]_|github_pat_)[A-Za-z0-9_]{16,}",
+        r"\bAIza[A-Za-z0-9_-]{30,}",
+        r"\b(?:AKIA|ASIA)[A-Z0-9]{16}\b",
+        r"\bxox[baprs]-[A-Za-z0-9-]{12,}",
+        r"(?i)\bbearer\s+[A-Za-z0-9._~+/-]{8,}",
+        r"""(?i)\b(?:api[_-]?key|access[_-]?token|auth[_-]?token|password|secret)\b["']?\s*[:=]\s*["']?(?!\$\{)[^\s,;"'}]{8,}""",
+    )
+    configured = [
+        value
+        for name, value in os.environ.items()
+        if re.search(r"(?:API_KEY|TOKEN|PASSWORD|SECRET)$", name) and len(value) >= 8
+    ]
+    if any(re.search(pattern, text) for pattern in patterns) or any(
+        value in text for value in configured
+    ):
+        raise ValueError(
+            "Historical task text may contain credentials. Remove sensitive task text before creating a benchmark."
+        )
+
+
 def history(root):
     """List bounded task identities; never infer a correct answer from past output."""
     root = Path(root).resolve()
@@ -24,10 +50,18 @@ def history(root):
     for order in factory_store(root, read_only=True).list(limit=100):
         if "factory" not in order.metadata:
             continue
+        try:
+            _safe_task(order.goal)
+            sensitive = False
+        except ValueError:
+            sensitive = True
         rows.append(
             {
                 "run": order.work_order_id,
-                "goal": order.goal,
+                "goal": "Task text withheld: review possible credentials locally"
+                if sensitive
+                else order.goal,
+                "task_text_withheld": sensitive,
                 "status": order.status.value,
                 "revision": order.metadata["factory"].get("repository_commit", ""),
             }
@@ -81,7 +115,7 @@ def draft(root, *, held_in, held_out, candidate):
             raise ValueError("Restore the original application commit before replay")
         trials._seed(root, revision)
         trials._paired(plan.snapshot, candidate_snapshot, root, revision)
-        _safe_text("historical-task.txt", order.goal)
+        _safe_task(order.goal)
         split = "held-in" if reference in held_in else "held-out"
         cases.append(
             {

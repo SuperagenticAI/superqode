@@ -329,6 +329,7 @@ nav:
       - 🧭 Gauge: cli-reference/gauge-commands.md
       - 🔐 Policy: cli-reference/policy-commands.md
       - 🏭 Factory: cli-reference/factory-commands.md
+      - Pydantic Coder: cli-reference/pydantic-coder-commands.md
       - 📤 Share: cli-reference/share-commands.md
       - 🧠 Memory: cli-reference/memory-commands.md
       - 🧠 Skills: cli-reference/skills-commands.md

@@ -79,14 +79,61 @@ def _review(service, params):
 
 
 def handle(service, method, params):
+    if method == "factory.demo.create":
+        from superqode.factory.demo import create
+
+        return create(
+            params["destination"],
+            confirmed=params.get("confirmed"),
+            model=params.get("model", "ollama/qwen3-coder"),
+            allow_cloud=params.get("allow_cloud") is True,
+        )
     root = service.project(params["project"])
     _ensure(service)
     target = _target(root)
+    if method == "factory.onboarding.draft.save":
+        from superqode.factory.onboarding import save_draft
+
+        return save_draft(
+            root,
+            yaml_text=params["yaml"],
+            confirmed=params.get("confirmed"),
+            description=params.get("description", ""),
+            drafting_model=params.get("drafting_model", ""),
+        )
+    if method == "factory.onboarding.draft.load":
+        from superqode.factory.onboarding import load_draft
+
+        return load_draft(root)
+    if method == "factory.demo.check":
+        from superqode.factory.demo import check
+        from .ship import assert_idle
+
+        assert_idle(service, params["project"])
+        return check(root, execute=params.get("confirmed") is True)
+    if method == "factory.onboarding.result":
+        from superqode.factory.onboarding import result_summary
+
+        return result_summary(root, params["run"])
     if method == "factory.onboarding.inspect":
         from superqode.factory.onboarding import inspect_setup
 
+        def check_connection(provider, model, binding):
+            return service.dispatch(
+                "providers.check",
+                {
+                    "project": params["project"],
+                    "provider": provider,
+                    "model": model,
+                    "harness": binding or "no-tool",
+                },
+            )
+
         return inspect_setup(
-            root, yaml_text=params.get("yaml"), drafting_model=params.get("drafting_model", "")
+            root,
+            yaml_text=params.get("yaml"),
+            drafting_model=params.get("drafting_model", ""),
+            check_connection=check_connection if params.get("check_connections") is True else None,
         )
     if method == "factory.models.inspect":
         from superqode.factory.model_setup import inspect_models

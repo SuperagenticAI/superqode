@@ -196,6 +196,38 @@ def inspect_setup(root, *, yaml_text=None, drafting_model="", check_connection=N
         trial_command,
     )
     next_step = next((s for s in steps if s["status"] not in {"configured", "verified"}), steps[-1])
+    actions = []
+    for index, row in enumerate(execution):
+        if row["eligible"] and row["state"] == "unchecked":
+            continue
+        actions.append(
+            {
+                "id": "model-" + str(index) + "-" + row["binding"] + "-" + row["state"],
+                "detail": row["message"],
+                "destination": "Configuration",
+                "connection": "source:local"
+                if row["state"] == "model-unavailable"
+                else "source:key"
+                if row["state"] == "missing-credential"
+                else "",
+            }
+        )
+    for finding in blocking:
+        actions.append(
+            {
+                "id": finding["id"],
+                "detail": finding.get("action") or finding["detail"],
+                "destination": "Operations",
+                "connection": "",
+            }
+        )
+    demo_path = project_path(root, ".superqode/factory-studio/demo.json")
+    draft_path = project_path(root, ".superqode/factory-studio/onboarding-draft.json")
+    demo_goal = ""
+    if demo_path.is_file():
+        from .demo import GOAL
+
+        demo_goal = GOAL
     return {
         "format": "superqode.factory-onboarding/1",
         "steps": steps,
@@ -204,6 +236,10 @@ def inspect_setup(root, *, yaml_text=None, drafting_model="", check_connection=N
         "application": host["application"],
         "host_checks": host["checks"],
         "verified_trial": verified,
+        "actions": actions,
+        "demo": demo_path.is_file(),
+        "demo_goal": demo_goal,
+        "draft_available": draft_path.is_file(),
         "model_calls": 0,
         "written": False,
         "notice": "This checklist makes no inference calls and runs no project commands. Installation, model downloads, application checks and trial execution remain explicit.",
@@ -218,8 +254,117 @@ def lines(value):
         f"{index}. {step['title']} [{step['status']}]\n   {step['detail']}"
         for index, step in enumerate(value["steps"], 1)
     ]
+    output += ["Setup action: " + row["detail"] for row in value.get("actions", [])]
     output += [
         "Next: " + value["next_step"]["title"],
         "  " + shlex.join(value["next_step"]["command"]),
     ]
     return output
+
+
+def result_summary(root, reference):
+    """Short, read-only handoff. Protected verification and release remain distinct."""
+    from .runtime import factory_store
+    from .evidence import trace, _usage
+    from .release import release_status
+
+    order = factory_store(root, read_only=True).get(reference)
+    if "factory" not in order.metadata or Path(order.repository).resolve() != Path(root).resolve():
+        raise ValueError("Choose a Factory run from this project")
+    evidence = trace(root, reference)
+    release = release_status(reference, root=root)
+    candidate = next(
+        (a for a in reversed(order.artifacts) if a.kind == "integration_candidate"), None
+    )
+    pending = [t.task_id for t in order.tasks if t.status.value == "waiting_for_human"]
+    usage = _usage(order)
+    verified = verified_trial(order)
+    cost = usage["cost_usd"]
+    cost_text = (
+        "Unknown cost; usage reports are incomplete"
+        if cost is None
+        else f"Reported model cost: {cost:.6f} USD"
+    )
+    checks = evidence["summary"]["checks"]
+    text = [
+        f"Factory run {reference}: {order.status.value}",
+        "Changed files: "
+        + (", ".join(candidate.metadata.get("files", [])) if candidate else "No candidate yet"),
+        f"Protected verification: {'passed' if verified else 'incomplete or failed'}; recorded checks {checks['passed']} passed, {checks['failed']} failed, {checks['blocked']} blocked, {checks['never_ran']} never ran",
+        cost_text,
+        "Recorded SuperGauge: "
+        + str((release.get("gauge") or {}).get("verdict") or "No current verdict"),
+        "Human gates: " + (", ".join(pending) if pending else "None waiting"),
+        "Release: "
+        + (
+            "applied"
+            if release["applied"]
+            else "authorized"
+            if release["authorized"]
+            else "human release approval still required"
+        ),
+    ]
+    if release["blockers"]:
+        text.append("Next review: " + "; ".join(release["blockers"][:3]))
+    return {
+        "format": "superqode.factory-first-result/1",
+        "run": reference,
+        "status": order.status.value,
+        "verified": verified,
+        "changed_files": candidate.metadata.get("files", []) if candidate else [],
+        "checks": checks,
+        "usage": usage,
+        "pending_human_gates": pending,
+        "release": release,
+        "text": "\n".join(text),
+        "written": False,
+    }
+
+
+def save_draft(root, *, yaml_text, confirmed=False, description="", drafting_model=""):
+    """Keep an explicit local draft; never replace the active Factory definition."""
+    from .operations import write
+    from superqode.desktop_service.studio import _credentials, file_digest
+
+    if confirmed is not True:
+        raise ValueError("Explicitly confirm saving the local draft")
+    if not isinstance(description, str) or len(description.encode()) > 16000:
+        raise ValueError("Use a description smaller than 16 KB")
+    if not isinstance(drafting_model, str) or len(drafting_model) > 300:
+        raise ValueError("Choose a bounded drafting model reference")
+    data = read_mapping(yaml_text)
+    validate_definition(data)
+    _credentials(data)
+    root = Path(root).resolve()
+    value = {
+        "format": "superqode.factory-onboarding-draft/1",
+        "yaml": yaml_text,
+        "description": description,
+        "drafting_model": drafting_model,
+        "base_digest": file_digest(project_path(root, ".superqode/factory.yaml")),
+    }
+    write(
+        project_path(root, ".superqode/factory-studio/onboarding-draft.json"),
+        json.dumps(value, ensure_ascii=False),
+    )
+    return {"saved": True, "activated": False}
+
+
+def load_draft(root):
+    from .operations import read
+    from superqode.desktop_service.studio import _credentials, file_digest
+
+    root = Path(root).resolve()
+    value = json.loads(
+        read(project_path(root, ".superqode/factory-studio/onboarding-draft.json"), 1000000)
+    )
+    if not isinstance(value, dict) or value.get("format") != "superqode.factory-onboarding-draft/1":
+        raise ValueError("Unsupported saved draft")
+    if value.get("base_digest") != file_digest(project_path(root, ".superqode/factory.yaml")):
+        raise ValueError(
+            "The saved Factory changed. Review the local draft file before merging its edits."
+        )
+    data = read_mapping(value["yaml"])
+    validate_definition(data)
+    _credentials(data)
+    return value

@@ -35,6 +35,7 @@ struct WelcomeView: View {
               }
             }
           }.frame(maxWidth: 860)
+          FactoryDemoStartView().frame(maxWidth: 860, alignment: .leading)
           HStack(spacing: 24) {
             Button {
               app.showLearningGuide = true

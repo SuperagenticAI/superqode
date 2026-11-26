@@ -2,6 +2,12 @@
 
 Version 0.5.2 (build 59) bundles Python engine 2.33.2.
 
+- Added **Pydantic Coder — Experimental** in the ACP agent catalog, using the coding engine behind Pax. Install its pinned runtime separately, check the connection and choose a model in Agent controls. Tool approvals, MCP and resumable sessions are supported; Pax's own terminal UI and plugins are separate.
+
+- **Try a disposable Factory sample** from Welcome or Describe creates a separate tiny app, protected checks and a committed baseline. Run sample diagnostics without inference, then connect a model for a real repair trial.
+- **Keep draft for next time** and **Restore local draft** preserve valid YAML, its description and drafting selection across sessions without activating it. Trials add a short summary of changes, verification, reported cost and remaining human steps.
+- Each execution binding can explicitly use the connected model, and setup findings link to the corresponding configuration or connection screen.
+
 - Factory Studio adds a **Your first verified run** checklist with links to definition review, execution models, host checks, protected acceptance and trial evidence. Isolation and application checks ask for confirmation before running.
 - Model setup separates the optional drafting model from execution bindings, with Local AI and frontier-provider connection shortcuts that return to Factory Studio. Connection checks send no inference prompts, and private routes require an explicit change before cloud use.
 - The getting-started guide places protected acceptance before a trial, counts matching verification evidence, and rejects stale results after project, draft or model changes. A prepared improvement plan is labeled as prepared.

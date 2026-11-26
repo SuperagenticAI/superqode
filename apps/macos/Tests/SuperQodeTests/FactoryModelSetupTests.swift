@@ -2,6 +2,42 @@ import XCTest
 @testable import SuperQode
 
 final class FactoryModelSetupTests: XCTestCase {
+  @MainActor func testLocalDraftReplyCannotReplaceAnotherProjectsEditor() async {
+    let pipe = Pipe(); let engine = Engine(input: pipe.fileHandleForWriting); defer { engine.stop() }
+    let studio = FactoryStudioLibrary(); studio.enter("first")
+    let pending = Task { await studio.onboardingAction(engine: engine, action: "onboarding.draft.load") }
+    while engine.pendingRequestCount < 1 { await Task.yield() }
+    studio.enter("second"); studio.text = "Second project draft"
+    engine.receive(["id": 1, "result": ["yaml": "Foreign draft"]])
+    await pending.value
+    XCTAssertEqual(studio.text, "Second project draft")
+    XCTAssertFalse(studio.onboardingWorking)
+  }
+
+  @MainActor func testLocalDraftReplyCannotOverwriteNewEditorChanges() async {
+    let pipe = Pipe(); let engine = Engine(input: pipe.fileHandleForWriting); defer { engine.stop() }
+    let studio = FactoryStudioLibrary(); studio.enter("project")
+    let pending = Task { await studio.onboardingAction(engine: engine, action: "onboarding.draft.load") }
+    while engine.pendingRequestCount < 1 { await Task.yield() }
+    studio.text = "Newer edits"
+    engine.receive(["id": 1, "result": ["yaml": "Older draft"]])
+    await pending.value
+    XCTAssertEqual(studio.text, "Newer edits")
+    XCTAssertFalse(studio.onboardingWorking)
+  }
+
+  @MainActor func testSampleProbeReplyCannotCrossProjects() async {
+    let pipe = Pipe(); let engine = Engine(input: pipe.fileHandleForWriting); defer { engine.stop() }
+    let studio = FactoryStudioLibrary(); studio.enter("first")
+    let pending = Task { await studio.onboardingAction(engine: engine, action: "demo.check") }
+    while engine.pendingRequestCount < 1 { await Task.yield() }
+    studio.enter("second")
+    engine.receive(["id": 1, "result": ["status": "passed"]])
+    await pending.value
+    XCTAssertTrue(studio.demoCheck.isEmpty)
+    XCTAssertFalse(studio.onboardingWorking)
+  }
+
   @MainActor func testFirstRunChecklistCannotCrossProjects() async {
     let pipe = Pipe(); let engine = Engine(input: pipe.fileHandleForWriting); defer { engine.stop() }
     let studio = FactoryStudioLibrary(); studio.enter("first")

@@ -11,6 +11,9 @@ import Combine
   @Published var text = "" { didSet { if text != oldValue { version += 1; review = [:]; acceptance.sourceChanged(text); modelSetup.invalidate(); setupGeneration += 1; gettingStarted = [:]; setupChecking = false } } }
   @Published var gettingStarted: [String: Any] = [:]
   @Published var setupChecking = false
+  @Published var onboardingWorking = false
+  @Published var demoCheck: [String: Any] = [:]
+  private var onboardingOperation = UUID()
   private var setupGeneration = 0
   @Published var description = "" { didSet { if description != oldValue { version += 1 } } }
   @Published var review: [String: Any] = [:]
@@ -94,6 +97,7 @@ import Combine
   func enter(_ identity: String) {
     guard identity != project else { return }
     setupGeneration += 1; gettingStarted = [:]; setupChecking = false
+    onboardingOperation = UUID(); onboardingWorking = false; demoCheck = [:]
     let hadProject = !project.isEmpty
     trialSuites.enter(identity)
     modelSetup.enter(identity)
@@ -137,7 +141,7 @@ import Combine
     var params = params; params["project"] = project
     return try await engine.call("factory." + method, params) as? [String: Any] ?? [:]
   }
-  func inspectGettingStarted(engine: Engine) async {
+  func inspectGettingStarted(engine: Engine, checkConnections: Bool = false) async {
     guard !project.isEmpty else { return }
     setupGeneration += 1
     let token = setupGeneration; let identity = project; let source = version
@@ -145,11 +149,34 @@ import Combine
     setupChecking = true
     defer { if project == identity, setupGeneration == token { setupChecking = false } }
     do {
-      let value = try await rpc(engine, "onboarding.inspect", ["yaml": text, "drafting_model": drafting])
+      let value = try await rpc(engine, "onboarding.inspect", ["yaml": text, "drafting_model": drafting, "check_connections": checkConnections])
       guard project == identity, setupGeneration == token, version == source, modelSetup.draftingReference == drafting, !Task.isCancelled else { return }
       gettingStarted = value
     } catch {
       if project == identity, setupGeneration == token, version == source, modelSetup.draftingReference == drafting { failure = error.localizedDescription }
+    }
+  }
+  func onboardingAction(engine: Engine, action: String) async {
+    guard !project.isEmpty, !onboardingWorking else { return }
+    let identity = project; let source = version; let token = UUID()
+    let drafting = modelSetup.draftingReference
+    onboardingOperation = token; onboardingWorking = true
+    defer { if project == identity, onboardingOperation == token { onboardingWorking = false } }
+    do {
+      let value = try await rpc(engine, action, ["yaml": text, "description": description, "drafting_model": drafting, "confirmed": true])
+      guard project == identity, version == source, modelSetup.draftingReference == drafting, onboardingOperation == token, !Task.isCancelled else { return }
+      if action == "onboarding.draft.load" {
+        text = string(value, "yaml"); review = [:]
+        description = string(value, "description"); modelSetup.draftingReference = string(value, "drafting_model")
+        message = "Local draft restored. Validate and review it before saving the Factory."
+      } else if action == "demo.check" {
+        demoCheck = value
+      } else {
+        message = "Draft kept locally for next time. The saved Factory is unchanged."
+      }
+      await inspectGettingStarted(engine: engine)
+    } catch {
+      if project == identity, version == source, onboardingOperation == token { failure = error.localizedDescription }
     }
   }
   func load(engine: Engine, template: String = "", revision: String = "") async {

@@ -50,7 +50,11 @@ jobs:
       - name: Install CodeGem system tools
         run: |
           sudo apt-get update
-          sudo apt-get install --yes ripgrep bash
+          sudo apt-get install --yes ripgrep bash bubblewrap libseccomp2
+          # Permit real namespace probes on this disposable GitHub runner.
+          if [ -e /proc/sys/kernel/apparmor_restrict_unprivileged_userns ]; then
+            sudo sysctl -w kernel.apparmor_restrict_unprivileged_userns=0
+          fi
           rg --version
       - name: Set up Node for pinned Codex protocol checks
         uses: actions/setup-node@v4
@@ -70,6 +74,16 @@ jobs:
         run: uv run ruff format --check .
       - name: Public documentation style
         run: uv run python scripts/check_public_docs_style.py
+      - name: Factory onboarding and replay release contracts
+        env:
+          PYTEST_DISABLE_PLUGIN_AUTOLOAD: "1"
+          SUPERQODE_VERIFY_NATIVE: "1"
+          PYTHONDONTWRITEBYTECODE: "1"
+        run: >-
+          uv run --frozen pytest -p pytest_asyncio.plugin
+          tests/test_factory_demo.py tests/test_factory_onboarding.py
+          tests/test_factory_next_milestone.py tests/test_factory_model_setup.py
+          tests/test_factory_tui_commands.py tests/test_pydantic_coder.py -q
       - name: Developer workflow release contracts
         env:
           PYTEST_DISABLE_PLUGIN_AUTOLOAD: "1"

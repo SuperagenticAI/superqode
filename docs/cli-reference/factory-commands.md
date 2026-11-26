@@ -107,6 +107,68 @@ commands are unchanged.
 
 ## factory start
 
+### Try a disposable sample first
+
+Installed CLI, TUI and macOS builds include the sample; cloning this repository
+or locating the recorded demo files is unnecessary. In the macOS Welcome screen
+or Factory Describe screen, choose **Try a disposable Factory sample** and select
+a new folder. The sample contains a faulty numeric CLI, protected expectations
+and a committed Factory baseline. Creation runs no models and downloads nothing.
+
+```bash
+sq factory demo create ./first-factory --confirm
+sq factory demo check --project ./first-factory --execute
+sq factory start --project ./first-factory
+```
+
+The faulty app fails two of the three built-in expectations. These isolated
+probe diagnostics reproduce the defect; they create no SuperGauge record.
+If isolation is unavailable, diagnostics report blocked. Review the expectations,
+connect a model, review its execution binding and prepare a real repair trial:
+
+```bash
+sq factory trial "Fix total(values) in app.py to add every number, including negatives and empty lists" --project ./first-factory
+sq factory worker WORK_ID --project ./first-factory --live
+sq factory inspect WORK_ID --project ./first-factory
+# Review and resolve any human gate shown by inspect before continuing the worker.
+sq factory verify WORK_ID --project ./first-factory --execute
+sq factory evidence summary WORK_ID --project ./first-factory
+```
+
+The sample starts with a local execution binding. Set your installed coding model
+in the Factory, or create the sample with `--model PROVIDER/MODEL`. A cloud model
+also requires explicit `--allow-cloud` during creation. In macOS, connect Local AI
+or a frontier provider, choose **Use connected model for this execution binding**,
+review cloud permission if needed, then save before preparing the trial. Selecting
+a drafting model leaves execution bindings unchanged. A confirmed trial exercises
+real coding tools and can incur provider charges; the result summary retains
+unknown cost when usage reporting is incomplete.
+
+The sample has no release signer and needs no production release to demonstrate
+repair and verification. Its normal human gate still applies. You can delete the
+folder after stopping workers. **Try Factory on my repository** opens your own
+project separately after inspecting a sample run.
+
+### Keep a draft and resume
+
+In macOS, **Keep draft for next time** explicitly stores a valid YAML draft,
+description and drafting model selection in the project's local runtime folder.
+**Restore local draft** restores the editor after confirmation, including after an
+app restart. It leaves the saved Factory unchanged. Source changes since the
+checkpoint require review before merging the saved draft.
+
+```bash
+sq factory draft keep --file my-factory-draft.yaml --confirm
+sq factory draft show
+```
+
+The CLI prints the checkpoint for inspection; it never activates it. Checkpoints
+live under `.superqode/factory-studio/onboarding-draft.json` with private file
+permissions. Keep that runtime directory out of source control. Incomplete or
+invalid YAML is rejected, and credentials belong in the connection store.
+
+### Inspect your current setup
+
 Run `sq factory start` in your project to inspect the Factory definition, execution
 models, host prerequisites, protected acceptance checks and first-trial evidence.
 It prints the next command, creates no project files, sends no inference prompts
@@ -124,6 +186,15 @@ The guide advances through the worker, human gates and protected verification
 according to the run's state. A matching verification receipt establishes a
 verified trial; SuperGauge and human release authorization remain separate checks.
 The macOS guide asks for confirmation before running host and application checks.
+
+### Understand a trial result
+
+`sq factory evidence summary WORK_ID` returns the same short summary used in the
+macOS trial view: changed files, protected verification, recorded checks, model
+cost, pending human gates and release blockers. Use **Inspect checks** to review
+the detailed evidence. A passed verification remains separate from human release
+authorization. The TUI supports the same commands with the `:factory` prefix,
+including `:factory demo`, `:factory draft` and `:factory evidence summary WORK_ID`.
 
 ## factory models
 

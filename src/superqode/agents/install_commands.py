@@ -301,7 +301,9 @@ def managed_agent_install(agent: Mapping[str, Any]) -> InstallCommand | None:
 
         return InstallCommand(
             raw="superqode pydantic-coder setup",
-            command=shlex.join([sys.executable, "-m", "superqode.pydantic_coder.setup", "--install"]),
+            command=shlex.join(
+                [sys.executable, "-m", "superqode.pydantic_coder.setup", "--install"]
+            ),
             kind="python",
             runnable=True,
             managed=True,

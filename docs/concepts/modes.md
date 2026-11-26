@@ -479,6 +479,11 @@ vendor.
 
 ## ACP Coding Agents
 
+The experimental `pydantic-coder` connector uses the coding engine behind Pax
+through a separately installed runtime. Use `:connect acp pydantic-coder`, or see
+the [Pydantic Coder commands](../cli-reference/pydantic-coder-commands.md) for
+setup, model selection and session recovery.
+
 ACP connects SuperQode to an external coding-agent harness. The agent manages
 its own model calls and can expose file editing, shell execution, MCP tools, and
 agent-specific commands. SuperQode supplies the terminal interface, session

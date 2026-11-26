@@ -7,14 +7,19 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [2.33.2] - 2026-11-26
+
+### Added
+
 - Add Pydantic Coder as an experimental ACP agent in the CLI, TUI and macOS
   catalog. Its pinned Pydantic AI v2 SDKs install in a separate environment,
   with model selection, explicit tool approvals, MCP and resumable sessions.
   The Mac app can use its configured OpenAI, Anthropic and Google API keys.
 
-## [2.33.2] - 2026-11-26
-
-### Added
+- Disposable first-run Factory sample in CLI, TUI and macOS Welcome/Describe,
+  with protected diagnostic probes and explicit model execution through trials.
+- Private local draft checkpoints and shared trial summaries covering changes,
+  protected verification, reported usage and remaining human release steps.
 
 - Shared Factory getting-started checklist in `sq factory start`, `:factory start`
   and macOS Factory Studio, with explicit next actions for model setup, host
@@ -24,9 +29,13 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Reviewable benchmark datasets from past runs, with pinned starting revisions,
   isolated replay, and cost or latency optimization objectives under held-out gates.
 - Protected acceptance probe files for the Factory demo.
-- macOS public beta 0.5.2 (build 59), bundling engine 2.33.2.
+- Prepared macOS source for public beta 0.5.2 (build 59), bundling engine
+  2.33.2. Signed macOS installers are distributed separately.
 
 ### Fixed
+
+- Benchmark history withholds task text containing common credential formats or
+  configured secret values, and dataset export rejects those tasks before saving.
 
 - RLM Factory drafts preserve existing execution models, budgets, permissions,
   workflow contracts and release policy, and report ignored workflow overrides.
