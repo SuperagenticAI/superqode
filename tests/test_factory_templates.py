@@ -46,6 +46,9 @@ def test_triage_spec_build_has_conditional_spec_gate_and_optional_input():
     assert stages["spec"]["when"] == {"input": "triage", "field": "needs-spec", "equals": True}
     assert stages["implement"]["inputs"]["spec"]["optional"] is True
     assert stages["verify"]["human_gate"] is True
+    assert 'SUPERQODE_OUTPUT: {"decision":' in stages["triage"]["goal"]
+    assert data["governance"]["budget"]["max_seconds"] == 14400
+    assert data["governance"]["budget"]["max_tool_calls"] == 400
     detected = compose_from_description("Add triage and spec review before coding")
     assert detected["metadata"]["name"] == "triage-spec-build"
 

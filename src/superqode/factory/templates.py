@@ -55,7 +55,7 @@ def _factory(name, description, stages):
                 "allow_shell": True,
                 "allow_network": False,
             },
-            "budget": {"max_workers": 1, "max_seconds": 1800, "max_tool_calls": 100},
+            "budget": {"max_workers": 1, "max_seconds": 14400, "max_tool_calls": 400},
             "release": "human",
         },
     }
@@ -73,7 +73,11 @@ def factory_template(name="fix-and-verify"):
                     "id": "triage",
                     "goal": (
                         "Research the request, identify open product or architecture decisions, "
-                        "and decide whether a spec with human sign-off is needed before coding."
+                        "and decide whether a spec with human sign-off is needed before coding. "
+                        "End with exactly one line and no Markdown fence. The only output name is "
+                        "decision, and complexity, needs-spec, and summary go inside it: "
+                        'SUPERQODE_OUTPUT: {"decision":{"complexity":"small","needs-spec":false,"summary":"one sentence"}} '
+                        "complexity is small, medium, or large. needs-spec is true or false."
                     ),
                     "role": "investigator",
                     "harness": "coder",
