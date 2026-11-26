@@ -56,6 +56,10 @@ class AgentInfo:
 def check_installed(name: str) -> bool:
     """Check if an agent is installed on the system."""
     from superqode.agents.acp_registry import get_registry_agent_by_short_name
+    from superqode.pydantic_coder import AGENT_ID, installed
+
+    if name == AGENT_ID:
+        return installed()
 
     lookup = "claude" if name == "claude-code" else name
     metadata = get_registry_agent_by_short_name(lookup)

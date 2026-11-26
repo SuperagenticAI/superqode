@@ -211,6 +211,15 @@ project-scoped custom ACP launch commands from the same flow. Engine and writer
 leases protect restart recovery, and interrupted tasks are available for review
 without automatic replay.
 
+**Pydantic Coder — Experimental** is available in the shared ACP agent catalog.
+Choose **Install agent**, **Check connection**, then **Use this connection**.
+Its Pydantic AI Harness 0.75.0 runtime installs separately from the bundled
+engine. OpenAI, Anthropic and Google keys configured in SuperQode are passed to
+the connector; choose the model in Agent controls. Writes, shell commands and
+MCP tool calls request approval, and sessions can resume after a process
+restart. This uses the coding engine behind Pax; Pax's own terminal UI and
+plugins are separate. Approved shell commands run on your Mac as your user.
+
 You can change agents within the same conversation. SuperQode keeps the local transcript and sends bounded conversation context to the selected agent. Returning to an agent resumes its compatible session when available. Agent permissions and authentication remain separate; historical images may need reattaching, and long handoffs may omit messages from agent context while retaining them in your local history.
 
 Selecting a connection does not automatically install an agent, download weights or start a paid model call. Model tests, evaluation and optimization can incur provider charges; review their prompts and budgets before starting.

@@ -23,6 +23,10 @@ _console = Console()
 def check_agent_installed(agent: "Agent") -> bool:
     """Check if an agent is installed on the system."""
     import shutil
+    from superqode.pydantic_coder import is_bundled_agent, installed
+
+    if is_bundled_agent(agent):
+        return installed()
 
     declared = agent.get("run_command", {})
     run_command = str(declared.get("*", "")) if isinstance(declared, dict) else str(declared or "")
@@ -592,6 +596,13 @@ async def connect_to_agent(agent_identifier: str, project_dir: str | None = None
         return 1
 
     # Perform comprehensive health check
+    from superqode.pydantic_coder import is_bundled_agent
+
+    if is_bundled_agent(agent):
+        from superqode.commands.pydantic_coder import connect_interactive
+
+        return await connect_interactive(project_dir)
+
     _console.print(f"[cyan]🔍 Checking {agent['name']}...[/cyan]")
     is_healthy, issues = perform_agent_health_check(agent)
 
@@ -795,6 +806,19 @@ def install_agent(agent_identifier: str) -> int:
             return 1
 
         # Get available actions
+        from superqode.pydantic_coder import is_bundled_agent
+
+        if is_bundled_agent(agent):
+            from superqode.pydantic_coder.setup import setup_runtime
+
+            try:
+                await asyncio.to_thread(setup_runtime, install=True)
+            except (ValueError, OSError, subprocess.CalledProcessError) as exc:
+                _console.print(f"[red]Pydantic Coder installation failed: {exc}[/red]")
+                return 1
+            _console.print("[green]Pydantic Coder runtime ready.[/green]")
+            return 0
+
         actions = agent.get("actions", {})
 
         # If no actions in agent, try to get from registry

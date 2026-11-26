@@ -294,6 +294,21 @@ def _managed_install(
 
 def managed_agent_install(agent: Mapping[str, Any]) -> InstallCommand | None:
     """Return a reviewed install recipe for a bundled agent."""
+    from superqode.pydantic_coder import COMMAND, is_bundled_agent
+
+    if is_bundled_agent(agent):
+        import sys
+
+        return InstallCommand(
+            raw="superqode pydantic-coder setup",
+            command=shlex.join([sys.executable, "-m", "superqode.pydantic_coder.setup", "--install"]),
+            kind="python",
+            runnable=True,
+            managed=True,
+            repository="https://github.com/SuperagenticAI/superqode",
+            license="Apache-2.0",
+            executable=COMMAND,
+        )
     short_name = str(agent.get("short_name") or "").strip()
     identity = str(agent.get("identity") or "").strip()
     if identity != _MANAGED_AGENT_IDENTITIES.get(short_name):

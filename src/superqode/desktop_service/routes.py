@@ -36,6 +36,11 @@ def acp_routes(root: Path):
         declared = agent.get("run_command", {})
         command = declared.get("*") if isinstance(declared, dict) else declared
         parts = shlex.split(str(command or ""))
+        from superqode.pydantic_coder import is_bundled_agent, installed as pydantic_coder_installed, launcher_argv
+
+        pydantic_coder = is_bundled_agent(agent)
+        if pydantic_coder:
+            parts = launcher_argv()
         from superqode.agents.install_commands import managed_agent_install
         from .managed_toolchains import bind_launch, for_agent
 
@@ -45,7 +50,9 @@ def acp_routes(root: Path):
         managed = {}
         if toolchain:
             parts, managed = bind_launch(toolchain, parts)
-        if managed:
+        if pydantic_coder:
+            tool_ready = pydantic_coder_installed()
+        elif managed:
             tool_ready = True
         else:
             parts, tool_ready = prepare_tool_launch(parts, recipe.executable if recipe else "")
@@ -70,7 +77,9 @@ def acp_routes(root: Path):
                 "description": item.description,
                 "runtime": "ACP",
                 "available": installed,
-                "issue": ""
+                "issue": "Run `superqode pydantic-coder setup`, or choose Install agent."
+                if pydantic_coder and not installed
+                else ""
                 if installed
                 else "Install the Goose CLI, then configure its provider and model."
                 if agent_id == "goose" and install
@@ -86,6 +95,7 @@ def acp_routes(root: Path):
                 "auth": "subscription requested" if vendor else "agent-managed; unverified",
                 "install": install,
                 "toolchain": managed or None,
+                **({"experimental": True} if pydantic_coder else {}),
             }
         )
     return result

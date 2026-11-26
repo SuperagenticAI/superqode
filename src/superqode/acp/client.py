@@ -323,6 +323,14 @@ class ACPClient:
             # Don't add -m flag as not all agents support it (e.g., opencode acp)
             cmd = self.command
 
+            # This connector ships with the engine, including native app bundles
+            # that do not put console scripts on PATH. Launch this exact package.
+            from superqode.pydantic_coder import COMMAND, launcher_argv
+
+            if self.launch_argv is None and cmd == COMMAND:
+                self.launch_argv = launcher_argv()
+                self.own_process_group = True
+
             env = os.environ.copy()
             env["PYTHONUNBUFFERED"] = "1"
 

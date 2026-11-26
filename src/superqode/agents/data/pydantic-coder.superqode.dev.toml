@@ -1,0 +1,49 @@
+identity = "pydantic-coder.superqode.dev"
+name = "Pydantic Coder — Experimental"
+short_name = "pydantic-coder"
+url = "https://pydantic.dev/docs/ai/harness/coder/"
+protocol = "acp"
+author_name = "Pydantic"
+author_url = "https://pydantic.dev"
+publisher_name = "Superagentic AI"
+publisher_url = "https://github.com/SuperagenticAI/superqode"
+type = "coding"
+description = "Pydantic's Coder harness over SuperQode's experimental ACP connector, with model selection, file and shell tools, approvals and persistent sessions."
+tags = ["open-source", "experimental", "framework"]
+catalog_tier = "featured"
+run_command."*" = "superqode-pydantic-coder"
+
+help = '''
+# Pydantic Coder — Experimental
+
+SuperQode's ACP connector for Pydantic AI Harness `Coder()`. This uses the
+coding engine behind Pax; Pax's terminal UI and plugins are separate.
+
+## Installation
+
+```bash
+superqode pydantic-coder setup
+superqode pydantic-coder doctor
+superqode connect acp pydantic-coder
+```
+
+The pinned SDKs run in a separate Python 3.13 environment. Setup requires uv;
+connecting and checking installation never download dependencies.
+The macOS app offers Install agent and Check connection in ACP agent setup.
+
+## Models and authentication
+
+Use an OpenAI, Anthropic or Google API key from the environment or SuperQode
+provider credentials. Select a provider:model in the ACP model control.
+The default is openai:gpt-4.1; SUPERQODE_PYDANTIC_CODER_MODEL overrides it.
+Account subscriptions and Pax's login plugins are not included.
+
+File writes, shell commands and MCP calls request permission. Reads use the
+opened project. Approved shell commands execute as your user; this is not an
+OS sandbox. Delegation is disabled in this initial connector. Sessions are
+saved privately outside the repository and may be resumed after a restart.
+'''
+
+[actions."*".install]
+command = "superqode pydantic-coder setup"
+description = "Install the isolated Pydantic Coder runtime"

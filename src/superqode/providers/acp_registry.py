@@ -50,6 +50,7 @@ FEATURED_AGENT_IDS = frozenset(
         "omp",
         "pi-acp",
         "pi",
+        "pydantic-coder",
         "qwen-code",
         "qwen",
     }

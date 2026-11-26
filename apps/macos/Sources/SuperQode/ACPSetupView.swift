@@ -32,6 +32,9 @@ struct ACPSetupView: View {
   private var ready: Bool { verifiedACPConnection(route: route, metadata: metadata) }
   private var credentialGuidance: String {
     if !setupGuidance.isEmpty { return setupGuidance }
+    if string(route, "agent_id") == "pydantic-coder" {
+      return "Uses your OpenAI, Anthropic or Google API key configured in SuperQode, or your existing environment. Choose a model in Agent controls after connecting. Writes, commands and MCP tools ask for permission."
+    }
     if string(route, "agent_id") == "amp" {
       return "Uses your Amp CLI sign-in. Run amp login in Terminal if needed."
     }

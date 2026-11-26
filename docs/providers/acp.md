@@ -62,6 +62,59 @@ The default TUI picker is intentionally curated:
 Installed agents are always visible. Registry refresh is explicit so starting
 the TUI does not require network access.
 
+### Pydantic Coder (experimental)
+
+Pydantic Coder runs the `Coder()` engine behind Pax through SuperQode's ACP
+connector. Pax's terminal UI, login plugins and Code Mode are separate.
+
+```bash
+superqode pydantic-coder setup
+superqode pydantic-coder doctor
+superqode connect acp pydantic-coder
+```
+
+The CLI supports `/models`, `/model PROVIDER:MODEL`, and `/quit`. To choose a
+model at startup or resume a saved session, use
+`superqode pydantic-coder chat --model PROVIDER:MODEL --resume SESSION_ID`.
+
+In the TUI, select **Pydantic Coder — Experimental** under `:connect acp`, or
+run `:connect acp pydantic-coder`. The setup picker can install its reviewed
+runtime. `superqode agents install pydantic-coder` is also supported.
+
+In the macOS app, open **ACP agents**, select **Pydantic Coder — Experimental**,
+choose **Install agent**, then **Check connection** and **Use this connection**.
+The connector launches through the app's bundled engine; it does not require a
+`superqode` console script on PATH. Provider keys configured in the app are
+available to this connector for OpenAI, Anthropic and Google.
+
+Setup explicitly installs Harness `0.75.0`, Pydantic AI Slim `2.75.0` and ACP
+`0.11.1` into a private Python 3.13 virtual environment using uv. This preserves
+the existing Pydantic AI v1 runtime. Connection and doctor checks never install
+packages or call a model. The default model is `openai:gpt-4.1`; select another
+advertised model through ACP, or set `SUPERQODE_PYDANTIC_CODER_MODEL` before
+starting the connection. API-key billing applies; Pax subscription logins are
+not part of this connector.
+
+File writes, shell commands and every MCP tool call require approval. The
+opened project supplies the workspace and repository instructions. Approved
+shell commands run as your user; this connector does not supply an OS sandbox.
+Delegation is disabled. MCP servers configured in SuperQode are passed into
+the session, with permission prompts before tool execution.
+
+Conversation history and the selected model are saved in private session files
+under SuperQode's state directory, outside the repository, so compatible clients
+can resume after a process restart. Sessions are scoped to the opened project.
+The adapter limits each SDK run to 40 model requests and 80 tool calls; approval
+resumption starts a new SDK run. Cancellation remains available through ACP.
+
+For a custom isolated environment, set `SUPERQODE_PYDANTIC_CODER_PYTHON` to its
+Python executable before setup. In the macOS app, runtime and session storage
+use the app's private state directory. This integration uses Pydantic's
+experimental ACP adapter and is version-pinned accordingly.
+
+See [Pydantic Coder](https://pydantic.dev/docs/ai/harness/coder/) and
+[the Pydantic ACP adapter](https://pydantic.dev/docs/ai/harness/acp/).
+
 ### OpenCode
 
 [OpenCode](https://github.com/anomalyco/opencode) provides native ACP mode:

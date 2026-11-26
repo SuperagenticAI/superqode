@@ -872,6 +872,13 @@ class DesktopService:
                     or (params.get("_desktop_route") or params.get("_desktop_connection"))
                     else self.credential_environment(None if kind == "tool" else providers)
                 )
+                if (
+                    kind != "check"
+                    and (params.get("_desktop_route") or {}).get("agent_id") == "pydantic-coder"
+                ):
+                    # This bundled adapter explicitly supports these providers;
+                    # switching its ACP model must also work with app-managed keys.
+                    credential_env = self.credential_environment({"openai", "anthropic", "google"})
                 if str(params.get("harness", "")).startswith("attach:"):
                     from .connect_workflow import attachment_environment
 

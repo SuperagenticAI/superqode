@@ -132,6 +132,13 @@ def installer_requirements(argv):
     """Identify the local package manager required by a reviewed install plan."""
     import shutil
 
+    if argv[1:3] == ["-m", "superqode.pydantic_coder.setup"]:
+        import os
+
+        if os.environ.get("SUPERQODE_APP") == "1" and os.environ.get("SUPERQODE_STATE_DIR"):
+            return []  # Explicit setup prepares the app's managed uv.
+        argv = ["uv"]
+
     binary = argv[0]
     name = Path(binary).name
     docs = {
@@ -235,6 +242,8 @@ def install_plan(root: Path, reference: str, version: str = ""):
             if review["language"] == "Goose CLI"
             else f"{packages} · SuperQode {review['language']} {review['version']}"
         )
+    elif target == "pydantic-coder":
+        plan["command"] = "Pydantic AI Harness 0.75.0 · separate Python 3.13 environment"
     plan["digest"] = install_digest(plan)
     return plan
 

@@ -1944,6 +1944,14 @@ cli_main.register_lazy(
     hidden=False,
 )
 
+cli_main.register_lazy(
+    "pydantic-coder",
+    "superqode.commands.pydantic_coder",
+    "pydantic_coder",
+    "Install, check or serve the experimental Pydantic Coder ACP agent.",
+    hidden=False,
+)
+
 
 cli_main.register_lazy(
     "gauge",

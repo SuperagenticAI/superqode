@@ -226,6 +226,7 @@ Changelog = "https://github.com/SuperagenticAI/superqode/blob/main/CHANGELOG.md"
 [project.scripts]
 superqode = "superqode.main:cli_main"
 sq = "superqode.main:cli_main"
+superqode-pydantic-coder = "superqode.pydantic_coder.launcher:main"
 superqode-codegem-index = "superqode.codegem.index_cli:main"
 superqode-codegem-download = "superqode.codegem.download_cli:main"
 

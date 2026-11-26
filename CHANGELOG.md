@@ -7,6 +7,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+- Add Pydantic Coder as an experimental ACP agent in the CLI, TUI and macOS
+  catalog. Its pinned Pydantic AI v2 SDKs install in a separate environment,
+  with model selection, explicit tool approvals, MCP and resumable sessions.
+  The Mac app can use its configured OpenAI, Anthropic and Google API keys.
+
 ## [2.33.2] - 2026-11-26
 
 ### Added
