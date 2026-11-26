@@ -105,8 +105,10 @@ struct FactoryModelSetupView: View {
       Button("Use " + executionReference) {
         let binding = executionBinding; let reference = executionReference
         guard !binding.isEmpty, idle, studio.project == executionProject, studio.version == executionVersion else { return }
+        let identity = studio.project; let source = studio.version
         executionBinding = ""
         Task {
+          guard studio.project == identity, studio.version == source else { return }
           await studio.edit(engine: app.engine, controls: ["binding": binding, "model": reference])
           await models.inspect(engine: app.engine, yaml: studio.text)
         }

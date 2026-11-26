@@ -90,8 +90,12 @@ struct FactoryGettingStartedView: View {
         Button("Continue") {
           let action = pendingAction
           guard !action.isEmpty, idle, studio.project == reviewedProject, studio.version == reviewedVersion else { return }
+          let identity = studio.project; let source = studio.version
           pendingAction = ""
-          Task { await studio.onboardingAction(engine: app.engine, action: action) }
+          Task {
+            guard studio.project == identity, studio.version == source else { return }
+            await studio.onboardingAction(engine: app.engine, action: action)
+          }
         }
         Button("Cancel", role: .cancel) { pendingAction = "" }
       } message: {
@@ -103,7 +107,9 @@ struct FactoryGettingStartedView: View {
         Button("Run reviewed checks") {
           guard idle, studio.project == reviewedProject, studio.version == reviewedVersion else { return }
           let ticket = studio.navigation.ticket()
+          let identity = studio.project; let source = studio.version
           Task {
+            guard studio.project == identity, studio.version == source else { return }
             await studio.operations.perform(app.engine, "check", ["application": true])
             if studio.project == reviewedProject, studio.version == reviewedVersion {
               studio.navigation.follow(ticket, to: "Operations")
