@@ -10,6 +10,7 @@ struct FactoryModelSetupView: View {
   @State private var cloudReviewProject = ""
   @State private var cloudReviewVersion = 0
   @State private var executionBinding = ""
+  @State private var reviewExecution = false
   @State private var executionReference = ""
   @State private var executionProject = ""
   @State private var executionVersion = 0
@@ -54,6 +55,7 @@ struct FactoryModelSetupView: View {
             Button("Use connected model for this execution binding…") {
               executionBinding = string(row, "binding"); executionReference = app.provider + "/" + app.model
               executionProject = studio.project; executionVersion = studio.version
+              reviewExecution = true
             }.disabled(!idle)
           }
         }
@@ -97,9 +99,9 @@ struct FactoryModelSetupView: View {
       guard models.project == studio.project, models.report.isEmpty else { return }
       await models.inspect(engine: app.engine, yaml: studio.text)
     }
-    .onChange(of: studio.project) { _, _ in reviewCloud = false; executionBinding = "" }
-    .onChange(of: studio.text) { _, _ in reviewCloud = false; executionBinding = "" }
-    .confirmationDialog("Change this draft's execution model?", isPresented: Binding(get: { !executionBinding.isEmpty }, set: { if !$0 { executionBinding = "" } }), titleVisibility: .visible) {
+    .onChange(of: studio.project) { _, _ in reviewCloud = false; reviewExecution = false; executionBinding = "" }
+    .onChange(of: studio.text) { _, _ in reviewCloud = false; reviewExecution = false; executionBinding = "" }
+    .confirmationDialog("Change this draft's execution model?", isPresented: $reviewExecution, titleVisibility: .visible) {
       Button("Use " + executionReference) {
         let binding = executionBinding; let reference = executionReference
         guard !binding.isEmpty, idle, studio.project == executionProject, studio.version == executionVersion else { return }

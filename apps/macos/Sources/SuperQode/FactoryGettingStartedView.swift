@@ -9,6 +9,7 @@ struct FactoryGettingStartedView: View {
   @State private var reviewedProject = ""
   @State private var reviewedVersion = 0
   @State private var pendingAction = ""
+  @State private var confirmSetupAction = false
   private var next: [String: Any] { studio.gettingStarted["next_step"] as? [String: Any] ?? [:] }
   private var steps: [[String: Any]] { studio.gettingStarted["steps"] as? [[String: Any]] ?? [] }
   private var checklistIdentity: String {
@@ -83,9 +84,9 @@ struct FactoryGettingStartedView: View {
         guard !Task.isCancelled else { return }
         await studio.inspectGettingStarted(engine: app.engine)
       }
-      .onChange(of: studio.project) { _, _ in confirmChecks = false; pendingAction = "" }
-      .onChange(of: studio.text) { _, _ in confirmChecks = false; pendingAction = "" }
-      .confirmationDialog("Continue with this setup action?", isPresented: Binding(get: { !pendingAction.isEmpty }, set: { if !$0 { pendingAction = "" } }), titleVisibility: .visible) {
+      .onChange(of: studio.project) { _, _ in confirmChecks = false; confirmSetupAction = false; pendingAction = "" }
+      .onChange(of: studio.text) { _, _ in confirmChecks = false; confirmSetupAction = false; pendingAction = "" }
+      .confirmationDialog("Continue with this setup action?", isPresented: $confirmSetupAction, titleVisibility: .visible) {
         Button("Continue") {
           let action = pendingAction
           guard !action.isEmpty, idle, studio.project == reviewedProject, studio.version == reviewedVersion else { return }
@@ -115,7 +116,7 @@ struct FactoryGettingStartedView: View {
       }
   }
   private func request(_ action: String) {
-    reviewedProject = studio.project; reviewedVersion = studio.version; pendingAction = action
+    reviewedProject = studio.project; reviewedVersion = studio.version; pendingAction = action; confirmSetupAction = true
   }
 }
 
