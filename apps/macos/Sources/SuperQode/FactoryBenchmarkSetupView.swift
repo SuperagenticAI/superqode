@@ -61,16 +61,22 @@ struct FactoryBenchmarkSetupView: View {
         }
       }.padding(.top, 8)
     }
-    .confirmationDialog("Save this reviewed benchmark workload?", isPresented: $confirmSave, titleVisibility: .visible) {
-      Button("Save workload sources") {
+    .factoryConfirmation(
+      isPresented: $confirmSave,
+      title: "Save this reviewed benchmark workload?",
+      message: "Save the selected task text, original revisions and pinned Factory snapshots locally. Preparation and model execution require separate actions. No existing Factory or release authority changes.",
+      kind: .save,
+      badges: [
+        FactoryConfirmBadge(label: "Local workload", symbol: "doc.text", color: Brand.purple),
+        FactoryConfirmBadge(label: "No model calls", symbol: "bolt.slash", color: Color(red: 0.14, green: 0.62, blue: 0.42))
+      ],
+      confirmTitle: "Save workload sources",
+      onConfirm: {
         guard idle, library.project == reviewedProject,
           string(library.historyProposal, "digest") == reviewedDigest else { return }
         Task { await library.history(app.engine, action: "install") }
       }
-      Button("Cancel", role: .cancel) {}
-    } message: {
-      Text("Save the selected task text, original revisions and pinned Factory snapshots locally. Preparation and model execution require separate actions. No existing Factory or release authority changes.")
-    }
+    )
     .onChange(of: library.project) { _, _ in confirmSave = false }
     .onChange(of: string(library.historyProposal, "digest")) { _, _ in confirmSave = false }
   }

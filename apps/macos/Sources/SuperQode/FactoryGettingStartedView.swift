@@ -5,7 +5,6 @@ struct FactoryGettingStartedView: View {
   @ObservedObject var studio: FactoryStudioLibrary
   var idle: Bool
   @State private var expanded = false
-  @State private var confirmChecks = false
   @State private var reviewedProject = ""
   @State private var reviewedVersion = 0
   @State private var pendingAction = ""
@@ -71,8 +70,7 @@ struct FactoryGettingStartedView: View {
           }.padding(.vertical, 3)
         }
         Button("Run isolation and application checks…") {
-          reviewedProject = studio.project; reviewedVersion = studio.version
-          confirmChecks = true
+          request("host.checks")
         }.disabled(!idle || studio.review.isEmpty || string(studio.review, "digest") != studio.expectedFileDigest)
         Text("Checks run only after confirmation. Models, protected expectations and release approval remain separate decisions.")
           .font(.caption).foregroundStyle(.secondary)
@@ -84,42 +82,55 @@ struct FactoryGettingStartedView: View {
         guard !Task.isCancelled else { return }
         await studio.inspectGettingStarted(engine: app.engine)
       }
-      .onChange(of: studio.project) { _, _ in confirmChecks = false; confirmSetupAction = false; pendingAction = "" }
-      .onChange(of: studio.text) { _, _ in confirmChecks = false; confirmSetupAction = false; pendingAction = "" }
-      .confirmationDialog("Continue with this setup action?", isPresented: $confirmSetupAction, titleVisibility: .visible) {
-        Button("Continue") {
+      .onChange(of: studio.project) { _, _ in confirmSetupAction = false; pendingAction = "" }
+      .onChange(of: studio.text) { _, _ in confirmSetupAction = false; pendingAction = "" }
+      .factoryConfirmation(
+        isPresented: $confirmSetupAction,
+        title: pendingAction == "host.checks"
+          ? "Run the saved Factory's application checks?"
+          : pendingAction == "demo.check"
+            ? "Run sample probes?"
+            : pendingAction == "onboarding.draft.load"
+              ? "Restore your local draft?"
+              : "Keep this draft for next time?",
+        message: pendingAction == "host.checks"
+          ? "Run protected host probes and the build, start, service and health commands declared in the saved Factory. Project commands run in a temporary checkout and can consume resources or contact services. Review them in the definition first. Results open in Operations; this grants no release approval."
+          : pendingAction == "demo.check"
+            ? "Run the sample's three built-in expectations under OS isolation. No models are called. The faulty app should fail; use a real trial for repair and SuperGauge verification."
+            : pendingAction == "onboarding.draft.load"
+              ? "Replace the editor's current contents with your local draft. The saved Factory stays unchanged; review and validate the restored draft."
+              : "Keep this valid Factory draft in the project's local runtime folder for your next session. This replaces the previous local draft and leaves the saved Factory unchanged. Credentials belong in Connections.",
+        kind: pendingAction == "host.checks" || pendingAction == "demo.check" ? .superGauge : .save,
+        badges: pendingAction == "demo.check"
+          ? [FactoryConfirmBadge(label: "OS Isolation", symbol: "lock.shield", color: Color(red: 0.14, green: 0.62, blue: 0.42)),
+             FactoryConfirmBadge(label: "No model calls", symbol: "bolt.slash", color: Brand.purple)]
+          : pendingAction == "host.checks"
+            ? [FactoryConfirmBadge(label: "Temporary checkout", symbol: "arrow.triangle.branch", color: Brand.purple)]
+            : [FactoryConfirmBadge(label: "Local draft only", symbol: "doc.text", color: Brand.purple)],
+        confirmTitle: pendingAction == "host.checks" ? "Run reviewed checks" : "Continue",
+        onCancel: { pendingAction = "" },
+        onConfirm: {
           let action = pendingAction
+          pendingAction = ""
           guard !action.isEmpty, idle, studio.project == reviewedProject, studio.version == reviewedVersion else { return }
           let identity = studio.project; let source = studio.version
-          pendingAction = ""
-          Task {
-            guard studio.project == identity, studio.version == source else { return }
-            await studio.onboardingAction(engine: app.engine, action: action)
-          }
-        }
-        Button("Cancel", role: .cancel) { pendingAction = "" }
-      } message: {
-        Text(pendingAction == "demo.check" ? "Run the sample's three built-in expectations under OS isolation. No models are called. The faulty app should fail; use a real trial for repair and SuperGauge verification."
-          : pendingAction == "onboarding.draft.load" ? "Replace the editor's current contents with your local draft. The saved Factory stays unchanged; review and validate the restored draft."
-          : "Keep this valid Factory draft in the project's local runtime folder for your next session. This replaces the previous local draft and leaves the saved Factory unchanged. Credentials belong in Connections.")
-      }
-      .confirmationDialog("Run the saved Factory's application checks?", isPresented: $confirmChecks, titleVisibility: .visible) {
-        Button("Run reviewed checks") {
-          guard idle, studio.project == reviewedProject, studio.version == reviewedVersion else { return }
-          let ticket = studio.navigation.ticket()
-          let identity = studio.project; let source = studio.version
-          Task {
-            guard studio.project == identity, studio.version == source else { return }
-            await studio.operations.perform(app.engine, "check", ["application": true])
-            if studio.project == reviewedProject, studio.version == reviewedVersion {
-              studio.navigation.follow(ticket, to: "Operations")
+          if action == "host.checks" {
+            let ticket = studio.navigation.ticket()
+            Task {
+              guard studio.project == identity, studio.version == source else { return }
+              await studio.operations.perform(app.engine, "check", ["application": true])
+              if studio.project == identity, studio.version == source {
+                studio.navigation.follow(ticket, to: "Operations")
+              }
+            }
+          } else {
+            Task {
+              guard studio.project == identity, studio.version == source else { return }
+              await studio.onboardingAction(engine: app.engine, action: action)
             }
           }
         }
-        Button("Cancel", role: .cancel) {}
-      } message: {
-        Text("Run protected host probes and the build, start, service and health commands declared in the saved Factory. Project commands run in a temporary checkout and can consume resources or contact services. Review them in the definition first. Results open in Operations; this grants no release approval.")
-      }
+      )
   }
   private func request(_ action: String) {
     reviewedProject = studio.project; reviewedVersion = studio.version; pendingAction = action; confirmSetupAction = true

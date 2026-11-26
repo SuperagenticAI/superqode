@@ -6,11 +6,10 @@ struct FactoryModelSetupView: View {
   @ObservedObject var models: FactoryModelSetupLibrary
   var idle: Bool
   var executionOnly = false
-  @State private var reviewCloud = false
+  @State private var pendingDialog = ""
   @State private var cloudReviewProject = ""
   @State private var cloudReviewVersion = 0
   @State private var executionBinding = ""
-  @State private var reviewExecution = false
   @State private var executionReference = ""
   @State private var executionProject = ""
   @State private var executionVersion = 0
@@ -55,7 +54,7 @@ struct FactoryModelSetupView: View {
             Button("Use connected model for this execution binding…") {
               executionBinding = string(row, "binding"); executionReference = app.provider + "/" + app.model
               executionProject = studio.project; executionVersion = studio.version
-              reviewExecution = true
+              pendingDialog = "execution"
             }.disabled(!idle)
           }
         }
@@ -83,7 +82,7 @@ struct FactoryModelSetupView: View {
       if privacyBlocked {
         Button("Review cloud permission…") {
           cloudReviewProject = studio.project; cloudReviewVersion = studio.version
-          reviewCloud = true
+          pendingDialog = "cloud"
         }
           .disabled(!idle || studio.text.isEmpty)
           .accessibilityIdentifier("factory.models.cloudPermission")
@@ -99,36 +98,43 @@ struct FactoryModelSetupView: View {
       guard models.project == studio.project, models.report.isEmpty else { return }
       await models.inspect(engine: app.engine, yaml: studio.text)
     }
-    .onChange(of: studio.project) { _, _ in reviewCloud = false; reviewExecution = false; executionBinding = "" }
-    .onChange(of: studio.text) { _, _ in reviewCloud = false; reviewExecution = false; executionBinding = "" }
-    .confirmationDialog("Change this draft's execution model?", isPresented: $reviewExecution, titleVisibility: .visible) {
-      Button("Use " + executionReference) {
-        let binding = executionBinding; let reference = executionReference
-        guard !binding.isEmpty, idle, studio.project == executionProject, studio.version == executionVersion else { return }
-        let identity = studio.project; let source = studio.version
-        executionBinding = ""
-        Task {
-          guard studio.project == identity, studio.version == source else { return }
-          await studio.edit(engine: app.engine, controls: ["binding": binding, "model": reference])
-          await models.inspect(engine: app.engine, yaml: studio.text)
+    .onChange(of: studio.project) { _, _ in pendingDialog = ""; executionBinding = "" }
+    .onChange(of: studio.text) { _, _ in pendingDialog = ""; executionBinding = "" }
+    .factoryConfirmation(
+      isPresented: Binding(get: { !pendingDialog.isEmpty }, set: { if !$0 { pendingDialog = "" } }),
+      title: pendingDialog == "cloud" ? "Allow cloud models in this Factory draft?" : "Change this draft's execution model?",
+      message: pendingDialog == "cloud"
+        ? "This permits cloud models for drafting and execution under the best route. Future confirmed model calls may send your description, draft and task context to the selected provider. Review the definition before saving; existing runs keep their pinned policy."
+        : "Set binding \(executionBinding) to \(executionReference) in the editor. Other bindings, the drafting model and cloud permissions stay as configured. Review and save before running. Confirmed cloud trials may transmit task context and incur provider charges.",
+      kind: pendingDialog == "cloud" ? .caution : .draft,
+      badges: pendingDialog == "cloud"
+        ? [FactoryConfirmBadge(label: "Route: best", symbol: "cloud", color: Brand.orange)]
+        : [FactoryConfirmBadge(label: executionBinding.isEmpty ? "Binding" : executionBinding, symbol: "cpu", color: Brand.purple)],
+      confirmTitle: pendingDialog == "cloud" ? "Set draft route to best" : "Use " + executionReference,
+      onCancel: { pendingDialog = ""; executionBinding = "" },
+      onConfirm: {
+        let mode = pendingDialog
+        pendingDialog = ""
+        if mode == "cloud" {
+          let identity = cloudReviewProject; let source = cloudReviewVersion
+          Task {
+            guard idle, studio.project == identity, studio.version == source else { return }
+            await studio.edit(engine: app.engine, controls: ["default_route": "best"])
+            await models.inspect(engine: app.engine, yaml: studio.text)
+          }
+        } else if mode == "execution" {
+          let binding = executionBinding; let reference = executionReference
+          executionBinding = ""
+          guard !binding.isEmpty, idle, studio.project == executionProject, studio.version == executionVersion else { return }
+          let identity = studio.project; let source = studio.version
+          Task {
+            guard studio.project == identity, studio.version == source else { return }
+            await studio.edit(engine: app.engine, controls: ["binding": binding, "model": reference])
+            await models.inspect(engine: app.engine, yaml: studio.text)
+          }
         }
       }
-      Button("Cancel", role: .cancel) { executionBinding = "" }
-    } message: {
-      Text("Set binding \(executionBinding) to \(executionReference) in the editor. Other bindings, the drafting model and cloud permissions stay as configured. Review and save before running. Confirmed cloud trials may transmit task context and incur provider charges.")
-    }
-    .confirmationDialog("Allow cloud models in this Factory draft?", isPresented: $reviewCloud, titleVisibility: .visible) {
-      Button("Set draft route to best") {
-        Task {
-          guard idle, studio.project == cloudReviewProject, studio.version == cloudReviewVersion else { return }
-          await studio.edit(engine: app.engine, controls: ["default_route": "best"])
-          await models.inspect(engine: app.engine, yaml: studio.text)
-        }
-      }
-      Button("Keep current route", role: .cancel) {}
-    } message: {
-      Text("This permits cloud models for drafting and execution under the best route. Future confirmed model calls may send your description, draft and task context to the selected provider. Review the definition before saving; existing runs keep their pinned policy.")
-    }
+    )
   }
 
   @ViewBuilder private var connectionButtons: some View {
