@@ -104,6 +104,22 @@ final class FactoryPresentationTests: XCTestCase {
     XCTAssertEqual(engine.pendingRequestCount, 0)
   }
 
+  @MainActor func testGeneratedDraftReviewRendersAtCompactWidth() throws {
+    _ = NSApplication.shared
+    let snapshot = try XCTUnwrap(FactoryRLMLineageSnapshot.parse(proposal: [
+      "rlm_lineage": ["engine": "rlm-context", "mode": "rlm-local-inspect", "repo_files": 42,
+                      "files_inspected": ["pyproject.toml"], "detected_stacks": ["Python"],
+                      "recommended_workflow": "fix-and-verify", "detected_test_command": "pytest -q"]
+    ]))
+    for width: CGFloat in [560, 820] {
+      try render(FactoryRLMProposalCard(snapshot: snapshot,
+        assumptions: ["Review the proposed regression command before saving."],
+        missingCapabilities: ["Add protected acceptance probes."], busy: false,
+        onApply: { _ in }, onApplyYamlOnly: {}, onDismiss: {}),
+        name: "proposal-\(Int(width))", width: width, height: 730)
+    }
+  }
+
   @MainActor private func render<V: View>(_ view: V, name: String, width: CGFloat, height: CGFloat) throws {
     let content = view.frame(width: width, height: height, alignment: .topLeading)
       .background(Color(nsColor: .windowBackgroundColor))
