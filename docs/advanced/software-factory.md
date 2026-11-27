@@ -17,7 +17,7 @@ Improve the Factory under held-out gates
       ↺
 ```
 
-The macOS app is the primary interface. The CLI and TUI are fully capable on their own: every step above, from creating a Factory to the release decision, has a `sq factory` command and a `:factory` TUI command that use the same engine and the same files. No hosted coordination server is required.
+The macOS app is the primary interface. Factory Studio opens on a focused five-step journey (Describe, Connect, Review, Run and Verify) with **Watch a Factory work**, an interactive scripted presentation demo available from Welcome and Factory Studio without opening a project or connecting a model. Detailed controls, local draft recovery, and all workflow starters stay accessible under Advanced setup. The CLI and TUI are fully capable on their own: every step above, from creating a Factory to the release decision, has a `sq factory` command and a `:factory` TUI command that use the same engine and the same files. No hosted coordination server is required.
 
 ![SuperQode for macOS with Factory Studio in the sidebar and Build your factory on the connect screen](../assets/SuperQode_landing.jpg)
 

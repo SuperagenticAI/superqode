@@ -682,15 +682,25 @@ Other customer-managed P-256 signers can use the same CLI challenge protocol.
 ## Native Factory Studio
 
 Open a project and select **Factory Studio** in the Harnesses navigation group.
-The Stack view exposes all seven layers and crosscutting governance. Start from
-a workflow: **Fix and verify**, **Continuous outcomes**, **Build test deploy**,
-**Kanban**, **Scrum**, **XP** or **Lean**. A description can draft starter
-settings with no model. Words in the description pick the workflow. A model can
-still draft a proposal; it receives the description and definition, has no
-tools, and cannot change the release authority. A private route that rejects a
-cloud model falls back to the same starter. Applying a proposal, validating
-and saving are separate actions. Nothing runs until the revision is saved and
-a trial is started.
+The Describe page opens with a focused five-step journey (**Describe**,
+**Connect**, **Review**, **Run** and **Verify**) backed by an evidence-based
+flow map. Choose **Play demo** from Welcome or **Watch a demo** in Factory
+Studio to run **Watch a Factory work**, a scripted checkout-total repair
+presentation that requires no project or API key, stops at Human review until
+you approve the illustrated repair, makes zero model calls or file changes, and
+grants no SuperGauge evidence or release authority. At the end of the demo, you
+can explicitly create a disposable real sample for a normal agent trial.
+
+Expand **Advanced setup** or choose **All Factory controls** to access all
+seven layers, local draft recovery, and every workflow starter: **Fix and
+verify**, **Triage, spec & build**, **Continuous outcomes**, **Build test
+deploy**, **Kanban**, **Scrum**, **XP** or **Lean**. A description can draft
+starter settings with no model. Words in the description pick the workflow. A
+model can still draft a proposal; it receives the description and definition,
+has no tools, and cannot change the release authority. A private route that
+rejects a cloud model falls back to the same starter. Applying a proposal,
+validating and saving are separate actions. Nothing runs until the revision is
+saved and a trial is started.
 
 Review the workflow, model bindings, warnings and definition diff; save a revision
 with a reason. Revisions can be loaded back into the draft and explicitly saved

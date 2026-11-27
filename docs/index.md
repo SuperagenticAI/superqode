@@ -112,7 +112,7 @@ harness command or editing its persistent configuration.
 
 ## Build your factory
 
-Factory Studio in the Mac app is where you design a software factory, configure its harness and model, and compare an improvement before you save it. The same definition runs from the CLI and the TUI.
+Factory Studio in the Mac app walks through a focused five-step journey (Describe, Connect, Review, Run and Verify) to design a software factory, configure its harness and model, run protected verification, and compare improvements before saving. Choose **Play demo** on the welcome screen or **Watch a demo** in Factory Studio to step through an interactive scripted checkout-total repair with zero model calls or file changes. The same definition runs from the CLI and the TUI.
 
 <p align="center">
   <img src="assets/SuperQode_landing.jpg" alt="SuperQode for macOS with Factory Studio in the sidebar and Build your factory on the connect screen" width="960">
