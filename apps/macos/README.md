@@ -33,6 +33,25 @@ ACP session after setup exits successfully.
 
 On the welcome guide, **Build your factory** opens Factory Studio for the project you already have open. With no project open, it asks you to choose a folder first.
 
+## Guided Factory setup and presentation demo
+
+Factory Studio's Describe page shows one step at a time: Describe, Connect,
+Review, Run and Verify. Use the map to revisit a step. Model selection, source
+review, protected acceptance, worker execution and release decisions keep their
+existing engine contracts. Advanced setup contains the detailed model controls,
+local draft recovery and all workflow starters.
+
+Choose **Play demo** from Welcome, or **Demo** in Factory Studio, to present the
+checkout-total Factory without opening a repository or connecting a model.
+Use Play/Pause, Next, Back and Restart; Left/Right arrows step through the story
+and Escape closes it. Playback stops at Human review until you choose **Approve
+demo repair**. Motion respects the macOS Reduce Motion setting, and playback
+pauses when the window loses focus.
+
+This is a scripted illustration with zero model calls and zero file changes.
+Its results do not create SuperGauge evidence or authorize a release. At the end,
+you can explicitly create a disposable real sample and run a normal agent trial.
+
 ## Start coding
 
 1. Open the DMG, drag SuperQode to Applications and launch it from Applications.

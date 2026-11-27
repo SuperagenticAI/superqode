@@ -81,6 +81,8 @@ jobs:
           version: "0.13.0"
           python-version: "3.13"
       - name: Swift transport regressions and native build
+        env:
+          SUPERQODE_FACTORY_PREVIEW_DIR: ${{ runner.temp }}/factory-previews
         run: |
           echo "::add-matcher::.github/matchers/swift.json"
           set -o pipefail
@@ -171,6 +173,7 @@ jobs:
         with:
           name: native-smoke-report
           path: |
+            ${{ runner.temp }}/factory-previews/*.png
             apps/macos/artifacts/smoke-report.json
             apps/macos/artifacts/navigation-main-thread-sample.txt
             apps/macos/artifacts/native-app-stderr.log

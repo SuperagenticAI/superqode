@@ -22,6 +22,7 @@ struct WelcomeView: View {
               showBetaGuide = true
             }.buttonStyle(.link).font(.callout)
           }
+          FactoryPresentationLaunchCard().frame(maxWidth: 860)
           Group {
             if geometry.size.width >= 980 {
               HStack(alignment: .top, spacing: 24) {
@@ -35,7 +36,6 @@ struct WelcomeView: View {
               }
             }
           }.frame(maxWidth: 860)
-          FactoryDemoStartView().frame(maxWidth: 860, alignment: .leading)
           HStack(spacing: 24) {
             Button {
               app.showLearningGuide = true

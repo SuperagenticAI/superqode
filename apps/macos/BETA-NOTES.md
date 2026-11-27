@@ -1,4 +1,13 @@
-# SuperQode for macOS public beta 0.5.2
+# SuperQode for macOS public beta 0.5.3
+
+Version 0.5.3 (build 60) bundles Python engine 2.33.3.
+
+- Factory Describe now opens with a focused, five-step journey: Describe, Connect, Review, Run and Verify. An interactive map shows your location and evidence-based milestones; detailed setup and all workflow starters remain available under Advanced setup.
+- Added **Watch a Factory work**, an interactive presentation available from Welcome and Factory Studio without a project or model connection. Play, pause, step back or restart a checkout-total repair, and approve the demo's human-review step before the illustrated verification continues.
+- Presentation mode stays labelled **Scripted demo**, makes no model calls, changes no files and creates no quality record or release authority. Its final step can create the existing real sample for an actual agent trial.
+- Added animated transitions, active-step feedback, keyboard demo controls and Reduce Motion support. The progress strip no longer duplicates the guided Describe map.
+
+## 0.5.2 (build 59)
 
 Version 0.5.2 (build 59) bundles Python engine 2.33.3.
 
