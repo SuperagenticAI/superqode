@@ -6,7 +6,6 @@ from copy import deepcopy
 import difflib
 import json
 from pathlib import Path
-import shlex
 
 import yaml
 
@@ -150,67 +149,6 @@ def _extract_json_object(text: str) -> dict:
     raise ValueError("Model response did not contain a valid JSON object")
 
 
-def build_default_probe_manifest(root: Path, *, command: str = "") -> dict | None:
-    """Build a starter protected Python probe manifest from the repo's test command."""
-    root = Path(root).resolve()
-    tokens: list[str] = []
-    if command and command.strip():
-        try:
-            tokens = shlex.split(command.strip())
-        except ValueError:
-            tokens = []
-    case_argv: list[str] | None = None
-    if tokens and Path(tokens[0]).name in {"python", "python3"} and len(tokens) >= 2:
-        if tokens[1] == "-m" and len(tokens) >= 3:
-            module = tokens[2]
-            mod_argv = [module, *tokens[3:]]
-            code = (
-                f"import runpy, sys; sys.path.insert(0, '.'); sys.argv = {mod_argv!r}; "
-                f"runpy.run_module({module!r}, run_name='__main__'); print('SUPERQODE_PROBE_OK')"
-            )
-            case_argv = ["python", "-c", code]
-        elif not tokens[1].startswith("-"):
-            script = tokens[1]
-            try:
-                candidate = source_path(root, script)
-            except ValueError:
-                candidate = None
-            if candidate is not None and candidate.is_file():
-                script_argv = [script, *tokens[2:]]
-                code = (
-                    f"import runpy, sys; sys.path.insert(0, '.'); sys.argv = {script_argv!r}; "
-                    f"runpy.run_path({script!r}, run_name='__main__'); print('SUPERQODE_PROBE_OK')"
-                )
-                case_argv = ["python", "-c", code]
-    if case_argv is None and (root / "self_check.py").is_file():
-        code = (
-            "import runpy, sys; sys.path.insert(0, '.'); sys.argv = ['self_check.py']; "
-            "runpy.run_path('self_check.py', run_name='__main__'); print('SUPERQODE_PROBE_OK')"
-        )
-        case_argv = ["python", "-c", code]
-    if case_argv is None and (root / "app.py").is_file():
-        code = (
-            "import py_compile; py_compile.compile('app.py', doraise=True); "
-            "print('SUPERQODE_PROBE_OK')"
-        )
-        case_argv = ["python", "-c", code]
-    if case_argv is None:
-        return None
-    manifest = {
-        "format": "superqode.factory-probes/1",
-        "cases": [
-            {
-                "id": "regression-probe",
-                "argv": case_argv,
-                "stdout_contains": "SUPERQODE_PROBE_OK",
-                "returncode": 0,
-            }
-        ],
-    }
-    parse_probes(canonical(manifest))
-    return manifest
-
-
 def scaffold_evaluator(
     root,
     *,
@@ -219,67 +157,73 @@ def scaffold_evaluator(
     command: str = "",
     manifest: dict | None = None,
 ) -> dict:
-    """Write a starter protected probe manifest and bind it into the Factory draft."""
+    """Bind explicit expectations; repository commands remain mutable self-checks.
+
+    ``command`` remains accepted for existing desktop clients. It never supplies
+    independent acceptance expectations, including when it exits successfully.
+    """
     root = Path(root).resolve()
-    data = read_mapping(yaml_text) if yaml_text and yaml_text.strip() else None
-    effective_command = command.strip()
-    if data and "apiVersion" in data:
+    with execution(root, exclusive=True), ownership(root):
+        data = read_mapping(yaml_text)
         validate_definition(data)
-        checks = data.get("improvement", {}).get("checks", {})
+        checks = data["improvement"]["checks"]
         if check not in checks:
-            accepted = data.get("orchestration", {}).get("acceptance_checks") or []
-            if accepted:
-                check = str(accepted[0])
-        existing_check = checks.get(check) if isinstance(checks, dict) else None
-        if isinstance(existing_check, dict):
-            existing_eval = existing_check.get("evaluator")
-            files_map = data.get("data_context", {}).get("files", {})
-            if (
-                existing_eval
-                and existing_eval in files_map
-                and (root / files_map[existing_eval]["path"]).is_file()
-            ):
-                return {
-                    "written": False,
-                    "already_configured": True,
-                    "path": files_map[existing_eval]["path"],
-                    "asset": existing_eval,
-                    "yaml": yaml_text,
-                }
-            if not effective_command:
-                effective_command = str(existing_check.get("command") or "")
-    chosen_manifest = manifest or build_default_probe_manifest(root, command=effective_command)
-    if chosen_manifest is None:
-        return {
-            "written": False,
-            "already_configured": False,
-            "yaml": yaml_text,
-            "reason": "No Python check script detected for automatic protected probe scaffolding.",
-        }
-    text = canonical(chosen_manifest)
-    _safe_text("protected-probes.json", text)
-    parse_probes(text)
-    rel_path = f".superqode/evaluators/{check}.json"
-    asset = f"evaluator-{check}"
-    write(source_path(root, rel_path), text)
-    updated_yaml = yaml_text
-    if data and "apiVersion" in data:
-        checks = data.setdefault("improvement", {}).setdefault("checks", {})
-        if check in checks and isinstance(checks[check], dict):
-            data.setdefault("data_context", {}).setdefault("files", {})[asset] = {
-                "path": rel_path,
-                "purpose": "evaluator",
+            accepted = data["orchestration"]["acceptance_checks"]
+            if not accepted:
+                raise ValueError("Choose an existing acceptance check")
+            check = accepted[0]
+        existing_eval = checks[check].get("evaluator")
+        files_map = data["data_context"].get("files", {})
+        if existing_eval:
+            binding = files_map.get(existing_eval, {})
+            if binding.get("purpose") != "evaluator":
+                raise ValueError("Existing evaluator binding needs review")
+            path = source_path(root, binding["path"])
+            parse_probes(path.read_text())
+            return {
+                "written": False,
+                "already_configured": True,
+                "path": binding["path"],
+                "asset": existing_eval,
+                "yaml": yaml_text,
             }
-            checks[check]["evaluator"] = asset
-            validate_definition(data)
-            updated_yaml = yaml.safe_dump(data, sort_keys=False)
-    return {
-        "written": True,
-        "already_configured": False,
-        "path": rel_path,
-        "asset": asset,
-        "yaml": updated_yaml,
-    }
+        if manifest is None:
+            return {
+                "written": False,
+                "already_configured": False,
+                "yaml": yaml_text,
+                "reason": "Add independently reviewed expected outcomes in Acceptance checks. "
+                "Repository test commands remain self-checks and cannot establish protected acceptance.",
+            }
+        text = canonical(manifest)
+        _safe_text("protected-probes.json", text)
+        parse_probes(text)
+        rel_path = f".superqode/evaluators/{check}.json"
+        asset = f"evaluator-{check}"
+        binding = {"path": rel_path, "purpose": "evaluator"}
+        if asset in files_map and files_map[asset] != binding:
+            raise ValueError("Existing evaluator asset needs review; it will not be replaced")
+        data["data_context"].setdefault("files", {})[asset] = binding
+        checks[check]["evaluator"] = asset
+        validate_definition(data)
+        updated_yaml = yaml.safe_dump(data, sort_keys=False)
+        path = source_path(root, rel_path)
+        path.parent.mkdir(parents=True, exist_ok=True)
+        # Exclusive creation also protects files written by an editor outside our lock.
+        try:
+            with path.open("x", encoding="utf-8") as stream:
+                stream.write(text)
+        except FileExistsError:
+            raise ValueError(
+                "Evaluator file already exists; review it in Acceptance checks"
+            ) from None
+        return {
+            "written": True,
+            "already_configured": False,
+            "path": rel_path,
+            "asset": asset,
+            "yaml": updated_yaml,
+        }
 
 
 async def generate(root, *, description, provider, model, gateway=None):

@@ -89,6 +89,23 @@ def parse_probes(text: str) -> dict:
     errors = list(Draft202012Validator(PROBE_SCHEMA).iter_errors(data))
     if errors:
         raise ValueError(f"Invalid protected probes: {errors[0].message}")
+    for row in data["cases"]:
+        argv = row["argv"]
+        if (
+            row["id"] == "regression-probe"
+            and row.get("stdout_contains") == "SUPERQODE_" + "PROBE_OK"
+            and len(argv) == 3
+            and argv[1] == "-c"
+            and any(
+                call in argv[2]
+                for call in ("runpy.run_path", "runpy.run_module", "py_compile.compile")
+            )
+        ):
+            raise ValueError(
+                "Legacy automatic self-check probes cannot establish protected acceptance. "
+                "Replace them with independently reviewed expectations in Acceptance checks, "
+                "then save and prepare a fresh trial."
+            )
     ids = [row["id"] for row in data["cases"]]
     if len(ids) != len(set(ids)):
         raise ValueError("Protected probe ids must be unique")

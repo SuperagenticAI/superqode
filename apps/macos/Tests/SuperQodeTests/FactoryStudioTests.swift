@@ -5,6 +5,25 @@ import SwiftUI
 @testable import SuperQode
 
 final class FactoryStudioTests: XCTestCase {
+  @MainActor func testWorkerCompletionDoesNotVerifyAnotherSelectedRun() async {
+    let pipe = Pipe(); let engine = Engine(input: pipe.fileHandleForWriting); defer { engine.stop() }
+    let studio = FactoryStudioLibrary(); studio.enter("project"); studio.run = "run-a"
+    var verificationStarted = false
+    let pending = Task { await studio.runStagesAndVerify(engine: engine, onVerify: { verificationStarted = true }) }
+    while engine.pendingRequestCount < 1 { await Task.yield() }
+    engine.receive(["id": 1, "result": ["id": "worker-job"]])
+    while engine.pendingRequestCount < 1 { await Task.yield() }
+    studio.run = "run-b"
+    studio.detail = ["has_protected_evaluators": true, "work_order": ["tasks": [["status": "succeeded"]]]]
+    engine.receive(["id": 2, "result": ["status": "completed"]])
+    while engine.pendingRequestCount < 1 { await Task.yield() }
+    engine.receive(["id": 3, "result": ["runs": []]])
+    await pending.value
+    XCTAssertFalse(verificationStarted)
+    XCTAssertEqual(studio.run, "run-b")
+    XCTAssertEqual(engine.pendingRequestCount, 0)
+  }
+
   @MainActor func testExternalOptimizerImportCannotPublishIntoAnotherProject() async {
     let pipe = Pipe(); let engine = Engine(input: pipe.fileHandleForWriting); defer { engine.stop() }
     let studio = FactoryStudioLibrary(); studio.enter("first"); studio.improvementPlan = ["id": "plan"]

@@ -502,32 +502,117 @@ def test_stdout_contains_probe_schema_and_verification(project, monkeypatch):
     assert result["record"]["decision"]["verdict"] == "ship"
 
 
-def test_scaffold_evaluator_binds_protected_probe_from_python_script(tmp_path):
+@pytest.mark.parametrize(
+    "command",
+    [
+        "python self_check.py",
+        "python -m unittest",
+        "python -m pytest",
+        "python -m py_compile app.py",
+        "npm test",
+    ],
+)
+def test_scaffolding_does_not_promote_mutable_self_checks(tmp_path, command):
     from superqode.factory.templates import factory_template
-    from superqode.factory.verifiers import _extract_json_object, scaffold_evaluator
+    from superqode.factory.verifiers import scaffold_evaluator
     import yaml
 
-    (tmp_path / "self_check.py").write_text("assert 2 + 3 == 5\nprint('ok')\n")
+    (tmp_path / "app.py").write_text("def total(values): return 999\n")
+    (tmp_path / "self_check.py").write_text("assert 1 == 2\n")
     spec = factory_template("fix-and-verify")
-    spec["improvement"]["checks"]["regression"]["command"] = "python3 self_check.py"
+    spec["improvement"]["checks"]["regression"]["command"] = command
     raw = yaml.safe_dump(spec, sort_keys=False)
+    before = scaffold_evaluator(tmp_path, yaml_text=raw)
+    (tmp_path / "self_check.py").write_text("pass\n")
+    after = scaffold_evaluator(tmp_path, yaml_text=raw)
+    for result in [before, after]:
+        assert result["written"] is False
+        assert result["already_configured"] is False
+        assert result["yaml"] == raw
+        assert "self-checks" in result["reason"]
+    assert not (tmp_path / ".superqode/evaluators/regression.json").exists()
 
-    result = scaffold_evaluator(tmp_path, yaml_text=raw)
+
+def test_scaffold_explicit_behavioral_expectations_preserves_existing_files(tmp_path):
+    from superqode.factory.templates import factory_template
+    from superqode.factory.verifiers import scaffold_evaluator
+    import yaml
+
+    raw = yaml.safe_dump(factory_template("fix-and-verify"), sort_keys=False)
+    manifest = {
+        "format": "superqode.factory-probes/1",
+        "cases": [{"id": "total", "argv": ["python", "app.py", "[2,3]"], "stdout": "5\n"}],
+    }
+    result = scaffold_evaluator(tmp_path, yaml_text=raw, manifest=manifest)
+    path = tmp_path / result["path"]
     assert result["written"] is True
-    assert result["path"] == ".superqode/evaluators/regression.json"
-    assert (tmp_path / result["path"]).is_file()
+    assert json.loads(path.read_text()) == manifest
     updated = yaml.safe_load(result["yaml"])
     assert updated["improvement"]["checks"]["regression"]["evaluator"] == "evaluator-regression"
-    assert updated["data_context"]["files"]["evaluator-regression"] == {
-        "path": ".superqode/evaluators/regression.json",
-        "purpose": "evaluator",
+    original_bytes = path.read_bytes()
+    again = scaffold_evaluator(tmp_path, yaml_text=result["yaml"])
+    assert again["already_configured"] is True
+    with pytest.raises(ValueError, match="already exists"):
+        scaffold_evaluator(tmp_path, yaml_text=raw, manifest=manifest)
+    assert path.read_bytes() == original_bytes
+
+
+def test_scaffold_refuses_invalid_manifest_before_creating_file(tmp_path):
+    from superqode.factory.templates import factory_template
+    from superqode.factory.verifiers import scaffold_evaluator
+    import yaml
+
+    with pytest.raises(ValueError, match="Invalid protected probes"):
+        scaffold_evaluator(tmp_path, yaml_text=yaml.safe_dump(factory_template()), manifest={})
+    assert not (tmp_path / ".superqode/evaluators/regression.json").exists()
+
+
+def test_scaffold_preserves_unbound_custom_evaluator(tmp_path):
+    from superqode.factory.templates import factory_template
+    from superqode.factory.verifiers import scaffold_evaluator
+    import yaml
+
+    path = tmp_path / ".superqode/evaluators/regression.json"
+    path.parent.mkdir(parents=True)
+    original = b'{"custom":"existing user file"}\n'
+    path.write_bytes(original)
+    manifest = {
+        "format": "superqode.factory-probes/1",
+        "cases": [{"id": "total", "argv": ["python", "app.py"], "stdout": "5\n"}],
     }
+    with pytest.raises(ValueError, match="already exists"):
+        scaffold_evaluator(
+            tmp_path, yaml_text=yaml.safe_dump(factory_template()), manifest=manifest
+        )
+    assert path.read_bytes() == original
 
-    # Calling again is idempotent.
-    second = scaffold_evaluator(tmp_path, yaml_text=result["yaml"])
-    assert second["written"] is False
-    assert second["already_configured"] is True
 
-    # JSON extraction handles prose + fenced blocks from cloud models.
+def test_verifier_json_extraction_preserves_prose_support():
+    from superqode.factory.verifiers import _extract_json_object
+
     parsed = _extract_json_object('Here is the manifest:\n```json\n{"checks": {}}\n```\nDone.')
     assert parsed == {"checks": {}}
+
+
+@pytest.mark.parametrize(
+    "call",
+    [
+        "runpy.run_path('self_check.py', run_name='__main__')",
+        "runpy.run_module('unittest', run_name='__main__')",
+        "py_compile.compile('app.py', doraise=True)",
+    ],
+)
+def test_previously_generated_self_check_wrappers_are_not_protected_acceptance(call):
+    manifest = {
+        "format": "superqode.factory-probes/1",
+        "cases": [
+            {
+                "id": "regression-probe",
+                "argv": ["python", "-c", call + "; print('SUPERQODE_PROBE_OK')"],
+                "stdout_contains": "SUPERQODE_PROBE_OK",
+                "returncode": 0,
+            }
+        ],
+    }
+    with pytest.raises(ValueError, match="fresh trial"):
+        parse_probes(json.dumps(manifest))

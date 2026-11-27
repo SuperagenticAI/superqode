@@ -2,6 +2,14 @@
 
 Your code factory is the organization-owned system that combines coding agents, harnesses, models, repositories, context, tools, policies, evaluation gates, and delivery workflows. The SuperQode Software Factory defines that system as code, runs it through durable WorkOrders, checks the result with protected evaluators and SuperGauge, and releases only what a person signs.
 
+Repository test commands are self-checks. Protected acceptance requires explicit,
+independently reviewed expected outcomes in **Acceptance checks**. Factory setup
+preserves existing evaluator files and leaves this step open when expectations
+are missing. Legacy automatic wrappers around test scripts or syntax compilation
+must be replaced before verification; save the corrected definition and prepare
+a fresh trial. The disposable demo includes behavioral acceptance probes.
+
+
 ```text
 Define the Factory (FactorySpec)
       ↓
