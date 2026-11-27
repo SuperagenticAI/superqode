@@ -1364,7 +1364,7 @@ struct FactoryStudioView: View {
     let requestedRun = library.run
     activeAction = action
     Task {
-      defer { if activeAction == action { activeAction = "" } }
+      defer { if activeAction == action || (action == "worker" && activeAction == "verify") { activeAction = "" } }
       guard library.project == ticket.project else { return }
       if action == "worker", library.run != requestedRun { return }
       switch action {

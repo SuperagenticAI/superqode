@@ -1,4 +1,12 @@
-# SuperQode for macOS public beta 0.5.8
+# SuperQode for macOS public beta 0.5.9
+
+Version 0.5.9 (build 66) bundles Python engine 2.33.3.
+
+- Protected acceptance integrity: repository test commands stay self-checks, and SuperGauge requires independently reviewed behavioral expectations in **Acceptance checks** rather than mutable test-script wrappers.
+- Preserved existing custom evaluator files during scaffolding by using exclusive file creation and explicit idle locking.
+- Pinned automatic SuperGauge verification to the original trial run ID so switching selected trials during execution never verifies a different trial, and fixed `activeAction` cleanup after automatic verification finishes.
+
+## 0.5.8 (build 65)
 
 Version 0.5.8 (build 65) bundles Python engine 2.33.3.
 
