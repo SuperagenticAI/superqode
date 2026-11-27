@@ -107,16 +107,25 @@ final class FactoryPresentationTests: XCTestCase {
   @MainActor private func render<V: View>(_ view: V, name: String, width: CGFloat, height: CGFloat) throws {
     let content = view.frame(width: width, height: height, alignment: .topLeading)
       .background(Color(nsColor: .windowBackgroundColor))
-    let renderer = ImageRenderer(content: content)
-    renderer.scale = 1
-    renderer.proposedSize = ProposedViewSize(width: width, height: height)
-    let image = try XCTUnwrap(renderer.nsImage, "Could not render " + name)
-    XCTAssertGreaterThan(image.size.width, 0)
+    // ImageRenderer omits AppKit-backed text fields and scroll content. Capture the
+    // actual hosted native view so previews include the controls people use.
+    let bounds = NSRect(x: 0, y: 0, width: width, height: height)
+    let window = NSWindow(contentRect: bounds, styleMask: [.borderless], backing: .buffered, defer: false)
+    window.appearance = NSAppearance(named: name.hasSuffix("-dark") ? .darkAqua : .aqua)
+    let hosting = NSHostingView(rootView: content)
+    hosting.frame = bounds
+    window.contentView = hosting
+    window.orderFront(nil)
+    defer { window.orderOut(nil) }
+    RunLoop.main.run(until: Date().addingTimeInterval(0.05))
+    hosting.layoutSubtreeIfNeeded()
+    hosting.displayIfNeeded()
+    let bitmap = try XCTUnwrap(hosting.bitmapImageRepForCachingDisplay(in: bounds), "Could not render " + name)
+    hosting.cacheDisplay(in: bounds, to: bitmap)
+    XCTAssertGreaterThan(bitmap.pixelsWide, 0)
     if let directory = ProcessInfo.processInfo.environment["SUPERQODE_FACTORY_PREVIEW_DIR"] {
       let folder = URL(fileURLWithPath: directory)
       try FileManager.default.createDirectory(at: folder, withIntermediateDirectories: true)
-      let tiff = try XCTUnwrap(image.tiffRepresentation)
-      let bitmap = try XCTUnwrap(NSBitmapImageRep(data: tiff))
       let png = try XCTUnwrap(bitmap.representation(using: .png, properties: [:]))
       try png.write(to: folder.appendingPathComponent(name + ".png"))
     }

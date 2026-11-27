@@ -42,7 +42,7 @@ struct FactoryPresentationState: Equatable {
       case .repair: "The loop replaces the running total. Accumulating each value fixes the behavior with one changed line."
       case .review: "Inspect the proposed change. This demo pauses here until you approve the illustrated repair."
       case .verify: "Multiple items, discounts and an empty basket all meet their expectations in this scripted example."
-      case .complete: "One changed line, three illustrated passing cases and a recorded review step. A real trial supplies actual usage and verification evidence."
+      case .complete: "One changed line, three illustrated passing cases and an approved demo review. A real trial supplies actual usage and verification evidence."
       }
     }
   }

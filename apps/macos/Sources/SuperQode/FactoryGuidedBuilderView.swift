@@ -132,7 +132,7 @@ struct FactoryGuidedBuilderView: View {
       title("Choose your starting point.", "A model can help draft the Factory. Its stages keep their own execution bindings.")
       HStack(spacing: 12) {
         connection("Local model", detail: "Use a model on your machine.", symbol: "desktopcomputer", source: "source:local")
-        connection("Frontier model", detail: "Connect your provider account.", symbol: "cloud", source: "source:key")
+        connection("Frontier model", detail: "Use your own API key.", symbol: "cloud", source: "source:key")
       }
       if connected {
         Button {

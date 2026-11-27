@@ -68,8 +68,10 @@ struct FactoryStudioView: View {
   }
   var body: some View {
     HStack(alignment: .top, spacing: 20) {
-      FactoryNavigationHeader(navigation: library.navigation, badges: sidebarBadges).frame(width: 178)
-      Divider()
+      if tab != "Stack" || showAdvancedSetup {
+        FactoryNavigationHeader(navigation: library.navigation, badges: sidebarBadges).frame(width: 178)
+        Divider()
+      }
       VStack(alignment: .leading, spacing: 14) {
       headerBar
       if showNextStepGuide && tab != "Stack" {
@@ -219,6 +221,10 @@ struct FactoryStudioView: View {
         Button("Save changes…") { requestConfirmation("save") }
           .disabled(!idle || library.review.isEmpty || controlsHaveChanges || setup.saved)
       }
+      if tab == "Stack", !showAdvancedSetup {
+        Button("All Factory controls") { library.navigation.select("Definition") }
+          .accessibilityIdentifier("factory.journey.allControls")
+      }
       Button { showTour = true } label: {
         Label("Tour", systemImage: "book.pages")
       }
@@ -264,6 +270,7 @@ struct FactoryStudioView: View {
             }
             .id("factory-proposal-top")
           }
+          if !library.canApplyProposal {
           FactoryGuidedBuilderView(
             studio: library, step: $journeyStep, trialGoal: $goal, setup: setup, idle: idle,
             onBuild: { requestConfirmation("rlm-architect") },
@@ -283,6 +290,7 @@ struct FactoryStudioView: View {
             onTrial: { requestConfirmation("trial") },
             onDemo: { showPresentation = true }
           )
+          }
           DisclosureGroup("Advanced setup · workflows, model details and local draft recovery", isExpanded: $showAdvancedSetup) {
             VStack(alignment: .leading, spacing: 18) {
           HStack(spacing: 8) {

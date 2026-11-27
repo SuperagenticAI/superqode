@@ -125,11 +125,9 @@ struct FactoryRLMProposalCard: View {
   var body: some View {
     VStack(alignment: .leading, spacing: 12) {
       HStack(spacing: 8) {
-        Label("On-Demand Software Factory ready", systemImage: "checkmark.seal.fill")
+        Label("Review your Factory draft", systemImage: "checkmark.seal.fill")
           .font(.subheadline.weight(.semibold))
           .foregroundStyle(Brand.purple)
-        pill(snapshot.engineLabel, color: Brand.purple)
-        pill(snapshot.modeLabel, color: snapshot.mode == "rlm-live" ? Brand.pink : Color(red: 0.14, green: 0.62, blue: 0.42))
         Spacer()
         if snapshot.durationMs > 0 {
           Text(String(format: "%.1fs", Double(snapshot.durationMs) / 1000.0))
@@ -147,11 +145,11 @@ struct FactoryRLMProposalCard: View {
 
       // Interactive 3-step visual summary of what SuperQode just did
       HStack(spacing: 8) {
-        stepBadge("1", "Scanned \(snapshot.repoFiles) files")
+        stepBadge("1", "Indexed \(snapshot.repoFiles) files")
         Image(systemName: "arrow.right").font(.caption2).foregroundStyle(.tertiary)
         stepBadge("2", "Detected \(snapshot.detectedStacks.joined(separator: ", "))")
         Image(systemName: "arrow.right").font(.caption2).foregroundStyle(.tertiary)
-        stepBadge("3", "Built \(snapshot.recommendedWorkflow)")
+        stepBadge("3", "Drafted workflow")
       }
 
       // Clear breakdown of what this factory sets up for the repo
@@ -232,7 +230,7 @@ struct FactoryRLMProposalCard: View {
         }
       }
       if !assumptions.isEmpty {
-        VStack(alignment: .leading, spacing: 3) {
+        DisclosureGroup("Assumptions to review (\(assumptions.count))") {
           ForEach(assumptions, id: \.self) { item in
             Text("• \(item)")
               .font(.caption)
@@ -241,11 +239,19 @@ struct FactoryRLMProposalCard: View {
         }
       }
 
+      if !missingCapabilities.isEmpty {
+        DisclosureGroup("Setup still needed (\(missingCapabilities.count))") {
+          ForEach(missingCapabilities, id: \.self) { item in
+            Label(item, systemImage: "exclamationmark.circle").font(.caption).foregroundStyle(.orange)
+          }
+        }
+      }
       DisclosureGroup(
         "How SuperQode analyzed this repository (\(snapshot.filesInspected.count) manifests read, \(snapshot.subcalls.count) sub-queries)",
         isExpanded: $showTrace
       ) {
         VStack(alignment: .leading, spacing: 6) {
+          Text(snapshot.engineLabel + " · " + snapshot.modeLabel).font(.caption)
           if !snapshot.filesInspected.isEmpty {
             Text("Files inspected: " + snapshot.filesInspected.joined(separator: ", "))
               .font(.caption2.monospaced())
@@ -281,7 +287,7 @@ struct FactoryRLMProposalCard: View {
           onApply(selectedSkills)
         } label: {
           Label(
-            selectedSkills.isEmpty ? "Apply & Edit Factory →" : "Apply, Add \(selectedSkills.count) Skills & Edit Factory →",
+            selectedSkills.isEmpty ? "Use this draft" : "Use draft & add \(selectedSkills.count) skills",
             systemImage: "arrow.right.circle.fill"
           )
         }
@@ -289,7 +295,7 @@ struct FactoryRLMProposalCard: View {
         .disabled(busy)
         .accessibilityIdentifier("factory.rlm.applyWithSkills")
 
-        Button("Open YAML only") {
+        Button("Use draft only") {
           onApplyYamlOnly()
         }
         .disabled(busy)
@@ -297,10 +303,10 @@ struct FactoryRLMProposalCard: View {
       }
 
       HStack(alignment: .firstTextBaseline, spacing: 6) {
-        Image(systemName: "sparkles")
+        Image(systemName: "doc.text")
           .font(.caption2)
           .foregroundStyle(Brand.purple)
-        Text("**Coming next — Recursive Software Factories:** dynamically spawn isolated, SuperGauge-verified sub-factories on demand for multi-service and monorepo tasks, governed by your committed `factory.yaml`.")
+        Text("Review and save the definition before preparing a trial. Selected skills create local files when you use this draft.")
           .font(.caption2)
           .foregroundStyle(.secondary)
       }

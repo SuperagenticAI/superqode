@@ -87,6 +87,13 @@ jobs:
           echo "::add-matcher::.github/matchers/swift.json"
           set -o pipefail
           swift test --build-system native --package-path apps/macos -c release 2>&1 | tee "$RUNNER_TEMP/superqode-swift-tests.log"
+      - name: Upload Factory native previews
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: factory-native-previews
+          path: ${{ runner.temp }}/factory-previews/*.png
+          if-no-files-found: ignore
       - name: Report native test failures in check annotations
         if: failure()
         run: |
