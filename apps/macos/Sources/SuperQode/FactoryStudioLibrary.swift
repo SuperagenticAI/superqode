@@ -300,7 +300,7 @@ import Combine
       await inspect(engine: engine)
     } catch { if project == identity { failure = error.localizedDescription } }
   }
-  func start(engine: Engine, action: String, provider: String = "", model: String = "", workflow: String = "", extra: [String: Any] = [:]) async {
+  func start(engine: Engine, action: String, provider: String = "", model: String = "", workflow: String = "", allowCloud: Bool = false, executionModel: String = "", extra: [String: Any] = [:]) async {
     guard !busy else { return }
     let identity = project; let token = version; let selected = run
     let op = UUID(); operation = op; busy = true; failure = ""
@@ -310,6 +310,10 @@ import Combine
     if ["source-commit", "improvement-search", "improvement-compare", "campaign-run", "campaign-worker"].contains(action) { params.merge(extra) { _, value in value } }
     if ["generate", "rlm-architect"].contains(action) { params.merge(["yaml": text, "description": description,
       "provider": provider, "model": model, "workflow": workflow]) { _, value in value } }
+    if action == "rlm-architect" {
+      params["allow_cloud"] = allowCloud
+      if !executionModel.isEmpty { params["execution_model"] = executionModel }
+    }
     if action == "apply" { params["candidate_id"] = detail["candidate_id"]; params["candidate_digest"] = detail["candidate_digest"] }
     do {
       let started = try await rpc(engine, "action.start", params)

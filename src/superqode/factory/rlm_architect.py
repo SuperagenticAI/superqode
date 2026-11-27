@@ -580,6 +580,8 @@ def _compose_factory_spec(
     workflow_override: str,
     provider: str,
     model: str,
+    allow_cloud: bool = False,
+    execution_model: str = "",
 ) -> tuple[dict[str, Any], list[str], list[str], list[dict[str, str]]]:
     arch = refinements.get("architecture-and-stages") or {}
     verif = refinements.get("verification-and-risk") or {}
@@ -613,6 +615,32 @@ def _compose_factory_spec(
             "release_authority"
         ):
             spec["governance"]["release_authority"] = base_data["governance"]["release_authority"]
+    elif allow_cloud:
+        spec["default_route"] = "best"
+
+    bound_execution_model = ""
+    if not existing and execution_model.strip():
+        from superqode.providers.dynamic import resolve_provider_def
+        from superqode.providers.model_specs import split_provider_model_ref
+
+        parsed = split_provider_model_ref(execution_model.strip())
+        resolved_provider = resolve_provider_def(parsed.provider) if parsed.provider else None
+        if (
+            parsed.provider
+            and parsed.model
+            and resolved_provider
+            and not resolved_provider.harness_only
+            and not any(word in parsed.model.lower() for word in ("embed", "rerank"))
+        ):
+            try:
+                check_generation_route(spec, parsed.provider, parsed.model)
+            except ValueError:
+                pass
+            else:
+                harnesses = spec.get("inference", {}).get("harnesses", {})
+                if "coder" in harnesses and isinstance(harnesses["coder"], dict):
+                    harnesses["coder"]["model"] = execution_model.strip()
+                    bound_execution_model = execution_model.strip()
 
     # Wire real detected test command into the regression check.
     test_command = str(verif.get("test_command") or "").strip() or signals["detected_test_command"]
@@ -722,9 +750,14 @@ def _compose_factory_spec(
                 f"Requested starter `{workflow_override}` was not applied: the existing Factory workflow is preserved. "
                 "Choose and review a replacement starter separately to change workflow structure."
             )
-    assumptions.append(
-        "The drafting model is separate from execution models; review the execution bindings before running a trial."
-    )
+    if bound_execution_model:
+        assumptions.append(
+            f"Bound `coder` execution model to `{bound_execution_model}` under route `{spec.get('default_route', 'best')}`."
+        )
+    else:
+        assumptions.append(
+            "The drafting model is separate from execution models; review the execution bindings before running a trial."
+        )
     for item in arch.get("assumptions") if isinstance(arch.get("assumptions"), list) else []:
         text = str(item).strip()
         if text and len(assumptions) < 8:
@@ -760,6 +793,8 @@ async def architect_factory(
     workflow: str = "",
     provider: str = "",
     model: str = "",
+    allow_cloud: bool = False,
+    execution_model: str = "",
     gateway: Any = None,
     use_monty: bool = True,
     on_subcall: Callable[[dict], None] | None = None,
@@ -802,8 +837,13 @@ async def architect_factory(
     allow_live_subcalls = bool(provider and model)
     route_note = ""
     if allow_live_subcalls:
+        effective_route_data = (
+            base_data
+            if base_data is not None
+            else ({"default_route": "best"} if allow_cloud else {})
+        )
         try:
-            check_generation_route(base_data or {}, provider, model)
+            check_generation_route(effective_route_data, provider, model)
         except ValueError as exc:
             if "local drafting model" not in str(exc):
                 raise
@@ -844,6 +884,8 @@ async def architect_factory(
         workflow_override=workflow if workflow in TEMPLATE_NAMES else "",
         provider=provider if allow_live_subcalls else "",
         model=model if allow_live_subcalls else "",
+        allow_cloud=allow_cloud,
+        execution_model=execution_model,
     )
     if route_note:
         assumptions.insert(0, route_note)

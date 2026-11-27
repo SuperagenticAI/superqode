@@ -232,3 +232,25 @@ def test_cloud_permission_control_edits_only_reviewable_draft(project, tmp_path,
             )
     finally:
         service.close()
+
+
+def test_explicit_allow_cloud_unblocks_empty_draft_without_overriding_private_draft(tmp_path):
+    report = inspect_models(
+        tmp_path,
+        yaml_text="",
+        drafting_model="google/gemini-4-neon",
+        allow_cloud=True,
+    )
+    assert report["default_route"] == "best"
+    assert report["drafting"]["eligible"] is True
+    assert report["drafting"]["state"] == "unchecked"
+
+    private = inspect_models(
+        tmp_path,
+        yaml_text="default_route: private\n",
+        drafting_model="google/gemini-4-neon",
+        allow_cloud=True,
+    )
+    assert private["default_route"] == "private"
+    assert private["drafting"]["eligible"] is False
+    assert private["drafting"]["state"] == "privacy-blocked"

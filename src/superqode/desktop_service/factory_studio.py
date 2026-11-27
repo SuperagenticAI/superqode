@@ -154,6 +154,7 @@ def handle(service, method, params):
             yaml_text=params.get("yaml"),
             drafting_model=params.get("drafting_model", ""),
             check_connection=check if params.get("check_connections") is True else None,
+            allow_cloud=params.get("allow_cloud") is True,
         )
     if method.startswith("factory.export."):
         from superqode.factory import portable
@@ -1070,6 +1071,10 @@ def validate_request(root, params, *, service=None):
         workflow = params.get("workflow", "")
         if workflow not in TEMPLATE_NAMES:
             workflow = ""
+        allow_cloud = params.get("allow_cloud") is True if action == "rlm-architect" else False
+        execution_model = (
+            str(params.get("execution_model", "")).strip() if action == "rlm-architect" else ""
+        )
         return {
             **common,
             "yaml": raw_yaml,
@@ -1077,6 +1082,8 @@ def validate_request(root, params, *, service=None):
             "provider": provider,
             "model": model,
             "workflow": workflow,
+            "allow_cloud": allow_cloud,
+            "execution_model": execution_model,
             "factory_providers": [provider] if provider else [],
         }
     if action not in {"worker", "verify", "apply"}:
@@ -1168,6 +1175,8 @@ async def run(request, emit):
                 workflow=request.get("workflow", ""),
                 provider=request.get("provider", ""),
                 model=request.get("model", ""),
+                allow_cloud=bool(request.get("allow_cloud", False)),
+                execution_model=str(request.get("execution_model", "")),
             )
         elif action == "verifier-generate":
             result = await generate_verifiers(

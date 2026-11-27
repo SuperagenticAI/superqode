@@ -4,13 +4,14 @@ import Combine
 /// Factory-local selections and read-only connection evidence. Credentials stay in Connect.
 @MainActor final class FactoryModelSetupLibrary: ObservableObject {
   @Published var draftingReference = "" { didSet { if oldValue != draftingReference { invalidate() } } }
+  @Published var allowCloud = false { didSet { if oldValue != allowCloud { invalidate() } } }
   @Published private(set) var draftingHarness = "no-tool"
   @Published private(set) var report: [String: Any] = [:]
   @Published private(set) var checking = false
   @Published private(set) var failure = ""
   private(set) var project = ""
   private var generation = 0
-  private var selections: [String: (String, String)] = [:]
+  private var selections: [String: (String, String, Bool)] = [:]
 
   var provider: String { draftingReference.split(separator: "/", maxSplits: 1).first.map(String.init) ?? "" }
   var model: String {
@@ -20,14 +21,16 @@ import Combine
   var drafting: [String: Any] { report["drafting"] as? [String: Any] ?? [:] }
   var execution: [[String: Any]] { report["execution"] as? [[String: Any]] ?? [] }
   var draftingBlocked: Bool { !draftingReference.isEmpty && (drafting["eligible"] as? Bool) == false }
+  var isPrivacyBlocked: Bool { draftingBlocked && string(drafting, "state") == "privacy-blocked" }
 
   func enter(_ identity: String) {
     guard identity != project else { return }
-    if !project.isEmpty { selections[project] = (draftingReference, draftingHarness) }
+    if !project.isEmpty { selections[project] = (draftingReference, draftingHarness, allowCloud) }
     project = identity
     let saved = selections[identity]
     draftingHarness = saved?.1 ?? "no-tool"
     draftingReference = saved?.0 ?? ""
+    allowCloud = saved?.2 ?? false
     invalidate()
   }
 
@@ -55,6 +58,7 @@ import Combine
       let value = try await engine.call("factory.models.inspect", [
         "project": identity, "yaml": yaml, "drafting_model": draftingReference,
         "drafting_harness": draftingHarness, "check_connections": checkConnections,
+        "allow_cloud": allowCloud,
       ]) as? [String: Any] ?? [:]
       guard project == identity, generation == token else { return }
       report = value

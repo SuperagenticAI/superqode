@@ -17,15 +17,17 @@ struct FactoryGuidedBuilderView: View {
   let onDemo: () -> Void
   var inspectAutomatically = true
   @State private var userSelectedStep = false
+  @State private var awaitingConnectionPick = false
 
   private var execution: [[String: Any]] { studio.modelSetup.execution }
   private var modelsConfigured: Bool { !execution.isEmpty && execution.allSatisfy { $0["eligible"] as? Bool == true } }
   private var connected: Bool { !app.provider.isEmpty && app.provider != "acp" && !app.model.isEmpty }
+  private var connectedRef: String { connected ? app.provider + "/" + app.model : "" }
   private var setupSuggestionID: String {
     studio.project + ":" + String(setup.saved) + ":" + String(setup.trialPrepared) + ":" + String(setup.hasCompletedRun)
   }
   private var inspectionID: String {
-    studio.project + "\n" + String(studio.version) + "\n" + studio.modelSetup.draftingReference + "\n"
+    studio.project + "\n" + String(studio.version) + "\n" + studio.modelSetup.draftingReference + "\n" + String(studio.modelSetup.allowCloud) + "\n"
       + studio.runs.map { string($0, "id") + string($0, "status") + String($0["verification_valid"] as? Bool ?? false) }.joined(separator: "\n")
   }
 
@@ -107,7 +109,13 @@ struct FactoryGuidedBuilderView: View {
       }
       .onChange(of: studio.project) { _, _ in
         userSelectedStep = false
+        awaitingConnectionPick = false
         step = .intent
+      }
+      .onChange(of: connectedRef) { _, ref in
+        guard awaitingConnectionPick, !ref.isEmpty else { return }
+        awaitingConnectionPick = false
+        studio.modelSetup.useConnected(provider: app.provider, model: app.model, harness: app.harness)
       }
       .onChange(of: setup.saved) { _, saved in
         if saved, step == .review { step = .trial }
@@ -143,15 +151,15 @@ struct FactoryGuidedBuilderView: View {
   }
   private var models: some View {
     VStack(alignment: .leading, spacing: 12) {
-      title("Choose your starting point.", "A model can help draft the Factory. Its stages keep their own execution bindings.")
-      HStack(spacing: 12) {
-        connection("Local model", detail: "Use a model on your machine.", symbol: "desktopcomputer", source: "source:local")
-        connection("Frontier model", detail: "Use your own API key.", symbol: "cloud", source: "source:key")
+      title("Choose your model.", "Connect a frontier API key, a signed-in CLI like Grok, or a local model — or inspect locally with no model.")
+      ViewThatFits(in: .horizontal) {
+        HStack(spacing: 10) { connectionCards }
+        VStack(spacing: 10) { connectionCards }
       }
-      if connected {
+      if connected, studio.modelSetup.draftingReference != connectedRef {
         Button {
           studio.modelSetup.useConnected(provider: app.provider, model: app.model, harness: app.harness)
-        } label: { Label("Draft with " + app.provider + "/" + app.model, systemImage: "sparkles") }
+        } label: { Label("Use " + connectedRef, systemImage: "sparkles") }
           .disabled(!idle).accessibilityIdentifier("factory.journey.useConnected")
       }
       HStack {
@@ -166,23 +174,51 @@ struct FactoryGuidedBuilderView: View {
           Button("Clear") { studio.modelSetup.draftingReference = "" }.disabled(!idle)
         }
       }.padding(10).background(Brand.purple.opacity(0.06), in: RoundedRectangle(cornerRadius: 12))
-      if studio.modelSetup.draftingBlocked {
+      if studio.modelSetup.isPrivacyBlocked {
+        HStack(spacing: 10) {
+          Label("Cloud models use the best route. Allow cloud here or confirm below when building.", systemImage: "cloud")
+            .font(.caption).foregroundStyle(.secondary)
+          Spacer(minLength: 8)
+          Button("Allow cloud (best)") {
+            studio.modelSetup.allowCloud = true
+            let identity = studio.project; let source = studio.version
+            Task {
+              if !studio.text.isEmpty, studio.project == identity, studio.version == source {
+                await studio.edit(engine: app.engine, controls: ["default_route": "best"])
+              }
+              await studio.modelSetup.inspect(engine: app.engine, yaml: studio.text)
+            }
+          }.controlSize(.small).disabled(!idle)
+            .accessibilityIdentifier("factory.journey.allowCloud")
+        }.padding(10).background(Brand.orange.opacity(0.08), in: RoundedRectangle(cornerRadius: 12))
+      } else if studio.modelSetup.draftingBlocked {
         Text(string(studio.modelSetup.drafting, "message")).font(.caption).foregroundStyle(.orange)
-        Button("Review model permissions") { studio.navigation.select("Configuration") }
+        Button("Open connection setup") {
+          awaitingConnectionPick = true
+          app.openConnections("source:key", returningTo: "Factory Studio")
+        }.disabled(!idle)
       }
-      Button("Inspect repository & build a draft…") { onBuild() }
+      Button(studio.modelSetup.isPrivacyBlocked ? "Allow cloud & build draft…" : "Inspect repository & build a draft…") { onBuild() }
         .buttonStyle(BrandButtonStyle()).disabled(!idle)
         .accessibilityIdentifier("factory.journey.build")
-      Text("You review the proposal before saving. Connecting a provider alone never permits cloud use.")
+      Text(studio.modelSetup.draftingReference.isEmpty
+        ? "You review the proposal before saving. Local inspection makes zero model calls."
+        : "You review the proposal before saving. New drafts bind " + studio.modelSetup.draftingReference + " so you can run a trial right away.")
         .font(.caption).foregroundStyle(.secondary)
     }
   }
+  @ViewBuilder private var connectionCards: some View {
+    connection("Frontier API key", detail: "Gemini, Claude, OpenAI, xAI.", symbol: "cloud", source: "source:key")
+    connection("Subscription / CLI", detail: "Grok CLI and signed-in models.", symbol: "terminal", source: "menu:vendors")
+    connection("Local model", detail: "Ollama or LM Studio on this Mac.", symbol: "desktopcomputer", source: "source:local")
+  }
   private var review: some View {
-    VStack(alignment: .leading, spacing: 12) {
+    let primaryModel = execution.first.map { string($0, "reference") } ?? ""
+    return VStack(alignment: .leading, spacing: 12) {
       title("Make it yours. Then save.", "Check the workflow, models and protected expectations before any agent runs.")
       LazyVGrid(columns: [GridItem(.flexible()), GridItem(.flexible())], spacing: 10) {
         reviewTile("Workflow", value: studio.review.isEmpty ? "Check to preview" : "\((studio.review["stages"] as? [[String: Any]] ?? []).count) stages", symbol: "point.3.connected.trianglepath.dotted", destination: "Workflow")
-        reviewTile("Execution models", value: modelsConfigured ? "Bindings configured" : "Choose models", symbol: "cpu", destination: "Configuration")
+        reviewTile("Execution models", value: modelsConfigured ? (primaryModel.isEmpty ? "Bindings configured" : primaryModel) : "Choose models", symbol: "cpu", destination: "Configuration")
         reviewTile("Acceptance", value: setup.hasProtectedChecks ? "Protected checks configured" : "Add protected checks", symbol: "lock.shield", destination: "Acceptance")
         reviewTile("Source & definition", value: setup.saved ? "Revision saved" : "Review your draft", symbol: "doc.text", destination: "Definition")
       }
@@ -251,7 +287,10 @@ struct FactoryGuidedBuilderView: View {
     }
   }
   private func connection(_ title: String, detail: String, symbol: String, source: String) -> some View {
-    Button { app.openConnections(source, returningTo: "Factory Studio") } label: {
+    Button {
+      awaitingConnectionPick = true
+      app.openConnections(source, returningTo: "Factory Studio")
+    } label: {
       VStack(alignment: .leading, spacing: 8) {
         Image(systemName: symbol).font(.title2).foregroundStyle(Brand.purple)
         Text(title).font(.headline)

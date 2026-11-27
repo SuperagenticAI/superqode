@@ -1158,9 +1158,14 @@ struct FactoryStudioView: View {
     case "generate": return noDraftingModel
       ? "This builds starter factory settings from your description on this Mac. No model is called."
       : "The selected model receives your description and draft definition. This may incur model usage. If that model cannot draft, starter settings are built here instead. The result is a proposal for you to review."
-    case "rlm-architect": return noDraftingModel
-      ? "SuperQode inspects this repository read-only (manifests, tests, build setup, and high-risk paths) using Recursive Language Model (RLM) context indexing, then chooses the right stages, agent roles, test checks, and skills for your project. Nothing is written or executed until you review and save."
-      : "SuperQode inspects this repository read-only with Recursive Language Model (RLM) context indexing and runs up to 2 bounded sub-queries with \(draftingProvider)/\(draftingModel) to assemble the right stages, agent roles, test checks, and skills for your task. Nothing is written or executed until you review and save."
+    case "rlm-architect":
+      if noDraftingModel {
+        return "SuperQode inspects this repository read-only (manifests, tests, build setup, and high-risk paths) using Recursive Language Model (RLM) context indexing, then chooses the right stages, agent roles, test checks, and skills for your project. Nothing is written or executed until you review and save."
+      }
+      if library.modelSetup.isPrivacyBlocked {
+        return "Enable the cloud route (best) and run read-only RLM inspection with \(draftingProvider)/\(draftingModel) to draft your Factory and bind it for execution. Nothing is written or executed until you review and save."
+      }
+      return "SuperQode inspects this repository read-only with Recursive Language Model (RLM) context indexing and runs up to 2 bounded sub-queries with \(draftingProvider)/\(draftingModel) to assemble the right stages, agent roles, test checks, and skills for your task. Nothing is written or executed until you review and save."
     case "trial": return "Pin the saved definition and its inputs to a queued WorkOrder for this goal. This step makes no model calls. The application must have a clean committed baseline."
     case "worker": return "Execute ready stages using this run’s pinned harnesses and model routes. Model calls may incur cost and stages may edit isolated worktrees. Human gates pause execution."
     case "verify": return "Execute the exact candidate in the required OS sandbox against pinned protected Python probes. Passing checks supplies acceptance evidence; it does not approve delivery."
@@ -1197,7 +1202,7 @@ struct FactoryStudioView: View {
     case "template": return "Load \(workflowTitle(preset))"
     case "reload": return "Reload saved"
     case "generate": return "Generate draft"
-    case "rlm-architect": return "Inspect repo & build"
+    case "rlm-architect": return library.modelSetup.isPrivacyBlocked ? "Allow cloud & build draft" : "Inspect repo & build"
     case "trial": return "Prepare trial"
     case "worker": return "Run stages"
     case "verify": return "Run SuperGauge"
@@ -1217,11 +1222,16 @@ struct FactoryStudioView: View {
            FactoryConfirmBadge(label: "No model call", symbol: "bolt.slash", color: Brand.purple)]
         : [FactoryConfirmBadge(label: "\(draftingProvider)/\(draftingModel)", symbol: "sparkles", color: Brand.pink)]
     case "rlm-architect":
-      return noModel
-        ? [FactoryConfirmBadge(label: "On-Demand · Read-Only Scan", symbol: "sparkles", color: Brand.purple),
-           FactoryConfirmBadge(label: "No model call", symbol: "bolt.slash", color: Color(red: 0.14, green: 0.62, blue: 0.42))]
-        : [FactoryConfirmBadge(label: "On-Demand · Read-Only Scan", symbol: "sparkles", color: Brand.purple),
-           FactoryConfirmBadge(label: "\(draftingProvider)/\(draftingModel)", symbol: "cpu", color: Brand.pink)]
+      if noModel {
+        return [FactoryConfirmBadge(label: "On-Demand · Read-Only Scan", symbol: "sparkles", color: Brand.purple),
+                FactoryConfirmBadge(label: "No model call", symbol: "bolt.slash", color: Color(red: 0.14, green: 0.62, blue: 0.42))]
+      }
+      var badges = [FactoryConfirmBadge(label: "On-Demand · Read-Only Scan", symbol: "sparkles", color: Brand.purple),
+                    FactoryConfirmBadge(label: "\(draftingProvider)/\(draftingModel)", symbol: "cpu", color: Brand.pink)]
+      if library.modelSetup.isPrivacyBlocked || library.modelSetup.allowCloud {
+        badges.append(FactoryConfirmBadge(label: "Route: best", symbol: "cloud", color: Brand.orange))
+      }
+      return badges
     case "template", "reload":
       return [FactoryConfirmBadge(label: "Draft only", symbol: "doc.text", color: Brand.purple),
               FactoryConfirmBadge(label: "No model call", symbol: "bolt.slash", color: Color(red: 0.14, green: 0.62, blue: 0.42))]
@@ -1309,8 +1319,19 @@ struct FactoryStudioView: View {
           else { journeyStep = .review }
         }
       case "rlm-architect":
+        let wasEmptyDraft = library.text.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
+        if library.modelSetup.isPrivacyBlocked {
+          library.modelSetup.allowCloud = true
+          if !wasEmptyDraft {
+            await library.edit(engine: app.engine, controls: ["default_route": "best"])
+          }
+        }
         guard await checkDraftingSelection(draftingReference) else { return }
-        await library.start(engine: app.engine, action: action, provider: draftingProvider, model: draftingModel, workflow: "")
+        await library.start(
+          engine: app.engine, action: action, provider: draftingProvider, model: draftingModel,
+          workflow: "", allowCloud: library.modelSetup.allowCloud,
+          executionModel: wasEmptyDraft ? draftingReference : ""
+        )
       case "trial": await library.trial(engine: app.engine, goal: goal); if library.failure.isEmpty { follow(ticket, to: "Runs") }
       case "enroll":
         let identity = library.project; let version = library.version

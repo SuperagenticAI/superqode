@@ -1,4 +1,11 @@
-# SuperQode for macOS public beta 0.5.3
+# SuperQode for macOS public beta 0.5.4
+
+Version 0.5.4 (build 61) bundles Python engine 2.33.3.
+
+- Guided Factory onboarding Step 2 (**Connect**) now offers **Frontier API key**, **Subscription / CLI** (including Grok CLI), and **Local model** directly, and automatically selects your chosen model when returning from Connect.
+- Removed the pre-draft cloud-route dead end: when starting from scratch with a cloud/frontier model, you can explicitly enable the `best` route inline in Step 2 or directly inside the **Allow cloud & build draft** confirmation, and newly drafted Factories bind that chosen model for execution immediately.
+
+## 0.5.3 (build 60)
 
 Version 0.5.3 (build 60) bundles Python engine 2.33.3.
 

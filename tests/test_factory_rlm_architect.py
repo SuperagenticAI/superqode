@@ -150,3 +150,22 @@ async def test_authoring_architect_stores_reviewable_draft_without_writing_facto
     assert not (tmp_path / ".superqode" / "factory.yaml").exists()
     assert draft["rlm_lineage"]["repo_files"] == 2
     assert len(draft["recommended_skills"]) == 2
+
+
+async def test_architect_factory_applies_explicit_cloud_route_and_execution_model_for_new_draft(
+    tmp_path,
+):
+    import yaml
+
+    (tmp_path / "app.py").write_text("def total(values): return 0\n", encoding="utf-8")
+
+    proposal = await architect_factory(
+        tmp_path,
+        description="Fix bugs and verify the repair",
+        allow_cloud=True,
+        execution_model="grok-cli/grok-4.7",
+        use_monty=False,
+    )
+    spec = yaml.safe_load(proposal["yaml"])
+    assert spec["default_route"] == "best"
+    assert spec["inference"]["harnesses"]["coder"]["model"] == "grok-cli/grok-4.7"

@@ -10,7 +10,9 @@ from .definition import read_mapping, validate_definition, project_path
 from .generation import check_generation_route
 
 
-def inspect_models(root, *, yaml_text=None, drafting_model="", check_connection=None):
+def inspect_models(
+    root, *, yaml_text=None, drafting_model="", check_connection=None, allow_cloud=False
+):
     """Explain drafting and pinned execution routes without inference or edits.
 
     A supplied connection checker may perform model discovery. Its results
@@ -33,7 +35,12 @@ def inspect_models(root, *, yaml_text=None, drafting_model="", check_connection=
     elif set(data) - {"default_route", "routes"}:
         raise ValueError("Expected a FactorySpec or a routing-only policy")
     defaults = default_policy()
-    route = data.get("default_route", defaults["default_route"])
+    if allow_cloud is True and "default_route" not in data:
+        route = "best"
+        route_data = {**data, "default_route": "best"}
+    else:
+        route = data.get("default_route", defaults["default_route"])
+        route_data = data
     if route not in defaults["routes"] and route not in data.get("routes", {}):
         raise ValueError(f"Unknown factory default route: {route}")
     cache = {}
@@ -77,7 +84,7 @@ def inspect_models(root, *, yaml_text=None, drafting_model="", check_connection=
             return row
         row["docs_url"] = definition.docs_url
         try:
-            check_generation_route(data, provider, model)
+            check_generation_route(route_data, provider, model)
         except ValueError:
             row.update(
                 state="privacy-blocked",
