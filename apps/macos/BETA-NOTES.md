@@ -1,4 +1,11 @@
-# SuperQode for macOS public beta 0.5.4
+# SuperQode for macOS public beta 0.5.5
+
+Version 0.5.5 (build 62) bundles Python engine 2.33.3.
+
+- Fixed **Use provider** in the API-key connection dialog (including Google Gemini 4 Neon) to use native AppKit click dispatch, auto-select the top model when opening a provider, surface connection errors clearly, and always close cleanly back to Factory Studio.
+- Fixed Factory Studio onboarding silently falling back to `ollama/qwen3-coder` when connecting external CLI agents or updating an existing draft: Step 2 now offers direct 1-click **Grok 4.7 (Grok CLI)**, **Cloud API key** (auto-binding the connected model straight into your Factory draft), and optional **Local model**, and warns inline if a draft is still bound to `ollama/qwen3-coder`.
+
+## 0.5.4 (build 61)
 
 Version 0.5.4 (build 61) bundles Python engine 2.33.3.
 

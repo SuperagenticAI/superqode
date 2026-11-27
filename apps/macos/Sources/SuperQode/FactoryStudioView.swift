@@ -1353,10 +1353,12 @@ struct FactoryStudioView: View {
           }
         }
         guard await checkDraftingSelection(draftingReference) else { return }
+        let chosenExecution = !draftingReference.isEmpty ? draftingReference
+          : (!app.provider.isEmpty && app.provider != "acp" && app.provider != "agent" && !app.model.isEmpty ? app.provider + "/" + app.model : "")
         await library.start(
           engine: app.engine, action: action, provider: draftingProvider, model: draftingModel,
           workflow: "", allowCloud: library.modelSetup.allowCloud,
-          executionModel: wasEmptyDraft ? draftingReference : ""
+          executionModel: chosenExecution
         )
       case "trial": await library.trial(engine: app.engine, goal: goal); if library.failure.isEmpty { follow(ticket, to: "Runs") }
       case "enroll":

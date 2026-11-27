@@ -384,11 +384,21 @@ struct ProviderConnectionView: View {
       Divider()
       HStack {
         if !message.isEmpty {
-          Text(message).font(.callout).foregroundStyle(.secondary).textSelection(.enabled)
+          Text(message).font(.callout).foregroundStyle(.orange).textSelection(.enabled)
+        } else if !canConnect && !working {
+          Text(modelID.isEmpty ? "Select a model on the left." : (needsRegionEndpoint && regionEndpoint.isEmpty) ? "Paste the Model Studio endpoint." : "Enter an API key to continue.")
+            .font(.caption).foregroundStyle(.secondary)
         }
         Spacer()
         if saving { ProgressView().controlSize(.small) }
-        Button("Use provider", action: connect).buttonStyle(.borderedProminent).disabled(!canConnect)
+        nativeButton("provider.use", action: connect, padded: false, title: "Use provider") {
+          Text("Use provider")
+            .font(.body.weight(.semibold))
+            .foregroundStyle(canConnect ? Color.white : Color.secondary)
+            .padding(.horizontal, 14).padding(.vertical, 7)
+            .background(canConnect ? Color.qAccent : Color.primary.opacity(0.08), in: RoundedRectangle(cornerRadius: 7))
+        }
+        .disabled(!canConnect)
       }.padding(.horizontal, 24).padding(.vertical, 12)
     }
     .task(id: "\(route):\(app.modelCatalogRevision)") { await loadCatalog(for: route) }
@@ -629,8 +639,14 @@ struct ProviderConnectionView: View {
         }
         return ModelRow(id: model, name: label)
       }
-      if selectedModel.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty, ids.contains("qwen4-max") {
-        selectedModel = "qwen4-max"
+      if selectedModel.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
+        if ids.contains("qwen4-max") {
+          selectedModel = "qwen4-max"
+        } else if id == "google", ids.contains("gemini-4-neon") {
+          selectedModel = "gemini-4-neon"
+        } else if let first = models.first {
+          selectedModel = first.id
+        }
       }
       catalogError = ""
     } catch {
@@ -730,12 +746,13 @@ struct ProviderConnectionView: View {
           : app.harness == "codegem"
           ? " Using CodeGem (optimized for Gemini & Gemma)." : ""
         if stayed {
-          app.notice = "Connected \(provider)/\(model). Factory Studio can draft with it." + thinking
+          app.notice = "Connected \(provider)/\(model). Factory Studio can use it." + thinking
         } else {
           app.notice = app.projectID.isEmpty
             ? "Provider selected. Open a project, then use Test model." + thinking
             : "Provider selected. Use Test model to verify the connection." + thinking
         }
+        app.showConnection = false
         dismiss()
       } catch { message = error.localizedDescription }
     }

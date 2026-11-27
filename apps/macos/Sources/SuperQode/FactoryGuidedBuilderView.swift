@@ -21,8 +21,9 @@ struct FactoryGuidedBuilderView: View {
   @State private var awaitingConnectionPick = false
 
   private var execution: [[String: Any]] { studio.modelSetup.execution }
+  private var primaryExecutionModel: String { execution.first.map { string($0, "reference") } ?? "" }
   private var modelsConfigured: Bool { !execution.isEmpty && execution.allSatisfy { $0["eligible"] as? Bool == true } }
-  private var connected: Bool { !app.provider.isEmpty && app.provider != "acp" && !app.model.isEmpty }
+  private var connected: Bool { !app.provider.isEmpty && app.provider != "acp" && app.provider != "agent" && !app.model.isEmpty }
   private var connectedRef: String { connected ? app.provider + "/" + app.model : "" }
   private var setupSuggestionID: String {
     studio.project + ":" + String(setup.saved) + ":" + String(setup.trialPrepared) + ":" + String(setup.hasCompletedRun)
@@ -124,7 +125,14 @@ struct FactoryGuidedBuilderView: View {
       .onChange(of: connectedRef) { _, ref in
         guard awaitingConnectionPick, !ref.isEmpty else { return }
         awaitingConnectionPick = false
-        studio.modelSetup.useConnected(provider: app.provider, model: app.model, harness: app.harness)
+        bindModelToFactory(provider: app.provider, model: app.model, harness: app.harness)
+      }
+      .onChange(of: app.showConnection) { wasShowing, isShowing in
+        guard wasShowing && !isShowing && awaitingConnectionPick else { return }
+        awaitingConnectionPick = false
+        if connected {
+          bindModelToFactory(provider: app.provider, model: app.model, harness: app.harness)
+        }
       }
       .onChange(of: setup.saved) { _, saved in
         if saved, step == .review { step = .trial }
@@ -161,20 +169,24 @@ struct FactoryGuidedBuilderView: View {
   }
   private var models: some View {
     VStack(alignment: .leading, spacing: 12) {
-      title("Connect your cloud model.", "Use a signed-in CLI like Grok or your cloud API key. Local models are optional.")
+      title("Connect your cloud model.", "Pick Grok 4.7 directly, connect a cloud API key like Gemini 4 Neon, or optionally use a local model.")
       ViewThatFits(in: .horizontal) {
         HStack(spacing: 10) { connectionCards }
         VStack(spacing: 10) { connectionCards }
       }
+      if app.isManaged {
+        Label("Factory stages run direct cloud models (Grok CLI, Gemini/Claude/OpenAI/xAI API keys, or local models), not external CLI agents like Codex or Claude Code.", systemImage: "info.circle")
+          .font(.caption).foregroundStyle(.orange)
+      }
       if connected, studio.modelSetup.draftingReference != connectedRef {
         Button {
-          studio.modelSetup.useConnected(provider: app.provider, model: app.model, harness: app.harness)
+          bindModelToFactory(provider: app.provider, model: app.model, harness: app.harness)
         } label: { Label("Use " + connectedRef, systemImage: "sparkles") }
           .disabled(!idle).accessibilityIdentifier("factory.journey.useConnected")
       }
       HStack {
         Image(systemName: studio.modelSetup.draftingReference.isEmpty ? "bolt.slash" : "cpu")
-        Text(studio.modelSetup.draftingReference.isEmpty ? "No model selected yet · will inspect repo locally" : studio.modelSetup.draftingReference)
+        Text(studio.modelSetup.draftingReference.isEmpty ? "No model selected yet · pick Grok 4.7 or a Cloud API key above" : studio.modelSetup.draftingReference)
           .font(.callout).textSelection(.enabled)
         Spacer()
         if !studio.modelSetup.draftingReference.isEmpty {
@@ -203,7 +215,7 @@ struct FactoryGuidedBuilderView: View {
         }.padding(10).background(Brand.orange.opacity(0.08), in: RoundedRectangle(cornerRadius: 12))
       } else if studio.modelSetup.draftingBlocked {
         Text(string(studio.modelSetup.drafting, "message")).font(.caption).foregroundStyle(.orange)
-        Button("Open connection setup") {
+        Button("Open API key setup") {
           awaitingConnectionPick = true
           app.openConnections("source:key", returningTo: "Factory Studio")
         }.disabled(!idle)
@@ -214,23 +226,57 @@ struct FactoryGuidedBuilderView: View {
         .buttonStyle(BrandButtonStyle()).disabled(!idle)
         .accessibilityIdentifier("factory.journey.build")
       Text(studio.modelSetup.draftingReference.isEmpty
-        ? "Connect a cloud subscription or API key above so your Factory is ready to run right away."
+        ? "Pick Grok 4.7 or connect a Cloud API key above so your Factory does not fall back to a local Ollama model."
         : "Builds a reviewable Factory using " + studio.modelSetup.draftingReference + " on the cloud best route.")
         .font(.caption).foregroundStyle(.secondary)
     }
   }
   @ViewBuilder private var connectionCards: some View {
-    connection("Subscription / CLI", detail: "Grok CLI, Codex, Claude, Antigravity.", symbol: "terminal", source: "menu:vendors")
-    connection("Cloud API key", detail: "Gemini, Claude, OpenAI, xAI.", symbol: "cloud", source: "source:key")
+    Button {
+      bindModelToFactory(provider: "grok-cli", model: "grok-4.7", harness: "core")
+    } label: {
+      VStack(alignment: .leading, spacing: 8) {
+        Image(systemName: "bolt.fill").font(.title2).foregroundStyle(Brand.purple)
+        Text("Grok 4.7 (Grok CLI)").font(.headline)
+        Text("1-click using your Grok CLI login.").font(.caption).foregroundStyle(.secondary)
+      }.frame(maxWidth: .infinity, minHeight: 66, alignment: .leading).padding(14)
+    }.buttonStyle(ConnectionChoiceStyle(selected: studio.modelSetup.draftingReference == "grok-cli/grok-4.7")).disabled(!idle)
+      .accessibilityIdentifier("factory.journey.grokCLI")
+    connection("Cloud API key", detail: "Gemini 4 Neon, xAI, Claude, OpenAI.", symbol: "cloud", source: "source:key")
     connection("Local model (optional)", detail: "Ollama or LM Studio on this Mac.", symbol: "desktopcomputer", source: "source:local")
   }
+  private func bindModelToFactory(provider: String, model: String, harness: String) {
+    studio.modelSetup.allowCloud = true
+    studio.modelSetup.useConnected(provider: provider, model: model, harness: harness)
+    let reference = provider + "/" + model
+    guard !studio.text.isEmpty else { return }
+    let identity = studio.project; let source = studio.version
+    Task {
+      guard studio.project == identity, studio.version == source else { return }
+      await studio.edit(engine: app.engine, controls: ["default_route": "best", "binding": "coder", "model": reference])
+      if studio.project == identity {
+        await studio.validate(engine: app.engine)
+        await studio.modelSetup.inspect(engine: app.engine, yaml: studio.text)
+      }
+    }
+  }
   private var review: some View {
-    let primaryModel = execution.first.map { string($0, "reference") } ?? ""
     return VStack(alignment: .leading, spacing: 12) {
       title("Make it yours. Then save.", "Check the workflow, models and protected expectations before any agent runs.")
+      if primaryExecutionModel == "ollama/qwen3-coder" {
+        HStack(spacing: 10) {
+          Label("Execution model is still ollama/qwen3-coder.", systemImage: "exclamationmark.triangle.fill")
+            .font(.caption).foregroundStyle(.orange)
+          Spacer(minLength: 8)
+          Button("Use Grok 4.7") { bindModelToFactory(provider: "grok-cli", model: "grok-4.7", harness: "core") }
+            .controlSize(.small).disabled(!idle)
+          Button("Connect API key") { awaitingConnectionPick = true; app.openConnections("source:key", returningTo: "Factory Studio") }
+            .controlSize(.small).disabled(!idle)
+        }.padding(10).background(Brand.orange.opacity(0.08), in: RoundedRectangle(cornerRadius: 12))
+      }
       LazyVGrid(columns: [GridItem(.flexible()), GridItem(.flexible())], spacing: 10) {
         reviewTile("Workflow", value: studio.review.isEmpty ? "Check to preview" : "\((studio.review["stages"] as? [[String: Any]] ?? []).count) stages", symbol: "point.3.connected.trianglepath.dotted", destination: "Workflow")
-        reviewTile("Execution models", value: modelsConfigured ? (primaryModel.isEmpty ? "Bindings configured" : primaryModel) : "Choose models", symbol: "cpu", destination: "Configuration")
+        reviewTile("Execution models", value: !primaryExecutionModel.isEmpty ? primaryExecutionModel : "Choose models", symbol: "cpu", destination: "Configuration")
         reviewTile("Acceptance", value: setup.hasProtectedChecks ? "Protected checks configured" : "Add protected checks", symbol: "lock.shield", destination: "Acceptance")
         reviewTile("Source & definition", value: setup.saved ? "Revision saved" : "Review your draft", symbol: "doc.text", destination: "Definition")
       }
@@ -274,6 +320,18 @@ struct FactoryGuidedBuilderView: View {
       } else if setup.trialPrepared {
         setupAction("Your trial is prepared. Run its ready stages and review any human gates.", button: "Open the active trial", destination: "Runs")
       } else {
+        if !primaryExecutionModel.isEmpty {
+          HStack(spacing: 8) {
+            Label("Execution model: " + primaryExecutionModel, systemImage: primaryExecutionModel.hasPrefix("ollama/") ? "exclamationmark.triangle.fill" : "cpu")
+              .font(.caption.weight(.medium))
+              .foregroundStyle(primaryExecutionModel == "ollama/qwen3-coder" ? Color.orange : Color.secondary)
+            Spacer()
+            if primaryExecutionModel == "ollama/qwen3-coder" {
+              Button("Switch to Grok 4.7") { bindModelToFactory(provider: "grok-cli", model: "grok-4.7", harness: "core") }
+                .controlSize(.small).disabled(!idle)
+            }
+          }
+        }
         TextField("What should this trial accomplish?", text: $trialGoal, axis: .vertical)
           .lineLimit(2...3).textFieldStyle(.roundedBorder)
         if !string(studio.gettingStarted, "demo_goal").isEmpty {

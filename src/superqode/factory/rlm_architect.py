@@ -615,11 +615,23 @@ def _compose_factory_spec(
             "release_authority"
         ):
             spec["governance"]["release_authority"] = base_data["governance"]["release_authority"]
+        if allow_cloud and spec.get("default_route") in {"no-subscription", "private"}:
+            spec["default_route"] = "best"
     elif allow_cloud:
         spec["default_route"] = "best"
 
     bound_execution_model = ""
-    if not existing and execution_model.strip():
+    harnesses = spec.get("inference", {}).get("harnesses", {})
+    current_coder_model = (
+        str(harnesses.get("coder", {}).get("model") or "")
+        if isinstance(harnesses.get("coder"), dict)
+        else ""
+    )
+    should_bind_execution = bool(
+        execution_model.strip()
+        and (not existing or current_coder_model in {"", "ollama/qwen3-coder"})
+    )
+    if should_bind_execution:
         from superqode.providers.dynamic import resolve_provider_def
         from superqode.providers.model_specs import split_provider_model_ref
 
@@ -637,7 +649,6 @@ def _compose_factory_spec(
             except ValueError:
                 pass
             else:
-                harnesses = spec.get("inference", {}).get("harnesses", {})
                 if "coder" in harnesses and isinstance(harnesses["coder"], dict):
                     harnesses["coder"]["model"] = execution_model.strip()
                     bound_execution_model = execution_model.strip()
