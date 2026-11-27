@@ -2,8 +2,9 @@
 
 Version 0.5.4 (build 61) bundles Python engine 2.33.3.
 
-- Guided Factory onboarding Step 2 (**Connect**) now offers **Frontier API key**, **Subscription / CLI** (including Grok CLI), and **Local model** directly, and automatically selects your chosen model when returning from Connect.
-- Removed the pre-draft cloud-route dead end: when starting from scratch with a cloud/frontier model, you can explicitly enable the `best` route inline in Step 2 or directly inside the **Allow cloud & build draft** confirmation, and newly drafted Factories bind that chosen model for execution immediately.
+- Cloud-first Factory onboarding: **Subscription / CLI** (Grok CLI, Codex, Claude, Antigravity) and **Cloud API key** (Gemini, Claude, OpenAI, xAI) are now the default preferred model choices in Factory Studio, with local models clearly optional. Connected models are selected automatically, new drafts default to the cloud `best` route, and `coder` binds straight to your chosen model.
+- Streamlined from-scratch flow: one-click **Build my Factory**, one-click **Save Factory**, inline **Commit Factory files**, and direct trial preparation without blocking on manual probe setup first.
+- Workflow starters, model setup, the getting-started checklist, and full Factory navigation are now always visible when scrolling down instead of hidden behind a collapsed toggle.
 
 ## 0.5.3 (build 60)
 

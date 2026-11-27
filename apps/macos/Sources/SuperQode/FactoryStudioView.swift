@@ -25,7 +25,6 @@ struct FactoryStudioView: View {
   @State private var runDetailTab = ProcessInfo.processInfo.arguments.contains("--factory-acceptance-inspect") ? "checks" : "pipeline"
   @State private var showTour = false
   @State private var showPresentation = false
-  @State private var showAdvancedSetup = false
   @State private var journeyStep: FactoryJourneyStep = .intent
   @State private var contentReady = false
   @State private var uiSkillPreset = "web"
@@ -68,10 +67,8 @@ struct FactoryStudioView: View {
   }
   var body: some View {
     HStack(alignment: .top, spacing: 20) {
-      if tab != "Stack" || showAdvancedSetup {
-        FactoryNavigationHeader(navigation: library.navigation, badges: sidebarBadges).frame(width: 178)
-        Divider()
-      }
+      FactoryNavigationHeader(navigation: library.navigation, badges: sidebarBadges).frame(width: 178)
+      Divider()
       VStack(alignment: .leading, spacing: 14) {
       headerBar
       if showNextStepGuide && tab != "Stack" {
@@ -176,7 +173,7 @@ struct FactoryStudioView: View {
       .onChange(of: string(library.review, "snapshot_digest")) { _, value in
         if !value.isEmpty, !controlsHaveChanges { syncControls() }
       }
-      .onChange(of: app.projectID) { _, _ in confirmation = ""; activeAction = ""; reason = ""; goal = ""; journeyStep = .intent; showAdvancedSetup = false; experimentStage = ""; experimentGoal = ""; experimentTask = "" }
+      .onChange(of: app.projectID) { _, _ in confirmation = ""; activeAction = ""; reason = ""; goal = ""; journeyStep = .intent; experimentStage = ""; experimentGoal = ""; experimentTask = "" }
       .factoryConfirmation(
         isPresented: Binding(get: { showingSheetConfirm }, set: { if !$0 { dismissConfirmation() } }),
         title: confirmationTitle,
@@ -220,10 +217,6 @@ struct FactoryStudioView: View {
         }.disabled(!idle || library.text.isEmpty)
         Button("Save changes…") { requestConfirmation("save") }
           .disabled(!idle || library.review.isEmpty || controlsHaveChanges || setup.saved)
-      }
-      if tab == "Stack", !showAdvancedSetup {
-        Button("All Factory controls") { library.navigation.select("Definition") }
-          .accessibilityIdentifier("factory.journey.allControls")
       }
       Button { showTour = true } label: {
         Label("Tour", systemImage: "book.pages")
@@ -275,8 +268,11 @@ struct FactoryStudioView: View {
           if !library.canApplyProposal {
           FactoryGuidedBuilderView(
             studio: library, step: $journeyStep, trialGoal: $goal, setup: setup, idle: idle,
-            onBuild: { requestConfirmation("rlm-architect") },
-            onStarter: chooseWorkflow,
+            onBuild: { execute("rlm-architect") },
+            onStarter: { id in
+              preset = id
+              execute("template")
+            },
             onValidate: {
               let identity = library.project; let source = library.version
               Task {
@@ -286,53 +282,76 @@ struct FactoryStudioView: View {
               }
             },
             onSave: {
+              let identity = library.project; let source = library.version
               if reason.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty { reason = "Configured my Factory" }
-              requestConfirmation("save")
+              Task {
+                guard library.project == identity, library.version == source else { return }
+                if library.review.isEmpty || string(library.review, "yaml") != library.text {
+                  await library.validate(engine: app.engine)
+                  if library.project == identity, !library.review.isEmpty { syncControls() }
+                }
+                guard library.project == identity, !library.review.isEmpty, library.failure.isEmpty else { return }
+                await library.save(engine: app.engine, reason: reason)
+                if library.project == identity, library.failure.isEmpty {
+                  await library.refreshSources(engine: app.engine)
+                }
+              }
             },
-            onTrial: { requestConfirmation("trial") },
+            onCommit: {
+              let identity = library.project
+              Task {
+                await library.refreshSources(engine: app.engine)
+                guard library.project == identity, library.failure.isEmpty else { return }
+                let files = library.sourceReview["files"] as? [[String: Any]] ?? []
+                let paths = files.filter { $0["changed"] as? Bool == true }.map { string($0, "path") }.filter { !$0.isEmpty }
+                guard !paths.isEmpty else { return }
+                await library.commitSources(engine: app.engine, paths: paths, message: "Save Factory configuration")
+                if library.project == identity {
+                  await library.refreshSources(engine: app.engine)
+                }
+              }
+            },
+            onTrial: { execute("trial") },
             onDemo: { showPresentation = true }
           )
           }
-          DisclosureGroup("Advanced setup · workflows, model details and local draft recovery", isExpanded: $showAdvancedSetup) {
-            VStack(alignment: .leading, spacing: 18) {
-          HStack(spacing: 8) {
-            FactoryStudioEmblem(size: 22)
-            Text("What should this Factory do?").font(.headline)
-          }
-          TextEditor(text: $library.description).font(.body).frame(height: 120).brandSurface().accessibilityLabel("Factory description")
-          FactoryGettingStartedView(studio: library, idle: idle)
-          FactoryModelSetupView(studio: library, models: library.modelSetup, idle: idle)
-          VStack(alignment: .leading, spacing: 6) {
-            HStack(spacing: 10) {
-              Button { requestConfirmation("rlm-architect") } label: {
-                Label("Build On-Demand Software Factory…", systemImage: "sparkles")
-              }
-              .buttonStyle(BrandButtonStyle())
-              .disabled(!idle)
-              .help("Inspect this repository and your goal using Recursive Language Models (RLM) to assemble the right stages, agents, checks, and skills automatically")
-              .accessibilityIdentifier("factory.rlm.architect")
-
-              Button("Generate a draft…") { requestConfirmation("generate") }
-                .disabled(!idle || library.description.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty)
+          Divider().padding(.vertical, 4)
+          VStack(alignment: .leading, spacing: 18) {
+            HStack(spacing: 8) {
+              FactoryStudioEmblem(size: 20)
+              Text("Workflow starters & full setup").font(.headline)
             }
-            Text("Powered by Recursive Language Models (RLM): inspects your repository and task read-only, selects the right stages, agent roles, test checks, and skills, and drafts a reviewable factory.yaml before anything runs.")
-              .font(.caption)
-              .foregroundStyle(.secondary)
-              .fixedSize(horizontal: false, vertical: true)
+            Text("Click any workflow card to load it directly with your connected cloud model, or scroll below for detailed controls and local draft recovery.")
+              .font(.caption).foregroundStyle(.secondary)
+            workflowGrid
+            Divider()
+            FactoryModelSetupView(studio: library, models: library.modelSetup, idle: idle)
+            FactoryGettingStartedView(studio: library, idle: idle)
+            VStack(alignment: .leading, spacing: 8) {
+              Text("Detailed Factory description").font(.subheadline.bold())
+              TextEditor(text: $library.description).font(.body).frame(height: 96).brandSurface().accessibilityLabel("Factory description")
+              HStack(spacing: 10) {
+                Button { execute("rlm-architect") } label: {
+                  Label("Build On-Demand Software Factory", systemImage: "sparkles")
+                }
+                .buttonStyle(BrandButtonStyle())
+                .disabled(!idle)
+                .help("Inspect this repository and your goal using Recursive Language Models (RLM) to assemble the right stages, agents, checks, and skills automatically")
+                .accessibilityIdentifier("factory.rlm.architect")
+
+                Button("Generate a draft…") { requestConfirmation("generate") }
+                  .disabled(!idle || library.description.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty)
+
+                Button("Reload saved…") { requestConfirmation("reload") }.disabled(!idle)
+              }
+            }
+            Divider()
+            HStack {
+              Text(setup.hasDraft ? "Your draft is available in the pages on the left." : "Pick a workflow card or describe your Factory above to get started.").font(.caption).foregroundStyle(.secondary)
+              Spacer()
+              nativeButton("factory.setup.next", action: advanceSetup, title: setup.action) { Text(setup.action).font(.caption.weight(.semibold)) }.disabled(!idle || (controlsHaveChanges && setup.hasDraft))
+            }
           }
-          Divider()
-          Text("Start from a workflow").font(.subheadline.bold())
-          Text("Click a card to load its settings. A model is not required.").font(.caption).foregroundStyle(.secondary)
-          workflowGrid
-          Button("Reload saved…") { requestConfirmation("reload") }.disabled(!idle)
-          Divider()
-          HStack {
-            Text(setup.hasDraft ? "Your draft is available in the pages on the left." : "Load a starter first to establish the drafting permissions and budget.").font(.caption).foregroundStyle(.secondary)
-            Spacer()
-            nativeButton("factory.setup.next", action: advanceSetup, title: setup.action) { Text(setup.action).font(.caption.weight(.semibold)) }.disabled(!idle || (controlsHaveChanges && setup.hasDraft))
-          }
-            }.padding(.top, 14)
-          }.font(.callout)
         }.frame(maxWidth: .infinity, alignment: .leading)
       }
       .onChange(of: library.canApplyProposal) { _, ready in
@@ -1303,11 +1322,19 @@ struct FactoryStudioView: View {
       case "template", "reload":
         replacingDraft = true; defer { replacingDraft = false }
         await library.load(engine: app.engine, template: action == "template" ? preset : "")
+        if action == "template", library.project == ticket.project, !library.text.isEmpty {
+          let chosenModel = !draftingReference.isEmpty ? draftingReference
+            : (!app.provider.isEmpty && app.provider != "acp" && !app.model.isEmpty ? app.provider + "/" + app.model : "")
+          if !chosenModel.isEmpty {
+            await library.edit(engine: app.engine, controls: ["default_route": "best", "binding": "coder", "model": chosenModel])
+          } else if library.modelSetup.allowCloud {
+            await library.edit(engine: app.engine, controls: ["default_route": "best"])
+          }
+        }
         await library.validate(engine: app.engine)
         if library.project == ticket.project, !library.review.isEmpty { syncControls() }
         if action == "template", library.navigation.isCurrent(ticket), library.failure.isEmpty, !library.text.isEmpty {
-          if showAdvancedSetup { library.navigation.select("Definition") }
-          else { journeyStep = .review }
+          journeyStep = .review
         }
       case "generate":
         if library.text.isEmpty { await library.load(engine: app.engine, template: preset) }
@@ -1315,8 +1342,7 @@ struct FactoryStudioView: View {
         guard await checkDraftingSelection(draftingReference) else { return }
         await library.start(engine: app.engine, action: action, provider: draftingProvider, model: draftingModel, workflow: preset)
         if library.navigation.isCurrent(ticket), library.failure.isEmpty, library.message.hasPrefix("Starter settings") {
-          if showAdvancedSetup { library.navigation.select("Definition") }
-          else { journeyStep = .review }
+          journeyStep = .review
         }
       case "rlm-architect":
         let wasEmptyDraft = library.text.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
@@ -1372,7 +1398,7 @@ struct FactoryStudioView: View {
     library.text = proposedYaml
     library.proposal = [:]
     appliedRLMSnapshot = snapshot
-    if library.navigation.selection == "Stack", !showAdvancedSetup {
+    if library.navigation.selection == "Stack" {
       journeyStep = .review
     } else {
       library.navigation.select("Definition")

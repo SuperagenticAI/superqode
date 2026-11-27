@@ -4,7 +4,7 @@ import Combine
 /// Factory-local selections and read-only connection evidence. Credentials stay in Connect.
 @MainActor final class FactoryModelSetupLibrary: ObservableObject {
   @Published var draftingReference = "" { didSet { if oldValue != draftingReference { invalidate() } } }
-  @Published var allowCloud = false { didSet { if oldValue != allowCloud { invalidate() } } }
+  @Published var allowCloud = true { didSet { if oldValue != allowCloud { invalidate() } } }
   @Published private(set) var draftingHarness = "no-tool"
   @Published private(set) var report: [String: Any] = [:]
   @Published private(set) var checking = false
@@ -30,7 +30,7 @@ import Combine
     let saved = selections[identity]
     draftingHarness = saved?.1 ?? "no-tool"
     draftingReference = saved?.0 ?? ""
-    allowCloud = saved?.2 ?? false
+    allowCloud = saved?.2 ?? true
     invalidate()
   }
 

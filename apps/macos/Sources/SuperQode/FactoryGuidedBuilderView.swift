@@ -13,6 +13,7 @@ struct FactoryGuidedBuilderView: View {
   let onStarter: (String) -> Void
   let onValidate: () -> Void
   let onSave: () -> Void
+  var onCommit: (() -> Void)? = nil
   let onTrial: () -> Void
   let onDemo: () -> Void
   var inspectAutomatically = true
@@ -93,6 +94,14 @@ struct FactoryGuidedBuilderView: View {
         if !userSelectedStep, step == .intent {
           step = .suggested(saved: setup.saved, trialPrepared: setup.trialPrepared, verified: setup.hasCompletedRun)
         }
+        if inspectAutomatically, studio.modelSetup.draftingReference.isEmpty, connected {
+          studio.modelSetup.useConnected(provider: app.provider, model: app.model, harness: app.harness)
+        }
+      }
+      .onChange(of: step) { _, nextStep in
+        if nextStep == .models, inspectAutomatically, studio.modelSetup.draftingReference.isEmpty, connected {
+          studio.modelSetup.useConnected(provider: app.provider, model: app.model, harness: app.harness)
+        }
       }
       .onChange(of: setupSuggestionID) { _, _ in
         if !userSelectedStep, step == .intent {
@@ -136,11 +145,12 @@ struct FactoryGuidedBuilderView: View {
         VStack(alignment: .leading) { intentSuggestions }
       }
       HStack(spacing: 12) {
-        Button("Choose how to build →") { step = .models }
+        Button("Choose model →") { step = .models }
           .buttonStyle(BrandButtonStyle())
           .disabled(!idle || studio.description.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty)
           .accessibilityIdentifier("factory.journey.continue")
         Button("Use Fix and verify") { onStarter("fix-and-verify") }.disabled(!idle)
+        Button("Use Triage, spec & build") { onStarter("triage-spec-build") }.disabled(!idle)
       }
     }
   }
@@ -151,7 +161,7 @@ struct FactoryGuidedBuilderView: View {
   }
   private var models: some View {
     VStack(alignment: .leading, spacing: 12) {
-      title("Choose your model.", "Connect a frontier API key, a signed-in CLI like Grok, or a local model — or inspect locally with no model.")
+      title("Connect your cloud model.", "Use a signed-in CLI like Grok or your cloud API key. Local models are optional.")
       ViewThatFits(in: .horizontal) {
         HStack(spacing: 10) { connectionCards }
         VStack(spacing: 10) { connectionCards }
@@ -164,7 +174,7 @@ struct FactoryGuidedBuilderView: View {
       }
       HStack {
         Image(systemName: studio.modelSetup.draftingReference.isEmpty ? "bolt.slash" : "cpu")
-        Text(studio.modelSetup.draftingReference.isEmpty ? "Repository inspection · no drafting-model call" : studio.modelSetup.draftingReference)
+        Text(studio.modelSetup.draftingReference.isEmpty ? "No model selected yet · will inspect repo locally" : studio.modelSetup.draftingReference)
           .font(.callout).textSelection(.enabled)
         Spacer()
         if !studio.modelSetup.draftingReference.isEmpty {
@@ -176,10 +186,10 @@ struct FactoryGuidedBuilderView: View {
       }.padding(10).background(Brand.purple.opacity(0.06), in: RoundedRectangle(cornerRadius: 12))
       if studio.modelSetup.isPrivacyBlocked {
         HStack(spacing: 10) {
-          Label("Cloud models use the best route. Allow cloud here or confirm below when building.", systemImage: "cloud")
+          Label("This saved draft uses a private local-only route. Switch it to best to use cloud models.", systemImage: "cloud")
             .font(.caption).foregroundStyle(.secondary)
           Spacer(minLength: 8)
-          Button("Allow cloud (best)") {
+          Button("Switch to cloud (best)") {
             studio.modelSetup.allowCloud = true
             let identity = studio.project; let source = studio.version
             Task {
@@ -198,19 +208,21 @@ struct FactoryGuidedBuilderView: View {
           app.openConnections("source:key", returningTo: "Factory Studio")
         }.disabled(!idle)
       }
-      Button(studio.modelSetup.isPrivacyBlocked ? "Allow cloud & build draft…" : "Inspect repository & build a draft…") { onBuild() }
+      Button { onBuild() } label: {
+        Label(studio.modelSetup.draftingReference.isEmpty ? "Build draft from repo" : "Build my Factory with " + studio.modelSetup.draftingReference, systemImage: "sparkles")
+      }
         .buttonStyle(BrandButtonStyle()).disabled(!idle)
         .accessibilityIdentifier("factory.journey.build")
       Text(studio.modelSetup.draftingReference.isEmpty
-        ? "You review the proposal before saving. Local inspection makes zero model calls."
-        : "You review the proposal before saving. New drafts bind " + studio.modelSetup.draftingReference + " so you can run a trial right away.")
+        ? "Connect a cloud subscription or API key above so your Factory is ready to run right away."
+        : "Builds a reviewable Factory using " + studio.modelSetup.draftingReference + " on the cloud best route.")
         .font(.caption).foregroundStyle(.secondary)
     }
   }
   @ViewBuilder private var connectionCards: some View {
-    connection("Frontier API key", detail: "Gemini, Claude, OpenAI, xAI.", symbol: "cloud", source: "source:key")
-    connection("Subscription / CLI", detail: "Grok CLI and signed-in models.", symbol: "terminal", source: "menu:vendors")
-    connection("Local model", detail: "Ollama or LM Studio on this Mac.", symbol: "desktopcomputer", source: "source:local")
+    connection("Subscription / CLI", detail: "Grok CLI, Codex, Claude, Antigravity.", symbol: "terminal", source: "menu:vendors")
+    connection("Cloud API key", detail: "Gemini, Claude, OpenAI, xAI.", symbol: "cloud", source: "source:key")
+    connection("Local model (optional)", detail: "Ollama or LM Studio on this Mac.", symbol: "desktopcomputer", source: "source:local")
   }
   private var review: some View {
     let primaryModel = execution.first.map { string($0, "reference") } ?? ""
@@ -223,12 +235,14 @@ struct FactoryGuidedBuilderView: View {
         reviewTile("Source & definition", value: setup.saved ? "Revision saved" : "Review your draft", symbol: "doc.text", destination: "Definition")
       }
       HStack(spacing: 12) {
-        if !setup.validated {
-          Button("Check my Factory") { onValidate() }.buttonStyle(BrandButtonStyle()).disabled(!idle || studio.text.isEmpty)
-        } else if !setup.saved {
-          Button("Review & save…") { onSave() }.buttonStyle(BrandButtonStyle()).disabled(!idle)
+        if !setup.saved {
+          Button(setup.validated ? "Save Factory →" : "Check & save Factory →") { onSave() }
+            .buttonStyle(BrandButtonStyle()).disabled(!idle || studio.text.isEmpty)
         } else {
           Button("Continue to a trial →") { step = .trial }.buttonStyle(BrandButtonStyle()).disabled(!idle)
+        }
+        if !setup.validated && !studio.text.isEmpty {
+          Button("Validate only") { onValidate() }.disabled(!idle)
         }
         Label(setup.validated ? "Definition checked" : "Validation makes no model calls", systemImage: setup.validated ? "checkmark.circle" : "bolt.slash")
           .font(.caption).foregroundStyle(.secondary)
@@ -237,13 +251,26 @@ struct FactoryGuidedBuilderView: View {
   }
   private var trial: some View {
     VStack(alignment: .leading, spacing: 12) {
-      title("Try one small, real task.", "A trial pins the inputs. Running its worker is a separate, confirmed action.")
+      title("Run your Factory on a real task.", "Write a prompt to prepare a pinned trial and run your agents in an isolated worktree.")
       if !setup.saved {
-        setupAction("Save the reviewed Factory first.", button: "Review the draft", destination: "Definition")
-      } else if !setup.hasProtectedChecks {
-        setupAction("Define the finish line with protected acceptance checks.", button: "Set up acceptance", destination: "Acceptance")
+        VStack(alignment: .leading, spacing: 12) {
+          Label("Save your Factory draft first so the trial pins its configuration.", systemImage: "doc.badge.plus").font(.callout)
+          HStack(spacing: 10) {
+            Button("Save Factory") { onSave() }.buttonStyle(BrandButtonStyle()).disabled(!idle || studio.text.isEmpty)
+            Button("Inspect YAML") { studio.navigation.select("Definition") }.disabled(!idle)
+          }
+        }.padding(16).frame(maxWidth: .infinity, alignment: .leading).background(Brand.purple.opacity(0.06), in: RoundedRectangle(cornerRadius: 16))
       } else if !setup.committed {
-        setupAction("Review and commit or isolate Factory source changes.", button: "Review source changes", destination: "Sources")
+        VStack(alignment: .leading, spacing: 12) {
+          Label("Commit your new Factory files locally so isolated worktrees start from a clean Git baseline.", systemImage: "arrow.triangle.branch").font(.callout)
+          HStack(spacing: 10) {
+            if let onCommit {
+              Button("Commit Factory files") { onCommit() }.buttonStyle(BrandButtonStyle()).disabled(!idle)
+                .accessibilityIdentifier("factory.journey.commit")
+            }
+            Button("Review in Source control") { studio.navigation.select("Sources") }.disabled(!idle)
+          }
+        }.padding(16).frame(maxWidth: .infinity, alignment: .leading).background(Brand.purple.opacity(0.06), in: RoundedRectangle(cornerRadius: 16))
       } else if setup.trialPrepared {
         setupAction("Your trial is prepared. Run its ready stages and review any human gates.", button: "Open the active trial", destination: "Runs")
       } else {
@@ -252,8 +279,14 @@ struct FactoryGuidedBuilderView: View {
         if !string(studio.gettingStarted, "demo_goal").isEmpty {
           Button("Use the sample repair task") { trialGoal = string(studio.gettingStarted, "demo_goal") }
         }
-        Button("Prepare my trial…") { onTrial() }.buttonStyle(BrandButtonStyle())
-          .disabled(!idle || trialGoal.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty)
+        HStack(spacing: 12) {
+          Button("Prepare & open trial →") { onTrial() }.buttonStyle(BrandButtonStyle())
+            .disabled(!idle || trialGoal.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty)
+          if !setup.hasProtectedChecks {
+            Button("Optional: add SuperGauge probes") { studio.navigation.select("Acceptance") }
+              .buttonStyle(.link).font(.caption).disabled(!idle)
+          }
+        }
       }
       Button("See what a run looks like first") { onDemo() }
         .disabled(!idle)
@@ -275,7 +308,7 @@ struct FactoryGuidedBuilderView: View {
     switch item {
     case .intent: setup.saved || (setup.hasDraft && !studio.description.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty)
     case .models: setup.hasCompletedRun || (modelsConfigured && execution.allSatisfy { string($0, "state") != "unchecked" })
-    case .review: setup.saved && setup.hasProtectedChecks && setup.committed
+    case .review: setup.saved && setup.committed
     case .trial: setup.trialPrepared
     case .evidence: setup.hasCompletedRun
     }
