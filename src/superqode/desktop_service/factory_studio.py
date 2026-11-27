@@ -409,6 +409,16 @@ def handle(service, method, params):
             bind=bool(params.get("bind", True)),
             overwrite=bool(params.get("overwrite", False)),
         )
+    if method == "factory.evaluator.scaffold":
+        from superqode.factory.verifiers import scaffold_evaluator
+
+        return scaffold_evaluator(
+            root,
+            yaml_text=str(params.get("yaml") or ""),
+            check=str(params.get("check") or "regression"),
+            command=str(params.get("command") or ""),
+            manifest=params.get("manifest"),
+        )
     if method == "factory.run.inspect":
         from superqode.factory.merge_risk import assess_merge_risk
         from superqode.factory.visual_proof import build_handoff_markdown, collect_visual_proof

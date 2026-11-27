@@ -500,3 +500,34 @@ def test_stdout_contains_probe_schema_and_verification(project, monkeypatch):
     result = verification.verify_factory(order.work_order_id, root=project)
     assert result["report"]["status"] == "passed"
     assert result["record"]["decision"]["verdict"] == "ship"
+
+
+def test_scaffold_evaluator_binds_protected_probe_from_python_script(tmp_path):
+    from superqode.factory.templates import factory_template
+    from superqode.factory.verifiers import _extract_json_object, scaffold_evaluator
+    import yaml
+
+    (tmp_path / "self_check.py").write_text("assert 2 + 3 == 5\nprint('ok')\n")
+    spec = factory_template("fix-and-verify")
+    spec["improvement"]["checks"]["regression"]["command"] = "python3 self_check.py"
+    raw = yaml.safe_dump(spec, sort_keys=False)
+
+    result = scaffold_evaluator(tmp_path, yaml_text=raw)
+    assert result["written"] is True
+    assert result["path"] == ".superqode/evaluators/regression.json"
+    assert (tmp_path / result["path"]).is_file()
+    updated = yaml.safe_load(result["yaml"])
+    assert updated["improvement"]["checks"]["regression"]["evaluator"] == "evaluator-regression"
+    assert updated["data_context"]["files"]["evaluator-regression"] == {
+        "path": ".superqode/evaluators/regression.json",
+        "purpose": "evaluator",
+    }
+
+    # Calling again is idempotent.
+    second = scaffold_evaluator(tmp_path, yaml_text=result["yaml"])
+    assert second["written"] is False
+    assert second["already_configured"] is True
+
+    # JSON extraction handles prose + fenced blocks from cloud models.
+    parsed = _extract_json_object('Here is the manifest:\n```json\n{"checks": {}}\n```\nDone.')
+    assert parsed == {"checks": {}}

@@ -1378,6 +1378,7 @@ struct FactoryStudioView: View {
           } else if library.modelSetup.allowCloud {
             await library.edit(engine: app.engine, controls: ["default_route": "best"])
           }
+          await library.scaffoldEvaluator(engine: app.engine)
         }
         await library.validate(engine: app.engine)
         if library.project == ticket.project, !library.review.isEmpty { syncControls() }
@@ -1468,6 +1469,7 @@ struct FactoryStudioView: View {
       for skill in skills {
         await library.scaffoldSkill(engine: app.engine, skill: skill.name, preset: skill.preset.isEmpty ? "web" : skill.preset)
       }
+      await library.scaffoldEvaluator(engine: app.engine)
       await library.validate(engine: app.engine)
       if library.project == projectIdentity, !library.review.isEmpty {
         syncControls()

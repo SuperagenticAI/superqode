@@ -225,6 +225,26 @@ import Combine
       message = "Added \(path) and bound it to your factory draft. Save the revision when ready."
     } catch { if project == identity { failure = error.localizedDescription } }
   }
+  func scaffoldEvaluator(engine: Engine, check: String = "regression", command: String = "") async {
+    let identity = project; let token = version
+    guard !text.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty else { return }
+    do {
+      let result = try await rpc(engine, "evaluator.scaffold", [
+        "check": check, "command": command, "yaml": text,
+      ])
+      guard project == identity, version == token else { return }
+      let updated = string(result, "yaml")
+      if !updated.isEmpty && updated != text {
+        text = updated
+        await validate(engine: engine)
+      }
+      if result["written"] as? Bool == true {
+        let path = string(result, "path", ".superqode/evaluators/\(check).json")
+        failure = ""
+        message = "Configured protected SuperGauge evaluator (\(path)). Save and commit when ready."
+      }
+    } catch { if project == identity { failure = error.localizedDescription } }
+  }
   func save(engine: Engine, reason: String) async {
     let identity = project; let token = version
     guard !busy else { return }; busy = true

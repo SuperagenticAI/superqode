@@ -1,4 +1,11 @@
-# SuperQode for macOS public beta 0.5.7
+# SuperQode for macOS public beta 0.5.8
+
+Version 0.5.8 (build 65) bundles Python engine 2.33.3.
+
+- Automatic SuperGauge evaluator setup: applying an RLM Factory proposal or loading a workflow starter now automatically scaffolds `.superqode/evaluators/regression.json` and binds it to your Factory draft when a Python check script is present, so SuperGauge runs cleanly on the very first trial without manual verifier setup.
+- Fixed verifier proposal JSON parsing in `verifiers.py` to extract JSON objects even when cloud models wrap them in markdown fences or explanatory text.
+
+## 0.5.7 (build 64)
 
 Version 0.5.7 (build 64) bundles Python engine 2.33.3.
 
