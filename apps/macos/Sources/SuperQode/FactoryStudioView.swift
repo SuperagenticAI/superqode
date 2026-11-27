@@ -1361,10 +1361,12 @@ struct FactoryStudioView: View {
     guard !action.isEmpty else { return }
     let ticket = library.navigation.ticket()
     let draftingReference = library.modelSetup.draftingReference
+    let requestedRun = library.run
     activeAction = action
     Task {
       defer { if activeAction == action { activeAction = "" } }
       guard library.project == ticket.project else { return }
+      if action == "worker", library.run != requestedRun { return }
       switch action {
       case "save": await library.save(engine: app.engine, reason: reason)
       case "template", "reload":
@@ -1422,16 +1424,8 @@ struct FactoryStudioView: View {
       case "approve": await library.approve(engine: app.engine)
       case "cancel": await library.cancel(engine: app.engine, runOnly: true)
       case "worker":
-        await library.start(engine: app.engine, action: "worker", provider: app.provider, model: app.model)
-        if library.project == ticket.project, library.failure.isEmpty, !library.run.isEmpty {
-          let updatedOrder = library.detail["work_order"] as? [String: Any] ?? [:]
-          let updatedTasks = updatedOrder["tasks"] as? [[String: Any]] ?? []
-          let allDone = !updatedTasks.isEmpty && updatedTasks.allSatisfy { FactoryStatus(raw: string($0, "status")).isComplete }
-          if allDone && runHasProtectedEvaluators && SuperGaugeSnapshot.parse(detail: library.detail).verdict != .ship {
-            activeAction = "verify"
-            await library.start(engine: app.engine, action: "verify", provider: app.provider, model: app.model)
-          }
-        }
+        await library.runStagesAndVerify(engine: app.engine, provider: app.provider, model: app.model,
+          onVerify: { activeAction = "verify" })
       default: await library.start(engine: app.engine, action: action, provider: app.provider, model: app.model)
       }
     }

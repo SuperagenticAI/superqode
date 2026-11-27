@@ -411,14 +411,17 @@ def handle(service, method, params):
         )
     if method == "factory.evaluator.scaffold":
         from superqode.factory.verifiers import scaffold_evaluator
+        from .ship import assert_idle
 
-        return scaffold_evaluator(
-            root,
-            yaml_text=str(params.get("yaml") or ""),
-            check=str(params.get("check") or "regression"),
-            command=str(params.get("command") or ""),
-            manifest=params.get("manifest"),
-        )
+        with service.lock:
+            assert_idle(service, params["project"])
+            return scaffold_evaluator(
+                root,
+                yaml_text=str(params.get("yaml") or ""),
+                check=str(params.get("check") or "regression"),
+                command=str(params.get("command") or ""),
+                manifest=params.get("manifest"),
+            )
     if method == "factory.run.inspect":
         from superqode.factory.merge_risk import assess_merge_risk
         from superqode.factory.visual_proof import build_handoff_markdown, collect_visual_proof

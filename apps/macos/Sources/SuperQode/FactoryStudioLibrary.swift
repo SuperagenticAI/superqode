@@ -242,6 +242,8 @@ import Combine
         let path = string(result, "path", ".superqode/evaluators/\(check).json")
         failure = ""
         message = "Configured protected SuperGauge evaluator (\(path)). Save and commit when ready."
+      } else if result["already_configured"] as? Bool != true {
+        message = string(result, "reason", "Review protected expectations in Acceptance checks.")
       }
     } catch { if project == identity { failure = error.localizedDescription } }
   }
@@ -320,6 +322,21 @@ import Combine
       await inspect(engine: engine)
     } catch { if project == identity { failure = error.localizedDescription } }
   }
+  func runStagesAndVerify(engine: Engine, provider: String = "", model: String = "", onVerify: (() -> Void)? = nil) async {
+    let identity = project; let selected = run
+    guard !busy, !selected.isEmpty else { return }
+    await start(engine: engine, action: "worker", provider: provider, model: model)
+    guard project == identity, run == selected, failure.isEmpty else { return }
+    let order = detail["work_order"] as? [String: Any] ?? [:]
+    let tasks = order["tasks"] as? [[String: Any]] ?? []
+    let allDone = !tasks.isEmpty && tasks.allSatisfy { FactoryStatus(raw: string($0, "status")).isComplete }
+    if allDone, detail["has_protected_evaluators"] as? Bool == true,
+       SuperGaugeSnapshot.parse(detail: detail).verdict != .ship {
+      onVerify?()
+      await start(engine: engine, action: "verify", provider: provider, model: model)
+    }
+  }
+
   func start(engine: Engine, action: String, provider: String = "", model: String = "", workflow: String = "", allowCloud: Bool = false, executionModel: String = "", extra: [String: Any] = [:]) async {
     guard !busy else { return }
     let identity = project; let token = version; let selected = run
