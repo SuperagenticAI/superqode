@@ -897,6 +897,11 @@ struct FactoryStudioView: View {
     }
   }
 
+  private var runHasProtectedEvaluators: Bool {
+    if let flag = library.detail["has_protected_evaluators"] as? Bool { return flag }
+    return setup.hasProtectedChecks
+  }
+
   private func runActionBar(
     proxy: ScrollViewProxy,
     orderStatus: FactoryStatus,
@@ -904,57 +909,82 @@ struct FactoryStudioView: View {
     hasCandidate: Bool,
     allStagesDone: Bool
   ) -> some View {
-    let stagePhasePrimary = !allStagesDone && orderStatus != .shipped
+    let waitingGate = tasks.contains { FactoryStatus(raw: string($0, "status")) == .waitingHuman }
+    let stagePhasePrimary = !allStagesDone && !waitingGate && orderStatus != .shipped
     let verifyPhasePrimary = allStagesDone && gaugeSnapshot.verdict != .ship && orderStatus != .shipped
     let approvePhasePrimary = gaugeSnapshot.verdict == .ship && hasCandidate && orderStatus != .shipped
+    let hasProtected = runHasProtectedEvaluators
 
-    return FactoryActionRow {
-      if stagePhasePrimary {
-        Button("Run ready stages…") { requestConfirmation("worker") }
-          .buttonStyle(BrandButtonStyle())
-          .disabled(!idle)
-      } else {
-        Button("Run ready stages…") { requestConfirmation("worker") }
-          .disabled(!idle)
-      }
-
-      if verifyPhasePrimary {
-        Button { requestConfirmation("verify") } label: {
-          HStack(spacing: 5) {
-            SuperGaugeMark(verdict: gaugeSnapshot.verdict, size: 15, animating: false)
-            Text("Verify candidate…")
+    return VStack(alignment: .leading, spacing: 10) {
+      FactoryActionRow {
+        if stagePhasePrimary {
+          Button { requestConfirmation("worker") } label: {
+            Label("Run ready stages", systemImage: "play.fill")
           }
+          .buttonStyle(FactoryPrimaryCTAButtonStyle())
+          .disabled(!idle)
+          .accessibilityIdentifier("factory.run.startStages")
+        } else {
+          Button("Run ready stages…") { requestConfirmation("worker") }
+            .disabled(!idle)
         }
-        .buttonStyle(BrandButtonStyle())
-        .disabled(!idle)
-      } else {
-        Button { requestConfirmation("verify") } label: {
-          HStack(spacing: 5) {
-            SuperGaugeMark(verdict: gaugeSnapshot.verdict, size: 15, animating: false)
-            Text("Verify candidate…")
+
+        if verifyPhasePrimary && !hasProtected {
+          Button { library.navigation.select("Acceptance") } label: {
+            Label("Add SuperGauge probes →", systemImage: "lock.shield")
           }
+          .buttonStyle(FactoryPrimaryCTAButtonStyle())
+          .disabled(!idle)
+          .accessibilityIdentifier("factory.run.addProbes")
+        } else if verifyPhasePrimary {
+          Button { requestConfirmation("verify") } label: {
+            HStack(spacing: 6) {
+              SuperGaugeMark(verdict: gaugeSnapshot.verdict, size: 16, animating: false)
+              Text("Verify with SuperGauge")
+            }
+          }
+          .buttonStyle(FactoryPrimaryCTAButtonStyle())
+          .disabled(!idle)
+          .accessibilityIdentifier("factory.run.verify")
+        } else {
+          Button { requestConfirmation("verify") } label: {
+            HStack(spacing: 5) {
+              SuperGaugeMark(verdict: gaugeSnapshot.verdict, size: 15, animating: false)
+              Text("Verify candidate…")
+            }
+          }
+          .disabled(!idle)
         }
-        .disabled(!idle)
+
+        if approvePhasePrimary {
+          Button { requestConfirmation("approve") } label: {
+            Label("Authenticate approval…", systemImage: "touchid")
+          }
+          .buttonStyle(FactoryPrimaryCTAButtonStyle())
+          .disabled(!idle || library.detail["diff_truncated"] as? Bool == true || string(library.detail, "candidate_diff").isEmpty)
+        }
+
+        Button("Stop run") { requestConfirmation("cancel") }
+          .disabled(library.run.isEmpty)
+
+        nativeButton("factory.run.coverage", action: {
+          runDetailTab = "checks"
+          Task { @MainActor in
+            proxy.scrollTo("factory.requirements", anchor: .top)
+          }
+        }, title: "Requirement coverage") {
+          Text("Requirement coverage")
+        }
       }
 
-      if approvePhasePrimary {
-        Button { requestConfirmation("approve") } label: {
-          Label("Authenticate approval…", systemImage: "touchid")
-        }
-        .buttonStyle(BrandButtonStyle())
-        .disabled(!idle || library.detail["diff_truncated"] as? Bool == true || string(library.detail, "candidate_diff").isEmpty)
-      }
-
-      Button("Stop run") { requestConfirmation("cancel") }
-        .disabled(library.run.isEmpty)
-
-      nativeButton("factory.run.coverage", action: {
-        runDetailTab = "checks"
-        Task { @MainActor in
-          proxy.scrollTo("factory.requirements", anchor: .top)
-        }
-      }, title: "Requirement coverage") {
-        Text("Requirement coverage")
+      if waitingGate {
+        Label("Approve the waiting human gate below — remaining stages and SuperGauge will continue automatically.", systemImage: "hand.raised.fill")
+          .font(.caption.weight(.medium))
+          .foregroundStyle(.orange)
+      } else if verifyPhasePrimary && !hasProtected {
+        Label("All stages completed. Add protected probes in Acceptance checks (then commit and prepare a fresh trial) to run SuperGauge verification.", systemImage: "lock.shield")
+          .font(.caption)
+          .foregroundStyle(.orange)
       }
     }
   }
@@ -979,7 +1009,25 @@ struct FactoryStudioView: View {
               gateReason: $gateReason,
               onApprove: {
                 let reasonText = gateReason
-                Task { await library.gate(engine: app.engine, task: task, decision: "approve", reason: reasonText) }
+                let ticket = library.navigation.ticket()
+                let runID = library.run
+                Task {
+                  await library.gate(engine: app.engine, task: task, decision: "approve", reason: reasonText)
+                  await library.refresh(engine: app.engine)
+                  guard library.project == ticket.project, library.run == runID, library.failure.isEmpty else { return }
+                  let updatedOrder = library.detail["work_order"] as? [String: Any] ?? [:]
+                  let updatedTasks = updatedOrder["tasks"] as? [[String: Any]] ?? []
+                  let hasBlocked = updatedTasks.contains {
+                    let s = FactoryStatus(raw: string($0, "status"))
+                    return s == .waitingHuman || s == .failed || s == .cancelled
+                  }
+                  let allDone = !updatedTasks.isEmpty && updatedTasks.allSatisfy { FactoryStatus(raw: string($0, "status")).isComplete }
+                  if !allDone && !hasBlocked {
+                    execute("worker")
+                  } else if allDone && runHasProtectedEvaluators && SuperGaugeSnapshot.parse(detail: library.detail).verdict != .ship {
+                    execute("verify")
+                  }
+                }
               },
               onHold: {
                 let reasonText = gateReason
@@ -1372,6 +1420,17 @@ struct FactoryStudioView: View {
         } catch { if library.project == identity { library.failure = error.localizedDescription } }
       case "approve": await library.approve(engine: app.engine)
       case "cancel": await library.cancel(engine: app.engine, runOnly: true)
+      case "worker":
+        await library.start(engine: app.engine, action: "worker", provider: app.provider, model: app.model)
+        if library.project == ticket.project, library.failure.isEmpty, !library.run.isEmpty {
+          let updatedOrder = library.detail["work_order"] as? [String: Any] ?? [:]
+          let updatedTasks = updatedOrder["tasks"] as? [[String: Any]] ?? []
+          let allDone = !updatedTasks.isEmpty && updatedTasks.allSatisfy { FactoryStatus(raw: string($0, "status")).isComplete }
+          if allDone && runHasProtectedEvaluators && SuperGaugeSnapshot.parse(detail: library.detail).verdict != .ship {
+            activeAction = "verify"
+            await library.start(engine: app.engine, action: "verify", provider: app.provider, model: app.model)
+          }
+        }
       default: await library.start(engine: app.engine, action: action, provider: app.provider, model: app.model)
       }
     }
@@ -1419,5 +1478,35 @@ struct FactoryStudioView: View {
   private func follow(_ ticket: FactoryNavigation.Ticket, to destination: String) {
     guard app.section == "Factory Studio" else { return }
     library.navigation.follow(ticket, to: destination)
+  }
+}
+
+/// High-visibility primary action button for active Factory trial actions.
+private struct FactoryPrimaryCTAButtonStyle: ButtonStyle {
+  @Environment(\.isEnabled) private var enabled
+  func makeBody(configuration: Configuration) -> some View {
+    configuration.label
+      .font(.callout.weight(.bold))
+      .foregroundStyle(enabled ? Color.white : Color.secondary)
+      .padding(.horizontal, 20)
+      .padding(.vertical, 10)
+      .background(
+        enabled
+          ? AnyShapeStyle(
+            LinearGradient(
+              colors: [Brand.purple, Brand.purple.opacity(0.84)],
+              startPoint: .topLeading,
+              endPoint: .bottomTrailing
+            ))
+          : AnyShapeStyle(Color.primary.opacity(0.08)),
+        in: RoundedRectangle(cornerRadius: 9, style: .continuous)
+      )
+      .overlay(
+        RoundedRectangle(cornerRadius: 9, style: .continuous)
+          .stroke(enabled ? Color.white.opacity(0.18) : Color.primary.opacity(0.1), lineWidth: 1)
+      )
+      .shadow(color: enabled ? Brand.purple.opacity(0.35) : .clear, radius: 6, y: 2)
+      .opacity(configuration.isPressed ? 0.85 : 1)
+      .scaleEffect(configuration.isPressed ? 0.98 : 1)
   }
 }

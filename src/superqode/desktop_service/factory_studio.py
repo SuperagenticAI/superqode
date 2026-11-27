@@ -468,6 +468,14 @@ def handle(service, method, params):
             merge_risk=merge_risk,
             visual_proof=visual_proof,
         )
+        has_protected_evaluators = False
+        try:
+            from superqode.factory.verification import evaluator_contract
+
+            evaluator_contract(validate_factory_order(order, store=store))
+            has_protected_evaluators = True
+        except (ValueError, KeyError, OSError):
+            has_protected_evaluators = False
         return {
             "work_order": data,
             "evidence": [
@@ -486,6 +494,7 @@ def handle(service, method, params):
             "diff_truncated": bool(candidate and len(candidate.content) > 200000),
             "candidate_id": candidate.artifact_id if candidate else "",
             "candidate_digest": candidate.digest if candidate else "",
+            "has_protected_evaluators": has_protected_evaluators,
             "merge_risk": merge_risk,
             "visual_proof": visual_proof,
             "handoff_markdown": handoff_markdown,

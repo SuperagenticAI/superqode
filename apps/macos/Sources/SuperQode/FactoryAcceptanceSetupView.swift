@@ -20,7 +20,7 @@ struct FactoryAcceptanceSetupView: View {
   @State private var reviewed = false
   @State private var confirmation = ""
   @State private var reviewedDigest = ""
-  @State private var verifiersExpanded = ProcessInfo.processInfo.arguments.contains("--factory-acceptance-inspect")
+  @State private var verifiersExpanded = true
   @State private var explicitExpanded = ProcessInfo.processInfo.arguments.contains("--factory-acceptance-inspect")
   private var idle: Bool { !studio.busy && !library.busy && !app.anyActive && !app.busy }
   private var requirements: [String: Any] { studio.review["requirements"] as? [String: Any] ?? [:] }

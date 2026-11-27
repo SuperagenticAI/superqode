@@ -1,4 +1,13 @@
-# SuperQode for macOS public beta 0.5.6
+# SuperQode for macOS public beta 0.5.7
+
+Version 0.5.7 (build 64) bundles Python engine 2.33.3.
+
+- Approving a Factory human gate now automatically continues remaining stages and automatically runs SuperGauge verification once all stages complete (when protected evaluators are configured).
+- Running ready stages now automatically transitions into SuperGauge verification when all stages finish cleanly with protected probes configured.
+- Replaced the flat primary trial action buttons (**Run ready stages**, **Verify with SuperGauge**, **Add SuperGauge probes**, and **Authenticate approval**) with a larger, high-contrast purple primary button so the next action stands out immediately.
+- Expanded **Prepare protected verifiers** by default on the Acceptance page and surfaced a direct **Add SuperGauge probes** action on trials whose snapshot has no protected evaluator yet.
+
+## 0.5.6 (build 63)
 
 Version 0.5.6 (build 63) bundles Python engine 2.33.3.
 
