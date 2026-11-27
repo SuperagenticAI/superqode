@@ -24,6 +24,9 @@ struct FactoryStudioView: View {
   @State private var syncedControls: FactoryControlDraft?
   @State private var runDetailTab = ProcessInfo.processInfo.arguments.contains("--factory-acceptance-inspect") ? "checks" : "pipeline"
   @State private var showTour = false
+  @State private var showPresentation = false
+  @State private var showAdvancedSetup = false
+  @State private var journeyStep: FactoryJourneyStep = .intent
   @State private var contentReady = false
   @State private var uiSkillPreset = "web"
   @State private var appliedRLMSnapshot: FactoryRLMLineageSnapshot?
@@ -65,11 +68,13 @@ struct FactoryStudioView: View {
   }
   var body: some View {
     HStack(alignment: .top, spacing: 20) {
-      FactoryNavigationHeader(navigation: library.navigation, badges: sidebarBadges).frame(width: 178)
-      Divider()
+      if tab != "Stack" || showAdvancedSetup {
+        FactoryNavigationHeader(navigation: library.navigation, badges: sidebarBadges).frame(width: 178)
+        Divider()
+      }
       VStack(alignment: .leading, spacing: 14) {
       headerBar
-      if showNextStepGuide {
+      if showNextStepGuide && tab != "Stack" {
         FactoryNextStepStrip(
           setup: setup,
           controlsHaveChanges: controlsHaveChanges,
@@ -171,7 +176,7 @@ struct FactoryStudioView: View {
       .onChange(of: string(library.review, "snapshot_digest")) { _, value in
         if !value.isEmpty, !controlsHaveChanges { syncControls() }
       }
-      .onChange(of: app.projectID) { _, _ in confirmation = ""; activeAction = ""; reason = ""; goal = ""; experimentStage = ""; experimentGoal = ""; experimentTask = "" }
+      .onChange(of: app.projectID) { _, _ in confirmation = ""; activeAction = ""; reason = ""; goal = ""; journeyStep = .intent; showAdvancedSetup = false; experimentStage = ""; experimentGoal = ""; experimentTask = "" }
       .factoryConfirmation(
         isPresented: Binding(get: { showingSheetConfirm }, set: { if !$0 { dismissConfirmation() } }),
         title: confirmationTitle,
@@ -186,6 +191,7 @@ struct FactoryStudioView: View {
           execute(action)
         }
       )
+      .sheet(isPresented: $showPresentation) { FactoryPresentationView() }
       .sheet(isPresented: $showTour) {
         FactoryTourSheet(
           onJumpToPage: { destination in library.navigation.select(destination) },
@@ -202,7 +208,7 @@ struct FactoryStudioView: View {
       FactoryGroupMark(id: library.navigation.group.id, selected: true, size: 26)
       Text(library.navigation.pageTitle).font(.title2.bold())
       Spacer()
-      if FactoryNavigation.buildPages.contains(tab) {
+      if FactoryNavigation.buildPages.contains(tab) && tab != "Stack" {
         Button("Check definition") {
           let ticket = library.navigation.ticket()
           activeAction = "validate"
@@ -215,16 +221,24 @@ struct FactoryStudioView: View {
         Button("Save changes…") { requestConfirmation("save") }
           .disabled(!idle || library.review.isEmpty || controlsHaveChanges || setup.saved)
       }
+      if tab == "Stack", !showAdvancedSetup {
+        Button("All Factory controls") { library.navigation.select("Definition") }
+          .accessibilityIdentifier("factory.journey.allControls")
+      }
       Button { showTour = true } label: {
         Label("Tour", systemImage: "book.pages")
       }
       .help("Walk through how to build a Software Factory before running anything")
       .accessibilityIdentifier("factory.tour.open")
+      if tab != "Stack" {
       Button { showNextStepGuide.toggle() } label: {
         Label(showNextStepGuide ? "Guide" : "Show guide", systemImage: showNextStepGuide ? "checklist.checked" : "checklist")
       }
       .help(showNextStepGuide ? "Hide the Next-Step progress strip" : "Show the Next-Step progress strip")
       .accessibilityIdentifier("factory.guide.toggle")
+      }
+      Button { showPresentation = true } label: { Label("Demo", systemImage: "play.rectangle") }
+        .accessibilityIdentifier("factory.presentation.open")
       FactorySoundToggleButton()
     }
   }
@@ -256,6 +270,29 @@ struct FactoryStudioView: View {
             }
             .id("factory-proposal-top")
           }
+          if !library.canApplyProposal {
+          FactoryGuidedBuilderView(
+            studio: library, step: $journeyStep, trialGoal: $goal, setup: setup, idle: idle,
+            onBuild: { requestConfirmation("rlm-architect") },
+            onStarter: chooseWorkflow,
+            onValidate: {
+              let identity = library.project; let source = library.version
+              Task {
+                guard library.project == identity, library.version == source else { return }
+                await library.validate(engine: app.engine)
+                if library.project == identity, !library.review.isEmpty { syncControls() }
+              }
+            },
+            onSave: {
+              if reason.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty { reason = "Configured my Factory" }
+              requestConfirmation("save")
+            },
+            onTrial: { requestConfirmation("trial") },
+            onDemo: { showPresentation = true }
+          )
+          }
+          DisclosureGroup("Advanced setup · workflows, model details and local draft recovery", isExpanded: $showAdvancedSetup) {
+            VStack(alignment: .leading, spacing: 18) {
           HStack(spacing: 8) {
             FactoryStudioEmblem(size: 22)
             Text("What should this Factory do?").font(.headline)
@@ -292,6 +329,8 @@ struct FactoryStudioView: View {
             Spacer()
             nativeButton("factory.setup.next", action: advanceSetup, title: setup.action) { Text(setup.action).font(.caption.weight(.semibold)) }.disabled(!idle || (controlsHaveChanges && setup.hasDraft))
           }
+            }.padding(.top, 14)
+          }.font(.callout)
         }.frame(maxWidth: .infinity, alignment: .leading)
       }
       .onChange(of: library.canApplyProposal) { _, ready in
@@ -1255,7 +1294,8 @@ struct FactoryStudioView: View {
         await library.validate(engine: app.engine)
         if library.project == ticket.project, !library.review.isEmpty { syncControls() }
         if action == "template", library.navigation.isCurrent(ticket), library.failure.isEmpty, !library.text.isEmpty {
-          library.navigation.select("Definition")
+          if showAdvancedSetup { library.navigation.select("Definition") }
+          else { journeyStep = .review }
         }
       case "generate":
         if library.text.isEmpty { await library.load(engine: app.engine, template: preset) }
@@ -1263,7 +1303,8 @@ struct FactoryStudioView: View {
         guard await checkDraftingSelection(draftingReference) else { return }
         await library.start(engine: app.engine, action: action, provider: draftingProvider, model: draftingModel, workflow: preset)
         if library.navigation.isCurrent(ticket), library.failure.isEmpty, library.message.hasPrefix("Starter settings") {
-          library.navigation.select("Definition")
+          if showAdvancedSetup { library.navigation.select("Definition") }
+          else { journeyStep = .review }
         }
       case "rlm-architect":
         guard await checkDraftingSelection(draftingReference) else { return }
@@ -1308,8 +1349,11 @@ struct FactoryStudioView: View {
     library.text = proposedYaml
     library.proposal = [:]
     appliedRLMSnapshot = snapshot
-    // Jump immediately to the editable Definition page so the user sees their new factory right away.
-    library.navigation.select("Definition")
+    if library.navigation.selection == "Stack", !showAdvancedSetup {
+      journeyStep = .review
+    } else {
+      library.navigation.select("Definition")
+    }
     Task {
       for skill in skills {
         await library.scaffoldSkill(engine: app.engine, skill: skill.name, preset: skill.preset.isEmpty ? "web" : skill.preset)

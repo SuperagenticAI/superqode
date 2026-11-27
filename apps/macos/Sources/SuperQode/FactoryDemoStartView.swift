@@ -3,6 +3,7 @@ import AppKit
 
 /// A new sample directory only. Creation never calls a model or starts a worker.
 struct FactoryDemoStartView: View {
+  var onCreated: (() -> Void)? = nil
   @EnvironmentObject private var app: Workspace
   @State private var creating = false
   @State private var createdPath = ""
@@ -28,6 +29,7 @@ struct FactoryDemoStartView: View {
             guard !createdPath.isEmpty else { throw EngineError(message: "The sample directory was not returned.") }
             if app.projectID == project, app.section == section, app.showWelcome == welcome {
               try await app.open(createdPath, landing: .factory)
+              onCreated?()
             }
           } catch { failure = error.localizedDescription }
         }
