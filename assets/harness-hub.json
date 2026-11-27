@@ -1,7 +1,7 @@
 {
   "schema_version": "1.7",
-  "generated_at": "2026-11-15T11:06:41.060603+00:00",
-  "count": 108,
+  "generated_at": "2026-11-27T07:52:35.728207+00:00",
+  "count": 110,
   "categories": [
     "SuperQode harnesses",
     "Coding agents",
@@ -971,6 +971,68 @@
       "language": "Go",
       "language_confidence": "inferred",
       "language_evidence": "Closed source. Ships as one self-contained agy binary with no separate runtime; Google\u2019s CLI docs and launch coverage describe it as a Go build sharing the Antigravity IDE agent harness."
+    },
+    {
+      "id": "antigravity-acp",
+      "name": "Antigravity (ACP)",
+      "description": "Use Google's Antigravity agent over its official ACP server (agy acp) with your Google Sign-In, live model and thinking controls",
+      "category": "Coding agents",
+      "kind": "connection",
+      "runtime": "antigravity",
+      "source": "connection:acp",
+      "readiness": "setup-required",
+      "integration_level": "managed",
+      "continuity": "fresh-session",
+      "provider": "",
+      "model": "",
+      "setup": "install or update agy from https://antigravity.google/docs/cli-install (Antigravity ACP requires agy 1.5.1+), then sign in with `agy`",
+      "warning": "",
+      "project_path": "",
+      "homepage": "",
+      "repository": "",
+      "interface": "",
+      "support_note": "",
+      "last_verified": "",
+      "aliases": [],
+      "docs_url": "https://docs.superqode.dev/concepts/modes/",
+      "install_command": "install or update agy from https://antigravity.google/docs/cli-install (Antigravity ACP requires agy 1.5.1+), then sign in with `agy`",
+      "tui_commands": [
+        ":connect antigravity-acp",
+        ":harness switch antigravity-acp",
+        ":harness status"
+      ],
+      "cli_commands": [
+        "superqode harness run antigravity-acp \"Describe your task\""
+      ],
+      "eval_commands": [],
+      "optimize_commands": [],
+      "tools": [],
+      "policies": [
+        "The connected coding agent owns its tool loop",
+        "Authentication remains with the vendor CLI or account",
+        "SuperQode provides discovery, launch, and session continuity",
+        "Evaluation and optimization apply to SuperQode HarnessSpecs, not to this agent's internal loop"
+      ],
+      "capabilities": [
+        "closed harness",
+        "multi-model",
+        "via ACP",
+        "Managed connection from SuperQode"
+      ],
+      "based_on": "Antigravity (ACP)",
+      "popularity_rank": 500,
+      "setup_steps": [
+        {
+          "title": "Complete the required setup",
+          "command": "",
+          "description": "install or update agy from https://antigravity.google/docs/cli-install (Antigravity ACP requires agy 1.5.1+), then sign in with `agy`"
+        }
+      ],
+      "openness": "closed",
+      "license": "",
+      "language": "Unknown",
+      "language_confidence": "inferred",
+      "language_evidence": "No public source or distribution signal yet."
     },
     {
       "id": "antigravity-managed",
@@ -2382,6 +2444,64 @@
       "language": "TypeScript",
       "language_confidence": "confirmed",
       "language_evidence": "The Pi coding agent and its pi-acp adapter both carry tsconfig.json."
+    },
+    {
+      "id": "acp:pydantic-coder",
+      "name": "Pydantic Coder \u2014 Experimental",
+      "description": "Pydantic's Coder harness over SuperQode's experimental ACP connector, with model selection, file and shell tools, approvals and persistent sessions.",
+      "category": "ACP agents",
+      "kind": "acp",
+      "runtime": "ACP",
+      "source": "acp:featured",
+      "readiness": "setup-required",
+      "integration_level": "protocol",
+      "continuity": "context-replay",
+      "provider": "",
+      "model": "",
+      "setup": "superqode pydantic-coder setup",
+      "warning": "",
+      "project_path": "",
+      "homepage": "https://pydantic.dev/docs/ai/harness/coder/",
+      "repository": "",
+      "interface": "",
+      "support_note": "",
+      "last_verified": "",
+      "aliases": [],
+      "docs_url": "https://pydantic.dev/docs/ai/harness/coder/",
+      "install_command": "superqode pydantic-coder setup",
+      "tui_commands": [
+        ":connect acp pydantic-coder",
+        ":harness switch acp:pydantic-coder",
+        ":harness status"
+      ],
+      "cli_commands": [
+        "superqode harness run acp:pydantic-coder \"Describe your task\""
+      ],
+      "eval_commands": [],
+      "optimize_commands": [],
+      "tools": [],
+      "policies": [
+        "External agent owns its tool loop and tool inventory",
+        "SuperQode provides ACP connection, session handoff, and context replay"
+      ],
+      "capabilities": [
+        "Agent Client Protocol",
+        "Context replay"
+      ],
+      "based_on": "Pydantic Coder \u2014 Experimental agent",
+      "popularity_rank": 500,
+      "setup_steps": [
+        {
+          "title": "Install Pydantic Coder \u2014 Experimental",
+          "command": "superqode pydantic-coder setup",
+          "description": ""
+        }
+      ],
+      "openness": "open",
+      "license": "",
+      "language": "Unknown",
+      "language_confidence": "inferred",
+      "language_evidence": "No public source or distribution signal yet."
     },
     {
       "id": "acp:agentpool",
