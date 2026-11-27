@@ -1,4 +1,12 @@
-# SuperQode for macOS public beta 0.5.5
+# SuperQode for macOS public beta 0.5.6
+
+Version 0.5.6 (build 63) bundles Python engine 2.33.3.
+
+- Removed the hardcoded Grok CLI shortcut from Factory Studio Step 2 so onboarding stays provider-neutral with **Cloud API key** (Google Gemini, Claude, OpenAI, xAI, DeepSeek, Token Plans, and 40+ providers) and optional **Local model**.
+- Factory Studio now checks model credentials automatically in Step 2 and flags missing or expired subscription sessions before building, saving, or running a trial.
+- Added Return-key submit support in the API key field so connecting a provider takes a single keystroke or click.
+
+## 0.5.5 (build 62)
 
 Version 0.5.5 (build 62) bundles Python engine 2.33.3.
 

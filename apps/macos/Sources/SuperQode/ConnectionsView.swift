@@ -476,6 +476,7 @@ struct ProviderConnectionView: View {
       }
       SecureField(configured ? "Replace API key (optional)" : "Enter API key", text: $key)
         .textFieldStyle(.roundedBorder).accessibilityLabel("API key")
+        .onSubmit { connect() }
       Toggle("Remember in Keychain", isOn: $remember).disabled(suppliedKey.isEmpty)
       if saved && !configured {
         Button(restoringKey ? "Opening Keychain…" : "Use saved key", action: useSavedKey)

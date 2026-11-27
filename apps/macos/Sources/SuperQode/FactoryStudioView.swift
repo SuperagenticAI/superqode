@@ -1324,7 +1324,7 @@ struct FactoryStudioView: View {
         await library.load(engine: app.engine, template: action == "template" ? preset : "")
         if action == "template", library.project == ticket.project, !library.text.isEmpty {
           let chosenModel = !draftingReference.isEmpty ? draftingReference
-            : (!app.provider.isEmpty && app.provider != "acp" && !app.model.isEmpty ? app.provider + "/" + app.model : "")
+            : (!app.provider.isEmpty && app.provider != "acp" && app.provider != "agent" && !app.model.isEmpty ? app.provider + "/" + app.model : "")
           if !chosenModel.isEmpty {
             await library.edit(engine: app.engine, controls: ["default_route": "best", "binding": "coder", "model": chosenModel])
           } else if library.modelSetup.allowCloud {

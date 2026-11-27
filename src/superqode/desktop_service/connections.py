@@ -240,6 +240,12 @@ def inspect_route(credentials: dict[str, str], params: dict):
             "state": "missing-credential",
             "message": "Connect this provider with an API key before running a task.",
         }
+    if definition.auth_mode == "subscription" and not configured:
+        return {
+            "ready": False,
+            "state": "missing-credential",
+            "message": "This subscription session is missing or expired. Refresh its login or connect a cloud API key instead.",
+        }
     return {
         "ready": None,
         "state": "needs-test",

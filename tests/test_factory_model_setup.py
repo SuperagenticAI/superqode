@@ -254,3 +254,24 @@ def test_explicit_allow_cloud_unblocks_empty_draft_without_overriding_private_dr
     assert private["default_route"] == "private"
     assert private["drafting"]["eligible"] is False
     assert private["drafting"]["state"] == "privacy-blocked"
+
+
+def test_expired_subscription_provider_reports_missing_credential(tmp_path, monkeypatch):
+    from superqode.desktop_service.connections import inspect_route
+
+    monkeypatch.setattr(
+        "superqode.desktop_service.connections.provider_api_key", lambda _defn: None
+    )
+    status = inspect_route({}, {"provider": "grok-cli", "model": "grok-4.7"})
+    assert status["ready"] is False
+    assert status["state"] == "missing-credential"
+
+    report = inspect_models(
+        tmp_path,
+        yaml_text="",
+        drafting_model="grok-cli/grok-4.7",
+        allow_cloud=True,
+        check_connection=lambda p, m, _b: inspect_route({}, {"provider": p, "model": m}),
+    )
+    assert report["drafting"]["eligible"] is False
+    assert report["drafting"]["state"] == "missing-credential"
