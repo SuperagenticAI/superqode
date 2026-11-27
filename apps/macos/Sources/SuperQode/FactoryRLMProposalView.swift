@@ -231,20 +231,30 @@ struct FactoryRLMProposalCard: View {
       }
       if !assumptions.isEmpty {
         DisclosureGroup("Assumptions to review (\(assumptions.count))") {
-          ForEach(assumptions, id: \.self) { item in
-            Text("• \(item)")
-              .font(.caption)
-              .foregroundStyle(.secondary)
+          VStack(alignment: .leading, spacing: 4) {
+            ForEach(assumptions, id: \.self) { item in
+              Text("• \(item)")
+                .font(.caption)
+                .foregroundStyle(.secondary)
+            }
           }
+          .frame(maxWidth: .infinity, alignment: .leading)
+          .padding(.top, 4)
         }
+        .font(.caption.weight(.medium))
       }
 
       if !missingCapabilities.isEmpty {
         DisclosureGroup("Setup still needed (\(missingCapabilities.count))") {
-          ForEach(missingCapabilities, id: \.self) { item in
-            Label(item, systemImage: "exclamationmark.circle").font(.caption).foregroundStyle(.orange)
+          VStack(alignment: .leading, spacing: 4) {
+            ForEach(missingCapabilities, id: \.self) { item in
+              Label(item, systemImage: "exclamationmark.circle").font(.caption).foregroundStyle(.orange)
+            }
           }
+          .frame(maxWidth: .infinity, alignment: .leading)
+          .padding(.top, 4)
         }
+        .font(.caption.weight(.medium))
       }
       DisclosureGroup(
         "How SuperQode analyzed this repository (\(snapshot.filesInspected.count) manifests read, \(snapshot.subcalls.count) sub-queries)",
@@ -295,11 +305,13 @@ struct FactoryRLMProposalCard: View {
         .disabled(busy)
         .accessibilityIdentifier("factory.rlm.applyWithSkills")
 
-        Button("Use draft only") {
-          onApplyYamlOnly()
+        if !selectedSkills.isEmpty {
+          Button("Use draft only") {
+            onApplyYamlOnly()
+          }
+          .disabled(busy)
+          .accessibilityIdentifier("factory.rlm.applyYamlOnly")
         }
-        .disabled(busy)
-        .accessibilityIdentifier("factory.rlm.applyYamlOnly")
       }
 
       HStack(alignment: .firstTextBaseline, spacing: 6) {

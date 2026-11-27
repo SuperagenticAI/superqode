@@ -105,11 +105,19 @@ struct FactoryPresentationScene: View {
         VStack(alignment: .leading, spacing: 12) {
           Label(repaired ? "Proposed change" : "The starting code", systemImage: "chevron.left.forwardslash.chevron.right")
             .font(.subheadline.bold())
-          Text("def total(values):\n    result = 0\n    for value in values:")
-            .font(.system(.callout, design: .monospaced))
-          Text(repaired ? "−       result = value\n+       result += value" : "        result = value")
-            .font(.system(.callout, design: .monospaced)).foregroundStyle(repaired ? Color.green : Brand.orange)
-          Text("    return result").font(.system(.callout, design: .monospaced))
+          VStack(alignment: .leading, spacing: 2) {
+            Text("def total(values):").fixedSize(horizontal: false, vertical: true)
+            Text("    result = 0").fixedSize(horizontal: false, vertical: true)
+            Text("    for value in values:").fixedSize(horizontal: false, vertical: true)
+            if repaired {
+              Text("−       result = value").foregroundStyle(Color.red)
+              Text("+       result += value").foregroundStyle(Color.green)
+            } else {
+              Text("        result = value").foregroundStyle(Brand.orange)
+            }
+            Text("    return result")
+          }.font(.system(.callout, design: .monospaced))
+            .fixedSize(horizontal: false, vertical: true)
           Text(repaired ? "One changed line. The protected expectations stay the same." : "The running total is replaced on every iteration.")
             .font(.caption).foregroundStyle(.secondary)
         }.frame(maxWidth: .infinity, alignment: .leading).padding(20).brandSurface()

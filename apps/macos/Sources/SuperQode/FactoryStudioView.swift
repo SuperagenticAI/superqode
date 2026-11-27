@@ -237,8 +237,10 @@ struct FactoryStudioView: View {
       .help(showNextStepGuide ? "Hide the Next-Step progress strip" : "Show the Next-Step progress strip")
       .accessibilityIdentifier("factory.guide.toggle")
       }
-      Button { showPresentation = true } label: { Label("Demo", systemImage: "play.rectangle") }
-        .accessibilityIdentifier("factory.presentation.open")
+      if tab != "Stack" || library.canApplyProposal {
+        Button { showPresentation = true } label: { Label("Demo", systemImage: "play.rectangle") }
+          .accessibilityIdentifier("factory.presentation.open")
+      }
       FactorySoundToggleButton()
     }
   }

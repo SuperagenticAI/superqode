@@ -16,10 +16,14 @@ struct FactoryGuidedBuilderView: View {
   let onTrial: () -> Void
   let onDemo: () -> Void
   var inspectAutomatically = true
+  @State private var userSelectedStep = false
 
   private var execution: [[String: Any]] { studio.modelSetup.execution }
   private var modelsConfigured: Bool { !execution.isEmpty && execution.allSatisfy { $0["eligible"] as? Bool == true } }
   private var connected: Bool { !app.provider.isEmpty && app.provider != "acp" && !app.model.isEmpty }
+  private var setupSuggestionID: String {
+    studio.project + ":" + String(setup.saved) + ":" + String(setup.trialPrepared) + ":" + String(setup.hasCompletedRun)
+  }
   private var inspectionID: String {
     studio.project + "\n" + String(studio.version) + "\n" + studio.modelSetup.draftingReference + "\n"
       + studio.runs.map { string($0, "id") + string($0, "status") + String($0["verification_valid"] as? Bool ?? false) }.joined(separator: "\n")
@@ -47,6 +51,7 @@ struct FactoryGuidedBuilderView: View {
         FactoryFlowNode(id: $0.rawValue, title: $0.title, symbol: $0.symbol, completed: completed($0))
       }, selection: step.rawValue, working: studio.busy || studio.setupChecking || studio.modelSetup.checking, enabled: idle, onSelect: { index in
         guard idle, let target = FactoryJourneyStep(rawValue: index) else { return }
+        userSelectedStep = true
         step = target
       })
       HStack(spacing: 6) {
@@ -69,7 +74,10 @@ struct FactoryGuidedBuilderView: View {
         .transition(reduceMotion ? .identity : .opacity.combined(with: .move(edge: .trailing)))
       HStack {
         if step != .intent {
-          Button { step = FactoryJourneyStep(rawValue: step.rawValue - 1) ?? .intent } label: {
+          Button {
+            userSelectedStep = true
+            step = FactoryJourneyStep(rawValue: step.rawValue - 1) ?? .intent
+          } label: {
             Label("Back", systemImage: "chevron.left")
           }.disabled(!idle)
         }
@@ -80,7 +88,12 @@ struct FactoryGuidedBuilderView: View {
       .animation(reduceMotion ? nil : .spring(response: 0.38, dampingFraction: 0.88), value: step)
       .accessibilityIdentifier("factory.journey")
       .onAppear {
-        if step == .intent {
+        if !userSelectedStep, step == .intent {
+          step = .suggested(saved: setup.saved, trialPrepared: setup.trialPrepared, verified: setup.hasCompletedRun)
+        }
+      }
+      .onChange(of: setupSuggestionID) { _, _ in
+        if !userSelectedStep, step == .intent {
           step = .suggested(saved: setup.saved, trialPrepared: setup.trialPrepared, verified: setup.hasCompletedRun)
         }
       }
@@ -93,6 +106,7 @@ struct FactoryGuidedBuilderView: View {
         await studio.inspectGettingStarted(engine: app.engine)
       }
       .onChange(of: studio.project) { _, _ in
+        userSelectedStep = false
         step = .intent
       }
       .onChange(of: setup.saved) { _, saved in
