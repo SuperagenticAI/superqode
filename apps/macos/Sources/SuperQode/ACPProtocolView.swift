@@ -63,11 +63,12 @@ extension Workspace {
   func acpPolicy(for reference: String, project selectedProject: String? = nil) -> ACPProtocolPolicy {
     let project = selectedProject ?? projectID
     let key = project + "\n" + reference
-    if let cached = acpProtocolChoices[key] {
+    if let cached = acpProtocolChoices[key] ?? acpPolicyCache[key] {
       return ACPProtocolPolicy(rawValue: cached) ?? .automatic
     }
     let stored = preferences.dictionary(forKey: "nativeACPProtocols:" + project) ?? [:]
     let raw = stored[reference] as? String ?? "auto"
+    acpPolicyCache[key] = raw
     return ACPProtocolPolicy(rawValue: raw) ?? .automatic
   }
 
@@ -79,7 +80,9 @@ extension Workspace {
       return
     }
     guard policy != acpPolicy(for: reference, project: project) else { return }
-    acpProtocolChoices[project + "\n" + reference] = policy.rawValue
+    let key = project + "\n" + reference
+    acpPolicyCache[key] = policy.rawValue
+    acpProtocolChoices[key] = policy.rawValue
     var stored = preferences.dictionary(forKey: "nativeACPProtocols:" + project) ?? [:]
     stored[reference] = policy.rawValue
     preferences.set(stored, forKey: "nativeACPProtocols:" + project)

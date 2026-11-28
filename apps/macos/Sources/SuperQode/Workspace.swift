@@ -362,6 +362,7 @@ private func jobStamp(_ row: [String: Any]) -> Double {
   @Published var agentModel = ""
   @Published var agentMode = ""
   @Published var acpProtocolChoices: [String: String] = [:]
+  var acpPolicyCache: [String: String] = [:]
   var acpProtocolPolicy: ACPProtocolPolicy {
     get { acpPolicy(for: harness) }
     set { setACPPolicy(newValue, for: harness) }
