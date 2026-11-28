@@ -87,7 +87,7 @@ uv run --no-project --python 3.15 python -m profiling.sampling --help
 
 `uv check` currently reports a substantial existing type-checking backlog and
 is not a required CI gate. `devtools` 0.13.0 passed a Python 3.15 formatting smoke
-check; it remains optional. See [dependency compatibility](docs/integrations/dependency-compatibility.md)
+check; it remains optional. See [dependency compatibility](../docs/integrations/dependency-compatibility.md)
 for the interpreter limitations and upstream blockers.
 
 ## Coding Standards
