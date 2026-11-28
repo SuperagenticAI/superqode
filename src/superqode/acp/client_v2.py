@@ -73,6 +73,15 @@ class ACPv2ClientMixin:
             raise
         if type(response.get("protocolVersion")) is int and response["protocolVersion"] == 1:
             self._request_v1_fallback("Agent selected ACP v1 during initialization.")
+        if (
+            isinstance(response, dict)
+            and "info" not in response
+            and "capabilities" not in response
+            and ("agentCapabilities" in response or "agentInfo" in response)
+        ):
+            self._request_v1_fallback(
+                "Agent returned an ACP v1 initialization response after a v2 request."
+            )
         validate_v2("InitializeResponse", response)
         if response.get("protocolVersion") != 2:
             raise ValueError("Agent selected an unsupported ACP version")

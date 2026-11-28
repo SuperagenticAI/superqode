@@ -263,3 +263,59 @@ async def test_doctor_failed_v2_start_reports_unnegotiated(tmp_path):
     assert result["negotiated_protocol_version"] is None
     assert result["protocol_compatible"] is False
     assert result["fallback"] is False
+
+
+async def test_auto_falls_back_when_v1_agent_echoes_protocol_version_2(tmp_path):
+    script = tmp_path / "echo_v1_agent.py"
+    script.write_text(
+        """
+import json, sys
+for line in sys.stdin:
+    msg = json.loads(line)
+    if msg.get("method") == "initialize":
+        ver = msg.get("params", {}).get("protocolVersion", 1)
+        out = {
+            "jsonrpc": "2.0",
+            "id": msg["id"],
+            "result": {
+                "protocolVersion": ver,
+                "agentCapabilities": {"loadSession": False},
+                "agentInfo": {"name": "legacy-echo", "version": "1.0"},
+                "authMethods": [],
+            },
+        }
+        sys.stdout.write(json.dumps(out) + "\\n")
+        sys.stdout.flush()
+    elif msg.get("method") == "session/new":
+        out = {"jsonrpc": "2.0", "id": msg["id"], "result": {"sessionId": "s1"}}
+        sys.stdout.write(json.dumps(out) + "\\n")
+        sys.stdout.flush()
+""".strip()
+    )
+    cmd = f"{sys.executable} {script}"
+    auto_client = ACPClient(
+        project_root=tmp_path,
+        command=cmd,
+        protocol_policy="auto",
+        allow_host_tools=False,
+    )
+    try:
+        assert await auto_client.start(), auto_client.last_startup_error
+        info = auto_client.get_initialization_info()
+        assert info["negotiated_protocol_version"] == 1
+        assert info["fallback"] is True
+        assert "v1 initialization response" in info["fallback_reason"]
+    finally:
+        await auto_client.stop()
+
+    strict_client = ACPClient(
+        project_root=tmp_path,
+        command=cmd,
+        protocol_policy="v2",
+        allow_host_tools=False,
+    )
+    try:
+        assert not await strict_client.start()
+        assert "ACP v2 is required" in strict_client.last_startup_error
+    finally:
+        await strict_client.stop()
