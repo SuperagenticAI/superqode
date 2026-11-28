@@ -1,4 +1,13 @@
-# SuperQode for macOS public beta 0.5.9
+# SuperQode for macOS public beta 0.6.0
+
+Version 0.6.0 (build 67) bundles Python engine 2.34.0.
+
+- **ACP v2 Preview support and protocol controls:** per-agent/project **Auto · Prefer v2**, **ACP v1 · Compatibility**, and **ACP v2 · Preview (required)** selection in the composer, agent setup, and settings; actual negotiated-version status badge with clickable provenance and fallback notice; policy-bound connection checks; safe cross-version session handoff; and an activity panel with foreground/background status, child-agent transcripts, display terminals, and capability-gated item stop controls.
+- Authenticated loopback HTTP MCP host-tool bridge preserves Desktop workspace path checks and native approval modals for v2 agents advertising HTTP MCP.
+- Automatic v1 fallback now gracefully handles legacy v1 agents that echo `protocolVersion: 2` with a v1 initialization payload.
+- Eliminated Factory Studio / tab-bar relayout churn and root `minWidth` `AttributeGraph` cycles for smoother section navigation.
+
+## 0.5.9 (build 66)
 
 Version 0.5.9 (build 66) bundles Python engine 2.33.3.
 

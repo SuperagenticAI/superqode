@@ -7,6 +7,25 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [2.34.0] - 2026-11-28
+
+### Added
+
+- **ACP v2 Preview client and dual-stack agent server (`schema-v2.0.0-beta.4`):**
+  - Opt-in ACP v2 client negotiation in `ACPClient` (`SUPERQODE_ACP_PROTOCOL_VERSION=2` or per-connection `protocol_policy`), with bounded single-reconnect v1 fallback during `initialize` and strict v2 mode (`protocol_policy="v2"`).
+  - Separated prompt acceptance (`submit_prompt` / `idempotencyKey`) from foreground `state_update` completion, per-session entity state reduction (whole-message replacement, chunks, explicit `null` patch clears, plans, base64 display terminals, child-session attribution), `session/resume` + `replay_complete`, typed `configOptions` (including booleans), and private SQLite submission outbox.
+  - Dual-stack `superqode serve acp` (`--protocol-version auto|1|2`) serving both ACP v1 and ACP v2 over one stdio entry point, with atomic SQLite session/history/idempotency ledger, ordered held prompts, all seven baseline session methods, semantic error states, and subagent/background task handles.
+  - Added `superqode acp doctor [AGENT] --live --protocol-version 2` protocol diagnostics and Desktop authenticated loopback HTTP MCP host-tool bridge (`HostMcpBridge`).
+  - Added macOS protocol controls (per-agent/project **Auto · Prefer v2**, **ACP v1 · Compatibility**, and **ACP v2 · Preview (required)** picker, actual-negotiation status badge with fallback explanation, safe cross-version session handoff, and foreground/background activity controls).
+- Prepared macOS source for public beta 0.6.0 (build 67), bundling Python engine 2.34.0. Signed macOS installers are distributed separately.
+
+### Fixed
+
+- Automatic v1 fallback now handles legacy v1 ACP agents (such as `openhands acp`) that echo `protocolVersion: 2` while returning a v1-shaped `InitializeResponse`, while strict v2 mode still rejects them.
+- `superqode acp doctor --live` now reports `not negotiated` (`None`) instead of an optimistic version number when startup fails before handshake completion.
+- Eliminated Factory Studio / coding tab-bar relayout churn, repeated `UserDefaults` reads in `acpPolicy`, and the root `minWidth` `AttributeGraph` cycle during macOS workspace navigation.
+- Cleaned up repository root community docs (moved into `.github/` with updated relative links) and removed unused `dev-notes/` and unreferenced image assets.
+
 ## [2.33.3] - 2026-11-26
 
 ### Added

@@ -9,26 +9,53 @@ struct HubView: View {
   @State private var selected: [String: Any]?
   @State private var spec: [String: Any] = [:]
   @State private var pendingACPSetup: String?
-  var rows: [[String: Any]] {
-    app.hub.filter { row in
-      let status = readiness(row, definition: definition(row)).0
-      return (search.isEmpty
-        || ["name", "description", "runtime", "category"].map { string(row, $0) }.joined(
-          separator: " "
-        ).localizedCaseInsensitiveContains(search))
-        && (filter == "All"
-          || (filter == "Native"
-            && ["native", "preset"].contains(string(row, "integration_level")))
-          || (filter == "Ready" && ["ready", "Session ready"].contains(status))
-          || (filter == "Needs setup" && ["setup-required", "Setup required"].contains(status)))
+  private func harnessIndex() -> (byID: [String: [String: Any]], byPath: [String: [String: Any]]) {
+    var byID: [String: [String: Any]] = [:]
+    var byPath: [String: [String: Any]] = [:]
+    byID.reserveCapacity(app.harnesses.count)
+    for item in app.harnesses {
+      let id = string(item, "id")
+      if !id.isEmpty, byID[id] == nil { byID[id] = item }
+      let path = string(item, "path")
+      if !path.isEmpty, byPath[path] == nil { byPath[path] = item }
     }
+    return (byID, byPath)
+  }
+  private func definition(
+    _ row: [String: Any], index: (byID: [String: [String: Any]], byPath: [String: [String: Any]])
+  ) -> [String: Any]? {
+    let id = string(row, "id")
+    if let match = index.byID[id] ?? index.byID["connection:" + id] ?? index.byID["attach:" + id] {
+      return match
+    }
+    let path = string(row, "project_path")
+    return path.isEmpty ? nil : index.byPath[path]
   }
   func definition(_ row: [String: Any]) -> [String: Any]? {
-    app.harnesses.first {
-      [string(row, "id"), "connection:" + string(row, "id"), "attach:" + string(row, "id")]
-        .contains(string($0, "id"))
-        || (!string(row, "project_path").isEmpty
-          && string($0, "path") == string(row, "project_path"))
+    definition(row, index: harnessIndex())
+  }
+  private func filteredRows(
+    index: (byID: [String: [String: Any]], byPath: [String: [String: Any]])
+  ) -> [[String: Any]] {
+    if search.isEmpty && filter == "All" { return app.hub }
+    return app.hub.filter { row in
+      if !search.isEmpty {
+        let matched =
+          string(row, "name").localizedCaseInsensitiveContains(search)
+          || string(row, "description").localizedCaseInsensitiveContains(search)
+          || string(row, "runtime").localizedCaseInsensitiveContains(search)
+          || string(row, "category").localizedCaseInsensitiveContains(search)
+        if !matched { return false }
+      }
+      switch filter {
+      case "All": return true
+      case "Native": return ["native", "preset"].contains(string(row, "integration_level"))
+      case "Ready":
+        return ["ready", "Session ready"].contains(readiness(row, definition: definition(row, index: index)).0)
+      case "Needs setup":
+        return ["setup-required", "Setup required"].contains(readiness(row, definition: definition(row, index: index)).0)
+      default: return true
+      }
     }
   }
   private func readiness(_ row: [String: Any], definition: [String: Any]?) -> (String, Color) {
@@ -45,6 +72,8 @@ struct HubView: View {
     return (value, value == "ready" ? .green : .secondary)
   }
   var body: some View {
+    let index = harnessIndex()
+    let displayedRows = filteredRows(index: index)
     VStack(alignment: .leading, spacing: 24) {
       PageTitle(
         eyebrow: "One Agent Space. Many ways to build.", title: "Harness Hub",
@@ -70,12 +99,12 @@ struct HubView: View {
         Picker("Filter", selection: $filter) {
           ForEach(["All", "Native", "Ready", "Needs setup"], id: \.self) { Text($0) }
         }.frame(width: 170)
-        Pill(title: "\(rows.count) HARNESSES", color: .qAccent)
+        Pill(title: "\(displayedRows.count) HARNESSES", color: .qAccent)
       }
       ScrollView {
         LazyVGrid(columns: [GridItem(.adaptive(minimum: 255), spacing: 16)], spacing: 16) {
-          ForEach(rows, id: \.projectRowID) { row in
-            let def = definition(row)
+          ForEach(displayedRows, id: \.projectRowID) { row in
+            let def = definition(row, index: index)
             let (status, tint) = readiness(row, definition: def)
             Button {
               selected = row
