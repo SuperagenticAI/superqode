@@ -3349,7 +3349,10 @@ private func jobStamp(_ row: [String: Any]) -> Double {
       "desktop_kind": "acp", "available": true, "description": "UI-only connection check",
       "digest": "ui-fixture", "command": "ui-only-not-an-executable",
     ])
-    connectionMetadata["acp:desktop-ui-check"] = ["connected": true, "route_digest": "ui-fixture", "message": "Verified UI fixture"]
+    connectionMetadata["acp:desktop-ui-check"] = [
+      "connected": true, "route_digest": "ui-fixture", "message": "Verified UI fixture",
+      "protocol_policy": acpPolicy(for: "acp:desktop-ui-check").rawValue, "project_id": projectID,
+    ]
     showConnection = true
     _ = try await waitForSheet()
     try await press("connect.acp")
@@ -3379,6 +3382,7 @@ private func jobStamp(_ row: [String: Any]) -> Double {
     // Disconnect intentionally cleared cached verification earlier in this smoke test.
     connectionMetadata["acp:desktop-ui-check"] = [
       "connected": true, "route_digest": "ui-fixture", "message": "Verified UI fixture",
+      "protocol_policy": acpPolicy(for: "acp:desktop-ui-check").rawValue, "project_id": projectID,
     ]
     openConnections("acp-detail:acp:desktop-ui-check")
     _ = try await waitForSheet()
