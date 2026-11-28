@@ -1,0 +1,382 @@
+{
+  "baseline": "schema-v2.0.0-beta.4",
+  "schema_sha256": "86dae71cce55d412b927383cb3838ea560bdbf683ea8903bede75785fc79c494",
+  "tck_commit": "7c71c4d1af0994e73bdc100c9f7f6b98f2319cda",
+  "workspace_base": "b7458b90569dac331acf32a9d8e7aa50080c8c5b",
+  "regressions": {
+    "broad": {
+      "passed": 1308,
+      "skipped": 5
+    },
+    "final_focused_client_agent_desktop": {
+      "passed": 141,
+      "skipped": 1
+    },
+    "v2_tests_in_final_focused_run": 48,
+    "native_macos": "Source and Swift tests added; not executable in this Linux environment."
+  },
+  "runs": [
+    {
+      "target": "deterministic-stdio-v1",
+      "protocol_version": 1,
+      "tck_version": "0.5.0",
+      "schema_revision": "3ea94133bb4e7cfdb1105df75660ff83e66acf62",
+      "started_at": "2026-11-28T00:02:24.826628+00:00",
+      "finished_at": "2026-11-28T00:03:32.699203+00:00",
+      "selected_test_counts": {
+        "SKIPPED": 86,
+        "PASS": 63,
+        "FAIL": 1
+      },
+      "full_suite": true,
+      "verdict": {
+        "conformant": true,
+        "tier_counts": {
+          "MANDATORY": {
+            "PASS": 38,
+            "FAIL": 0,
+            "SKIPPED": 1,
+            "NOT_TESTED": 0
+          },
+          "CAPABILITY": {
+            "PASS": 1,
+            "FAIL": 0,
+            "SKIPPED": 52,
+            "NOT_TESTED": 0
+          },
+          "ADVISORY": {
+            "PASS": 16,
+            "FAIL": 1,
+            "SKIPPED": 20,
+            "NOT_TESTED": 0
+          },
+          "INFORMATIONAL": {
+            "PASS": 4,
+            "FAIL": 0,
+            "SKIPPED": 1,
+            "NOT_TESTED": 0
+          }
+        },
+        "blocked_by_auth": false,
+        "blocked_by_version_mismatch": false
+      },
+      "failed_requirements": [
+        {
+          "id": "ACP-SESSION-004",
+          "tier": "ADVISORY"
+        }
+      ]
+    },
+    {
+      "target": "deterministic-stdio-v2",
+      "protocol_version": 2,
+      "tck_version": "0.5.0",
+      "schema_revision": "3ea94133bb4e7cfdb1105df75660ff83e66acf62",
+      "started_at": "2026-11-28T00:26:44.162339+00:00",
+      "finished_at": "2026-11-28T00:30:53.367739+00:00",
+      "selected_test_counts": {
+        "SKIPPED": 140,
+        "PASS": 175
+      },
+      "full_suite": true,
+      "verdict": {
+        "conformant": true,
+        "tier_counts": {
+          "MANDATORY": {
+            "PASS": 31,
+            "FAIL": 0,
+            "SKIPPED": 3,
+            "NOT_TESTED": 0
+          },
+          "CAPABILITY": {
+            "PASS": 91,
+            "FAIL": 0,
+            "SKIPPED": 93,
+            "NOT_TESTED": 0
+          },
+          "ADVISORY": {
+            "PASS": 35,
+            "FAIL": 0,
+            "SKIPPED": 31,
+            "NOT_TESTED": 0
+          },
+          "INFORMATIONAL": {
+            "PASS": 6,
+            "FAIL": 0,
+            "SKIPPED": 6,
+            "NOT_TESTED": 0
+          }
+        },
+        "blocked_by_auth": false,
+        "blocked_by_version_mismatch": false
+      },
+      "failed_requirements": []
+    },
+    {
+      "target": "production-cli-synthetic-v1",
+      "protocol_version": 1,
+      "tck_version": "0.5.0",
+      "schema_revision": "3ea94133bb4e7cfdb1105df75660ff83e66acf62",
+      "started_at": "2026-11-28T00:26:42.854479+00:00",
+      "finished_at": "2026-11-28T00:28:16.973390+00:00",
+      "selected_test_counts": {
+        "SKIPPED": 86,
+        "PASS": 63,
+        "FAIL": 1
+      },
+      "full_suite": true,
+      "verdict": {
+        "conformant": true,
+        "tier_counts": {
+          "MANDATORY": {
+            "PASS": 38,
+            "FAIL": 0,
+            "SKIPPED": 1,
+            "NOT_TESTED": 0
+          },
+          "CAPABILITY": {
+            "PASS": 1,
+            "FAIL": 0,
+            "SKIPPED": 52,
+            "NOT_TESTED": 0
+          },
+          "ADVISORY": {
+            "PASS": 16,
+            "FAIL": 1,
+            "SKIPPED": 20,
+            "NOT_TESTED": 0
+          },
+          "INFORMATIONAL": {
+            "PASS": 4,
+            "FAIL": 0,
+            "SKIPPED": 1,
+            "NOT_TESTED": 0
+          }
+        },
+        "blocked_by_auth": false,
+        "blocked_by_version_mismatch": false
+      },
+      "failed_requirements": [
+        {
+          "id": "ACP-SESSION-004",
+          "tier": "ADVISORY"
+        }
+      ]
+    },
+    {
+      "target": "production-cli-synthetic-v2",
+      "protocol_version": 2,
+      "tck_version": "0.5.0",
+      "schema_revision": "3ea94133bb4e7cfdb1105df75660ff83e66acf62",
+      "started_at": "2026-11-28T00:12:44.454877+00:00",
+      "finished_at": "2026-11-28T00:17:16.542977+00:00",
+      "selected_test_counts": {
+        "SKIPPED": 173,
+        "PASS": 142
+      },
+      "full_suite": true,
+      "verdict": {
+        "conformant": true,
+        "tier_counts": {
+          "MANDATORY": {
+            "PASS": 31,
+            "FAIL": 0,
+            "SKIPPED": 3,
+            "NOT_TESTED": 0
+          },
+          "CAPABILITY": {
+            "PASS": 65,
+            "FAIL": 0,
+            "SKIPPED": 119,
+            "NOT_TESTED": 0
+          },
+          "ADVISORY": {
+            "PASS": 28,
+            "FAIL": 0,
+            "SKIPPED": 38,
+            "NOT_TESTED": 0
+          },
+          "INFORMATIONAL": {
+            "PASS": 5,
+            "FAIL": 0,
+            "SKIPPED": 7,
+            "NOT_TESTED": 0
+          }
+        },
+        "blocked_by_auth": false,
+        "blocked_by_version_mismatch": false
+      },
+      "failed_requirements": []
+    },
+    {
+      "target": "post-fix-focused-lifecycle",
+      "protocol_version": 2,
+      "tck_version": "0.5.0",
+      "schema_revision": "3ea94133bb4e7cfdb1105df75660ff83e66acf62",
+      "started_at": "2026-11-28T00:19:28.406360+00:00",
+      "finished_at": "2026-11-28T00:21:08.012258+00:00",
+      "selected_test_counts": {
+        "SKIPPED": 33,
+        "PASS": 57
+      },
+      "full_suite": false,
+      "verdict": {
+        "conformant": false,
+        "tier_counts": {
+          "MANDATORY": {
+            "PASS": 2,
+            "FAIL": 0,
+            "SKIPPED": 0,
+            "NOT_TESTED": 32
+          },
+          "CAPABILITY": {
+            "PASS": 45,
+            "FAIL": 0,
+            "SKIPPED": 23,
+            "NOT_TESTED": 116
+          },
+          "ADVISORY": {
+            "PASS": 7,
+            "FAIL": 0,
+            "SKIPPED": 5,
+            "NOT_TESTED": 54
+          },
+          "INFORMATIONAL": {
+            "PASS": 2,
+            "FAIL": 0,
+            "SKIPPED": 1,
+            "NOT_TESTED": 9
+          }
+        },
+        "blocked_by_auth": false,
+        "blocked_by_version_mismatch": false
+      },
+      "failed_requirements": []
+    },
+    {
+      "target": "final-cancellation-and-admission-recheck",
+      "protocol_version": 2,
+      "tck_version": "0.5.0",
+      "schema_revision": "3ea94133bb4e7cfdb1105df75660ff83e66acf62",
+      "started_at": "2026-11-28T00:32:10.383341+00:00",
+      "finished_at": "2026-11-28T00:32:46.135169+00:00",
+      "selected_test_counts": {
+        "SKIPPED": 11,
+        "PASS": 20
+      },
+      "full_suite": false,
+      "verdict": {
+        "conformant": false,
+        "tier_counts": {
+          "MANDATORY": {
+            "PASS": 2,
+            "FAIL": 0,
+            "SKIPPED": 0,
+            "NOT_TESTED": 32
+          },
+          "CAPABILITY": {
+            "PASS": 18,
+            "FAIL": 0,
+            "SKIPPED": 8,
+            "NOT_TESTED": 158
+          },
+          "ADVISORY": {
+            "PASS": 1,
+            "FAIL": 0,
+            "SKIPPED": 2,
+            "NOT_TESTED": 63
+          },
+          "INFORMATIONAL": {
+            "PASS": 1,
+            "FAIL": 0,
+            "SKIPPED": 1,
+            "NOT_TESTED": 10
+          }
+        },
+        "blocked_by_auth": false,
+        "blocked_by_version_mismatch": false
+      },
+      "failed_requirements": []
+    }
+  ],
+  "adapters": [
+    {
+      "adapter": "claude",
+      "package": "@agentclientprotocol/claude-agent-acp@0.113.0",
+      "initialized": true,
+      "negotiated_version": 2,
+      "info": {
+        "protocol_version": 2,
+        "requested_protocol_version": 2,
+        "agent": {
+          "name": "@agentclientprotocol/claude-agent-acp",
+          "title": "Claude Agent",
+          "version": "0.113.0"
+        }
+      },
+      "error": ""
+    },
+    {
+      "adapter": "codex",
+      "package": "@agentclientprotocol/codex-acp@2.12.1",
+      "initialized": false,
+      "negotiated_version": null,
+      "info": {
+        "agent": {}
+      },
+      "error": "Codex state directory was read-only; adapter initialization did not complete."
+    }
+  ],
+  "wheel_verified_against_current_source": true,
+  "macos_protocol_policy_followup": {
+    "default": "auto (prefer v2)",
+    "policy_scope": "per agent and project",
+    "policies": [
+      "auto",
+      "v1",
+      "v2 (required)"
+    ],
+    "broad_regressions": {
+      "passed": 1326,
+      "skipped": 5
+    },
+    "policy_contract_tests": {
+      "passed": 16,
+      "skipped": 0
+    },
+    "swift_syntax_files_checked": 8,
+    "native_build_and_live_checks": "Reserved for the user on their Mac",
+    "wheel_verified_against_current_source": true,
+    "completed_features": [
+      "Protocol-aware setup checks",
+      "Project/route/policy-bound readiness",
+      "Live negotiated-version badge and adapter details",
+      "Fallback explanation",
+      "Persistent per-agent/project selection",
+      "Fresh-session handoff on protocol changes",
+      "Original version pinned for unchanged Auto resume",
+      "Foreground/background status and scoped cancellation",
+      "No fallback or automatic resend after task submission"
+    ],
+    "final_targeted_regressions": {
+      "passed": 58,
+      "skipped": 0
+    }
+  },
+  "publication_integration": {
+    "base_main_commit": "61d292f0628141be66332efcd9c0ee30161d6ffd",
+    "engine_version": "2.33.3",
+    "rebased_without_discarding_upstream_changes": true,
+    "broad_regressions": {
+      "passed": 1335,
+      "skipped": 5
+    },
+    "upstream_pydantic_coder_and_factory_checks": {
+      "passed": 20,
+      "skipped": 4
+    },
+    "integrated_wheel_built_and_verified": true,
+    "swift_sources_syntax_checked": true,
+    "native_build_and_live_checks": "Reserved for the user on their Mac"
+  }
+}
