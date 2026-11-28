@@ -474,7 +474,7 @@ superqode harness graph <run-id> --json
 
 ## Contributing
 
-Contributions are welcome. See [CONTRIBUTING.md](CONTRIBUTING.md).
+Contributions are welcome. See [CONTRIBUTING.md](.github/CONTRIBUTING.md).
 
 ```bash
 git clone https://github.com/SuperagenticAI/superqode

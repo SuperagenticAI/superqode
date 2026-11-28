@@ -12,7 +12,7 @@ import click
 from superqode.main import cli_main
 
 
-EXPECTED_COMMAND_COUNT = 424
+EXPECTED_COMMAND_COUNT = 426
 # Rebaselined for `superqode update` (261 -> 262: exactly one command added),
 # and again for the `copilot-cli` / `grok-cli` subscription runtimes, which
 # widen the --runtime choice list without adding a Click command. The same work
@@ -197,11 +197,14 @@ EXPECTED_COMMAND_COUNT = 424
 # Factory model setup/start (+2), historical benchmarks (+4), demo (+3),
 # local drafts (+3), evidence summary (+1) and Pydantic Coder (+5) add the
 # intended eighteen routes (406 -> 424). Existing commands remain available.
-EXPECTED_HELP_TREE_SHA256 = "6eee7a5553c5b779a59572782535bef9190bd9d50c3a3c5a08b123f1a5512ed7"
+# ACP v2 Preview adds `acp` and `acp doctor` (+2 routes: 424 -> 426) plus
+# `--protocol-version` on `agents doctor` and `serve acp`. Both Click 8.1.8
+# and Click 8.5.1 digests were regenerated for this tree.
+EXPECTED_HELP_TREE_SHA256 = "252025d4bcc029e182492075287d3e2d205cd07e663c832b9818851774d9e6b5"
 # Click 8.5 renders optional group commands as [COMMAND] and case-insensitive
 # choices in lower case. Both verified renders expose the same command tree.
 EXPECTED_MODERN_CLICK_HELP_TREE_SHA256 = (
-    "1c40193164337878ab0f95e19e814e5fe27e7763b78e51f7a06dd4db30475745"
+    "5d4f823e58b010a25121043542216f4a2b7ecc28ba7d744b7f438ecc7a32489a"
 )
 
 

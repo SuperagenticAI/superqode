@@ -7,7 +7,7 @@ Publish this text at https://superqode.dev/support.
 - Questions and bug reports: [GitHub Issues](https://github.com/SuperagenticAI/superqode/issues)
 - Ideas and discussion: [GitHub Discussions](https://github.com/SuperagenticAI/superqode/discussions)
 - Email: info@super-agentic.ai
-- Security reports: please email privately, as described in [SECURITY.md](https://github.com/SuperagenticAI/superqode/blob/main/SECURITY.md).
+- Security reports: please email privately, as described in [SECURITY.md](https://github.com/SuperagenticAI/superqode/blob/main/.github/SECURITY.md).
 
 ## What you need
 

@@ -408,4 +408,4 @@ Links:
 
 - [GitHub Issues](https://github.com/SuperagenticAI/superqode/issues)
 - [GitHub Discussions](https://github.com/SuperagenticAI/superqode/discussions)
-- [Support](https://github.com/SuperagenticAI/superqode/blob/main/SUPPORT.md)
+- [Support](https://github.com/SuperagenticAI/superqode/blob/main/.github/SUPPORT.md)

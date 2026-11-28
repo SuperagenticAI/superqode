@@ -107,7 +107,7 @@ current dependency guard.
 `devtools` 0.13.0 passed a Python 3.15 formatting smoke check and remains an
 optional debugging tool. The preview `uv check` command runs ty but reports a
 large existing diagnostics backlog, so it is not a required CI gate. See
-[contributing](https://github.com/SuperagenticAI/superqode/blob/main/CONTRIBUTING.md)
+[contributing](https://github.com/SuperagenticAI/superqode/blob/main/.github/CONTRIBUTING.md)
 for commands. Official references:
 [Python 3.15 release](https://www.python.org/downloads/release/python-3150/),
 [uv 0.13 release](https://github.com/astral-sh/uv/releases/tag/0.13.0), and
