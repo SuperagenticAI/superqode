@@ -2,6 +2,13 @@
 
 Agent Client Protocol (ACP) mode connects SuperQode to external coding agents that implement ACP.
 
+SuperQode supports opt-in [ACP v2 Preview](../cli-reference/acp-commands.md#use-acp-v2-preview)
+with v1 fallback. macOS defaults to Auto (prefer v2), with explicit v1 and
+required-v2 controls saved per agent/project. CLI/TUI clients retain their v1
+default. See [macOS protocol controls](../advanced/acp-macos-protocols.md). Use
+`superqode acp doctor AGENT --live --protocol-version 2 --json` to check the
+actual negotiated version before selecting v2 for an agent.
+
 > **Note:** SuperQode can also run as an ACP agent inside Zed, JetBrains IDEs, Neovim, or the Harbor benchmark framework with `superqode serve acp`. See [ACP Agent Server](../advanced/acp-agent-server.md).
 
 ---

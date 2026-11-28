@@ -1,10 +1,13 @@
 import AppKit
 import SwiftUI
 
-func verifiedACPConnection(route: [String: Any], metadata: [String: Any]) -> Bool {
+func verifiedACPConnection(route: [String: Any], metadata: [String: Any], policy: ACPProtocolPolicy? = nil,
+  project: String? = nil) -> Bool {
   let digest = string(route, "digest")
   return route["available"] as? Bool == true && !digest.isEmpty && metadata["connected"] as? Bool == true
     && string(metadata, "last_check_error").isEmpty && string(metadata, "route_digest") == digest
+    && (policy == nil || string(metadata, "protocol_policy") == policy?.rawValue)
+    && (project == nil || string(metadata, "project_id") == project)
 }
 
 struct ACPSetupView: View {
@@ -29,7 +32,8 @@ struct ACPSetupView: View {
     app.harnesses.first { string($0, "id") == string(initialRoute, "id") } ?? initialRoute
   }
   private var identity: String { string(route, "id") }
-  private var ready: Bool { verifiedACPConnection(route: route, metadata: metadata) }
+  private var policy: ACPProtocolPolicy { app.acpPolicy(for: identity, project: project) }
+  private var ready: Bool { verifiedACPConnection(route: route, metadata: metadata, policy: policy, project: project) }
   private var credentialGuidance: String {
     if !setupGuidance.isEmpty { return setupGuidance }
     if string(route, "agent_id") == "pydantic-coder" {
@@ -58,6 +62,11 @@ struct ACPSetupView: View {
         }
       }
       Text(credentialGuidance).font(.callout).foregroundStyle(.secondary)
+      ACPProtocolPicker(reference: identity, project: project)
+        .disabled(operation != nil)
+      if ready {
+        ACPProtocolStatusView(status: ACPProtocolStatus(metadata["initialization"] as? [String: Any] ?? [:]))
+      }
       if !string(route, "registry_source").isEmpty {
         Text(string(route, "registry_source") + (string(route, "registry_version").isEmpty ? "" : " · " + string(route, "registry_version")))
           .font(.caption).foregroundStyle(.secondary)
@@ -137,6 +146,7 @@ struct ACPSetupView: View {
       }.disabled(route["available"] as? Bool != true || !ready || app.active || app.busy || app.projectID != project)
     }
     .task(id: identity) { metadata = app.connectionMetadata[identity] ?? [:]; await loadInstall() }
+    .onChange(of: policy) { _, _ in metadata = app.connectionMetadata[identity] ?? [:] }
     .centeredDialog(isPresented: Binding(get: { operation != nil }, set: { if !$0 { operation = nil } }), title: "Agent setup", onDismiss: {
       if let pending = pendingTerminal { pendingTerminal = nil; terminalPlan = pending }
       else if operationResult?["signed_in"] as? Bool == true { begin("probe") }
@@ -153,8 +163,11 @@ struct ACPSetupView: View {
               catch { failure = "Agent installed. Could not refresh its status: " + error.localizedDescription }
             }
           } else {
+            guard app.projectID == project,
+              string(request, "reference") == identity,
+              string(request, "protocol_policy", policy.rawValue) == policy.rawValue else { return }
             metadata = result
-            if result["connected"] != nil && app.projectID == project {
+            if result["connected"] != nil {
               app.connectionMetadata[identity] = result
             }
           }
@@ -220,7 +233,8 @@ struct ACPSetupView: View {
       app.connectionMetadata[identity] = metadata
     }
     operationResult = nil
-    operation = ["action": action, "project": project, "reference": identity].merging(extra) { _, value in value }
+    operation = ["action": action, "project": project, "reference": identity,
+      "protocol_policy": policy.rawValue].merging(extra) { _, value in value }
   }
   private func loadInstall() async {
     knownLogin = (try? await app.engine.call("connect.acp.login.plan", ["project": project, "reference": identity])) as? [String: Any] ?? [:]

@@ -135,7 +135,10 @@ func phoneConnection(fromJobRequest request: [String: Any]) -> PhoneConnectionSe
     mode: string(request, "interaction_mode"),
     agentModel: string(options, "model"),
     agentMode: string(options, "mode"),
-    agentConfig: options["config"] as? [String: String] ?? [:]
+    agentConfig: (options["config"] as? [String: Any] ?? [:]).reduce(into: [:]) { result, entry in
+      if let value = entry.value as? String { result[entry.key] = value }
+      else if let value = entry.value as? Bool { result[entry.key] = value ? "true" : "false" }
+    }
   )
 }
 
@@ -358,6 +361,15 @@ private func jobStamp(_ row: [String: Any]) -> Double {
   }
   @Published var agentModel = ""
   @Published var agentMode = ""
+  @Published var acpProtocolChoices: [String: String] = [:]
+  var acpProtocolPolicy: ACPProtocolPolicy {
+    get { acpPolicy(for: harness) }
+    set { setACPPolicy(newValue, for: harness) }
+  }
+  var acpProtocolVersion: Int {
+    get { acpProtocolPolicy.requestedVersion }
+    set { acpProtocolPolicy = newValue == 1 ? .v1 : .automatic }
+  }
   @Published var agentConfig: [String: String] = [:]
   @Published var connectionMetadata: [String: [String: Any]] = [:]
   @Published var forkWorkspaces: [[String: Any]] = []
@@ -468,6 +480,14 @@ private func jobStamp(_ row: [String: Any]) -> Double {
   var selectedAgentEffort: String {
     guard let option = agentEffortOption else { return "" }
     return agentConfigForTurn[string(option, "id")] ?? ""
+  }
+  var acpConfigPayload: [String: Any] {
+    var payload: [String: Any] = agentConfigForTurn
+    for option in agentSession["config_options"] as? [[String: Any]] ?? [] where string(option, "type") == "boolean" {
+      let id = string(option, "configId", string(option, "id"))
+      if let value = agentConfig[id] { payload[id] = value == "true" }
+    }
+    return payload
   }
   var allowsManualAgentModel: Bool {
     isManaged && !isACP && !harness.hasPrefix("local-harness:")
@@ -821,7 +841,8 @@ private func jobStamp(_ row: [String: Any]) -> Double {
     chooseHarness(id)
     interactionMode = "code"
     finishConnectionSelection()
-    if let verified, verifiedACPConnection(route: route, metadata: verified) {
+    if let verified, verifiedACPConnection(route: route, metadata: verified,
+      policy: string(route, "desktop_kind") == "acp" ? acpPolicy(for: id) : nil, project: projectID) {
       connectionMetadata[id] = verified
       routeStatus = ["state": "connected", "message": string(verified, "message")]
     } else { perform { await self.checkManagedConnection() } }
@@ -834,6 +855,7 @@ private func jobStamp(_ row: [String: Any]) -> Double {
     }
     let reference = harness
     let checkedProject = projectID
+    let checkedPolicy = acpPolicy(for: reference)
     connectionGeneration += 1
     let generation = connectionGeneration
     checkingConnection = true
@@ -843,16 +865,18 @@ private func jobStamp(_ row: [String: Any]) -> Double {
     do {
       let response = try await engine.call("connect.auth.start", [
         "action": "probe", "project": projectID, "reference": reference,
+        "protocol_policy": checkedPolicy.rawValue,
       ]) as? [String: Any] ?? [:]
       operation = string(response, "id")
       guard !operation.isEmpty else { throw EngineError(message: "Connection check could not start.") }
       for _ in 0..<200 {
-        guard generation == connectionGeneration, reference == harness else {
+        guard generation == connectionGeneration, reference == harness, checkedPolicy == acpPolicy(for: reference) else {
           _ = try? await engine.call("connect.auth.cancel", ["id": operation])
           return
         }
         let result = try await engine.call("connect.auth.poll", ["id": operation]) as? [String: Any] ?? [:]
-        guard generation == connectionGeneration, reference == harness, checkedProject == projectID else {
+        guard generation == connectionGeneration, reference == harness, checkedProject == projectID,
+          checkedPolicy == acpPolicy(for: reference) else {
           _ = try? await engine.call("connect.auth.cancel", ["id": operation])
           return
         }
@@ -914,7 +938,7 @@ private func jobStamp(_ row: [String: Any]) -> Double {
     return events.suffix(8).contains { string($0, "type") == "result" }
   }
   /// Working indicators and Stop follow the answer, not the worker process.
-  var showsWorking: Bool { active && !turnAnswered }
+  var showsWorking: Bool { active && !turnAnswered && !acpForegroundIdle }
   /// Detail loads after the jobs list. The working bar uses the list status until then.
   var activityStatus: String {
     let detailStatus = string(detail, "status")
@@ -1367,6 +1391,7 @@ private func jobStamp(_ row: [String: Any]) -> Double {
     choices[harness] = [
       "provider": provider, "model": model,
       "agentModel": agentModel, "agentMode": agentMode, "agentConfig": agentConfig,
+      "acpProtocolPolicy": acpProtocolPolicy.rawValue,
     ]
     preferences.set(choices, forKey: key)
   }
@@ -1698,7 +1723,12 @@ private func jobStamp(_ row: [String: Any]) -> Double {
           let options = request["acp_options"] as? [String: Any] ?? [:]
           agentModel = string(options, "model")
           agentMode = string(options, "mode")
-          agentConfig = options["config"] as? [String: String] ?? [:]
+          // The saved per-project/agent preference selects the next session.
+          // Historical requests keep their recorded protocol without changing it.
+          agentConfig = (options["config"] as? [String: Any] ?? [:]).reduce(into: [:]) { result, entry in
+            if let value = entry.value as? String { result[entry.key] = value }
+            else if let value = entry.value as? Bool { result[entry.key] = value ? "true" : "false" }
+          }
           savePreferences()
         }
         let previousStatus = string(detail, "status")
@@ -1956,7 +1986,7 @@ private func jobStamp(_ row: [String: Any]) -> Double {
     }
   }
   var canSubmitDraft: Bool {
-    connected && !loadingConversationDraft && !connectionDisconnected && !busy && !showsWorking
+    connected && !loadingConversationDraft && !connectionDisconnected && !busy && !showsWorking && !acpForegroundIdle
       && !checkingConnection && !projectID.isEmpty && (isManaged || !model.isEmpty)
       && detail["archived"] as? Bool != true
       && !draft.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
@@ -1965,6 +1995,12 @@ private func jobStamp(_ row: [String: Any]) -> Double {
   /// called when send declines before starting (check `busy` afterwards).
   func send(continueSession: Bool, onSettled: (@MainActor (Bool) -> Void)? = nil) {
     guard connected else { notice = "The local engine is offline. Your draft is kept; reconnect before sending."; return }
+    guard !acpForegroundIdle else {
+      notice = acpBackgroundPending
+        ? "Background work is still attached. Stop the remaining tasks or close the agent session before sending another turn. Your draft is kept."
+        : "The current turn is finishing. Your draft is kept."
+      return
+    }
 
     guard detail["archived"] as? Bool != true else { notice = "Restore this archived thread before continuing."; return }
     guard !loadingConversationDraft, !connectionDisconnected, !busy, !showsWorking, !checkingConnection, !projectID.isEmpty,
@@ -1992,7 +2028,9 @@ private func jobStamp(_ row: [String: Any]) -> Double {
     }
     if isManaged {
       extra["acp_options"] = [
-        "model": agentModel, "mode": agentMode, "config": agentConfigForTurn,
+        "model": agentModel, "mode": agentMode, "config": acpConfigPayload,
+        "protocol_version": acpProtocolVersion,
+        "protocol_policy": acpProtocolPolicy.rawValue,
       ]
     }
     if continueSession {
@@ -2088,7 +2126,7 @@ private func jobStamp(_ row: [String: Any]) -> Double {
       "context_files": contextFiles, "image_ids": imageAttachments.map { string($0, "id") },
       "context_window": contextWindow.isEmpty ? 0 : Int(contextWindow) ?? -1,
       "enable_summarization": summarizeContext,
-      "acp_options": ["model": agentModel, "mode": agentMode, "config": agentConfig],
+      "acp_options": ["model": agentModel, "mode": agentMode, "config": acpConfigPayload, "protocol_version": acpProtocolVersion, "protocol_policy": acpProtocolPolicy.rawValue],
     ]
     if enforcesSessionControls { extra["permission_mode"] = permissionMode }
     if !isManaged, !effectiveNativeReasoningEffort.isEmpty {
@@ -2221,9 +2259,21 @@ private func jobStamp(_ row: [String: Any]) -> Double {
     }
   }
   func cancel() {
+    let snapshot = ACPActivitySnapshot(events)
+    if active, acpProtocolStatus.negotiated == 2, !snapshot.root.isEmpty {
+      acpControl(snapshot.foreground == "idle" ? "close" : "cancel", session: snapshot.root)
+      return
+    }
     let id = selectedJob
     perform {
       _ = try await self.engine.call("jobs.cancel", ["id": id])
+      await self.refreshDetail()
+    }
+  }
+  func acpControl(_ action: String, session: String, item: String = "") {
+    let id = selectedJob
+    perform {
+      _ = try await self.engine.call("jobs.acp.control", ["id": id, "action": action, "session_id": session, "item_id": item])
       await self.refreshDetail()
     }
   }

@@ -7929,7 +7929,33 @@ class CommandImplMixin:
         sub = parts[0].lower() if parts else "list"
         subargs = parts[1] if len(parts) > 1 else ""
 
-        if sub in ("list", ""):
+        if sub == "cancel":
+            client = getattr(self, "_acp_client", None)
+            fields = subargs.split()
+            if client is None or client.negotiated_version != 2 or len(fields) not in {2, 3}:
+                log.add_error(
+                    "Use :agents cancel <session> session or :agents cancel <session> tool|terminal <id> on a v2 connection"
+                )
+                return
+
+            async def cancel_item():
+                if fields[1] == "session" and len(fields) == 2:
+                    return await client.cancel(fields[0])
+                if fields[1] not in {"tool", "terminal"} or len(fields) != 3:
+                    raise ValueError("Choose session, tool or terminal")
+                return await client.cancel_item(
+                    fields[0], fields[2], terminal=fields[1] == "terminal"
+                )
+
+            def execute():
+                try:
+                    self._acp_loop_runner.run(cancel_item())
+                    self._call_ui(log.add_info, "ACP cancellation delivered")
+                except Exception as exc:
+                    self._call_ui(log.add_error, str(exc))
+
+            self.run_worker(execute, thread=True)
+        elif sub in ("list", ""):
             self._show_agents(log, include_all=False, catalog_tier="featured")
         elif sub in ("doctor", "check"):
             self.run_worker(self._acp_doctor_cmd(subargs, log))
@@ -7951,6 +7977,14 @@ class CommandImplMixin:
 
         tokens = (args or "").split()
         live = any(token in ("--live", "live") for token in tokens)
+        protocol_version = None
+        if "--protocol-version" in tokens:
+            index = tokens.index("--protocol-version")
+            if index + 1 >= len(tokens) or tokens[index + 1] not in {"1", "2"}:
+                log.add_error("Use --protocol-version 1 or 2")
+                return
+            protocol_version = int(tokens[index + 1])
+            del tokens[index : index + 2]
         agent_parts = [token for token in tokens if token not in ("--live", "live")]
         agent = " ".join(agent_parts).strip() or None
 
@@ -7959,7 +7993,7 @@ class CommandImplMixin:
         else:
             log.add_info("Checking ACP agents...")
 
-        results = await acp_doctor(agent, live=live)
+        results = await acp_doctor(agent, live=live, protocol_version=protocol_version)
         if agent and not results:
             log.add_error(f"ACP agent not found: {agent}")
             return

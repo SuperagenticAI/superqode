@@ -77,13 +77,21 @@ def agents_show(agent):
 @click.option("--live", is_flag=True, help="Start the ACP agent and check protocol support")
 @click.option("--timeout", default=10.0, type=float, help="Live protocol check timeout")
 @click.option("--json", "json_output", is_flag=True, help="Emit JSON")
-def agents_doctor(agent, live, timeout, json_output):
+@click.option(
+    "--protocol-version",
+    type=click.IntRange(1, 2),
+    default=None,
+    help="Request ACP 1 or opt-in Preview 2; report any v1 fallback",
+)
+def agents_doctor(agent, live, timeout, json_output, protocol_version=None):
     """Check ACP agent install, setup, and optional protocol health."""
     import asyncio
 
     from superqode.acp.doctor import acp_doctor
 
-    results = asyncio.run(acp_doctor(agent, live=live, timeout=timeout))
+    results = asyncio.run(
+        acp_doctor(agent, live=live, timeout=timeout, protocol_version=protocol_version)
+    )
     if agent and not results:
         raise click.ClickException(f"ACP agent not found: {agent}")
 
@@ -96,6 +104,12 @@ def agents_doctor(agent, live, timeout, json_output):
         click.echo(f"{result['short_name']} ({result['name']}): {status}")
         if result.get("command"):
             click.echo(f"  command: {result['command']}")
+        if isinstance(result.get("live"), dict) and "negotiated_protocol_version" in result["live"]:
+            check = result["live"]
+            click.echo(
+                f"  ACP: requested {check['requested_protocol_version']}, negotiated {check['negotiated_protocol_version']}"
+                + (" (fallback; v2 not verified)" if check.get("fallback") else "")
+            )
         if result.get("missing_env_vars"):
             click.echo(f"  env: set one of {', '.join(result['missing_env_vars'])}")
         if not result["installed"] and result.get("install_command"):

@@ -2625,6 +2625,51 @@ class ConversationLog(RichLog):
                 self._rendered_response_text += flushed
                 self.write(self._render_answer_block(block))
 
+    def set_response_snapshot(self, text: str) -> None:
+        """Apply an ACP message replacement while retaining interleaved tool rows."""
+        previous = getattr(self, "_streaming_response", "")
+        strips = getattr(self, "_acp_response_strips", [])
+        if not text.startswith(previous):
+            obsolete = {id(strip) for strip in strips}
+            self.lines = [strip for strip in self.lines if id(strip) not in obsolete]
+            self._line_cache.clear()
+            from textual.geometry import Size
+
+            self.virtual_size = Size(self._widest_line_width, len(self.lines))
+            agent = getattr(self, "_active_response_agent", "Assistant")
+            self.reset_response_stream(agent)
+            strips = []
+            previous = ""
+            self.refresh(layout=True)
+        before = len(self.lines)
+        self.add_response_chunk(text[len(previous) :])
+        strips.extend(self.lines[before:])
+        self._acp_response_strips = strips
+
+    def set_acp_entity_snapshot(self, key: tuple, text: str) -> None:
+        """Replace a child message or display entity without replaying its old rows."""
+        entities = getattr(self, "_acp_entity_rows", {})
+        previous, strips, recorded = entities.get(key, (None, [], None))
+        if text == previous:
+            return
+        obsolete = {id(strip) for strip in strips}
+        self.lines = [strip for strip in self.lines if id(strip) not in obsolete]
+        if recorded is not None:
+            self._messages = [item for item in self._messages if item is not recorded]
+        self._line_cache.clear()
+        from textual.geometry import Size
+
+        self.virtual_size = Size(self._widest_line_width, len(self.lines))
+        before = len(self.lines)
+        recorded = None
+        if text:
+            recorded = ("meta", text, "")
+            self._messages.append(recorded)
+            self._write_feedback(Text(f"  ↳ {text}", style=THEME["dim"]))
+        entities[key] = (text, self.lines[before:], recorded)
+        self._acp_entity_rows = entities
+        self.refresh(layout=True)
+
     def reset_conversation(self) -> None:
         """Switch transcripts without leaking copy, search, or tool history."""
         self._restored_history = []
@@ -2633,6 +2678,7 @@ class ConversationLog(RichLog):
         self._bounded_history_view = False
         self._navigation_view = None
         self.clear()
+        self._acp_entity_rows = {}
         self._messages.clear()
         self._last_response = ""
         self._last_error = ""
@@ -2895,6 +2941,7 @@ class ConversationLog(RichLog):
     def reset_response_stream(self, agent: str = "Assistant") -> None:
         """Reset per-response streaming buffers before a new streamed answer."""
         self._streaming_response = ""
+        self._acp_response_strips = []
         self._streaming_notice_shown = False
         self._streamed_offset = 0
         self._markdown_scan_offset = 0

@@ -53,22 +53,37 @@ async def _run_live_protocol_check(
     *,
     project_root: Path,
     timeout: float,
+    protocol_version: int | None = None,
 ) -> dict[str, Any]:
     from superqode.acp.client import ACPClient
 
-    client = ACPClient(project_root=project_root, command=command)
+    client = ACPClient(
+        project_root=project_root,
+        command=command,
+        protocol_version=protocol_version,
+        allow_host_tools=False,
+    )
     payload: dict[str, Any] = {
         "started": False,
         "initialized": False,
         "session": False,
         "models": [],
         "modes": [],
+        "requested_protocol_version": client.protocol_version,
     }
     try:
         started = await asyncio.wait_for(client.start(), timeout=timeout)
         payload["started"] = bool(started)
         payload["initialized"] = bool(started)
         payload["session"] = bool(client.get_session_id())
+        if not started:
+            payload["error"] = client.last_startup_error
+        payload["requested_protocol_version"] = client.protocol_version
+        payload["negotiated_protocol_version"] = client.negotiated_version
+        payload["protocol_compatible"] = (
+            bool(started) and client.negotiated_version == client.protocol_version
+        )
+        payload["fallback"] = bool(started) and client.negotiated_version != client.protocol_version
         if started:
             try:
                 payload["models"] = await asyncio.wait_for(
@@ -96,6 +111,7 @@ async def acp_doctor(
     live: bool = False,
     timeout: float = 10.0,
     project_root: Path | None = None,
+    protocol_version: int | None = None,
 ) -> list[dict[str, Any]]:
     """Return structured diagnostics for ACP agents."""
     from superqode.agents.registry import get_all_acp_agents
@@ -143,6 +159,7 @@ async def acp_doctor(
                     command,
                     project_root=project_root or Path.cwd(),
                     timeout=timeout,
+                    protocol_version=protocol_version,
                 )
 
         results.append(result)

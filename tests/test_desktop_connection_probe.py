@@ -153,7 +153,7 @@ async def test_opencode_probe_uses_shared_free_pricing_without_inventing_acp_mod
 ):
     class Client:
         def __init__(self, *args, **kwargs):
-            pass
+            self.protocol_policy = kwargs.get("protocol_policy") or "v1"
 
         async def start(self):
             return True

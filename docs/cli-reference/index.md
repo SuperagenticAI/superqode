@@ -27,6 +27,7 @@ superqode [OPTIONS] COMMAND [ARGS]...
 | Group | Reference |
 | --- | --- |
 | `agents` | [Agent Commands](agents-commands.md) |
+| `acp` | [ACP Protocol Commands](acp-commands.md) |
 | `a2a-keys` | [A2A Keys Commands](a2a-keys-commands.md) |
 | `auth` | [Auth Commands](auth-commands.md) |
 | `benchmark` | [Benchmark Commands](benchmark-commands.md) |

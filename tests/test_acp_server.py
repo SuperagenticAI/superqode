@@ -334,7 +334,7 @@ async def test_tool_call_start_carries_title_and_location():
     await agent.prompt(prompt=[text_block("go")], session_id="sess-1")
     start = next(u for u in client.updates if isinstance(u, ToolCallStart))
     assert start.title == "Read a.py"
-    assert start.locations and start.locations[0].path == "a.py"
+    assert start.locations and start.locations[0].path == str(Path.cwd() / "a.py")
 
 
 async def test_tool_result_without_start_is_not_dropped():

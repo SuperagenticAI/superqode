@@ -426,6 +426,11 @@ class DesktopService:
                     with self.lock:
                         self.pending[job_id] = event["data"]["request_id"]
                     self._status(job_id, "needs_approval")
+                elif event.get("type") == "approval_cancelled":
+                    with self.lock:
+                        if self.pending.get(job_id) == event.get("data", {}).get("request_id"):
+                            self.pending.pop(job_id, None)
+                            self._status(job_id, "running")
                 elif event.get("type") == "result":
                     result = event.get("data")
                     with self.lock:
@@ -599,6 +604,7 @@ class DesktopService:
             params.pop("_chat_history", None)
             params.pop("_handoff_context", None)
             params.pop("_continuity", None)
+            params.pop("_acp_resume_protocol_version", None)
             params.pop("expected_digest", None)
             params.pop("_thread_harness", None)
             params.pop("_fork_origin", None)
@@ -1952,6 +1958,34 @@ class DesktopService:
 
                 self._background(reap)
                 return {"ok": True}
+        if method == "jobs.acp.control":
+            with self.lock:
+                job = self.dispatch("jobs.get", {"id": params["id"]})
+                if not job["request"].get("_desktop_route") or job["status"] not in {
+                    "running",
+                    "needs_approval",
+                }:
+                    raise ValueError("An active ACP task is required")
+                if params.get("action") not in {"close", "cancel", "tool", "terminal"}:
+                    raise ValueError("Choose an ACP session or item control")
+                process = self.processes.get(params["id"])
+                if not process or not process.stdin:
+                    raise ValueError("The run has stopped")
+                identity = uuid.uuid4().hex
+                process.stdin.write(
+                    json.dumps(
+                        {
+                            "operation": "acp_control",
+                            "request_id": identity,
+                            "action": params["action"],
+                            "session_id": str(params.get("session_id") or ""),
+                            "item_id": str(params.get("item_id") or ""),
+                        }
+                    )
+                    + "\n"
+                )
+                process.stdin.flush()
+                return {"request_id": identity, "state": "sent"}
         if method == "jobs.steer":
             with self.lock:
                 job = self.dispatch("jobs.get", {"id": params["id"]})
@@ -2336,13 +2370,16 @@ class DesktopService:
                     )
 
                 async def probe(status):
-                    return await probe_route(
+                    result = await probe_route(
                         root,
                         route,
                         status,
                         method_id=params.get("method") if action == "acp-auth" else None,
                         terminal_method=params.get("method") if action == "acp-terminal" else None,
+                        protocol_policy=params.get("protocol_policy"),
+                        protocol_version=params.get("protocol_version"),
                     )
+                    return {**result, "project_id": params["project"]}
 
                 return self.authentication.start(probe)
             if action == "install":

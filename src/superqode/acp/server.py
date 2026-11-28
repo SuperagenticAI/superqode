@@ -155,12 +155,14 @@ def _tool_title(name: str, arguments: Any) -> str:
     return name
 
 
-def _tool_locations(arguments: Any) -> list[ToolCallLocation] | None:
+def _tool_locations(arguments: Any, cwd: Path | None = None) -> list[ToolCallLocation] | None:
     """File locations for follow-the-agent UIs, when the arguments name a path."""
     args = arguments if isinstance(arguments, dict) else {}
     path = _first_str(args, _PATH_ARG_KEYS)
     if not path:
         return None
+    if cwd is not None and not Path(path).is_absolute():
+        path = str((cwd / path).resolve())
     location = ToolCallLocation(path=path)
     line = args.get("line") or args.get("start_line") or args.get("offset")
     if isinstance(line, int) and line > 0:
@@ -288,6 +290,7 @@ class _AcpSessionState:
     model: str
     cwd: Path
     cancel_event: asyncio.Event = field(default_factory=asyncio.Event)
+    active_task: asyncio.Task | None = None
 
 
 class SuperQodeAcpAgent:
@@ -324,6 +327,15 @@ class SuperQodeAcpAgent:
     ) -> InitializeResponse:
         from superqode import __version__
 
+        capabilities = (
+            client_capabilities.model_dump(by_alias=True)
+            if hasattr(client_capabilities, "model_dump")
+            else client_capabilities
+        )
+        terminal_auth = client_capabilities is None or bool(
+            ((capabilities or {}).get("auth") or {}).get("terminal", False)
+        )
+
         return InitializeResponse(
             protocol_version=min(int(protocol_version), PROTOCOL_VERSION),
             agent_capabilities=AgentCapabilities(
@@ -344,7 +356,9 @@ class SuperQodeAcpAgent:
                     ),
                     args=["local", "init", "--repo", "."],
                 )
-            ],
+            ]
+            if terminal_auth
+            else [],
         )
 
     async def authenticate(self, method_id: str, **kwargs: Any) -> None:
@@ -392,6 +406,10 @@ class SuperQodeAcpAgent:
         return NewSessionResponse(session_id=session.session_id)
 
     async def close_session(self, session_id: str, **kwargs: Any) -> None:
+        await self.cancel(session_id)
+        state = self._sessions.get(session_id)
+        if state and state.active_task and state.active_task is not asyncio.current_task():
+            await asyncio.gather(state.active_task, return_exceptions=True)
         self._sessions.pop(session_id, None)
         return None
 
@@ -406,7 +424,7 @@ class SuperQodeAcpAgent:
 
         state = self._sessions.get(session_id)
         if state is None:
-            raise RequestError.invalid_params({"reason": f"Unknown session: {session_id}"})
+            raise RequestError(-32002, "Unknown session", {"sessionId": session_id})
         parsed = split_provider_model_ref(str(model_id))
         if parsed.provider:
             state.provider = parsed.provider
@@ -419,6 +437,11 @@ class SuperQodeAcpAgent:
         state = self._sessions.get(session_id)
         if state is not None:
             state.cancel_event.set()
+            cancel = getattr(state.session, "cancel", None)
+            if cancel:
+                await cancel()
+            if state.active_task and state.active_task is not asyncio.current_task():
+                state.active_task.cancel()
 
     # -- prompting ---------------------------------------------------------------
 
@@ -431,24 +454,27 @@ class SuperQodeAcpAgent:
     ) -> PromptResponse:
         state = self._sessions.get(session_id)
         if state is None:
-            raise RequestError.invalid_params({"reason": f"Unknown session: {session_id}"})
+            raise RequestError(-32002, "Unknown session", {"sessionId": session_id})
         text = _prompt_to_text(prompt)
         if not text:
             return PromptResponse(stop_reason="end_turn")
         state.cancel_event = asyncio.Event()
+        state.active_task = asyncio.current_task()
         tracker = _ToolCallTracker()
         try:
             cancelled = await self._stream_turn(state, text, tracker)
             if not cancelled:
                 cancelled = await self._resolve_approvals(state, tracker)
         except asyncio.CancelledError:
-            raise
+            return PromptResponse(stop_reason="cancelled")
         except Exception as exc:
             await self._send_update(
                 session_id,
                 update_agent_message_text(f"SuperQode harness run failed: {exc}"),
             )
             return PromptResponse(stop_reason="end_turn")
+        finally:
+            state.active_task = None
         return PromptResponse(stop_reason="cancelled" if cancelled else "end_turn")
 
     async def _stream_turn(
@@ -463,28 +489,34 @@ class SuperQodeAcpAgent:
             sandbox_backend=state.spec.execution_policy.sandbox,
         )
         iterator = stream.__aiter__()
+
+        async def consume():
+            # A generator may hold ContextVar tokens across yields. Keep every
+            # advance and its cleanup in one task, including cancellation.
+            try:
+                async for event in iterator:
+                    await self._dispatch_event(state, event, tracker)
+            finally:
+                close = getattr(iterator, "aclose", None)
+                if close:
+                    with contextlib.suppress(Exception):
+                        await close()
+
+        stream_task = asyncio.create_task(consume())
+        cancel_task = asyncio.create_task(state.cancel_event.wait())
         try:
-            while True:
-                next_task = asyncio.ensure_future(anext(iterator, _STREAM_DONE))
-                cancel_task = asyncio.ensure_future(state.cancel_event.wait())
-                done, _ = await asyncio.wait(
-                    {next_task, cancel_task}, return_when=asyncio.FIRST_COMPLETED
-                )
-                if next_task not in done:
-                    next_task.cancel()
-                    with contextlib.suppress(asyncio.CancelledError):
-                        await next_task
-                    return True
-                cancel_task.cancel()
-                with contextlib.suppress(asyncio.CancelledError):
-                    await cancel_task
-                event = next_task.result()
-                if event is _STREAM_DONE:
-                    return False
-                await self._dispatch_event(state, event, tracker)
+            done, _ = await asyncio.wait(
+                {stream_task, cancel_task}, return_when=asyncio.FIRST_COMPLETED
+            )
+            if stream_task in done:
+                await stream_task
+                return state.cancel_event.is_set()
+            return True
         finally:
-            with contextlib.suppress(Exception):
-                await iterator.aclose()
+            for task in (stream_task, cancel_task):
+                if not task.done():
+                    task.cancel()
+            await asyncio.gather(stream_task, cancel_task, return_exceptions=True)
 
     async def _dispatch_event(
         self, state: _AcpSessionState, event: Any, tracker: _ToolCallTracker
@@ -511,7 +543,7 @@ class SuperQodeAcpAgent:
                     _tool_title(name, arguments),
                     kind=_tool_kind(name),
                     status="in_progress",
-                    locations=_tool_locations(arguments),
+                    locations=_tool_locations(arguments, state.cwd),
                     raw_input=arguments,
                 ),
             )
@@ -539,7 +571,7 @@ class SuperQodeAcpAgent:
                         _tool_title(name, arguments),
                         kind=_tool_kind(name),
                         status=status,
-                        locations=_tool_locations(arguments),
+                        locations=_tool_locations(arguments, state.cwd),
                         raw_input=arguments or None,
                         content=content or None,
                         raw_output=output,
@@ -583,7 +615,7 @@ class SuperQodeAcpAgent:
                     title=_tool_title(tool_name, arguments),
                     kind=_tool_kind(tool_name),
                     status="pending",
-                    locations=_tool_locations(arguments),
+                    locations=_tool_locations(arguments, state.cwd),
                     raw_input=arguments,
                 ),
             )
@@ -637,6 +669,7 @@ async def run_acp_server(
     harness_dir: Path | None = None,
     provider: str = "",
     model: str = "",
+    protocol_version: str = "auto",
 ) -> None:
     """Serve SuperQode as an ACP agent on stdio until the client disconnects."""
     agent = SuperQodeAcpAgent(
@@ -646,4 +679,17 @@ async def run_acp_server(
         provider=provider,
         model=model,
     )
-    await run_agent(agent)
+    from .server_v2 import SuperQodeAcpV2Agent
+    from .transport import run_dual_agent
+
+    await run_dual_agent(
+        agent,
+        lambda: SuperQodeAcpV2Agent(
+            spec_path=spec_path,
+            harness=harness,
+            harness_dir=harness_dir,
+            provider=provider,
+            model=model,
+        ),
+        supported_versions=(1, 2) if protocol_version == "auto" else (int(protocol_version),),
+    )

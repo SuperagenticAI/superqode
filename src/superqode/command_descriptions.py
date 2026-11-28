@@ -36,6 +36,8 @@ COMMAND_DESCRIPTIONS = {
     ":a2a-keys status": "Show whether this environment can issue and verify keys.",
     ":a2a-keys verify": "Check whether KEY would be accepted right now.",
     ":acp": "Browse, install and connect ACP coding agents",
+    ":acp doctor": "Check ACP protocol compatibility without sending a coding prompt",
+    ":agents cancel": "Cancel an advertised ACP v2 session, tool or terminal",
     ":activity": "Inspect tools and changes from the current task",
     ":agent": "Return to the agent workspace; arguments manage ACP agents",
     ":agents connect opencode": "Connect to OpenCode through ACP",

@@ -4,6 +4,19 @@
 
 This is the inverse of [ACP Agents](../providers/acp.md), where SuperQode is the *client* connecting to other agents. Here SuperQode is the agent, and the loop it runs is your [HarnessSpec](harness-system.md) rather than a fixed pipeline.
 
+The same stdio entry point now serves v1 and v2 Preview. The editor chooses a
+version during initialization; the server selects the highest implemented
+version at or below that request. Use `--protocol-version 1` to restrict future
+connections to v1, or `--protocol-version 2` for a v2-only deployment. See
+[protocol controls](../cli-reference/acp-commands.md) and
+[validation results](acp-v2-validation.md) for scope and rollout limits.
+
+On v2, a prompt response acknowledges user-message insertion. Foreground
+completion is a separate state update. Session listing, durable resume, replay,
+submission deduplication and task cancellation are implemented. The server does
+not advertise client-supplied MCP transports, additional workspace roots or
+custom system prompts; those require harness integration before advertisement.
+
 ```bash
 superqode serve acp                       # stdio, auto-discovered harness
 superqode serve acp --spec harness.yaml   # pin one HarnessSpec
@@ -67,13 +80,18 @@ The session's provider and model resolve in order:
 3. `HARBOR_ACP_REQUESTED_MODEL` (set by Harbor with the benchmark's `--model` value)
 4. The spec's `model_policy.primary` (for example `ollama/qwen3-coder`)
 
-Clients may also switch models mid-session through ACP `session/set_model`; SuperQode accepts `provider/model` references or bare model ids.
+V1 clients may switch models through ACP `session/set_model`; SuperQode accepts
+`provider/model` references or bare model ids. V2 exposes typed config options.
+The current v2 harness pins its model at session creation and offers a boolean
+reasoning-display option. Start a new session to select another model.
 
 ---
 
 ## Authentication
 
-SuperQode needs no login for local or BYOK use. The initialize response advertises one **terminal auth** method, `superqode-setup`, which runs:
+SuperQode needs no login for local or BYOK use. If the client advertises support
+for terminal authentication, the initialize response offers one **terminal auth**
+method, `superqode-setup`, which runs:
 
 ```bash
 superqode local init --repo .

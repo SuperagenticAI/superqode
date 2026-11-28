@@ -8,6 +8,7 @@ on:
       - ".github/matchers/swift.json"
       - "src/**"
       - "tests/test_desktop*"
+      - "tests/test_acp*"
       - "tests/test_strands*"
       - "tests/test_harness_eval*"
       - "tests/test_repository_grader.py"
@@ -47,7 +48,7 @@ jobs:
           PYTEST_DISABLE_PLUGIN_AUTOLOAD: "1"
         run: >-
           uv run --locked --no-sync pytest -p pytest_asyncio.plugin
-          tests/test_desktop_*.py tests/test_macos_runtime_inventory.py
+          tests/test_desktop_*.py tests/test_acp_v2*.py tests/test_acp_protocol_policy.py tests/test_macos_runtime_inventory.py
           tests/test_macos_runtime_dependencies.py tests/test_agent_subprocess_cleanup.py
           tests/test_harness_acceptance.py tests/test_harness_omni.py
           tests/test_harness_eval_*.py tests/test_repository_grader.py

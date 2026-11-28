@@ -1091,8 +1091,9 @@ struct CodingComposer: View {
           Text(string(app.routeStatus, "message", "The agent owns sign-in and model access."))
             .font(.caption).foregroundStyle(app.routeStatus["ready"] as? Bool == false ? Color.orange : Color.secondary)
             .lineLimit(2).textSelection(.enabled)
-          if string(app.routeStatus, "state") == "connection-failed" {
-            Button("Retry") { app.perform { await app.checkManagedConnection() } }.font(.caption)
+          if ["connection-failed", "check-required"].contains(string(app.routeStatus, "state")) {
+            Button("Check protocol") { app.perform { await app.checkManagedConnection() } }
+              .font(.caption).disabled(app.hasActiveWork(project: app.projectID))
           }
           if app.routeStatus["ready"] as? Bool == false {
             Button("Fix…") { app.openConnections("menu:root") }.font(.caption)
@@ -1100,6 +1101,23 @@ struct CodingComposer: View {
         }
       }
       if app.isManaged {
+        if app.isACP {
+          HStack(spacing: 10) {
+            ACPProtocolMenu()
+            ACPProtocolStatusView(status: app.acpProtocolStatus)
+          }
+          ACPProtocolFallbackNotice().id(app.selectedJob + ":" + app.harness)
+          if app.acpForegroundIdle {
+            Text(app.acpBackgroundPending
+              ? "The response is finished. Background activity is still attached; use the activity panel to stop tasks or close the session."
+              : "The response is finished. Finalizing this turn…")
+              .font(.caption).foregroundStyle(.secondary)
+          }
+          if app.acpProtocolWillSwitch {
+            Text("The next message starts a new agent session. This conversation stays visible and its recent context is handed over.")
+              .font(.caption).foregroundStyle(.secondary)
+          }
+        }
         HStack(spacing: 12) {
           if !app.agentModels.isEmpty {
             AgentModelPicker().frame(maxWidth: 320, alignment: .leading)
@@ -1213,7 +1231,7 @@ struct CodingComposer: View {
           Button("Steer run", action: app.steerDraft).disabled(app.draft.isEmpty)
         }
         if app.showsWorking {
-          Button("Stop", systemImage: "stop.fill", action: app.cancel)
+          Button(app.acpProtocolStatus.negotiated == 2 ? "Stop response" : "Stop", systemImage: "stop.fill", action: app.cancel)
             .help("Stop the current run; wait for the agent to acknowledge cancellation")
         }
         Button {
@@ -1378,15 +1396,31 @@ func displayEvents(_ events: [[String: Any]]) -> [[String: Any]] {
     rows.append(["type": "output", "data": ["text": parts.joined()], "coalesced": true])
     parts.removeAll(keepingCapacity: true)
   }
-  for event in events {
+  let lastSnapshot = events.lastIndex { event in
+    string(event["data"] as? [String: Any] ?? [:], "event") == "acp_message"
+  }
+  let lastACP = events.lastIndex { event in
+    string(event["data"] as? [String: Any] ?? [:], "event") == "acp_update"
+  }
+  for (index, event) in events.enumerated() {
     let data = event["data"] as? [String: Any] ?? [:]
     let payload = data["payload"] as? [String: Any] ?? [:]
     let name = string(data, "event")
+    if name == "acp_message" && index != lastSnapshot { continue }
+    if name == "acp_update" {
+      if index == lastACP {
+        flush()
+        rows.append(["type": "acp_activity", "data": [:]])
+      }
+      continue
+    }
     let delta = string(event, "type") == "harness_event"
       && ["delta", "model_delta", "message.delta"].contains(name)
     let committed = string(event, "type") == "harness_event" && name == "message"
     let answer = string(event, "type") == "answer"
-    if delta || answer || committed {
+    if name == "acp_message" {
+      parts = [string(payload, "text")]
+    } else if delta || answer || committed {
       let text = answer ? string(data, "text") : string(payload, "text", string(payload, "content"))
       if committed {
         let joined = parts.joined()
@@ -1602,7 +1636,8 @@ struct EventStream: View {
                 .id("prompt:" + app.selectedJob)
             }
             if isTask && !plan.isEmpty { PlanCard(items: plan) }
-            let messages = rows.filter { string($0, "type") != "activity_group" }
+            let messages = rows.filter { string($0, "type") != "activity_group"
+              && !(app.active && string($0, "type") == "acp_activity") }
             if !messages.isEmpty {
               VStack(alignment: .leading, spacing: 16) {
                 HStack(spacing: 7) {
@@ -1678,18 +1713,22 @@ struct EventStream: View {
           }
         }
       }
-      if app.showsWorking || !activity.isEmpty {
+      if app.showsWorking || app.acpForegroundIdle || !activity.isEmpty {
         Divider()
         VStack(spacing: 4) {
-          if app.showsWorking {
+          if app.active && app.acpProtocolStatus.negotiated == 2 {
+            ACPActivityView()
+          } else if app.showsWorking {
             AgentWorkingCard(
               status: app.activityStatus, activity: currentAgentActivity(app.events),
               startedAt: RunStats.startDate(app.detail), waitingSince: RunStats.waitingSince(app.detail),
               planLine: PlanSnapshot.compactLine(plan))
           }
           // Folded until the person opens it, including while a run is active.
-          AgentActivityView(events: activity, active: app.showsWorking)
-            .id(app.selectedJob)
+          if !(app.active && app.acpProtocolStatus.negotiated == 2) {
+            AgentActivityView(events: activity, active: app.showsWorking)
+              .id(app.selectedJob)
+          }
         }
         .frame(maxWidth: 1080).frame(maxWidth: .infinity)
         .padding(.horizontal, 14).padding(.vertical, 4)
@@ -1803,6 +1842,8 @@ struct EventRow: View {
           }
         }.padding(14).frame(maxWidth: .infinity, alignment: .leading).background(
           Color.orange.opacity(0.08), in: RoundedRectangle(cornerRadius: 8))
+      } else if type == "acp_activity" {
+        ACPActivityView()
       } else if type == "harness_event" {
         let name = string(data, "event")
         let payload = data["payload"] as? [String: Any] ?? [:]

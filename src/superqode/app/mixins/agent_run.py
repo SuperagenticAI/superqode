@@ -2257,6 +2257,76 @@ class AgentRunMixin:
                 # Stream response chunks directly - always visible
                 self._call_ui(log.add_response_chunk, text)
 
+        async def on_message_update(snapshot: dict) -> None:
+            _flush_thinking_buffer()
+            text_parts[:] = [snapshot["text"]]
+            self._call_ui(log.set_response_snapshot, snapshot["text"])
+
+        async def on_v2_update(params: dict) -> None:
+            update = params["update"]
+            identity = params["sessionId"]
+            kind = update.get("sessionUpdate")
+            acp_client = getattr(self, "_acp_client", None)
+            state = acp_client.sessions.get(identity) if acp_client else None
+            if kind == "subagent_update":
+                self._call_ui(
+                    log.add_meta,
+                    f"Subagent {update.get('title') or update['sessionId']} · {update['sessionId']}",
+                    "↳",
+                )
+            elif (
+                identity != getattr(acp_client, "_session_id", "")
+                and kind
+                in {
+                    "agent_message",
+                    "agent_message_chunk",
+                    "session_message",
+                    "session_message_chunk",
+                }
+                and state
+            ):
+                from superqode.acp.state import content_text
+
+                message_id = update["messageId"]
+                text = content_text(state.messages[message_id].get("content"))
+                self._call_ui(
+                    log.set_acp_entity_snapshot,
+                    (identity, "message", message_id),
+                    f"[{identity}] {text}" if text else "",
+                )
+            elif kind in {"terminal_update", "terminal_output_chunk"} and state:
+                terminal_id = update["terminalId"]
+                terminal = state.terminals[terminal_id]
+                output = terminal.get("bytes", b"").decode("utf-8", errors="replace")[-100_000:]
+                self._call_ui(
+                    log.set_acp_entity_snapshot,
+                    (identity, "terminal", terminal_id),
+                    f"[{identity}] Terminal {terminal_id}: {terminal.get('command') or ''}\n{output}",
+                )
+            elif kind in {"plan_update", "plan_removed"} and state:
+                plan_id = update["plan"]["planId"] if kind == "plan_update" else update["planId"]
+                plan = state.plans.get(plan_id)
+                self._call_ui(
+                    log.set_acp_entity_snapshot,
+                    (identity, "plan", plan_id),
+                    f"[{identity}] Plan: " + str(plan.get("entries", [])) if plan else "",
+                )
+            elif kind == "state_update" and update.get("background"):
+                self._call_ui(
+                    log.add_meta,
+                    "Background work: "
+                    + ", ".join(
+                        str(
+                            item.get("toolCallId")
+                            or item.get("terminalId")
+                            or item.get("sessionId")
+                        )
+                        for item in update["background"]
+                    )
+                    + ". Use :agents cancel <session> tool|terminal <id> to stop a supported item.",
+                    "↳",
+                )
+
         async def on_thinking(text: str) -> None:
             """Handle agent thinking/session logs - toggleable with Ctrl+T."""
             import time
@@ -2675,7 +2745,9 @@ class AgentRunMixin:
                 self._call_ui(self._show_thinking_line, f"✅ Auto-allowed: {tool_name}", log)
                 return _pick_option(options, ["allow_once", "allow_always"])
 
-            needs_permission = self._tool_needs_permission(tool_name, tool_input)
+            needs_permission = tool_call.get(
+                "acp_permission"
+            ) is True or self._tool_needs_permission(tool_name, tool_input)
             if needs_permission:
                 self._call_ui(self._show_permission_prompt, tool_name, tool_input, log)
                 self._permission_pending = True
@@ -2687,7 +2759,7 @@ class AgentRunMixin:
                     if self._cancel_requested:
                         self._permission_pending = False
                         break
-                    time.sleep(0.1)
+                    await asyncio.sleep(0.1)
 
                 if self._permission_response == "allow":
                     return _pick_option(options, ["allow_once", "allow_always"])
@@ -2779,10 +2851,19 @@ class AgentRunMixin:
                 self._bind_acp_client(client, client_key)
 
             client.on_message = on_message
+            client.on_message_update = on_message_update
+            client.on_session_update = on_v2_update
             client.on_thinking = on_thinking
             client.on_tool_call = on_tool_call
             client.on_tool_update = on_tool_update
-            client.on_permission_request = on_permission_request
+
+            async def permission_callback(options, tool):
+                try:
+                    return await on_permission_request(options, tool)
+                finally:
+                    self._permission_pending = False
+
+            client.on_permission_request = permission_callback
             client.on_plan = on_plan
             client.on_available_commands = on_available_commands
             client.on_mode_update = on_mode_update
@@ -2961,6 +3042,18 @@ class AgentRunMixin:
                     stats.get("cost", 0.0),
                 )
                 self._cancel_requested = False
+                self.is_busy = False
+                return
+            if stop_reason == "error":
+                self._call_ui(
+                    log.end_agent_session,
+                    False,
+                    response_text or "The ACP agent reported a foreground execution error.",
+                    stats.get("prompt_tokens", 0),
+                    stats.get("completion_tokens", 0),
+                    stats.get("thinking_tokens", 0),
+                    stats.get("cost", 0.0),
+                )
                 self.is_busy = False
                 return
             if not response_text.strip() and not tool_actions:

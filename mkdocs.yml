@@ -238,6 +238,9 @@ nav:
     - 🌀 RLM Code Integration: advanced/rlm-code.md
     - 🔬 RLM Routes Compared: advanced/rlm-routes.md
     - 🔌 Serve a Harness over ACP: advanced/acp-agent-server.md
+    - ACP v2 Adoption: advanced/acp-v2-adoption.md
+    - ACP v2 Validation: advanced/acp-v2-validation.md
+    - macOS ACP Protocol Controls: advanced/acp-macos-protocols.md
     - 🔁 Omnigent Compatibility: advanced/omnigent-compat.md
 
   - 🧭 SystemOne Harness:
@@ -320,6 +323,7 @@ nav:
       - 🔌 Providers: cli-reference/provider-commands.md
       - 📦 Models: cli-reference/models-commands.md
       - 🤖 Agents: cli-reference/agents-commands.md
+      - ACP Protocol: cli-reference/acp-commands.md
       - 🔗 Connect: cli-reference/connect-commands.md
       - 🔁 A2A Keys: cli-reference/a2a-keys-commands.md
       - 🔐 Auth: cli-reference/auth-commands.md

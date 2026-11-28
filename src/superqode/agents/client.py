@@ -168,6 +168,7 @@ class ACPAgentManager:
         self.client: SuperQodeACPClient | None = None
         self.connection: ClientSideConnection | None = None
         self._response_queue: asyncio.Queue = asyncio.Queue()
+        self._primary = None
 
     async def connect_to_agent(
         self, command: str, cwd: str | None = None, *, extra_env: dict[str, str] | None = None
@@ -182,6 +183,39 @@ class ACPAgentManager:
             True if connection successful, False otherwise
         """
         try:
+            from superqode.acp.protocol import requested_version
+
+            if requested_version() == 2:
+                from superqode.acp.client import ACPClient
+                from prompt_toolkit import PromptSession
+
+                approval_lock = asyncio.Lock()
+
+                async def permission(options, subject):
+                    import json
+
+                    async with approval_lock:
+                        details = subject.get("subject") or {}
+                        message = subject.get("title", "Allow operation?")
+                        if subject.get("description"):
+                            message += "\n" + str(subject["description"])
+                        if details:
+                            message += "\n" + json.dumps(details, ensure_ascii=False)
+                        try:
+                            answer = await PromptSession().prompt_async(message + " [y/N] ")
+                        except EOFError:
+                            return ""
+                    kind = "allow_once" if answer.strip().lower() == "y" else "reject_once"
+                    return next((o["optionId"] for o in options if o.get("kind") == kind), "")
+
+                self._primary = ACPClient(
+                    Path(cwd or os.getcwd()),
+                    command,
+                    protocol_version=2,
+                    extra_env=extra_env,
+                    on_permission_request=permission,
+                )
+                return await self._primary.start()
             # Parse command
             import shlex
 
@@ -234,6 +268,9 @@ class ACPAgentManager:
 
     async def disconnect(self) -> None:
         """Disconnect from the current agent."""
+        if self._primary:
+            await self._primary.stop()
+            self._primary = None
         if self.connection:
             await self.connection.close()
             self.connection = None
@@ -243,6 +280,10 @@ class ACPAgentManager:
 
     async def send_message(self, message: str) -> None:
         """Send a message to the agent."""
+        if self._primary:
+            await self._primary.send_prompt(message)
+            await self._response_queue.put(self._primary.get_message_buffer())
+            return
         if not self.connection:
             raise RuntimeError("Not connected to an agent")
 
@@ -254,6 +295,11 @@ class ACPAgentManager:
 
     async def receive_messages(self) -> list:
         """Receive all pending messages from the agent."""
+        if self._primary:
+            messages = []
+            while not self._response_queue.empty():
+                messages.append(self._response_queue.get_nowait())
+            return messages
         messages = []
         while not self.client.message_queue.empty():
             try:
@@ -265,4 +311,6 @@ class ACPAgentManager:
 
     async def is_connected(self) -> bool:
         """Check if currently connected to an agent."""
+        if self._primary:
+            return self._primary.is_running()
         return self.connection is not None

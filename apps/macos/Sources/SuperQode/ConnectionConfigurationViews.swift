@@ -536,6 +536,7 @@ struct AgentControlsView: View {
   var body: some View {
     DisclosureGroup("Agent settings") {
       VStack(alignment: .leading, spacing: 10) {
+        if app.isACP { ACPProtocolPicker(reference: app.harness, project: app.projectID) }
         let modes = app.agentSession["modes"] as? [String: Any] ?? [:]
         let availableModes = modes["availableModes"] as? [[String: Any]] ?? []
         if showModelAndEffort {
@@ -572,6 +573,10 @@ struct AgentControlsView: View {
                 Text(string(value, "name", string(value, "value"))).tag(string(value, "value"))
               }
             }
+          } else if string(option, "type") == "boolean" {
+            Toggle(string(option, "name"), isOn: Binding(
+              get: { app.agentConfig[string(option, "id")].map { $0 == "true" } ?? (option["currentValue"] as? Bool ?? false) },
+              set: { app.agentConfig[string(option, "id")] = $0 ? "true" : "false" }))
           } else if string(option, "type") == "text" {
             TextField(string(option, "name"), text: Binding(
               get: { app.agentConfig[string(option, "id")] ?? "" },

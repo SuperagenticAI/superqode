@@ -239,6 +239,8 @@ where = ["src"]
 
 [tool.setuptools.package-data]
 superqode = [
+    "acp/schema/*.json",
+    "acp/schema/*.md",
     "agents/data/*.toml",
     "data/*.yaml",
     "data/themes/*.json",

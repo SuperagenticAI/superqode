@@ -72,6 +72,7 @@ WRITES = {
     "jobs.cancel": ("cancel", {"id"}),
     "jobs.steer": ("steer", {"id", "text"}),
     "factory.gate": ("approve", {"project", "run", "stage", "gate_digest", "decision", "reason"}),
+    "jobs.acp.control": ("cancel", {"id", "action", "session_id", "item_id"}),
 }
 
 

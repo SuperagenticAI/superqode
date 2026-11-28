@@ -48,6 +48,15 @@ jobs:
         env:
           PYTEST_DISABLE_PLUGIN_AUTOLOAD: "1"
         run: uv run --frozen pytest -p pytest_asyncio.plugin tests/test_cli_reference_coverage.py -q
+      - name: ACP v1 and v2 Preview contracts
+        env:
+          PYTEST_DISABLE_PLUGIN_AUTOLOAD: "1"
+        run: >-
+          uv run --frozen pytest -p pytest_asyncio.plugin
+          tests/test_acp_v2.py tests/test_acp_v2_server.py tests/test_acp_v2_desktop.py tests/test_acp_v2_tui.py
+          tests/test_acp_protocol_policy.py
+          tests/test_acp_client.py tests/test_acp_server.py tests/test_acp_permission_store.py
+          tests/test_acp_session_store.py tests/test_desktop_acp_setup.py -q
       - name: Harness2 refinement contracts
         env:
           PYTEST_DISABLE_PLUGIN_AUTOLOAD: "1"

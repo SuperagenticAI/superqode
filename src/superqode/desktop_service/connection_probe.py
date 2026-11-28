@@ -71,7 +71,15 @@ async def _antigravity_model_efforts(root, binary, models, levels):
         pass
 
 
-async def probe_route(root: Path, route: dict, status, method_id=None, terminal_method=None):
+async def probe_route(
+    root: Path,
+    route: dict,
+    status,
+    method_id=None,
+    terminal_method=None,
+    protocol_policy=None,
+    protocol_version=None,
+):
     if not route.get("available"):
         raise ValueError(route.get("issue") or "Install this agent before connecting.")
     status("Checking " + str(route.get("name") or "agent") + " without a coding prompt…")
@@ -106,6 +114,8 @@ async def probe_route(root: Path, route: dict, status, method_id=None, terminal_
             launch_argv=route.get("command_argv") or shlex.split(route["command"]),
             own_process_group=True,
             initialize_only=True,
+            protocol_policy=protocol_policy,
+            protocol_version=protocol_version,
             terminal_auth_supported=Path(
                 (route.get("command_argv") or shlex.split(route["command"]))[0]
             ).name
@@ -144,6 +154,7 @@ async def probe_route(root: Path, route: dict, status, method_id=None, terminal_
                     "auth_methods": public_auth_methods(methods),
                     "message": "Choose a sign-in method offered by this agent, then check the connection again.",
                     "initialization": client.get_initialization_info(),
+                    "protocol_policy": client.protocol_policy,
                 }
             models = client.get_session_models()
             command = shlex.split(route["command"])
@@ -180,6 +191,7 @@ async def probe_route(root: Path, route: dict, status, method_id=None, terminal_
                 "checked_at": time.time(),
                 "route_digest": route.get("digest", ""),
                 "initialization": getattr(client, "get_initialization_info", lambda: {})(),
+                "protocol_policy": client.protocol_policy,
                 "auth_methods": public_auth_methods(methods),
                 "session": {
                     "capabilities": client.get_agent_capabilities(),
@@ -190,6 +202,11 @@ async def probe_route(root: Path, route: dict, status, method_id=None, terminal_
                 },
             }
         finally:
+            if getattr(client, "negotiated_version", 1) == 2 and client.get_session_id():
+                try:
+                    await asyncio.wait_for(client.close_session(), 3)
+                except Exception:
+                    pass
             await client.stop()
     if route.get("runtime") == "codex-cli":
         from superqode.agent.loop import AgentConfig

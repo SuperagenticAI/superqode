@@ -270,12 +270,20 @@ def serve_harness(
 )
 @click.option("--provider", default="", envvar="SUPERQODE_ACP_PROVIDER")
 @click.option("--model", default="", envvar="SUPERQODE_ACP_MODEL")
+@click.option(
+    "--protocol-version",
+    type=click.Choice(["auto", "1", "2"]),
+    default="auto",
+    show_default=True,
+    help="Serve both ACP versions, or restrict new connections to one version",
+)
 def serve_acp(
     spec_path: Optional[Path],
     harness_dir: Optional[Path],
     provider: str,
     model: str,
     harness_ref: str,
+    protocol_version: str = "auto",
 ):
     """Run SuperQode as an ACP agent on stdio (Zed, JetBrains, Neovim, ...).
 
@@ -307,6 +315,7 @@ def serve_acp(
                 harness=harness_ref,
                 provider=provider,
                 model=model,
+                protocol_version=protocol_version,
             )
         )
     except KeyboardInterrupt:

@@ -1382,10 +1382,12 @@ async def test_public_connection_identity_omits_auth_payload_and_is_copied(tmp_p
     )
     await client._initialize()
     info = client.get_initialization_info()
-    assert info == {
-        "protocol_version": PROTOCOL_VERSION,
-        "agent": {"name": "fixture", "version": "1.2"},
-    }
+    assert info["protocol_version"] == PROTOCOL_VERSION
+    assert info["agent"] == {"name": "fixture", "version": "1.2"}
+    assert info["protocol_policy"] == "v1"
+    assert info["negotiated_protocol_version"] == PROTOCOL_VERSION
+    assert info["fallback"] is False
+    assert "PRIVATE" not in str(info) and "private-auth-payload" not in str(info)
     info["agent"]["name"] = "changed"
     assert client.get_initialization_info()["agent"]["name"] == "fixture"
 

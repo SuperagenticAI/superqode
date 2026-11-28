@@ -2103,6 +2103,14 @@ cli_main.register_lazy(
     hidden=False,
 )
 
+cli_main.register_lazy(
+    "acp",
+    "superqode.commands.acp_protocol",
+    "acp",
+    "Inspect ACP protocol compatibility, including opt-in v2 Preview.",
+    hidden=False,
+)
+
 
 cli_main.register_lazy(
     "connect",

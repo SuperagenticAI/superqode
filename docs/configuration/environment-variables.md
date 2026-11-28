@@ -194,6 +194,7 @@ terminal use; it is not a model-performance setting.
 | Variable | Values | Default | Effect |
 |---|---|---|---|
 | `SUPERQODE_ACP_CLIENT` | client id | unset | Pin which ACP client implementation the TUI uses. |
+| `SUPERQODE_ACP_PROTOCOL_VERSION` | `1` or `2` | `1` | Request ACP v1 or opt into v2 Preview. V1-only agents use a bounded reconnect with a v1 handshake. |
 | `SUPERQODE_ACP_STARTUP_TIMEOUT` | seconds | `15` | How long to wait for an ACP agent process to start. |
 | `SUPERQODE_ACP_REQUEST_TIMEOUT` | seconds | `12` | Timeout for individual ACP requests. |
 | `SUPERQODE_ACP_PROMPT_TIMEOUT` | seconds | `180` | Timeout for a full ACP prompt turn. |

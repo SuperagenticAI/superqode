@@ -244,6 +244,7 @@ COMMANDS = [
     ":agents list",
     ":agents refresh",
     ":agents doctor",
+    ":agents cancel",
     ":agents show",
     ":agents store",
     ":agents install",
@@ -888,6 +889,7 @@ COMMANDS = [
 TUI_COMMAND_ALIASES = [
     ":a2a",
     ":acp",
+    ":acp doctor",
     ":agent",
     ":benchmarks",
     ":catalog",

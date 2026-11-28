@@ -205,7 +205,9 @@ def visible_answer(events) -> str:
         payload = data.get("payload") or {}
         text = str(payload.get("text") or payload.get("content") or "")
         name = data.get("event")
-        if name in {"delta", "model_delta", "message.delta"}:
+        if name == "acp_message":
+            parts = [str(payload.get("text") or "")]
+        elif name in {"delta", "model_delta", "message.delta"}:
             parts.append(text)
         elif name == "message" and text:
             joined = "".join(parts)
@@ -285,10 +287,30 @@ def prepare_continuation(service, params, project, root):
 
         digest = resolve_harness(params.get("harness") or "core", root=root).digest
     binding = None
+    protocol_switched = False
     for node in reversed(nodes):
         result = node["result"]
         if route_key(node["request"]) != route_key(params):
             continue
+        if route and route.get("desktop_kind") == "acp":
+            from superqode.acp.protocol import protocol_policy
+
+            old_options = node["request"].get("acp_options") or {}
+            new_options = params.get("acp_options") or {}
+            old_policy, _ = protocol_policy(
+                old_options.get("protocol_policy"), old_options.get("protocol_version")
+            )
+            new_policy, target_version = protocol_policy(
+                new_options.get("protocol_policy"), new_options.get("protocol_version")
+            )
+            actual_version = result.get("protocol_version", 1)
+            if (
+                old_policy != new_policy
+                or new_policy != "auto"
+                and actual_version != target_version
+            ):
+                protocol_switched = True
+                break
         # Do not go behind a failed turn on the same native session: its state
         # may already contain partially executed work unknown to the transcript.
         if node["status"] != "completed":
@@ -312,6 +334,8 @@ def prepare_continuation(service, params, project, root):
         result = binding["result"]
         params["session_id"] = result["session_id"]
         params["expected_digest"] = digest
+        if route and route.get("desktop_kind") == "acp":
+            params["_acp_resume_protocol_version"] = result.get("protocol_version", 1)
         if result.get("remote_continuity"):
             params["_remote_previous"] = result["remote_state"]
         if result.get("interaction_mode") == "chat":
@@ -321,6 +345,7 @@ def prepare_continuation(service, params, project, root):
         "mode": "resume" if binding else "handoff",
         "resumed_from": binding["id"] if binding else "",
         "conversation_id": nodes[0]["id"],
+        **({"protocol_switch": True} if protocol_switched else {}),
     }
     if not intervening:
         return

@@ -8,6 +8,7 @@ This is the primary interface for all ACP agent communication.
 from __future__ import annotations
 
 import asyncio
+from contextlib import suppress
 from datetime import datetime
 import json
 import os
@@ -42,6 +43,8 @@ from superqode.acp.types import (
 )
 
 from superqode.herdr import child_env
+from superqode.acp.client_v2 import ACPv2ClientMixin, V1FallbackRequired
+from superqode.acp.protocol import ProtocolError, capability, redact_protocol, validate_envelope
 
 
 async def cancel_prompt_with_grace(
@@ -157,7 +160,7 @@ def _format_jsonrpc_error(error: Any) -> str:
 
 
 @dataclass
-class ACPClient:
+class ACPClient(ACPv2ClientMixin):
     """
     ACP (Agent Client Protocol) client for communicating with coding agents.
 
@@ -172,6 +175,18 @@ class ACPClient:
     initialize_only: bool = field(default=False, kw_only=True)
     terminal_auth_supported: bool = field(default=False, kw_only=True)
     allow_host_tools: bool = field(default=True, kw_only=True)
+    protocol_version: Optional[int] = field(default=None, kw_only=True)
+    protocol_policy: Optional[str] = field(default=None, kw_only=True)
+    session_protocol_version: Optional[int] = field(default=None, kw_only=True)
+    pending_submission_path: Optional[Path] = field(default=None, kw_only=True)
+    on_session_update: Optional[Callable[[dict], Awaitable[None]]] = field(
+        default=None, kw_only=True
+    )
+    on_message_update: Optional[Callable[[dict], Awaitable[None]]] = field(
+        default=None, kw_only=True
+    )
+    on_v2_ready: Optional[Callable[[Any], Awaitable[None]]] = field(default=None, kw_only=True)
+    host_mcp_servers: List[dict] = field(default_factory=list, kw_only=True)
     model: Optional[str] = None
     startup_timeout: float = 30.0
     prompt_timeout: float = 180.0
@@ -267,6 +282,10 @@ class ACPClient:
     # ``.get()`` always works even before initialize completes.
     _agent_capabilities: Dict[str, Any] = field(default_factory=dict, repr=False)
 
+    def __post_init__(self) -> None:
+        self.project_root = Path(self.project_root).expanduser().resolve()
+        self._setup_v2()
+
     def reset_stats(self) -> None:
         """Reset tracking stats for a new prompt."""
         self._files_modified = []
@@ -316,6 +335,14 @@ class ACPClient:
     async def start(self) -> bool:
         """Start the ACP agent subprocess."""
         self.last_startup_error = ""
+        if not self._fallback_attempt:
+            self._v1_fallback = False
+            self._fallback_reason = ""
+            self._initialization_info = {}
+            self.protocol_version = self._preferred_protocol_version
+            if self.resume_session_id and self.session_protocol_version is not None:
+                self.protocol_version = self.session_protocol_version
+        self._v2_disconnected = False
         try:
             await self._initialize_traffic_log()
 
@@ -383,14 +410,32 @@ class ACPClient:
 
             # Initialize the protocol
             await self._initialize()
+            if self.protocol_version == 2:
+                self._initialization_info["requested_protocol_version"] = 2
 
             if self.initialize_only:
                 return True
+            if self.negotiated_version == 2 and self.on_v2_ready:
+                await self.on_v2_ready(self)
             if not await self._restore_or_create_session():
                 return False
 
             return True
 
+        except V1FallbackRequired as exc:
+            # Legacy agents may reject repeated initialization. Reopen once,
+            # restoring the v1 host-tool and terminal-auth capability exchange.
+            await self.stop()
+            if self._v1_fallback:
+                self.last_startup_error = "ACP version fallback failed"
+                return False
+            self._v1_fallback = True
+            self._fallback_reason = str(exc)
+            self._fallback_attempt = True
+            try:
+                return await self.start()
+            finally:
+                self._fallback_attempt = False
         except Exception as e:
             self.last_startup_error = str(e) or type(e).__name__
             if self.on_thinking:
@@ -525,16 +570,20 @@ class ACPClient:
             {
                 "ts": datetime.now().isoformat(timespec="milliseconds"),
                 "direction": direction,
-                "payload": payload,
+                "payload": redact_protocol(payload),
             }
         )
 
-    async def send_prompt(self, prompt: str, *, images=None) -> Optional[str]:
+    async def send_prompt(self, prompt: str, *, images=None, idempotency_key=None) -> Optional[str]:
         """
         Send a prompt to the agent and wait for completion.
 
         Returns the stop reason.
         """
+        if self.negotiated_version == 2:
+            return await self._send_prompt_v2(
+                prompt, images=images, idempotency_key=idempotency_key
+            )
         # Reset stats for this prompt
         self.reset_stats()
 
@@ -570,12 +619,15 @@ class ACPClient:
 
         return stop_reason
 
-    async def cancel(self) -> bool:
+    async def cancel(self, session_id: Optional[str] = None) -> bool:
         """Cancel the current operation."""
         try:
+            target = session_id or self._session_id
+            if self.negotiated_version == 2:
+                self.sessions.check_child_method(target, "session/cancel")
             await self._send_notification(
                 "session/cancel",
-                sessionId=self._session_id,
+                sessionId=target,
                 _meta={},
             )
             return True
@@ -666,6 +718,8 @@ class ACPClient:
         Useful for CLIs that want to grey out a resume menu rather than
         attempt and fail.
         """
+        if self.negotiated_version == 2:
+            return capability(self._agent_capabilities, "session")
         return bool(self._agent_capabilities.get("loadSession"))
 
     async def _restore_or_create_session(self) -> bool:
@@ -702,9 +756,20 @@ class ACPClient:
         return dict(self._agent_capabilities)
 
     def get_auth_methods(self) -> list[dict]:
-        return json.loads(json.dumps(self._auth_methods))
+        methods = json.loads(json.dumps(self._auth_methods))
+        if self.negotiated_version == 2:
+            for method in methods:
+                method["id"] = method.get("methodId", "")
+                if isinstance(method.get("env"), list):
+                    method["env"] = {entry["name"]: entry["value"] for entry in method["env"]}
+        return methods
 
     async def authenticate(self, method_id: str):
+        if self.negotiated_version == 2:
+            method = next((m for m in self._auth_methods if m.get("methodId") == method_id), None)
+            if not method or method.get("type") != "agent":
+                raise ValueError("Choose an advertised agent authentication method")
+            return await self._call_method("auth/login", methodId=method_id, timeout=300)
         method = next((m for m in self._auth_methods if m.get("id") == method_id), None)
         if not method or method.get("type", "agent") != "agent":
             raise ValueError("Choose an advertised agent authentication method")
@@ -714,6 +779,13 @@ class ACPClient:
         """Only public protocol/agent identity; never account or authentication payloads."""
         return {
             **self._initialization_info,
+            "protocol_policy": self.protocol_policy,
+            "requested_protocol_version": self.protocol_version,
+            "preferred_protocol_version": self._preferred_protocol_version,
+            "negotiated_protocol_version": self._initialization_info.get("protocol_version"),
+            "fallback": self._v1_fallback,
+            "fallback_reason": self._fallback_reason,
+            "resumed_protocol": self.session_protocol_version if self.resume_session_id else None,
             "agent": dict(self._initialization_info.get("agent") or {}),
         }
 
@@ -763,6 +835,9 @@ class ACPClient:
 
     async def _initialize(self) -> InitializeResponse:
         """Initialize the ACP protocol."""
+        if self.protocol_version == 2 and not self._v1_fallback:
+            return await self._initialize_v2()
+        self.negotiated_version = 1
         response = await self._call_method(
             "initialize",
             timeout=self.startup_timeout,
@@ -817,6 +892,8 @@ class ACPClient:
 
     async def _new_session(self) -> NewSessionResponse:
         """Create a new session and persist it if a store is configured."""
+        if self.negotiated_version == 2:
+            return await self._new_session_v2()
         from superqode.mcp.config import get_acp_mcp_servers
 
         params: Dict[str, Any] = {
@@ -903,6 +980,8 @@ class ACPClient:
         on the agent) so the client can rebuild any cached UI state. We
         persist the touch on success so the resume bumps last_used_at.
         """
+        if self.negotiated_version == 2:
+            return await self._resume_session_v2(session_id)
         from superqode.mcp.config import get_acp_mcp_servers
 
         params: Dict[str, Any] = {
@@ -1153,7 +1232,15 @@ class ACPClient:
             await self._send_json(request)
             response = await asyncio.wait_for(future, timeout=timeout or self.request_timeout)
             return response
+        except asyncio.CancelledError:
+            if self.negotiated_version == 2:
+                with suppress(ConnectionError, BrokenPipeError):
+                    await self._send_notification("$/cancel_request", requestId=request_id)
+            raise
         except asyncio.TimeoutError:
+            if self.negotiated_version == 2:
+                with suppress(ConnectionError, BrokenPipeError):
+                    await self._send_notification("$/cancel_request", requestId=request_id)
             raise TimeoutError(f"{method}: timed out waiting for the ACP agent") from None
         except Exception as exc:
             failure = RuntimeError(f"{method}: {exc}")
@@ -1178,8 +1265,9 @@ class ACPClient:
         if self._process and self._process.stdin:
             await self._log_traffic("client->agent", data)
             json_bytes = json.dumps(data).encode("utf-8") + b"\n"
-            self._process.stdin.write(json_bytes)
-            await self._process.stdin.drain()
+            async with self._v2_send_lock:
+                self._process.stdin.write(json_bytes)
+                await self._process.stdin.drain()
 
     async def _read_loop(self) -> None:
         """Read and process output from the agent."""
@@ -1199,6 +1287,30 @@ class ACPClient:
                 try:
                     data = json.loads(line_str)
                     await self._log_traffic("agent->client", data)
+                    if self.negotiated_version == 2:
+                        try:
+                            validate_envelope(data)
+                        except ProtocolError as exc:
+                            notification = (
+                                isinstance(data, dict)
+                                and "id" not in data
+                                and isinstance(data.get("method"), str)
+                                and exc.code == -32602
+                            )
+                            if not notification and (
+                                not isinstance(data, dict) or "method" in data
+                            ):
+                                await self._send_json(
+                                    {
+                                        "jsonrpc": "2.0",
+                                        "id": data.get("id")
+                                        if isinstance(data, dict)
+                                        and type(data.get("id")) in (str, int)
+                                        else None,
+                                        "error": exc.wire(),
+                                    }
+                                )
+                            continue
                     if self._is_jsonrpc_response(data):
                         await self._handle_message(data)
                     elif data.get("id") is None:
@@ -1213,6 +1325,12 @@ class ACPClient:
                         task = asyncio.create_task(self._handle_message(data))
                         self._inbound_tasks.add(task)
                         task.add_done_callback(self._inbound_tasks.discard)
+                        if self.negotiated_version == 2:
+                            identity = data["id"]
+                            self._v2_active_requests[identity] = task
+                            task.add_done_callback(
+                                lambda done, key=identity: self._v2_active_requests.pop(key, None)
+                            )
                 except json.JSONDecodeError:
                     # Not JSON - might be debug output, log it
                     if self.on_thinking and line_str:
@@ -1224,6 +1342,9 @@ class ACPClient:
             if self.on_thinking:
                 await self.on_thinking(f"[error] {e}")
         finally:
+            self._v2_disconnected = True
+            for session in self.sessions.sessions.values():
+                session.changed.set()
             # EOF must release requests immediately, including long-running
             # prompts. Replaying a prompt after a disconnect could repeat edits.
             pending = list(self._pending_requests.values())
@@ -1285,8 +1406,13 @@ class ACPClient:
                 error_response = {
                     "jsonrpc": "2.0",
                     "error": {
-                        "code": -32603,
+                        "code": getattr(e, "acp_code", -32603),
                         "message": str(e),
+                        **(
+                            {"data": e.data}
+                            if isinstance(e, ProtocolError) and e.data is not None
+                            else {}
+                        ),
                     },
                     "id": request_id,
                 }
@@ -1294,6 +1420,17 @@ class ACPClient:
 
     async def _handle_agent_request(self, method: str, params: dict) -> Any:
         """Handle a request from the agent."""
+
+        if self.negotiated_version == 2:
+            if method == "$/cancel_request":
+                task = self._v2_active_requests.get(params.get("requestId"))
+                if task:
+                    task.cancel()
+                return {}
+            if method == "session/request_permission":
+                return await self._permission_v2(params)
+            if method != "session/update":
+                raise ProtocolError(-32601, "Unsupported ACP v2 client method")
 
         if method == "session/update":
             await self._handle_session_update(params)
@@ -1328,6 +1465,8 @@ class ACPClient:
 
     async def _handle_session_update(self, params: dict) -> None:
         """Handle session update notifications."""
+        if self.negotiated_version == 2:
+            return await self._handle_v2_update(params)
         # The params dict IS the update - sessionUpdate is a direct key
         update = params
         update_type = update.get("sessionUpdate", "")
@@ -1643,6 +1782,8 @@ class ACPClient:
 
     async def get_available_modes(self) -> List[AvailableMode]:
         """Get list of available modes from the agent."""
+        if self.negotiated_version == 2:
+            return list(self._available_modes)
         if self._available_modes:
             return self._available_modes
         try:
@@ -1668,6 +1809,8 @@ class ACPClient:
 
     async def get_available_models(self) -> List[AvailableModel]:
         """Get list of available models from the agent."""
+        if self.negotiated_version == 2:
+            return list(self._available_models)
         if self._available_models:
             return self._available_models
         try:
@@ -1696,6 +1839,9 @@ class ACPClient:
 
     async def set_mode(self, mode_id: str) -> bool:
         """Set the current mode for the session."""
+        if self.negotiated_version == 2:
+            option = next((o for o in self._config_options if o.get("category") == "mode"), None)
+            return bool(option) and await self.set_config_option(option["configId"], mode_id)
         try:
             await self._call_method(
                 "session/set_mode",
@@ -1709,6 +1855,9 @@ class ACPClient:
 
     async def set_model(self, model_id: str) -> bool:
         """Set the current model for the session."""
+        if self.negotiated_version == 2:
+            option = self._model_config_option()
+            return bool(option) and await self.set_config_option(option["configId"], model_id)
         try:
             await self._call_method(
                 "session/set_model",
@@ -1720,16 +1869,28 @@ class ACPClient:
         except Exception:
             return False
 
-    async def set_config_option(self, config_id: str, value: str) -> bool:
+    async def set_config_option(self, config_id: str, value: Any) -> bool:
         """Set a generic ACP session config option."""
         try:
+            if self.negotiated_version == 2:
+                self.sessions.check_child_method(self._session_id, "session/set_config_option")
             response = await self._call_method(
                 "session/set_config_option",
                 sessionId=self._session_id,
                 configId=config_id,
                 value=value,
+                **(
+                    {"type": "boolean" if isinstance(value, bool) else "id"}
+                    if self.negotiated_version == 2
+                    else {}
+                ),
             )
-            self._apply_session_state_from_response(response)
+            if self.negotiated_version == 2:
+                session = self.sessions.get(self._session_id)
+                session.config_options = response.get("configOptions", [])
+                self._apply_v2_configuration(session)
+            else:
+                self._apply_session_state_from_response(response)
             if config_id == "model":
                 self._current_model_id = value
             return True
@@ -1738,6 +1899,8 @@ class ACPClient:
 
     async def get_current_mode(self) -> Optional[str]:
         """Get the current mode."""
+        if self.negotiated_version == 2:
+            return self._current_mode_id
         if self._current_mode_id:
             return self._current_mode_id
         try:
@@ -1761,6 +1924,8 @@ class ACPClient:
 
     async def get_current_model(self) -> Optional[str]:
         """Get the current model."""
+        if self.negotiated_version == 2:
+            return self._current_model_id
         if self._current_model_id:
             return self._current_model_id
         try:
