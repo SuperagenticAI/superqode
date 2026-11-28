@@ -106,8 +106,12 @@ def agents_doctor(agent, live, timeout, json_output, protocol_version=None):
             click.echo(f"  command: {result['command']}")
         if isinstance(result.get("live"), dict) and "negotiated_protocol_version" in result["live"]:
             check = result["live"]
+            negotiated = check["negotiated_protocol_version"]
+            negotiated_label = (
+                f"negotiated {negotiated}" if negotiated is not None else "not negotiated"
+            )
             click.echo(
-                f"  ACP: requested {check['requested_protocol_version']}, negotiated {check['negotiated_protocol_version']}"
+                f"  ACP: requested {check['requested_protocol_version']}, {negotiated_label}"
                 + (" (fallback; v2 not verified)" if check.get("fallback") else "")
             )
         if result.get("missing_env_vars"):

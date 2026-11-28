@@ -78,12 +78,13 @@ async def _run_live_protocol_check(
         payload["session"] = bool(client.get_session_id())
         if not started:
             payload["error"] = client.last_startup_error
+        negotiated = client.get_initialization_info().get("negotiated_protocol_version")
         payload["requested_protocol_version"] = client.protocol_version
-        payload["negotiated_protocol_version"] = client.negotiated_version
-        payload["protocol_compatible"] = (
-            bool(started) and client.negotiated_version == client.protocol_version
+        payload["negotiated_protocol_version"] = negotiated
+        payload["protocol_compatible"] = bool(started) and negotiated == client.protocol_version
+        payload["fallback"] = (
+            bool(started) and negotiated is not None and negotiated != client.protocol_version
         )
-        payload["fallback"] = bool(started) and client.negotiated_version != client.protocol_version
         if started:
             try:
                 payload["models"] = await asyncio.wait_for(

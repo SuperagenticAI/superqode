@@ -247,3 +247,19 @@ def test_runtime_error_never_falls_back_or_resubmits(desktop, monkeypatch):
     ]
     assert len(sessions) == 1
     assert sessions[0]["data"]["payload"]["negotiated_protocol_version"] == 2
+
+
+async def test_doctor_failed_v2_start_reports_unnegotiated(tmp_path):
+    from superqode.acp.doctor import _run_live_protocol_check
+
+    result = await _run_live_protocol_check(
+        f"{sys.executable} -c 'import sys; sys.exit(1)'",
+        project_root=tmp_path,
+        timeout=5.0,
+        protocol_version=2,
+    )
+    assert result["started"] is False
+    assert result["requested_protocol_version"] == 2
+    assert result["negotiated_protocol_version"] is None
+    assert result["protocol_compatible"] is False
+    assert result["fallback"] is False
