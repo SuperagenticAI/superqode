@@ -260,7 +260,7 @@ struct RootView: View {
     .animation(
       reduceMotion || !animatedInterface ? nil : .easeInOut(duration: 0.18), value: app.showWelcome
     )
-    .background { BrandBackdrop() }.tint(.qAccent).frame(minWidth: app.section == "Factory Studio" ? 1024 : 1120, minHeight: 740)
+    .background { BrandBackdrop() }.tint(.qAccent).frame(minWidth: 1024, minHeight: 740)
     .background { CommandPaletteWindowReader(app: app).frame(width: 0, height: 0) }
     // Window-level key monitor. Zero-sized so it never takes part in the
     // workspace layout; its own guards keep it inactive outside the workspace.
@@ -302,154 +302,203 @@ struct RootView: View {
     default: EmptyView()
     }
   }
+  @ViewBuilder private func topToolbar(factoryMode: Bool) -> some View {
+    HStack(spacing: 12) {
+      if !factoryMode { ThreadsSidebarToggle() }
+      Button {
+        app.showWelcome = true
+      } label: {
+        Label("Home", systemImage: "house")
+      }
+      .help("Return to Welcome").accessibilityIdentifier("workspace.home")
+      Button(action: app.goBack) { Image(systemName: "chevron.left") }
+        .disabled(app.navigationHistory.isEmpty || app.openingProject || app.restoringNavigation)
+        .help("Back (⌘[)").accessibilityLabel("Back")
+      Button(action: app.goForward) { Image(systemName: "chevron.right") }
+        .disabled(app.forwardHistory.isEmpty || app.openingProject || app.restoringNavigation)
+        .help("Forward (⌘])").accessibilityLabel("Forward")
+      Text(Sections.title(for: factoryMode ? "Factory Studio" : app.section))
+        .font(.system(size: 12, weight: .medium)).lineLimit(1)
+      Text("/").foregroundStyle(.tertiary)
+      if factoryMode {
+        Menu {
+          Button("Open project…") { app.chooseProject(openFolder: app.openProjectInFactory) }
+          Divider()
+          ForEach(app.projects, id: \.projectRowID) { row in
+            Button(string(row, "name", "Project")) { app.openProjectInFactory(string(row, "path")) }
+          }
+        } label: { Text(string(app.project, "name", "Project")).font(.system(size: 12)).lineLimit(1) }
+          .menuStyle(.borderlessButton).fixedSize().disabled(app.openingProject || app.restoringNavigation)
+          .accessibilityLabel("Factory project")
+      } else {
+        Text(string(app.project, "name", "No project")).font(.system(size: 12)).lineLimit(1).truncationMode(.middle).foregroundStyle(.secondary)
+      }
+      Spacer()
+      Button(action: app.presentCommandPalette) {
+        Image(systemName: "command")
+      }.help("Command Palette (⌘K)").accessibilityLabel("Open command palette")
+      Button {
+        app.showLearningGuide = true
+      } label: {
+        Image(systemName: "questionmark.circle")
+      }.help("Getting started & learning (⌘?)")
+      Pill(title: "ON YOUR MAC", color: .green)
+      Button {
+        if !app.project.isEmpty {
+          NSWorkspace.shared.open(URL(fileURLWithPath: string(app.project, "path")))
+        }
+      } label: {
+        Image(systemName: "folder")
+      }.help("Reveal project in Finder").disabled(app.project.isEmpty)
+    }.padding(.horizontal, 14).padding(.vertical, 7).modifier(NavigationGlass()).padding(
+      .horizontal, 10
+    ).padding(.vertical, 4)
+  }
+  @ViewBuilder private var footerBanners: some View {
+    ExecutionRecoveryView()
+    if !app.recoveryIssue.isEmpty {
+      HStack {
+        Label(app.recoveryIssue, systemImage: "exclamationmark.triangle").font(.caption)
+          .textSelection(.enabled)
+        Spacer()
+        Button("Retry recovery save") { app.saveDraft(); app.flushRecovery() }
+        if !app.recoveryStore.loadIssue.isEmpty {
+          Button("Reset recovery…", action: app.resetRecovery)
+        }
+      }.padding(12).background(Color.orange.opacity(0.12))
+    }
+    if !app.notice.isEmpty {
+      HStack {
+        Text(app.notice).font(.caption)
+        Spacer()
+        nativeButton("notice.close", action: { app.notice = "" }, title: "Dismiss notification") {
+          Image(systemName: "xmark")
+        }
+      }.padding(12).background(Color.qAccent.opacity(0.1))
+    }
+  }
   private var workspaceShell: some View {
-    HStack(spacing: 0) {
-      if app.section != "Factory Studio" {
+    let isFactory = app.section == "Factory Studio"
+    return ZStack(alignment: .topLeading) {
+      HStack(spacing: 0) {
         WorkspaceNavigationRail()
         Divider()
-      }
-      if !app.threadsSidebarCollapsed && app.section != "Factory Studio" {
-        SidebarView().frame(width: CGFloat(min(max(sidebarWidth, 200), 440))).background(Color.qPanel)
-          .disabled(app.openingProject || app.restoringNavigation)
-          .transition(.move(edge: .leading).combined(with: .opacity))
-        sidebarResizeHandle
-      }
-      VStack(spacing: 0) {
-        HStack(spacing: 12) {
-          if app.section != "Factory Studio" { ThreadsSidebarToggle() }
-          Button {
-            app.showWelcome = true
-          } label: {
-            Label("Home", systemImage: "house")
-          }
-          .help("Return to Welcome").accessibilityIdentifier("workspace.home")
-          Button(action: app.goBack) { Image(systemName: "chevron.left") }
-            .disabled(app.navigationHistory.isEmpty || app.openingProject || app.restoringNavigation)
-            .help("Back (⌘[)").accessibilityLabel("Back")
-          Button(action: app.goForward) { Image(systemName: "chevron.right") }
-            .disabled(app.forwardHistory.isEmpty || app.openingProject || app.restoringNavigation)
-            .help("Forward (⌘])").accessibilityLabel("Forward")
-          Text(Sections.title(for: app.section)).font(.system(size: 12, weight: .medium)).lineLimit(1)
-          Text("/").foregroundStyle(.tertiary)
-          if app.section == "Factory Studio" {
-            Menu {
-              Button("Open project…") { app.chooseProject(openFolder: app.openProjectInFactory) }
-              Divider()
-              ForEach(app.projects, id: \.projectRowID) { row in
-                Button(string(row, "name", "Project")) { app.openProjectInFactory(string(row, "path")) }
-              }
-            } label: { Text(string(app.project, "name", "Project")).font(.system(size: 12)).lineLimit(1) }
-              .menuStyle(.borderlessButton).fixedSize().disabled(app.openingProject || app.restoringNavigation)
-              .accessibilityLabel("Factory project")
-          } else {
-            Text(string(app.project, "name", "No project")).font(.system(size: 12)).lineLimit(1).truncationMode(.middle).foregroundStyle(.secondary)
-          }
-          Spacer()
-          Button(action: app.presentCommandPalette) {
-            Image(systemName: "command")
-          }.help("Command Palette (⌘K)").accessibilityLabel("Open command palette")
-          Button {
-            app.showLearningGuide = true
-          } label: {
-            Image(systemName: "questionmark.circle")
-          }.help("Getting started & learning (⌘?)")
-          Pill(title: "ON YOUR MAC", color: .green)
-          Button {
-            if !app.project.isEmpty {
-              NSWorkspace.shared.open(URL(fileURLWithPath: string(app.project, "path")))
-            }
-          } label: {
-            Image(systemName: "folder")
-          }.help("Reveal project in Finder").disabled(app.project.isEmpty)
-        }.padding(.horizontal, 14).padding(.vertical, 7).modifier(NavigationGlass()).padding(
-          .horizontal, 10
-        ).padding(.vertical, 4)
-        if WorkspaceNavigationGroup.usesCodingWorkspace(app.section) {
-          ThreadTabBar()
-          ForkWorkspaceBar()
+        if !app.threadsSidebarCollapsed {
+          SidebarView().frame(width: CGFloat(min(max(sidebarWidth, 200), 440))).background(Color.qPanel)
+            .disabled(app.openingProject || app.restoringNavigation)
+            .transition(.move(edge: .leading).combined(with: .opacity))
+          sidebarResizeHandle
         }
-        if app.project.isEmpty && !["Agent activity", "Models"].contains(app.section) {
-          GettingStartedView(draftStore: app.draftStore)
-        } else {
-          GeometryReader { geometry in
-            ZStack {
-              if !app.projectID.isEmpty {
-                CodingView().id(app.projectID)
+        VStack(spacing: 0) {
+          topToolbar(factoryMode: false)
+          if app.project.isEmpty && !["Agent activity", "Models"].contains(app.section) {
+            GettingStartedView(draftStore: app.draftStore)
+          } else {
+            GeometryReader { geometry in
+              let panelWidth = max(0, geometry.size.width - 20)
+              let panelHeight = max(0, geometry.size.height - 10)
+              ZStack(alignment: .topLeading) {
+                if !app.projectID.isEmpty {
+                  let codingVisible = WorkspaceNavigationGroup.usesCodingWorkspace(app.section)
+                  VStack(spacing: 0) {
+                    ThreadTabBar()
+                    ForkWorkspaceBar()
+                    CodingView().id(app.projectID)
+                      .frame(maxWidth: .infinity, maxHeight: .infinity)
+                      .background(Color.qPanel)
+                      .clipShape(RoundedRectangle(cornerRadius: 12))
+                      .overlay(RoundedRectangle(cornerRadius: 12).strokeBorder(.primary.opacity(0.07)))
+                      .padding(.horizontal, 10).padding(.bottom, 10)
+                  }
                   .frame(width: geometry.size.width, height: geometry.size.height)
-                  .opacity(WorkspaceNavigationGroup.usesCodingWorkspace(app.section) ? 1 : 0)
-                  .disabled(!WorkspaceNavigationGroup.usesCodingWorkspace(app.section))
-                  .allowsHitTesting(WorkspaceNavigationGroup.usesCodingWorkspace(app.section))
-                  .accessibilityHidden(!WorkspaceNavigationGroup.usesCodingWorkspace(app.section))
-              }
-              if app.navigationState.factoryMounted && !app.projectID.isEmpty {
-                FactoryStudioView(library: app.factoryStudio, active: app.section == "Factory Studio")
-                  .id(app.projectID)
-                  .frame(width: geometry.size.width, height: geometry.size.height)
-                  .opacity(app.section == "Factory Studio" ? 1 : 0)
-                  .disabled(app.section != "Factory Studio")
-                  .allowsHitTesting(app.section == "Factory Studio")
-                  .accessibilityHidden(app.section != "Factory Studio")
-              }
-              if app.navigationState.studioMounted && !app.projectID.isEmpty {
-                HarnessStudioView(library: app.harnessStudio, active: app.section == "Harness Studio")
-                  .id(app.projectID)
-                  .frame(width: geometry.size.width, height: geometry.size.height)
-                  .opacity(app.section == "Harness Studio" ? 1 : 0)
-                  .disabled(app.section != "Harness Studio")
-                  .allowsHitTesting(app.section == "Harness Studio")
-                  .accessibilityHidden(app.section != "Harness Studio")
-              }
-              if app.navigationState.modelsMounted {
-                ModelsView(active: app.section == "Models").id(app.projectID)
-                  .frame(width: geometry.size.width, height: geometry.size.height)
-                  .opacity(app.section == "Models" ? 1 : 0)
-                  .disabled(app.section != "Models")
-                  .allowsHitTesting(app.section == "Models")
-                  .accessibilityHidden(app.section != "Models")
-              }
-              if app.navigationState.toolsMounted && !app.projectID.isEmpty {
-                ToolsView(active: app.section == "Tools").id(app.projectID)
-                  .frame(width: geometry.size.width, height: geometry.size.height)
-                  .opacity(app.section == "Tools" ? 1 : 0)
-                  .disabled(app.section != "Tools")
-                  .allowsHitTesting(app.section == "Tools")
-                  .accessibilityHidden(app.section != "Tools")
-              }
-              featureContent.frame(width: geometry.size.width, height: geometry.size.height)
-            }.disabled(app.openingProject || app.restoringNavigation).frame(
-              width: geometry.size.width, height: geometry.size.height, alignment: .topLeading
-            )
+                  .opacity(codingVisible ? 1 : 0)
+                  .disabled(!codingVisible)
+                  .allowsHitTesting(codingVisible)
+                  .accessibilityHidden(!codingVisible)
+                }
+                if app.navigationState.studioMounted && !app.projectID.isEmpty {
+                  HarnessStudioView(library: app.harnessStudio, active: app.section == "Harness Studio")
+                    .id(app.projectID)
+                    .frame(width: panelWidth, height: panelHeight)
+                    .background(Color.qPanel)
+                    .clipShape(RoundedRectangle(cornerRadius: 12))
+                    .overlay(RoundedRectangle(cornerRadius: 12).strokeBorder(.primary.opacity(0.07)))
+                    .padding(.horizontal, 10).padding(.bottom, 10)
+                    .opacity(app.section == "Harness Studio" ? 1 : 0)
+                    .disabled(app.section != "Harness Studio")
+                    .allowsHitTesting(app.section == "Harness Studio")
+                    .accessibilityHidden(app.section != "Harness Studio")
+                }
+                if app.navigationState.modelsMounted {
+                  ModelsView(active: app.section == "Models").id(app.projectID)
+                    .frame(width: panelWidth, height: panelHeight)
+                    .background(Color.qPanel)
+                    .clipShape(RoundedRectangle(cornerRadius: 12))
+                    .overlay(RoundedRectangle(cornerRadius: 12).strokeBorder(.primary.opacity(0.07)))
+                    .padding(.horizontal, 10).padding(.bottom, 10)
+                    .opacity(app.section == "Models" ? 1 : 0)
+                    .disabled(app.section != "Models")
+                    .allowsHitTesting(app.section == "Models")
+                    .accessibilityHidden(app.section != "Models")
+                }
+                if app.navigationState.toolsMounted && !app.projectID.isEmpty {
+                  ToolsView(active: app.section == "Tools").id(app.projectID)
+                    .frame(width: panelWidth, height: panelHeight)
+                    .background(Color.qPanel)
+                    .clipShape(RoundedRectangle(cornerRadius: 12))
+                    .overlay(RoundedRectangle(cornerRadius: 12).strokeBorder(.primary.opacity(0.07)))
+                    .padding(.horizontal, 10).padding(.bottom, 10)
+                    .opacity(app.section == "Tools" ? 1 : 0)
+                    .disabled(app.section != "Tools")
+                    .allowsHitTesting(app.section == "Tools")
+                    .accessibilityHidden(app.section != "Tools")
+                }
+                if !isFactory
+                  && !WorkspaceNavigationGroup.usesCodingWorkspace(app.section)
+                  && !["Harness Studio", "Models", "Tools"].contains(app.section)
+                {
+                  featureContent
+                    .frame(width: panelWidth, height: panelHeight)
+                    .background(Color.qPanel)
+                    .clipShape(RoundedRectangle(cornerRadius: 12))
+                    .overlay(RoundedRectangle(cornerRadius: 12).strokeBorder(.primary.opacity(0.07)))
+                    .padding(.horizontal, 10).padding(.bottom, 10)
+                }
+              }.disabled(app.openingProject || app.restoringNavigation).frame(
+                width: geometry.size.width, height: geometry.size.height, alignment: .topLeading
+              )
+            }
+          }
+          if !isFactory { footerBanners }
+        }.frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
+      }
+      .opacity(isFactory ? 0 : 1)
+      .disabled(isFactory)
+      .allowsHitTesting(!isFactory)
+      .accessibilityHidden(isFactory)
+
+      if app.navigationState.factoryMounted && !app.projectID.isEmpty {
+        VStack(spacing: 0) {
+          topToolbar(factoryMode: true)
+          FactoryStudioView(library: app.factoryStudio, active: isFactory)
+            .id(app.projectID)
+            .frame(maxWidth: .infinity, maxHeight: .infinity)
             .background(Color.qPanel)
             .clipShape(RoundedRectangle(cornerRadius: 12))
             .overlay(RoundedRectangle(cornerRadius: 12).strokeBorder(.primary.opacity(0.07)))
-          }.padding(.horizontal, 10).padding(.bottom, 10)
+            .padding(.horizontal, 10).padding(.bottom, 10)
+            .disabled(app.openingProject || app.restoringNavigation)
+          if isFactory { footerBanners }
         }
-        ExecutionRecoveryView()
-        if !app.recoveryIssue.isEmpty {
-          HStack {
-            Label(app.recoveryIssue, systemImage: "exclamationmark.triangle").font(.caption)
-              .textSelection(.enabled)
-            Spacer()
-            Button("Retry recovery save") { app.saveDraft(); app.flushRecovery() }
-            if !app.recoveryStore.loadIssue.isEmpty {
-              Button("Reset recovery…", action: app.resetRecovery)
-            }
-          }.padding(12).background(Color.orange.opacity(0.12))
-        }
-        if !app.notice.isEmpty {
-          HStack {
-            Text(app.notice).font(.caption)
-            Spacer()
-            nativeButton("notice.close", action: { app.notice = "" }, title: "Dismiss notification") {
-              Image(systemName: "xmark")
-            }
-          }.padding(12).background(Color.qAccent.opacity(0.1))
-        }
-      }.frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
+        .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
+        .opacity(isFactory ? 1 : 0)
+        .disabled(!isFactory)
+        .allowsHitTesting(isFactory)
+        .accessibilityHidden(!isFactory)
+      }
     }
     // Section changes replace substantial editors and inspectors. A shell-wide
     // animation retains both pages and animates all their layout work per click.
-
   }
   /// Divider between the threads column and the content. Drag to resize; double-click resets.
   private var sidebarResizeHandle: some View {
